@@ -111,6 +111,16 @@ mutants-setup host:
 mutants-on host *args:
     scripts/remote-mutants.sh run "$@"
 
+# Check locked dependencies against the RustSec advisories; the nightly workflow runs this
+[group('tools')]
+advisories:
+    cargo deny check advisories
+
+# Lint the GitHub workflows, after editing them
+[group('tools')]
+workflows:
+    actionlint
+
 # Raise ci/test-counts.txt's minimums to this tree's
 [env("CARGO_TARGET_DIR", target)]
 [group('tools')]

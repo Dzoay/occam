@@ -1,0 +1,29 @@
+# What should not wait for a PR. The full corpus, randomised boolean sequences and the OCCT comparison join this workflow
+# as they arrive (docs/PLAN.md section 5). For now it notices a new advisory against a locked dependency.
+name: nightly
+
+on:
+  schedule:
+    - cron: "23 3 * * *" # daily at 03:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  advisories:
+    name: advisories
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          tools: just cargo-deny
+      - run: just advisories

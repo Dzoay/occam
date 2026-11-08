@@ -1,0 +1,66 @@
+# The one Rust toolchain CI uses and the gate tools, each pinned here and nowhere else. There is no rust-toolchain.toml:
+# CI names one stable version, and comparisons happen within one build. Tools are built from crates.io and cached.
+name: setup
+description: Install the pinned Rust toolchain and gate tools
+inputs:
+  components:
+    description: Comma-separated rustup components
+    default: ""
+  targets:
+    description: Comma-separated extra targets
+    default: ""
+  tools:
+    description: Space-separated tools to install, each with a pin below
+    default: just
+runs:
+  using: composite
+  steps:
+    - name: rustup toolchain install
+      shell: bash
+      env:
+        COMPONENTS: ${{ inputs.components }}
+        TARGETS: ${{ inputs.targets }}
+      run: |
+        toolchain=1.99.1
+        args=(--profile minimal)
+        if [ -n "$COMPONENTS" ]; then args+=(--component "$COMPONENTS"); fi
+        if [ -n "$TARGETS" ]; then args+=(--target "$TARGETS"); fi
+        rustup toolchain install "$toolchain" "${args[@]}"
+        rustup default "$toolchain"
+        rustc --version
+    - name: Tool pins
+      id: pins
+      shell: bash
+      env:
+        TOOLS: ${{ inputs.tools }}
+      run: |
+        declare -A pin=(
+          [just]=1.59.0
+          [cargo-nextest]=0.9.148
+          [cargo-mutants]=27.1.0
+          [cargo-deny]=0.20.2
+          [cargo-shear]=1.14.0
+          [wasmtime-cli]=49.0.2
+        )
+        specs=()
+        for tool in $TOOLS; do specs+=("$tool@${pin[$tool]:?no pin for $tool}"); done
+        joined="${specs[*]}"
+        echo "specs=$joined" >> "$GITHUB_OUTPUT"
+        echo "key=${joined// /-}" >> "$GITHUB_OUTPUT"
+    - name: Tool cache
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.tools
+        key: tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.pins.outputs.key }}
+    - name: Install the tools
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        SPECS: ${{ steps.pins.outputs.specs }}
+      run: |
+        # shellcheck disable=SC2086 # one word per tool
+        cargo install --locked --root ~/.tools $SPECS
+    - name: Tools on PATH
+      shell: bash
+      run: echo "$HOME/.tools/bin" >> "$GITHUB_PATH"
