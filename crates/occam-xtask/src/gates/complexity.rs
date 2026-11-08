@@ -23,7 +23,7 @@ const WINDOW: usize = 10;
 
 const EXEMPTIONS: &str = "ci/complexity-exemptions.txt";
 
-fn measured(path: &str) -> bool {
+pub(super) fn measured(path: &str) -> bool {
     path.starts_with("crates/")
         && Path::new(path).extension().is_some_and(|extension| extension == "rs")
         && !path.contains("/probes/")
