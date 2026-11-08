@@ -1,0 +1,54 @@
+# What a PR says about itself. Separate from ci.yml so that editing a PR's title or body re-runs only these. The squash
+# commit on main takes its subject from the title and its message from the body.
+name: pr
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  conventional-title:
+    name: Conventional PR title
+    runs-on: ubuntu-24.04
+    steps:
+      - name: The title is a Conventional Commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|perf|refactor|test|docs|build|ci|chore|revert'
+          re="^(${types})(\([a-z0-9-]+\))?!?: [^ ].*[^.]$"
+          if [[ ! "$TITLE" =~ $re ]]; then
+            echo "::error::PR title is not a Conventional Commit: $TITLE"
+            echo "Expected <type>(<scope>)<!>: <summary> with no trailing full stop. Types: ${types//|/, }"
+            exit 1
+          fi
+          if (( ${#TITLE} > 72 )); then
+            echo "::error::PR title is ${#TITLE} characters; keep it to 72 or fewer."
+            exit 1
+          fi
+          echo "OK: $TITLE"
+
+  plan-footers:
+    name: Plan-Step footers
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the gate compares the plan against origin/main
+      - uses: ./.github/actions/setup
+      - name: The footers match the steps this PR finishes
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s\n' "$BODY" > "$RUNNER_TEMP/pr-body.md"
+          just gate plan --pr-body "$RUNNER_TEMP/pr-body.md"

@@ -44,14 +44,20 @@ impl Repo {
         fs::read_to_string(path).map_err(|e| io(path, &e))
     }
 
-    /// Runs a program from the root, returning whether it succeeded and its output, stdout then stderr.
-    pub fn run(&self, program: &str, args: &[&str]) -> Result<(bool, String), Finding> {
+    /// Runs a program from the root, returning whether it succeeded, its stdout and its stderr. A caller that parses the
+    /// output wants stdout alone, because stderr carries the compiler's warnings.
+    pub fn capture(&self, program: &str, args: &[&str]) -> Result<(bool, String, String), Finding> {
         let output = Command::new(program).args(args).current_dir(&self.root).output().map_err(|e| {
             Finding::new("repo.no-tool", program, e.to_string(), "run `just setup` to install the gate tools")
         })?;
-        let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
-        text.push_str(&String::from_utf8_lossy(&output.stderr));
-        Ok((output.status.success(), text))
+        let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+        Ok((output.status.success(), text(&output.stdout), text(&output.stderr)))
+    }
+
+    /// Runs a program from the root, returning whether it succeeded and its output, stdout then stderr.
+    pub fn run(&self, program: &str, args: &[&str]) -> Result<(bool, String), Finding> {
+        let (ok, out, err) = self.capture(program, args)?;
+        Ok((ok, out + &err))
     }
 
     /// Runs a program and turns a failure into a finding carrying the end of its output.
@@ -112,11 +118,11 @@ impl Repo {
     pub fn test_listing(&self) -> Result<String, Finding> {
         let args =
             ["nextest", "list", "--workspace", "--message-format", "oneline", "--color", "never", "--cargo-quiet"];
-        let (ok, output) = self.run(env!("CARGO"), &args)?;
+        let (ok, listing, errors) = self.capture(env!("CARGO"), &args)?;
         if ok {
-            Ok(output)
+            Ok(listing)
         } else {
-            Err(Finding::new("counts.listing-failed", "", output, "fix the build, then run `just counts`"))
+            Err(Finding::new("counts.listing-failed", "", errors, "fix the build, then run `just counts`"))
         }
     }
 

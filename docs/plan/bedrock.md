@@ -11,14 +11,6 @@ layer. No geometry. The crates created here are `occam-report`, `occam-math`, `o
 
 ## Steps
 
-### `bedrock.ci`
-
-GitHub Actions running the same commands: diff-based mutants in shards, wasm, the Windows check, and the nightly workflow.
-Holds the 45-minute goal from PLAN §5. As in phasekit there is no `rust-toolchain.toml`: CI names one stable version, and
-comparisons happen within one build.
-
-*Check:* a deliberately failing PR is red for the right reason.
-
 ### `bedrock.report`
 
 `occam-report`, std-only:

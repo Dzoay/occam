@@ -14,6 +14,9 @@ SPDX-License-Identifier = "MIT OR Apache-2.0"
 # Adapted from phasekit, under the same licence.
 [[annotations]]
 path = [
+    ".github/actions/setup/action.yml",
+    ".github/workflows/ci.yml",
+    ".github/workflows/pr.yml",
     "scripts/target-dir.sh",
     "scripts/merge-counts.sh",
     "crates/occam-xtask/src/gates/complexity.rs",

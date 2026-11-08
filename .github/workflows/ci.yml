@@ -1,0 +1,136 @@
+# CI. Every job runs a `just` recipe, so these are the commands a person runs (docs/PLAN.md section 5). Pins are in
+# .github/actions/setup.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          components: rustfmt
+      - run: just fmt-check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          components: clippy
+      - run: just clippy
+
+  test:
+    name: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          components: clippy # the lint probes run clippy
+          tools: just cargo-nextest
+      - run: just test-all
+
+  wasm:
+    name: wasm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          targets: wasm32-wasip2,wasm32-unknown-unknown,x86_64-pc-windows-msvc
+          tools: just cargo-nextest wasmtime-cli
+      - run: just wasm
+
+  gates:
+    name: gates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the gates compare against origin/main
+      - uses: ./.github/actions/setup
+        with:
+          tools: just cargo-nextest cargo-deny cargo-shear
+      - name: uv, which runs reuse
+        run: pipx install "uv==0.13.7"
+      - run: just gate all --except mutants
+
+  mutants-shard:
+    name: mutants (shard ${{ matrix.shard }} of 4)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the gate mutates the changes since origin/main
+      - uses: ./.github/actions/setup
+        with:
+          components: clippy # the lint probes run clippy
+          tools: just cargo-nextest cargo-mutants
+      - run: just mutants --shard ${{ matrix.shard }}/4
+        env:
+          OCCAM_MUTANTS_JOBS: "2"
+
+  # The required check: it passes only when every shard did.
+  mutants:
+    name: mutants
+    needs: mutants-shard
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every mutants shard passed
+        env:
+          RESULT: ${{ needs.mutants-shard.result }}
+        run: |
+          echo "mutants shards: $RESULT"
+          test "$RESULT" = success
+
+  # A goal, not a gate (L46): it is reported and never fails the run.
+  ci-time:
+    name: ci time
+    needs: [fmt, clippy, test, wasm, gates, mutants]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    steps:
+      - name: Against the 45-minute goal in docs/PLAN.md section 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN: ${{ github.run_id }}
+        run: |
+          started=$(gh api "repos/$REPOSITORY/actions/runs/$RUN" --jq .run_started_at)
+          minutes=$(( ($(date +%s) - $(date -d "$started" +%s)) / 60 ))
+          echo "CI took $minutes minutes. The goal is 45." | tee -a "$GITHUB_STEP_SUMMARY"
+          if (( minutes > 45 )); then
+            echo "::warning::CI took $minutes minutes, over the 45-minute goal"
+          fi
