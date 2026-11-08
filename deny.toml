@@ -1,0 +1,38 @@
+# cargo-deny: licences, bans, sources and advisories of everything in Cargo.lock. `gates deps` runs it. The allow-list
+# below is the one home of which licences occam accepts; `gates provenance` holds every file in the repository to it too.
+
+[graph]
+# Optional features count: a dependency behind a feature must pass too.
+all-features = true
+
+[advisories]
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Permissive licences only: no copyleft enters this repository (docs/decisions/2026-11-08-no-copyleft.md).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "ISC",
+    "Unicode-3.0",
+]
+confidence-threshold = 0.93
+# The list is policy for dependencies to come: an entry no current dependency uses is not a finding.
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# The workspace's own path dependencies have no version, which is fine for crates that are never published.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

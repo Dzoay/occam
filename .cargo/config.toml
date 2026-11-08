@@ -1,0 +1,7 @@
+[alias]
+# `cargo xtask <task>`: developer tasks and the gates (crates/occam-xtask).
+xtask = "run --quiet -p occam-xtask --"
+
+[target.wasm32-wasip2]
+# wasip2 test binaries run under wasmtime, which `just toolchain` checks for.
+runner = "wasmtime"

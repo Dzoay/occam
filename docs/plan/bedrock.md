@@ -11,30 +11,11 @@ layer. No geometry. The crates created here are `occam-report`, `occam-math`, `o
 
 ## Steps
 
-### `bedrock.repo`
-
-Licence files and `REUSE.toml`; the Cargo workspace with `publish = false` by default; every lint on (L19), including
-`indexing_slicing`, `arithmetic_side_effects`, the panic and printing bans, `forbid(unsafe_code)`, and `disallowed-types`
-for `Any`, `HashMap` and `HashSet` in kernel crates; `clippy.toml` thresholds; `rustfmt`; `deny.toml`; nextest profiles;
-`.cargo/mutants.toml` and the mutants build profile with every speed setting from phasekit (L14); build profiles; the
-shared target-directory script (L48); the `justfile` groups and the `wasm` recipe. `just setup` already exists, and a
-tool added later joins the one list in `scripts/toolchain.sh`. As in phasekit, there is no `rust-toolchain.toml`: CI names
-one stable version, and comparisons happen within one build.
-
-*Failing test first:* probe files, one per banned pattern, each of which clippy must reject.
-
-### `bedrock.gates`
-
-`occam-xtask` with `layers`, `complexity`, `provenance`, `docs`, `plan`, `deps`, `counts` and the mutants runner (unmutated
-first, timeout floor, L13), taken from phasekit's where they apply and otherwise written fresh. `--json` on all of them.
-`docs/SOURCES.md` and `ci/forbidden-identifiers.txt`. `just next`, with tests (L40). The test-count merge driver (L44).
-
-*Failing test first:* for each gate, a fixture tree holding one violation that the gate must report.
-
 ### `bedrock.ci`
 
 GitHub Actions running the same commands: diff-based mutants in shards, wasm, the Windows check, and the nightly workflow.
-Holds the 45-minute goal from PLAN §5.
+Holds the 45-minute goal from PLAN §5. As in phasekit there is no `rust-toolchain.toml`: CI names one stable version, and
+comparisons happen within one build.
 
 *Check:* a deliberately failing PR is red for the right reason.
 

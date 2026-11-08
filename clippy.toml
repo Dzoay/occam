@@ -1,0 +1,17 @@
+# Policies enforced by clippy, not by review. `probes::clippy_rejects_every_banned_pattern` proves each one fires.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+allow-dbg-in-tests = true
+allow-print-in-tests = true
+
+# Lines of code; clippy counts no blank or comment line. `gates complexity` holds a lower bar with an exemption list.
+too-many-lines-threshold = 100
+
+# Applied to every crate. A crate outside the kernel that needs one allows it at its root, with a reason.
+disallowed-types = [
+    { path = "std::any::Any", reason = "no Any or downcasting across seams: closed enums within a family, open traits across families (L26)" },
+    { path = "std::collections::HashMap", reason = "unspecified iteration order breaks determinism: use BTreeMap (L23)" },
+    { path = "std::collections::HashSet", reason = "unspecified iteration order breaks determinism: use BTreeSet (L23)" },
+]

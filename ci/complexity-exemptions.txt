@@ -1,0 +1,5 @@
+# `gates complexity`: code allowed over a bar, one per line, each with its exact measure and the reason it stays.
+#   fn <file> <function> lines=<n> <reason>
+#   file <file> lines=<n> <reason>
+#   dup <file-a> <file-b> windows=<n> <reason>
+# An entry whose measure differs fails the gate, and an entry may be neither added nor raised: the list only shrinks.
