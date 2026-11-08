@@ -1,0 +1,10 @@
+# Lint probes for `probes::clippy_rejects_every_banned_pattern`. Excluded from the occam workspace; the test copies this
+# crate into a scratch workspace whose `[workspace.lints]` and `clippy.toml` are the repository's.
+[package]
+name = "bans"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lints]
+workspace = true

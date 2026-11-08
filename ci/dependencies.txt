@@ -1,0 +1,22 @@
+# `gates deps`: every third-party crate, as `<crate> <consumer|transitive> <decision-slug>`. A crate named directly needs
+# a line for the crate using it, and anything else in Cargo.lock a `transitive` line. Ask the user before adding one.
+proc-macro2 occam-xtask xtask-dependencies
+serde occam-xtask xtask-dependencies
+serde_json occam-xtask xtask-dependencies
+syn occam-xtask xtask-dependencies
+toml occam-xtask xtask-dependencies
+itoa transitive xtask-dependencies
+memchr transitive xtask-dependencies
+quote transitive xtask-dependencies
+serde_core transitive xtask-dependencies
+serde_derive transitive xtask-dependencies
+serde_spanned transitive xtask-dependencies
+toml_datetime transitive xtask-dependencies
+toml_parser transitive xtask-dependencies
+toml_writer transitive xtask-dependencies
+unicode-ident transitive xtask-dependencies
+winnow transitive xtask-dependencies
+zmij transitive xtask-dependencies
+equivalent transitive xtask-dependencies
+hashbrown transitive xtask-dependencies
+indexmap transitive xtask-dependencies

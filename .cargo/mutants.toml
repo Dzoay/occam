@@ -1,0 +1,29 @@
+# cargo-mutants, run by `gates mutants` (L13, L14). A mutant of changed code that no test catches fails the gate unless
+# it is excluded here, and every exclusion says why no test can catch it.
+
+gitignore = true
+# A mutant must be caught by any workspace test. `gates mutants` tests occam-xtask's own mutants on its own tests alone.
+test_workspace = true
+# Every test in one parallel pool, stopping at the first failure (.config/nextest.toml, profile `default`).
+test_tool = "nextest"
+# Optimised builds, so the tests a mutant runs take a fraction of the time; the same tests and assertions.
+profile = "mutants"
+# cargo-mutants times its baseline on the mutated packages only, so the timeout it derives can be shorter than one full
+# workspace run, and a mutant no test catches would run out of time and count as caught (L13). This floor covers a full
+# run with room to spare. A mutant that really hangs costs this much.
+minimum_test_timeout = 300
+
+exclude_globs = [
+    # Process glue: it runs git, cargo and the tools. Every gate's real run exercises it; unit tests cannot.
+    "crates/occam-xtask/src/repo.rs",
+    "crates/occam-xtask/src/main.rs",
+]
+
+# Each gate's `run` gathers its input through `repo` and is exercised by running the gate, not by unit tests; the rules
+# it applies are in the module's pure functions, which are mutated. The same goes for `gates::main` and `usage`.
+exclude_re = [
+    "replace run -> Verdict",
+    "in run$",
+    "replace (main|usage) -> ExitCode",
+    "in (main|usage)$",
+]

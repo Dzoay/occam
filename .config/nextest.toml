@@ -1,0 +1,17 @@
+# cargo-nextest: every test in its own process, all test binaries in one parallel pool. Doctests are not nextest's; the
+# `test` recipe runs them with `cargo test --doc`.
+
+# `cargo nextest run` and the mutants gate: stop at the first failure and end the tests still running, so a caught
+# mutant does not wait for the slowest in-flight test (L14).
+[profile.default]
+fail-fast = { max-fail = 1, terminate = "immediate" }
+
+# The lint probes run clippy in a scratch workspace, seconds apiece, and catch no mutant of the gates. They run last, so
+# a mutant a quick test catches fails before them. Order only: every test still runs.
+[[profile.default.overrides]]
+filter = "package(occam-xtask) & test(/^probes::/)"
+priority = -10
+
+# The gates and CI: run everything and report every failure.
+[profile.ci]
+fail-fast = false

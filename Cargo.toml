@@ -1,0 +1,61 @@
+# The occam workspace. The allowed crate graph is in docs/PLAN.md section 4, and `gates layers` holds it.
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["crates/occam-xtask/probes"] # lint probes, built only in scratch copies
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Dzoay/occam"
+publish = false # unpublished unless a crate says otherwise
+
+# Every lint is on from the start (L19), and `probes::clippy_rejects_every_banned_pattern` proves each ban fires. A crate
+# relaxes one only at its root, with a reason.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Errors are the agent API (L1): no panic is reachable from library code.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+string_slice = "deny"
+arithmetic_side_effects = "deny"
+# Diagnostics travel as values. Command-line tools allow printing at their crate root.
+print_stdout = "deny"
+print_stderr = "deny"
+dbg_macro = "deny"
+too_many_lines = "deny"
+
+# Whole-program optimisation for what this workspace builds itself. No `target-cpu`, so artifacts stay generic x86-64.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
+[profile.bench]
+lto = "fat"
+codegen-units = 1
+
+# The mutants gate's build: the test profile, optimised. The same assertions, overflow checks included, and the same
+# floating-point results (L14). No debug info, so links are shorter.
+[profile.mutants]
+inherits = "test"
+opt-level = 1
+debug = false
+
+# Line tables, not full debug info: panics keep their files and lines.
+[profile.dev]
+debug = "line-tables-only"
+
+# Dependencies build optimised in `dev`, and so in `test` and `mutants`.
+[profile.dev.package."*"]
+opt-level = 2

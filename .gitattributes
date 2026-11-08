@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Merged per test binary by scripts/merge-counts.sh once `just setup` has defined the driver; without it, as text.
+ci/test-counts.txt merge=occam-counts

@@ -10,9 +10,9 @@ cite [the phasekit lessons](evidence/2026-11-08-phasekit-lessons.md). "Phasekit"
 
 - **Step ids.** A step is a level-3 heading or a table row whose text begins with a backticked id of the form
   `<milestone>.<slug>`. Nothing else is a step.
-- **What is next comes from git.** Once `bedrock.gates` lands, `just next` prints, for each open milestone, its first
-  step with no `Plan-Step:` footer on `main`. Until then, work that out by hand. Milestones run in §6's order. `bedrock`
-  and `census` are open together; every other milestone opens when the one before it closes.
+- **What is next comes from git.** `just next` prints, for each open milestone, its first step with no `Plan-Step:`
+  footer on `main`. Milestones run in §6's order. `bedrock` and `census` are open together; every other milestone opens
+  when the one before it closes.
 - **Footers.** `main` changes only by squash merge, which takes its message from the PR body, so footers go in the PR
   body: one `Plan-Step: <id>` line per step. `gates plan` fails a step PR that lacks them.
 - **Working a step:** write the failing test first, show it red, implement, get every gate green, open the PR. The PR

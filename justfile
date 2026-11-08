@@ -1,0 +1,118 @@
+# Common tasks for occam. `just` lists them by group; every recipe runs from the repository root. CI runs the same
+# commands. The gates are defined in docs/PLAN.md section 5.
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+set positional-arguments := true
+set ignore-comments := true
+set lazy := true
+
+# This checkout's shared cargo target directory (L48), asked for once per `just` run, only by the recipes that run cargo.
+target := `scripts/target-dir.sh`
+# On disk, not in a RAM-backed /tmp: cargo-mutants copies the tree there and builds each copy.
+tmp := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-tmp"
+
+[private]
+default:
+    @just --list --unsorted
+
+# Install whichever gate tools are missing and set up the test counts' merge driver, safe to repeat
+[group('setup')]
+setup:
+    scripts/toolchain.sh install
+    git config merge.occam-counts.name "ci/test-counts.txt, per test binary"
+    git config merge.occam-counts.driver "scripts/merge-counts.sh %O %A %B"
+
+# Check that the gate tools are installed, changing nothing
+[group('setup')]
+toolchain:
+    scripts/toolchain.sh check
+
+# Debug build of every crate
+[env("CARGO_TARGET_DIR", target)]
+[group('build')]
+build:
+    cargo build --workspace
+
+# The API docs of every crate, intra-doc links checked
+[env("CARGO_TARGET_DIR", target)]
+[env("RUSTDOCFLAGS", "-D rustdoc::broken_intra_doc_links -D rustdoc::private_intra_doc_links")]
+[group('build')]
+doc *args:
+    cargo doc --workspace --no-deps "$@"
+
+# What to do next: each open milestone's first unfinished step
+[env("CARGO_TARGET_DIR", target)]
+[group('plan')]
+next *args:
+    cargo xtask next "$@"
+
+# Tests, or those nextest's arguments pick: `just test -p occam-xtask docs`
+[env("CARGO_TARGET_DIR", target)]
+[group('test')]
+test *args:
+    cargo nextest run "$@"
+
+# Format the Rust code
+[group('check')]
+fmt:
+    cargo fmt --all
+
+# Formatting, unchanged
+[group('gates')]
+fmt-check:
+    cargo fmt --all --check
+
+# Clippy on every crate and target, warnings denied
+[env("CARGO_TARGET_DIR", target)]
+[group('gates')]
+clippy:
+    cargo clippy --workspace --all-targets -- -D warnings
+
+# Every test on the host, then the doctests of any library
+[env("CARGO_TARGET_DIR", target)]
+[group('gates')]
+test-all:
+    cargo nextest run --workspace --profile ci
+    if cargo metadata --no-deps --format-version 1 | grep -q '"kind":\["lib"\]'; then cargo test --doc --workspace; fi
+
+# The tests on wasm32-wasip2, xtask aside, the browser target, and a Windows check (no MSVC linker here)
+[env("CARGO_TARGET_DIR", target)]
+[group('gates')]
+wasm:
+    if ls crates | grep -qvx occam-xtask; then cargo nextest run --workspace --exclude occam-xtask --target wasm32-wasip2 --profile ci; else echo "wasm: no crate but occam-xtask yet, so no tests to run on wasm32-wasip2"; fi
+    cargo check --workspace --target wasm32-unknown-unknown
+    cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
+
+# One gate, or `all`: `just gate docs`, `just gate all --except counts`, `just gate plan --json`
+[env("CARGO_TARGET_DIR", target)]
+[group('gates')]
+gate *args="all":
+    cargo xtask gates "$@"
+
+# Everything except mutants and perf
+[group('gates')]
+gates: fmt-check clippy test-all wasm (gate "all" "--except" "mutants")
+
+# Mutation testing on the Rust changed since origin/main; `just mutants --shard 1/4`: one slice of it
+[env("CARGO_TARGET_DIR", target)]
+[env("TMPDIR", tmp)]
+[group('mutants')]
+mutants *args:
+    mkdir -p "$TMPDIR"
+    cargo xtask gates mutants "$@"
+
+# Install what `just mutants-on` needs on another machine over ssh, at this machine's versions
+[group('mutants')]
+mutants-setup host:
+    scripts/remote-mutants.sh setup "$1"
+
+# `just mutants` on another machine over ssh, on a mirror of this checkout; `OCCAM_MUTANTS_JOBS=6`: six at once
+[group('mutants')]
+mutants-on host *args:
+    scripts/remote-mutants.sh run "$@"
+
+# Raise ci/test-counts.txt's minimums to this tree's
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+counts:
+    cargo xtask gates counts --update

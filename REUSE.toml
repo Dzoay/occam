@@ -1,0 +1,24 @@
+# REUSE 3.3 (https://reuse.software): the licence and copyright of every file. `gates deps` runs `reuse lint`, and
+# `gates provenance` holds every licence here to the allow-list in deny.toml. When several annotations match a file, the
+# last one wins.
+version = 1
+
+# Everything is the project's own unless an annotation below says otherwise. `override`, because the gates' own sources
+# and the documents quote licence tags as data.
+[[annotations]]
+path = "**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 The occam contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+
+# Adapted from phasekit, under the same licence.
+[[annotations]]
+path = [
+    "scripts/target-dir.sh",
+    "scripts/merge-counts.sh",
+    "crates/occam-xtask/src/gates/complexity.rs",
+    "crates/occam-xtask/src/gates/mutants.rs",
+]
+precedence = "override"
+SPDX-FileCopyrightText = ["2026 The occam contributors", "2026 The phasekit contributors"]
+SPDX-License-Identifier = "MIT OR Apache-2.0"
