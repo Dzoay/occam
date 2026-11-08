@@ -8,6 +8,7 @@ mod plan;
 #[cfg(test)]
 mod probes;
 mod repo;
+mod seeded;
 mod verdict;
 
 use std::env;

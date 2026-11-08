@@ -10,3 +10,5 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 
 | Key | Kind | Licence | Citation |
 |---|---|---|---|
+
+[A deliberately broken link](no-such-file.md)
