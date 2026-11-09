@@ -8,7 +8,7 @@ import unittest
 
 import generate
 import import_arris
-import schema
+from occam_oracle import caseformat as schema
 
 COMMIT = "1a7bc1e660b9d20a677ac06a317de83200ffd639"
 IMPORTED = pathlib.Path(import_arris.__file__).resolve().parent / "imported"

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 import generate
-import schema
+from occam_oracle import caseformat as schema
 
 GENERATED = pathlib.Path(generate.__file__).resolve().parent / "generated"
 PI = math.pi

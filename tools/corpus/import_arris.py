@@ -20,7 +20,10 @@ import subprocess
 import sys
 
 import generate
-import schema
+
+ORACLE = pathlib.Path(__file__).resolve().parents[1] / "oracle"
+sys.path.insert(0, str(ORACLE))
+from occam_oracle import caseformat  # noqa: E402
 
 LOCK = pathlib.Path(__file__).resolve().parent / "sources.lock.json"
 OUT = pathlib.Path(__file__).resolve().parent / "imported"
@@ -221,8 +224,8 @@ def _case(fixture, slug, commit, params, variant):
         "expect": _expect(fixture["analytic"], params),
     }
     try:
-        schema.validate_case(case)
-    except schema.CaseError as error:
+        caseformat.validate_case(case)
+    except caseformat.CaseError as error:
         raise Excluded("invalid after conversion", str(error)) from error
     return case
 

@@ -72,7 +72,8 @@ so the oracle reports triangle and vertex counts per `tessellate` op in its resu
 
 ## What the oracle disagreed with
 
-No case failed to run. Twenty-six cases did not agree, in three kinds.
+No case failed to run. Twenty-six cases did not agree, in three kinds. These counts were reproduced on the merged harness
+at commit `6251c56`, 520 of 546 generated cases and 32 of 32 imported ones passing.
 
 **Spherical faces (11 cases: the disagreement is OCCT's measure, not the closed form).** `sphere-cap-common-0002`,
 `-0005`, `-0008`, `sphere-cap-cut-0002`, `-0004`, `-0008` report a bounding box extending to the full sphere along the
@@ -187,4 +188,4 @@ Still external, as the plan says. The user has approved it only as a second opin
   other commit.
 - `just corpus-test` runs the pipeline's own tests, which never touch the network.
 - `just oracle run tools/corpus/generated` and `just oracle check tools/corpus/generated` run the corpus through the
-  harness, once `census.oracle` is merged.
+  harness.

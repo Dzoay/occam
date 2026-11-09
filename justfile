@@ -95,7 +95,7 @@ gate *args="all":
 
 # The survey scripts' tests, Python standard library only
 [group('gates')]
-tools-test:
+tools-test: corpus-test
     python3 -m unittest discover -s tools/census/tests
 
 # Everything except mutants and perf
