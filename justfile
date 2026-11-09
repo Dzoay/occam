@@ -75,12 +75,14 @@ test-all:
     cargo nextest run --workspace --profile ci
     if cargo metadata --no-deps --format-version 1 | grep -q '"kind":\["lib"\]'; then cargo test --doc --workspace; fi
 
-# The tests on wasm32-wasip2, xtask aside, the browser target, and a Windows check (no MSVC linker here)
+# The tests on wasm32-wasip2, xtask aside, baseline and simd128; the browser target, both builds; and a Windows check (no MSVC linker here)
 [env("CARGO_TARGET_DIR", target)]
 [group('gates')]
 wasm:
     if ls crates | grep -qvx occam-xtask; then cargo nextest run --workspace --exclude occam-xtask --target wasm32-wasip2 --profile ci; else echo "wasm: no crate but occam-xtask yet, so no tests to run on wasm32-wasip2"; fi
+    CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo nextest run --workspace --exclude occam-xtask --target wasm32-wasip2 --profile ci
     cargo check --workspace --target wasm32-unknown-unknown
+    CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo check --workspace --exclude occam-xtask --target wasm32-unknown-unknown
     cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
 
 # One gate, or `all`: `just gate docs`, `just gate all --except counts`, `just gate plan --json`

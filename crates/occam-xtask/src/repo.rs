@@ -72,6 +72,15 @@ impl Repo {
         Err(Finding::new(code, "", shown, format!("run {program} {} and fix what it reports", args.join(" "))))
     }
 
+    /// A directory of its own for a build whose flags differ, nested in this checkout's cargo target directory.
+    pub fn nested_target(&self, name: &str) -> String {
+        env::var_os("CARGO_TARGET_DIR")
+            .map_or_else(|| self.root.join("target"), PathBuf::from)
+            .join(name)
+            .display()
+            .to_string()
+    }
+
     pub fn git(&self, args: &[&str]) -> Result<String, Finding> {
         let (ok, output) = self.run("git", args)?;
         if ok {

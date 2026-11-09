@@ -7,6 +7,7 @@
 pub mod arithmetic_side_effects;
 pub mod dbg_macro;
 pub mod disallowed_any;
+pub mod disallowed_float_methods;
 pub mod disallowed_hash_map;
 pub mod disallowed_hash_set;
 pub mod expect_used;

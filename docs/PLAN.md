@@ -98,7 +98,7 @@ the same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 | `gates docs` | Links resolve, step and decision ids are unique, files in `docs/evidence/` are unchanged once merged (L41, L45) | `bedrock.gates` |
 | `gates deps` | Dependency allow-list, `cargo deny`, `cargo shear`, REUSE | `bedrock.gates` |
 | `gates errors` | Every code is in the catalogue; every code and remedy pair is registered by a followed-remedy test (L2); matches are exhaustive (L4) | `bedrock.report` |
-| `gates determinism` | Output hashes match on x86-64 at 1 and N threads and on single-threaded wasm32, with NaNs canonicalised before hashing (L23) | `bedrock.maths` |
+| `gates determinism` | [The contract](DETERMINISM.md): output hashes match on x86-64 at 1 and N threads and on single-threaded wasm32, with NaNs canonicalised before hashing (L23) | `bedrock.maths` |
 | `gates perf` | Native instruction counts per operation class, scalar and lanes. Browser timing is reported on every PR; only the same-run simd128-against-scalar ratio is gated (L30, L31) | `bedrock.perf` |
 
 Nightly, not per PR: the full corpus, randomised boolean sequences, and the OCCT comparison (L16, L17). The workflow comes

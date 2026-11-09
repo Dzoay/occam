@@ -1,4 +1,5 @@
 # `gates counts`: the fewest tests each binary may have, `<binary> <minimum>`. `just counts` raises minimums and adds
 # binaries, and never lowers one. Lowering one by hand needs a reason in the PR.
+occam-math 23
 occam-report 36
-occam-xtask::bin/occam-xtask 171
+occam-xtask::bin/occam-xtask 191

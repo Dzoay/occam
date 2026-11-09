@@ -11,14 +11,6 @@ layer. No geometry. The crates created here are `occam-report`, `occam-math`, `o
 
 ## Steps
 
-### `bedrock.maths`
-
-`occam-math`'s skeleton: the determinism contract written down, the sealed `Real` trait with scalar and `[f64; W]` lane
-implementations of basic arithmetic under `forbid(unsafe_code)`, a separate simd128 build for wasm, and
-`gates determinism` (L23). `proving-ground.s5` decides which functions occam implements itself.
-
-*Failing test first:* a stream of operations gives the same output hash on x86-64 and wasm32, scalar and lanes.
-
 ### `bedrock.units`
 
 `occam-units`: `Length`, `Angle`, points and vectors typed by frame (world, local, UV), one conversion point at the API,

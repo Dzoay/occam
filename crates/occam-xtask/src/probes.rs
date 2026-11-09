@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 use std::{env, fs, process};
 
-/// (file, line, lint), and for a `disallowed-types` entry the path it names after the lint.
+/// (file, line, lint), and for a `disallowed-types` or `disallowed-methods` entry the path it names after the lint.
 type Hit = (String, usize, String);
 
 fn root() -> &'static Path {
@@ -53,7 +53,7 @@ fn marks(dir: &Path) -> BTreeSet<Hit> {
     found
 }
 
-/// What clippy reported, each `disallowed_types` hit with the path its message names.
+/// What clippy reported, each `disallowed_types` or `disallowed_methods` hit with the path its message names.
 fn diagnostics(dir: &Path) -> BTreeSet<Hit> {
     let output = Command::new(env!("CARGO"))
         .args(["clippy", "--quiet", "--message-format=json", "--", "-D", "warnings"])
@@ -68,7 +68,8 @@ fn diagnostics(dir: &Path) -> BTreeSet<Hit> {
         let Some(code) = value["message"]["code"]["code"].as_str() else { continue };
         let span = value["message"]["spans"].as_array().unwrap().iter().find(|s| s["is_primary"] == true).unwrap();
         let path = value["message"]["message"].as_str().unwrap().split('`').nth(1).unwrap_or_default();
-        let lint = if code == "clippy::disallowed_types" { format!("{code} {path}") } else { code.to_string() };
+        let named = matches!(code, "clippy::disallowed_types" | "clippy::disallowed_methods");
+        let lint = if named { format!("{code} {path}") } else { code.to_string() };
         found.insert((
             span["file_name"].as_str().unwrap().to_string(),
             usize::try_from(span["line_start"].as_u64().unwrap()).unwrap(),
@@ -95,8 +96,10 @@ fn banned() -> BTreeSet<String> {
     let mut all: BTreeSet<String> = denied(&lints["clippy"], "clippy::").into_iter().collect();
     all.extend(denied(&lints["rust"], ""));
     let clippy = parse(&root().join("clippy.toml"));
-    for entry in clippy["disallowed-types"].as_array().into_iter().flatten() {
-        all.insert(format!("clippy::disallowed_types {}", entry["path"].as_str().unwrap()));
+    for (key, lint) in [("disallowed-types", "disallowed_types"), ("disallowed-methods", "disallowed_methods")] {
+        for entry in clippy[key].as_array().into_iter().flatten() {
+            all.insert(format!("clippy::{lint} {}", entry["path"].as_str().unwrap()));
+        }
     }
     all
 }
