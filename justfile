@@ -10,6 +10,8 @@ set lazy := true
 target := `scripts/target-dir.sh`
 # On disk, not in a RAM-backed /tmp: cargo-mutants copies the tree there and builds each copy.
 tmp := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-tmp"
+# The OCCT wheel's virtualenv lives outside the repository too (docs/decisions/2026-11-09-occt-oracle.md).
+oracle_venv := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-oracle" / "venv"
 
 [private]
 default:
@@ -134,3 +136,15 @@ workflows:
 [group('tools')]
 counts:
     cargo xtask gates counts --update
+
+# The OCCT oracle harness (`just oracle run tools/oracle/examples`, then `check` and `register`); a large download the first time
+[env("UV_PROJECT_ENVIRONMENT", oracle_venv)]
+[group('oracle')]
+oracle *args:
+    uv run --frozen --project tools/oracle python tools/oracle/oracle.py "$@"
+
+# The oracle harness's own tests, through the pinned OCCT wheel; the nightly workflow runs this
+[env("UV_PROJECT_ENVIRONMENT", oracle_venv)]
+[group('oracle')]
+oracle-test:
+    uv run --frozen --project tools/oracle python -m unittest discover -s tools/oracle/tests -t tools/oracle

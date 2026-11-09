@@ -1,0 +1,17 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "box-cut-cylinder-0001",
+  "origin": "written by hand: a closed-form answer, 10*20*30 minus pi*2*2*30",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {"op": "box", "id": "a", "size": [10, 20, 30], "origin": [0, 0, 0]},
+    {"op": "cylinder", "id": "b", "radius": 2, "height": 40, "origin": [5, 10, -5], "axis": [0, 0, 1]},
+    {"op": "cut", "id": "c", "target": "a", "tool": "b"}
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {"value": 5623.008881569225, "rel_tol": 1e-6},
+    "euler": {"value": 0},
+    "valid": {"value": true}
+  }
+}
