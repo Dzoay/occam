@@ -63,7 +63,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           targets: wasm32-wasip2,wasm32-unknown-unknown,x86_64-pc-windows-msvc
-          tools: just cargo-nextest wasmtime-cli
+          tools: just cargo-nextest wasmtime-cli wasm-bindgen-cli
       - run: just wasm
 
   gates:

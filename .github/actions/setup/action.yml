@@ -41,6 +41,7 @@ runs:
           [cargo-deny]=0.20.2
           [cargo-shear]=1.14.0
           [wasmtime-cli]=49.0.2
+          [wasm-bindgen-cli]=0.2.129
         )
         specs=()
         for tool in $TOOLS; do specs+=("$tool@${pin[$tool]:?no pin for $tool}"); done

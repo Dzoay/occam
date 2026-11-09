@@ -14,10 +14,4 @@ run.
 
 ## Steps
 
-### `census.baseline`
-
-Whole-operation OCCT timings on the generated corpus: booleans, fillets, tessellation and thread scaling, plus the same
-through `opencascade.js` (LGPL-2.1, outside the workspace) for the browser (L32), on a recorded machine. These are the numbers occam has to beat. Speed
-targets that follow are goals, not gates, until they have been measured (L46).
-
-*Output:* `docs/evidence/<date>-occt-baseline.md`.
+Every step has merged, and [the exit gate above is met](../decisions/2026-11-09-parity-approved.md).

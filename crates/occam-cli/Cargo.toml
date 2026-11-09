@@ -1,0 +1,17 @@
+[package]
+name = "occam-cli"
+description = "The occam command-line tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "occam"
+path = "src/main.rs"
+
+[dependencies]
+occam = { path = "../occam" }
+
+[lints]
+workspace = true
