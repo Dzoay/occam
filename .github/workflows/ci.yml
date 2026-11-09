@@ -80,6 +80,7 @@ jobs:
       - name: uv, which runs reuse
         run: pipx install "uv==0.13.7"
       - run: just gate all --except mutants
+      - run: just tools-test
 
   mutants-shard:
     name: mutants (shard ${{ matrix.shard }} of 4)

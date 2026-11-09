@@ -91,9 +91,14 @@ wasm:
 gate *args="all":
     cargo xtask gates "$@"
 
+# The survey scripts' tests, Python standard library only
+[group('gates')]
+tools-test:
+    python3 -m unittest discover -s tools/census/tests
+
 # Everything except mutants and perf
 [group('gates')]
-gates: fmt-check clippy test-all wasm (gate "all" "--except" "mutants")
+gates: fmt-check clippy test-all wasm tools-test (gate "all" "--except" "mutants")
 
 # Mutation testing on the Rust changed since origin/main; `just mutants --shard 1/4`: one slice of it
 [env("CARGO_TARGET_DIR", target)]
