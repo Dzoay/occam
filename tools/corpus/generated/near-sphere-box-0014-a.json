@@ -1,0 +1,39 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-sphere-box-0014-a",
+  "origin": "tools/corpus/generate.py family near-sphere-box seed 42014",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 12.894,
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "rotate",
+      "id": "ra",
+      "target": "a",
+      "axis_origin": [
+        -1.37,
+        -2.119,
+        2.814
+      ],
+      "axis": [
+        -0.875,
+        0.86,
+        -0.899
+      ],
+      "angle_degrees": 115.397
+    }
+  ],
+  "result": "ra",
+  "volume_identity": {
+    "group": "near-sphere-box-0014",
+    "role": "a"
+  }
+}

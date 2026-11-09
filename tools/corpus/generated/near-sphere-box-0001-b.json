@@ -1,0 +1,27 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-sphere-box-0001-b",
+  "origin": "tools/corpus/generate.py family near-sphere-box seed 42001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        16.46,
+        16.46,
+        8.23
+      ],
+      "origin": [
+        -8.23,
+        -8.23,
+        3.7551
+      ]
+    }
+  ],
+  "result": "b",
+  "volume_identity": {
+    "group": "near-sphere-box-0001",
+    "role": "b"
+  }
+}

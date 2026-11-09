@@ -1,0 +1,62 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "tess-cone-0001",
+  "origin": "tools/corpus/generate.py family tess-cone seed 37001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cone",
+      "id": "a",
+      "radius1": 1.153,
+      "radius2": 0.641,
+      "height": 21.227,
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "tessellate",
+      "id": "m",
+      "target": "a",
+      "linear_deflection": 0.5,
+      "angular_deflection": 0.5
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 55.1134190144,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 125.137815911,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -1.153,
+        -1.153,
+        0.0
+      ],
+      "max": [
+        1.153,
+        1.153,
+        21.227
+      ],
+      "abs_tol": 1e-05
+    },
+    "watertight": {
+      "value": true
+    }
+  }
+}

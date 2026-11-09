@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "steinmetz-common-0005",
+  "origin": "tools/corpus/generate.py family steinmetz-common seed 18005",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 2.892,
+      "height": 13.656,
+      "origin": [
+        -6.828,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 2.892,
+      "height": 13.656,
+      "origin": [
+        0.0,
+        -6.828,
+        0.0
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "common",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 129.001153536,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 133.818624,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -2.892,
+        -2.892,
+        -2.892
+      ],
+      "max": [
+        2.892,
+        2.892,
+        2.892
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

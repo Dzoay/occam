@@ -1,0 +1,83 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-crossed-external-0012-intersection",
+  "origin": "tools/corpus/generate.py family near-crossed-external seed 39012",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 19.06,
+      "height": 152.48,
+      "origin": [
+        -76.24,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 7.957,
+      "height": 152.48,
+      "origin": [
+        0.0,
+        -76.24,
+        27.013125
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "rotate",
+      "id": "ra",
+      "target": "a",
+      "axis_origin": [
+        2.48,
+        1.966,
+        -2.986
+      ],
+      "axis": [
+        0.273,
+        -0.942,
+        -0.142
+      ],
+      "angle_degrees": 55.125
+    },
+    {
+      "op": "rotate",
+      "id": "rb",
+      "target": "b",
+      "axis_origin": [
+        2.48,
+        1.966,
+        -2.986
+      ],
+      "axis": [
+        0.273,
+        -0.942,
+        -0.142
+      ],
+      "angle_degrees": 55.125
+    },
+    {
+      "op": "common",
+      "id": "i",
+      "target": "ra",
+      "tool": "rb"
+    }
+  ],
+  "result": "i",
+  "volume_identity": {
+    "group": "near-crossed-external-0012",
+    "role": "intersection"
+  }
+}

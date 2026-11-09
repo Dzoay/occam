@@ -1,0 +1,69 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "box-slab-common-0001",
+  "origin": "tools/corpus/generate.py family box-slab-common seed 11001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        2.708,
+        18.027,
+        4.325
+      ],
+      "origin": [
+        -5.383,
+        -5.185,
+        6.846
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        2.708,
+        18.027,
+        5.313
+      ],
+      "origin": [
+        -5.383,
+        -5.185,
+        9.975
+      ]
+    },
+    {
+      "op": "common",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 58.385270736,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 147.232352,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -5.383,
+        -5.185,
+        9.975
+      ],
+      "max": [
+        -2.675,
+        12.842,
+        11.171
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

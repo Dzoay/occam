@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "arris-boolean-adjoining-cavities-cut-many",
+  "origin": "arris-labs/arris@1a7bc1e660b9d20a677ac06a317de83200ffd639 tests/fixtures/boolean/adjoining-cavities-cut-many/fixture.json: the recipe and its closed-form answer, converted by tools/corpus/import_arris.py; Copyright (c) 2026 Sergei Sergienko, under MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE at that commit)",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "plate",
+      "size": [
+        100,
+        100,
+        10
+      ],
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "box",
+      "id": "c1",
+      "size": [
+        20,
+        20,
+        6
+      ],
+      "origin": [
+        20,
+        20,
+        2
+      ]
+    },
+    {
+      "op": "box",
+      "id": "c2",
+      "size": [
+        20,
+        20,
+        6
+      ],
+      "origin": [
+        40,
+        30,
+        2
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "result.1",
+      "target": "plate",
+      "tool": "c1"
+    },
+    {
+      "op": "cut",
+      "id": "result",
+      "target": "result.1",
+      "tool": "c2"
+    }
+  ],
+  "result": "result",
+  "expect": {
+    "volume": {
+      "value": 95200.0,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 26440.0,
+      "rel_tol": 1e-06
+    }
+  }
+}

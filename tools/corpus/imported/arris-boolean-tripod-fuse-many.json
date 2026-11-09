@@ -1,0 +1,82 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "arris-boolean-tripod-fuse-many",
+  "origin": "arris-labs/arris@1a7bc1e660b9d20a677ac06a317de83200ffd639 tests/fixtures/boolean/tripod-fuse-many/fixture.json: the recipe and its closed-form answer, converted by tools/corpus/import_arris.py; Copyright (c) 2026 Sergei Sergienko, under MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE at that commit)",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "cx",
+      "radius": 5,
+      "height": 40,
+      "origin": [
+        -20,
+        0,
+        0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "cy",
+      "radius": 5,
+      "height": 40,
+      "origin": [
+        0,
+        -20,
+        0
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "cz",
+      "radius": 5,
+      "height": 40,
+      "origin": [
+        0,
+        0,
+        -20
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "fuse",
+      "id": "result.1",
+      "target": "cx",
+      "tool": "cy"
+    },
+    {
+      "op": "fuse",
+      "id": "result",
+      "target": "result.1",
+      "tool": "cz"
+    }
+  ],
+  "result": "result",
+  "expect": {
+    "volume": {
+      "value": 8010.5643984,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 3392.62194492,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    }
+  }
+}

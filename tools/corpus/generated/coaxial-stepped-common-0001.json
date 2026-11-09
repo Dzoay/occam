@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "coaxial-stepped-common-0001",
+  "origin": "tools/corpus/generate.py family coaxial-stepped-common seed 25001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 4.835,
+      "height": 10.42,
+      "origin": [
+        6.824,
+        -1.113,
+        -7.107
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 2.958,
+      "height": 7.215,
+      "origin": [
+        6.824,
+        6.18,
+        -7.107
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "common",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 85.9555835856,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 113.093754114,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        3.866,
+        6.18,
+        -10.065
+      ],
+      "max": [
+        9.782,
+        9.307,
+        -4.149
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

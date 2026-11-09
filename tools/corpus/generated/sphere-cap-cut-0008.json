@@ -1,0 +1,65 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "sphere-cap-cut-0008",
+  "origin": "tools/corpus/generate.py family sphere-cap-cut seed 16008",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 5.67,
+      "origin": [
+        -2.644,
+        -12.308,
+        2.032
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        22.68,
+        17.009999999999998,
+        22.68
+      ],
+      "origin": [
+        -13.984,
+        -33.407,
+        -9.308
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 723.164600813,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 396.142389769,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -8.314,
+        -16.397,
+        -3.638
+      ],
+      "max": [
+        3.026,
+        -6.638,
+        7.702
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

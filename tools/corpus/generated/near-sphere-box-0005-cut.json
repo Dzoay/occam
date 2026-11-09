@@ -1,0 +1,39 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-sphere-box-0005-cut",
+  "origin": "tools/corpus/generate.py family near-sphere-box seed 42005",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 19.855,
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        79.42,
+        79.42,
+        39.71
+      ],
+      "origin": [
+        -39.71,
+        -39.71,
+        19.8549717
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "x",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "x"
+}

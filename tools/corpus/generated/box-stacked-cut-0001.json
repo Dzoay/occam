@@ -1,0 +1,69 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "box-stacked-cut-0001",
+  "origin": "tools/corpus/generate.py family box-stacked-cut seed 13001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        23.355,
+        17.236,
+        2.505
+      ],
+      "origin": [
+        0.985,
+        -0.796,
+        7.213
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        13.036,
+        9.284,
+        3.19
+      ],
+      "origin": [
+        9.388,
+        5.159,
+        9.718
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 1008.3796839,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 1008.45447,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        0.985,
+        -0.796,
+        7.213
+      ],
+      "max": [
+        24.34,
+        16.44,
+        9.718
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

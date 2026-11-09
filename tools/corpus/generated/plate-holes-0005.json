@@ -1,0 +1,181 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "plate-holes-0005",
+  "origin": "tools/corpus/generate.py family plate-holes seed 15005",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        34.14,
+        52.993,
+        0.684
+      ],
+      "origin": [
+        1.669,
+        -7.905,
+        -9.761
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h0",
+      "radius": 1.93,
+      "height": 2.684,
+      "origin": [
+        7.565,
+        5.48,
+        -10.761
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c0",
+      "target": "a",
+      "tool": "h0"
+    },
+    {
+      "op": "cylinder",
+      "id": "h1",
+      "radius": 2.337,
+      "height": 2.684,
+      "origin": [
+        18.069,
+        4.793,
+        -10.761
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c1",
+      "target": "c0",
+      "tool": "h1"
+    },
+    {
+      "op": "cylinder",
+      "id": "h2",
+      "radius": 2.491,
+      "height": 2.684,
+      "origin": [
+        30.872,
+        5.652,
+        -10.761
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c2",
+      "target": "c1",
+      "tool": "h2"
+    },
+    {
+      "op": "cylinder",
+      "id": "h3",
+      "radius": 2.675,
+      "height": 2.684,
+      "origin": [
+        8.226,
+        29.733,
+        -10.761
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c3",
+      "target": "c2",
+      "tool": "h3"
+    },
+    {
+      "op": "cylinder",
+      "id": "h4",
+      "radius": 2.22,
+      "height": 2.684,
+      "origin": [
+        17.875,
+        32.844,
+        -10.761
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c4",
+      "target": "c3",
+      "tool": "h4"
+    },
+    {
+      "op": "cylinder",
+      "id": "h5",
+      "radius": 2.479,
+      "height": 2.684,
+      "origin": [
+        29.339,
+        33.578,
+        -10.761
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c5",
+      "target": "c4",
+      "tool": "h5"
+    }
+  ],
+  "result": "c5",
+  "expect": {
+    "volume": {
+      "value": 1165.23331846,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 3587.04798899,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": -10
+    },
+    "bbox": {
+      "min": [
+        1.669,
+        -7.905,
+        -9.761
+      ],
+      "max": [
+        35.809,
+        45.088,
+        -9.077
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

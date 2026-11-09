@@ -1,0 +1,69 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "fillet-box-edge-0008",
+  "origin": "tools/corpus/generate.py family fillet-box-edge seed 31008",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        23.692,
+        33.658,
+        29.091
+      ],
+      "origin": [
+        -6.088,
+        -6.4,
+        3.016
+      ]
+    },
+    {
+      "op": "fillet",
+      "id": "f",
+      "target": "a",
+      "radius": 3.924,
+      "edges": {
+        "in_box": {
+          "min": [
+            -6.089,
+            -6.401,
+            32.106
+          ],
+          "max": [
+            -6.087,
+            27.259,
+            32.108
+          ]
+        }
+      }
+    }
+  ],
+  "result": "f",
+  "expect": {
+    "volume": {
+      "value": 23086.681257,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 4868.29294748,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -6.088,
+        -6.4,
+        3.016
+      ],
+      "max": [
+        17.604,
+        27.258,
+        32.107
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

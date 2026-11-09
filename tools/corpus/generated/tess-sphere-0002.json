@@ -1,0 +1,55 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "tess-sphere-0002",
+  "origin": "tools/corpus/generate.py family tess-sphere seed 33002",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 4.214,
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "tessellate",
+      "id": "m",
+      "target": "a",
+      "linear_deflection": 0.05,
+      "angular_deflection": 0.5
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 313.452835709,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 223.15104583,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -4.214,
+        -4.214,
+        -4.214
+      ],
+      "max": [
+        4.214,
+        4.214,
+        4.214
+      ],
+      "abs_tol": 1e-05
+    },
+    "watertight": {
+      "value": true
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "steinmetz-cut-0001",
+  "origin": "tools/corpus/generate.py family steinmetz-cut seed 20001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 1.632,
+      "height": 5.863,
+      "origin": [
+        -2.9315,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 1.632,
+      "height": 5.863,
+      "origin": [
+        0.0,
+        -2.9315,
+        0.0
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 25.8755842565,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 76.8549173678,
+      "rel_tol": 1e-06
+    },
+    "bbox": {
+      "min": [
+        -2.9315,
+        -1.632,
+        -1.632
+      ],
+      "max": [
+        2.9315,
+        1.632,
+        1.632
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "plate-hole-0003",
+  "origin": "tools/corpus/generate.py family plate-hole seed 14003",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        68.276,
+        37.534,
+        5.879
+      ],
+      "origin": [
+        -1.452,
+        -7.477,
+        -8.799
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h0",
+      "radius": 7.181,
+      "height": 7.879,
+      "origin": [
+        38.231,
+        8.617,
+        -9.799
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c0",
+      "target": "a",
+      "tool": "h0"
+    }
+  ],
+  "result": "c0",
+  "expect": {
+    "volume": {
+      "value": 14113.536734,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 6310.71108909,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 0
+    },
+    "bbox": {
+      "min": [
+        -1.452,
+        -7.477,
+        -8.799
+      ],
+      "max": [
+        66.824,
+        30.057,
+        -2.92
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

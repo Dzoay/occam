@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "coaxial-tube-0001",
+  "origin": "tools/corpus/generate.py family coaxial-tube seed 27001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 5.025,
+      "height": 1.636,
+      "origin": [
+        -2.41,
+        18.285,
+        4.119
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 2.564,
+      "height": 3.636,
+      "origin": [
+        -2.41,
+        17.285,
+        4.119
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 95.9907397484,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 195.357633234,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 0
+    },
+    "bbox": {
+      "min": [
+        -7.435,
+        18.285,
+        -0.906
+      ],
+      "max": [
+        2.615,
+        19.921,
+        9.144
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

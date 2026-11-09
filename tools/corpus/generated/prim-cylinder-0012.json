@@ -1,0 +1,51 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "prim-cylinder-0012",
+  "origin": "tools/corpus/generate.py family prim-cylinder seed 2012",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 0.714,
+      "height": 2.683,
+      "origin": [
+        -6.863,
+        -19.607,
+        13.465
+      ],
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 4.2970159815,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 15.2396020688,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -6.863,
+        -20.321,
+        12.751
+      ],
+      "max": [
+        -4.18,
+        -18.893,
+        14.179
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

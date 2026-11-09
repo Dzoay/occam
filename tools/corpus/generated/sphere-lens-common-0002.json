@@ -1,0 +1,48 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "sphere-lens-common-0002",
+  "origin": "tools/corpus/generate.py family sphere-lens-common seed 29002",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 2.249,
+      "origin": [
+        4.556,
+        15.879,
+        6.196
+      ]
+    },
+    {
+      "op": "sphere",
+      "id": "b",
+      "radius": 1.984,
+      "origin": [
+        4.585969153227,
+        17.027049100541,
+        6.903733080053
+      ]
+    },
+    {
+      "op": "common",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 21.0321468499,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 37.8808196246,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    }
+  }
+}

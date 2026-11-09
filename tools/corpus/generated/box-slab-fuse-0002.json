@@ -1,0 +1,69 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "box-slab-fuse-0002",
+  "origin": "tools/corpus/generate.py family box-slab-fuse seed 9002",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        5.056,
+        9.574,
+        22.795
+      ],
+      "origin": [
+        -4.491,
+        -3.072,
+        -7.11
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        5.056,
+        9.574,
+        27.626
+      ],
+      "origin": [
+        -4.491,
+        -3.072,
+        7.786
+      ]
+    },
+    {
+      "op": "fuse",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 2058.32605517,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 1341.006008,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -4.491,
+        -3.072,
+        -7.11
+      ],
+      "max": [
+        0.565,
+        6.502,
+        35.412
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

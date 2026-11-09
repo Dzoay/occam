@@ -1,0 +1,61 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "sphere-lens-fuse-0006",
+  "origin": "tools/corpus/generate.py family sphere-lens-fuse seed 28006",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 3.069,
+      "origin": [
+        12.2,
+        6.378,
+        12.038
+      ]
+    },
+    {
+      "op": "sphere",
+      "id": "b",
+      "radius": 2.003,
+      "origin": [
+        12.850751053982,
+        4.50257161526,
+        11.692288502572
+      ]
+    },
+    {
+      "op": "fuse",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 129.134521027,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 125.481387645,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        9.131,
+        2.49957161526,
+        8.969
+      ],
+      "max": [
+        15.269,
+        9.447,
+        15.107
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

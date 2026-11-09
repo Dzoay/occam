@@ -1,0 +1,48 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "sphere-lens-cut-0001",
+  "origin": "tools/corpus/generate.py family sphere-lens-cut seed 30001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 11.678,
+      "origin": [
+        -8.536,
+        -12.696,
+        3.592
+      ]
+    },
+    {
+      "op": "sphere",
+      "id": "b",
+      "radius": 11.678,
+      "origin": [
+        -8.536,
+        0.006,
+        3.592
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 4905.48602136,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 1713.74738793,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    }
+  }
+}

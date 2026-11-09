@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "steinmetz-fuse-0001",
+  "origin": "tools/corpus/generate.py family steinmetz-fuse seed 19001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 0.604,
+      "height": 2.576,
+      "origin": [
+        -1.288,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 0.604,
+      "height": 2.576,
+      "origin": [
+        0.0,
+        -1.288,
+        0.0
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "fuse",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 4.72953008258,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 18.2994233664,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -1.288,
+        -1.288,
+        -0.604
+      ],
+      "max": [
+        1.288,
+        1.288,
+        0.604
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

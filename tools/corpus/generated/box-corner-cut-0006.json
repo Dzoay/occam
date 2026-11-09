@@ -1,0 +1,69 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "box-corner-cut-0006",
+  "origin": "tools/corpus/generate.py family box-corner-cut seed 7006",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        7.829,
+        29.384,
+        3.763
+      ],
+      "origin": [
+        -2.858,
+        -9.474,
+        -9.869
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        9.262,
+        26.5,
+        12.077
+      ],
+      "origin": [
+        2.327,
+        7.511,
+        -8.769
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 778.36711354,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 740.15971,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -2.858,
+        -9.474,
+        -9.869
+      ],
+      "max": [
+        4.971,
+        19.91,
+        -6.106
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

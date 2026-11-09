@@ -1,0 +1,65 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "sphere-cap-common-0003",
+  "origin": "tools/corpus/generate.py family sphere-cap-common seed 17003",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 6.141,
+      "origin": [
+        -15.096,
+        8.547,
+        5.08
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        24.564,
+        24.564,
+        18.423000000000002
+      ],
+      "origin": [
+        -27.378,
+        -3.735,
+        7.33
+      ]
+    },
+    {
+      "op": "common",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 230.396813757,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 252.705449914,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -20.8099636856,
+        2.83303631443,
+        7.33
+      ],
+      "max": [
+        -9.38203631443,
+        14.2609636856,
+        11.221
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "prim-sphere-0009",
+  "origin": "tools/corpus/generate.py family prim-sphere seed 4009",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 3.804,
+      "origin": [
+        -19.997,
+        -8.028,
+        13.096
+      ]
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 230.573893987,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 181.8406104,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -23.801,
+        -11.832,
+        9.292
+      ],
+      "max": [
+        -16.193,
+        -4.224,
+        16.9
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

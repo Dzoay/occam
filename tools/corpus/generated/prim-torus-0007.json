@@ -1,0 +1,51 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "prim-torus-0007",
+  "origin": "tools/corpus/generate.py family prim-torus seed 5007",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "torus",
+      "id": "a",
+      "major_radius": 1.056,
+      "minor_radius": 0.299,
+      "origin": [
+        11.209,
+        5.33,
+        -5.421
+      ],
+      "axis": [
+        -0.755,
+        0.779,
+        -0.625
+      ]
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 1.86352848647,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 12.4650734881,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 0
+    },
+    "bbox": {
+      "min": [
+        10.0676153572,
+        4.20430752631,
+        -6.63500801504
+      ],
+      "max": [
+        12.3503846428,
+        6.45569247369,
+        -4.20699198496
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

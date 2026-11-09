@@ -1,0 +1,58 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "arris-boolean-oblique-hole",
+  "origin": "arris-labs/arris@1a7bc1e660b9d20a677ac06a317de83200ffd639 tests/fixtures/boolean/oblique-hole/fixture.json: the recipe and its closed-form answer, converted by tools/corpus/import_arris.py; Copyright (c) 2026 Sergei Sergienko, under MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE at that commit)",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "plate",
+      "size": [
+        40,
+        30,
+        10
+      ],
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "hole",
+      "radius": 3,
+      "height": 16,
+      "origin": [
+        20,
+        11.0,
+        -1.9282032302755097
+      ],
+      "axis": [
+        0,
+        0.49999999999999994,
+        0.8660254037844387
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "result",
+      "target": "plate",
+      "tool": "hole"
+    }
+  ],
+  "result": "result",
+  "expect": {
+    "volume": {
+      "value": 11673.5161144,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 3952.3591466,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 0
+    }
+  }
+}

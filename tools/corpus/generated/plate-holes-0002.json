@@ -1,0 +1,115 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "plate-holes-0002",
+  "origin": "tools/corpus/generate.py family plate-holes seed 15002",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        111.627,
+        62.571,
+        4.958
+      ],
+      "origin": [
+        0.576,
+        0.536,
+        9.118
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h0",
+      "radius": 6.899,
+      "height": 6.958,
+      "origin": [
+        32.278,
+        17.14,
+        8.118
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c0",
+      "target": "a",
+      "tool": "h0"
+    },
+    {
+      "op": "cylinder",
+      "id": "h1",
+      "radius": 7.055,
+      "height": 6.958,
+      "origin": [
+        88.426,
+        18.681,
+        8.118
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c1",
+      "target": "c0",
+      "tool": "h1"
+    },
+    {
+      "op": "cylinder",
+      "id": "h2",
+      "radius": 7.078,
+      "height": 6.958,
+      "origin": [
+        28.106,
+        45.703,
+        8.118
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c2",
+      "target": "c1",
+      "tool": "h2"
+    }
+  ],
+  "result": "c2",
+  "expect": {
+    "volume": {
+      "value": 32332.7581027,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 15425.1985194,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": -4
+    },
+    "bbox": {
+      "min": [
+        0.576,
+        0.536,
+        9.118
+      ],
+      "max": [
+        112.203,
+        63.107,
+        14.076
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

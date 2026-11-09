@@ -103,6 +103,26 @@ mutants *args:
     mkdir -p "$TMPDIR"
     cargo xtask gates mutants "$@"
 
+# Regenerate tools/corpus/generated from its seeds, and print the family table
+[group('corpus')]
+corpus-generate *args:
+    python3 -B tools/corpus/generate.py "$@"
+
+# Download the locked corpus sources (the NIST parts) into ~/.cache/occam-corpus, each verified against the lock
+[group('corpus')]
+corpus-fetch *args:
+    python3 -B tools/corpus/fetch.py "$@"
+
+# The corpus pipeline's own tests; they never touch the network
+[group('corpus')]
+corpus-test *args:
+    python3 -B -m unittest discover -s tools/corpus/tests -t tools/corpus "$@"
+
+# Regenerate tools/corpus/imported from a clone of arris at the locked commit, taking only what the per-case gate allows
+[group('corpus')]
+corpus-import-arris repo:
+    python3 -B tools/corpus/import_arris.py "$1"
+
 # Install what `just mutants-on` needs on another machine over ssh, at this machine's versions
 [group('mutants')]
 mutants-setup host:

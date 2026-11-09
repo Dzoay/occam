@@ -25,3 +25,11 @@ path = [
 precedence = "override"
 SPDX-FileCopyrightText = ["2026 The occam contributors", "2026 The phasekit contributors"]
 SPDX-License-Identifier = "MIT OR Apache-2.0"
+
+# Test recipes converted from the arris fixture corpus (tests/fixtures/), under the same licence. Attribution per case
+# is in each file's `origin`, and the commit in tools/corpus/sources.lock.json.
+[[annotations]]
+path = "tools/corpus/imported/**"
+precedence = "override"
+SPDX-FileCopyrightText = ["2026 The occam contributors", "2026 Sergei Sergienko"]
+SPDX-License-Identifier = "MIT OR Apache-2.0"
