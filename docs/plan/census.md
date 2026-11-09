@@ -10,9 +10,7 @@ run.
 
 **PR grouping:** one PR each.
 
-**Still to do from `census.oracle`:** `occam-verify` starts as the Rust side of the oracle: it reads oracle result files
-and compares them. A survey session cannot write to `crates/`, so an implementation session writes it from
-[the harness's formats](../../tools/oracle/README.md). The `solidcore` second opinion is not wired up yet.
+**Still to do from `census.oracle`:** the `solidcore` second opinion is not wired up yet.
 
 ## Steps
 

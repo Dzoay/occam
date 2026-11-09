@@ -1,0 +1,14 @@
+[package]
+name = "occam-verify"
+description = "Compares occam's measurements with the oracle's results (never shipped)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+
+[lints]
+workspace = true
