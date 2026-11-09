@@ -3,4 +3,5 @@
 occam-math 23
 occam-report 36
 occam-units 24
+occam-verify 30
 occam-xtask::bin/occam-xtask 199
