@@ -64,7 +64,14 @@ def engines(engine_type):
 def _clean_environment():
     """A minimal environment that sends no account, credential or user configuration to the fetch and the build."""
     kept = {key: os.environ[key] for key in ("HOME", "PATH", "RUSTUP_HOME", "CARGO_HOME", "RUSTUP_TOOLCHAIN") if key in os.environ}
-    return {**kept, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "LC_ALL": "C"}
+    return {
+        **kept,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "LC_ALL": "C",
+        "RUSTFLAGS": "--cap-lints allow",  # a compiler warning quotes the kernel's source, which is not to be read
+    }
 
 
 def _run(command, cwd=None):

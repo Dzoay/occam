@@ -281,7 +281,10 @@ Where arris answers differently from the description above:
   release. Arris's booleans at this release are documented for planes and cylinders; anything else is its own typed
   refusal, reported as `op_failed`.
 
-`solidcore` is not wired up. See the pull request for what was tried.
+`solidcore` is not wired up yet, and no result comes from it. Its release 1.0.1 is commit
+`e83425f7942c10ca806242af220e5a2901a9db60`. A driver still has to be written for volume (`brep_volume` needs a
+`PropertyAttributes`), for placing shapes off the Z axis and rotating them (`transform` with an `Axis2Placement`), and for
+entity counts, fillets and tessellation.
 
 ### Adding an engine
 

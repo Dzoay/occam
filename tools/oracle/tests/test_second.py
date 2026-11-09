@@ -8,6 +8,7 @@ import stat
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 
 from occam_oracle.compare import check_case, compare_results
@@ -101,11 +102,20 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(result["error"]["code"], "worker_timeout")
         pid = int(marker.read_text())
         marker.unlink()
-        with self.assertRaises(ProcessLookupError):
-            for _attempt in range(200):
-                os.kill(pid, 0)
-                os.sched_yield()
-            raise AssertionError("the driver outlived its timeout")
+        self.assert_gone(pid)
+
+    def assert_gone(self, pid):
+        """Waits for the process to go; a killed process awaiting its reaper counts as gone."""
+        deadline = time.monotonic() + 10.0
+        status = pathlib.Path(f"/proc/{pid}/stat")
+        while time.monotonic() < deadline:
+            try:
+                if status.read_text().rsplit(")", 1)[1].split()[0] == "Z":
+                    return
+            except (FileNotFoundError, ProcessLookupError):
+                return
+            time.sleep(0.05)
+        self.fail(f"the driver (pid {pid}) outlived its timeout")
 
 
 class EngineListTests(unittest.TestCase):
