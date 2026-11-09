@@ -11,17 +11,6 @@ layer. No geometry. The crates created here are `occam-report`, `occam-math`, `o
 
 ## Steps
 
-### `bedrock.units`
-
-`occam-units`: `Length`, `Angle`, points and vectors typed by frame (world, local, UV), one conversion point at the API,
-and a per-model `Tolerance` that is never global (L22). The internal length unit is the millimetre.
-
-Compile-fail checks are `occam-xtask` fixtures: each runs `rustc --error-format=json`, asserts the expected error code, and
-has a positive twin that must compile, so a fixture cannot pass just because the type does not exist yet.
-
-*Failing test first:* compile-fail fixtures for adding a world point to a UV point and for passing a bare `f64` as a
-`Length`; unit round-trip tests.
-
 ### `bedrock.thread`
 
 One trivial operation through every crate listed above: measure the distance between two points, refusing a tolerance

@@ -1,6 +1,8 @@
 //! `cargo xtask`: the gates and the developer tasks. Never shipped.
 #![allow(clippy::print_stdout, clippy::print_stderr, reason = "a command-line tool prints")]
 
+#[cfg(test)]
+mod compile_fail;
 mod gates;
 mod glob;
 mod manifest;

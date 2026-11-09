@@ -58,6 +58,15 @@ disallowed-methods = [
     { path = "f64::mul_add", reason = "it rounds once, so it changes results against `a * b + c`: proving-ground.s5 decides (L23)" },
 ]
 
-# `arithmetic_side_effects` passes these: IEEE floating-point arithmetic, lane by lane, which cannot panic or overflow. A
+# `arithmetic_side_effects` passes these: IEEE floating-point arithmetic underneath, which cannot panic or overflow. A
 # type of the crate being linted is named by its path inside that crate.
-arithmetic-side-effects-allowed = ["lanes::Lanes", "occam_math::Lanes"]
+arithmetic-side-effects-allowed = [
+    "lanes::Lanes",
+    "occam_math::Lanes",
+    "measure::Measure",
+    "occam_units::Measure",
+    "frame::Triple",
+    "occam_units::Triple",
+    "uv::Pair",
+    "occam_units::Pair",
+]

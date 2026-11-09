@@ -6,10 +6,11 @@
 [profile.default]
 fail-fast = { max-fail = 1, terminate = "immediate" }
 
-# The lint probes run clippy in a scratch workspace, seconds apiece, and catch no mutant of the gates. They run last, so
-# a mutant a quick test catches fails before them. Order only: every test still runs.
+# The lint probes run clippy in a scratch workspace, and the compile-fail fixtures run rustc, seconds apiece, and catch
+# no mutant of the gates. They run last, so a mutant a quick test catches fails before them. Order only: every test still
+# runs.
 [[profile.default.overrides]]
-filter = "package(occam-xtask) & test(/^probes::/)"
+filter = "package(occam-xtask) & test(/^(probes|compile_fail)::/)"
 priority = -10
 
 # The gates and CI: run everything and report every failure.
