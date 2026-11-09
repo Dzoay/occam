@@ -1,0 +1,170 @@
+//! Source: original
+//! [`Lanes`]: several numbers side by side, as a plain array. Each operation is the `f64` operation on every lane, in a
+//! loop the compiler vectorises where it is inlined, so there is no `unsafe` and only one definition of each result.
+
+use std::ops::{Add, Div, Mul, Neg, Sub};
+
+use crate::real::Real;
+
+/// `W` numbers side by side. Every operation works lane by lane.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lanes<const W: usize>([f64; W]);
+
+impl<const W: usize> Lanes<W> {
+    /// The lanes, lane 0 first.
+    #[must_use]
+    pub const fn new(lanes: [f64; W]) -> Self {
+        Self(lanes)
+    }
+
+    /// The lanes as an array, lane 0 first.
+    #[must_use]
+    pub const fn to_array(self) -> [f64; W] {
+        self.0
+    }
+
+    /// `op` on every lane.
+    #[inline]
+    fn map(self, op: impl Fn(f64) -> f64) -> Self {
+        Self(self.0.map(op))
+    }
+
+    /// `op` on every pair of lanes.
+    #[inline]
+    fn zip(mut self, rhs: Self, op: impl Fn(f64, f64) -> f64) -> Self {
+        for (lane, other) in self.0.iter_mut().zip(rhs.0) {
+            *lane = op(*lane, other);
+        }
+        self
+    }
+}
+
+impl<const W: usize> Add for Lanes<W> {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        self.zip(rhs, |a, b| a + b)
+    }
+}
+
+impl<const W: usize> Sub for Lanes<W> {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self {
+        self.zip(rhs, |a, b| a - b)
+    }
+}
+
+impl<const W: usize> Mul for Lanes<W> {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self {
+        self.zip(rhs, |a, b| a * b)
+    }
+}
+
+impl<const W: usize> Div for Lanes<W> {
+    type Output = Self;
+
+    #[inline]
+    fn div(self, rhs: Self) -> Self {
+        self.zip(rhs, |a, b| a / b)
+    }
+}
+
+impl<const W: usize> Neg for Lanes<W> {
+    type Output = Self;
+
+    #[inline]
+    fn neg(self) -> Self {
+        self.map(|a| -a)
+    }
+}
+
+impl<const W: usize> Real for Lanes<W> {
+    const LANES: usize = W;
+
+    #[inline]
+    fn splat(x: f64) -> Self {
+        Self([x; W])
+    }
+
+    #[inline]
+    fn from_fn(mut next: impl FnMut() -> f64) -> Self {
+        Self(std::array::from_fn(|_| next()))
+    }
+
+    #[inline]
+    fn for_each_lane(self, mut visit: impl FnMut(f64)) {
+        for lane in self.0 {
+            visit(lane);
+        }
+    }
+
+    #[inline]
+    fn abs(self) -> Self {
+        self.map(f64::abs)
+    }
+
+    #[inline]
+    fn sqrt(self) -> Self {
+        self.map(f64::sqrt)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const A: [f64; 4] = [1.5, -2.25, 0.1, 1e300];
+    const B: [f64; 4] = [0.5, 4.0, 0.2, 1e300];
+
+    fn bits(lanes: [f64; 4]) -> [u64; 4] {
+        lanes.map(f64::to_bits)
+    }
+
+    #[test]
+    fn binary_operations_work_lane_by_lane() {
+        let (a, b) = (Lanes::new(A), Lanes::new(B));
+        let lanes = |op: fn(f64, f64) -> f64| [op(1.5, 0.5), op(-2.25, 4.0), op(0.1, 0.2), op(1e300, 1e300)];
+        assert_eq!(bits((a + b).to_array()), bits(lanes(|x, y| x + y)));
+        assert_eq!(bits((a - b).to_array()), bits(lanes(|x, y| x - y)));
+        assert_eq!(bits((a * b).to_array()), bits(lanes(|x, y| x * y)));
+        assert_eq!(bits((a / b).to_array()), bits(lanes(|x, y| x / y)));
+    }
+
+    #[test]
+    fn unary_operations_work_lane_by_lane() {
+        let a = Lanes::new(A);
+        assert_eq!(bits((-a).to_array()), bits([-1.5, 2.25, -0.1, -1e300]));
+        assert_eq!(bits(a.abs().to_array()), bits([1.5, 2.25, 0.1, 1e300]));
+        let roots = Lanes::new([4.0, 2.0, 0.0, -0.0]).sqrt();
+        assert_eq!(bits(roots.to_array()), bits([2.0, f64::from_bits(0x3FF6_A09E_667F_3BCD), 0.0, -0.0]));
+    }
+
+    #[test]
+    fn splat_fills_every_lane() {
+        assert_eq!(Lanes::<3>::splat(2.5).to_array(), [2.5; 3]);
+    }
+
+    #[test]
+    fn lanes_are_built_and_visited_from_lane_zero() {
+        let mut next = 0.0;
+        let lanes = Lanes::<3>::from_fn(|| {
+            next += 1.0;
+            next
+        });
+        assert_eq!(lanes.to_array(), [1.0, 2.0, 3.0]);
+        let mut seen = Vec::new();
+        lanes.for_each_lane(|x| seen.push(x));
+        assert_eq!(seen, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn a_lane_count_is_its_width() {
+        assert_eq!(Lanes::<4>::LANES, 4);
+    }
+}

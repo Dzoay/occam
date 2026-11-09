@@ -12,7 +12,9 @@ repository = "https://github.com/Dzoay/occam"
 publish = false # unpublished unless a crate says otherwise
 
 # Every lint is on from the start (L19), and `probes::clippy_rejects_every_banned_pattern` proves each ban fires. A crate
-# relaxes one only at its root, with a reason.
+# relaxes one only at its root, with a reason. The exception is `arithmetic_side_effects` on code generic over
+# `occam_math::Real`, whose type parameter no allow-list can name: only the items that compute carry an `#[expect]`, with
+# that reason, so integer arithmetic elsewhere in the crate stays checked.
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

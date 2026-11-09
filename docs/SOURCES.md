@@ -10,3 +10,5 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 
 | Key | Kind | Licence | Citation |
 |---|---|---|---|
+| `fnv-1a` | spec | n/a | Fowler, Noll, Vo, Eastlake, Hansen. *The FNV Non-Cryptographic Hash Algorithm*. RFC 9923, IETF |
+| `splitmix64` | paper | n/a | Steele, Lea, Flood. *Fast Splittable Pseudorandom Number Generators*. OOPSLA 2014 |

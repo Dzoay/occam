@@ -1,0 +1,10 @@
+[package]
+name = "occam-math"
+description = "The one maths implementation: the determinism contract, the Real trait and its lanes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

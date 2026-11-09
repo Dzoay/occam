@@ -75,7 +75,8 @@ jobs:
           fetch-depth: 0 # the gates compare against origin/main
       - uses: ./.github/actions/setup
         with:
-          tools: just cargo-nextest cargo-deny cargo-shear
+          targets: wasm32-wasip2 # the determinism gate's wasm builds
+          tools: just cargo-nextest cargo-deny cargo-shear wasmtime-cli
       - name: uv, which runs reuse
         run: pipx install "uv==0.13.7"
       - run: just gate all --except mutants
