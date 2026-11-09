@@ -12,11 +12,6 @@ run.
 
 ## Steps
 
-### `census.parity`
-
-`docs/PARITY.md`: tiers ordered by real usage, each row a behaviour rather than an OCCT class name, and one table of what
-will not be built. The first tier is the bracket test. Implementers work from this file. The user approves it (L35).
-
 ### `census.defects`
 
 A script fetches public OCCT and FreeCAD issues and strips code blocks and linked patches. Only the stripped text is read,
