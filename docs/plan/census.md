@@ -16,4 +16,4 @@ and compares them. A survey session cannot write to `crates/`, so an implementat
 
 ## Steps
 
-Every step has merged. What remains is the exit gate above.
+Every step has merged, and [the exit gate above is met](../decisions/2026-11-09-parity-approved.md).
