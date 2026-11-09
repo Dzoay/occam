@@ -28,8 +28,8 @@ fn surface<R: Real>([row0, row1, row2, row3]: [[f64; 4]; 4], u: R, v: R) -> R {
     cubic([along(row0), along(row1), along(row2), along(row3)], v)
 }
 
-/// Writes each row's points to a buffer, two at a time, as a tessellator does. The vectoriser starts from those stores: when
-/// this workload summed the lanes straight into one number, the simd128 build held no vector arithmetic at all.
+/// Writes each row's points to a buffer, two at a time, as a tessellator does. When this workload summed the lanes straight
+/// into one number, the simd128 build held no vector arithmetic at all, so check the gate's ratio after changing its shape.
 fn sweep(grid: u32) -> f64 {
     let net = control_net();
     let step = 1.0 / f64::from(grid.max(1));
