@@ -79,7 +79,7 @@ jobs:
           tools: just cargo-nextest cargo-deny cargo-shear wasmtime-cli
       - name: uv, which runs reuse
         run: pipx install "uv==0.13.7"
-      - run: just gate all --except mutants
+      - run: just gate all --except mutants,perf
       - run: just tools-test
 
   # Instruction counts per operation class, and browser timing with its simd128-against-scalar ratio (L30, L31).
