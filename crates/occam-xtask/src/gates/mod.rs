@@ -10,6 +10,7 @@ pub mod docs;
 mod errors;
 mod layers;
 mod mutants;
+mod perf;
 mod plan;
 mod provenance;
 
@@ -22,7 +23,7 @@ use crate::verdict::{self, Finding, Verdict};
 type Gate = fn(&Repo, &[String]) -> Verdict;
 
 /// The gates in force, in the order `gates all` runs them.
-const GATES: [(&str, Gate); 10] = [
+const GATES: [(&str, Gate); 11] = [
     ("layers", layers::run),
     ("complexity", complexity::run),
     ("provenance", provenance::run),
@@ -33,6 +34,7 @@ const GATES: [(&str, Gate); 10] = [
     ("determinism", determinism::run),
     ("counts", counts::run),
     ("mutants", mutants::run),
+    ("perf", perf::run),
 ];
 
 /// A gate selected to run, with its name and its own arguments.

@@ -62,4 +62,5 @@ new values from a separate implementation again, and say so in the PR.
 - wasmtime on x86-64 runs the same floating-point instructions as native code, so comparing these builds cannot show a
   difference in NaN bits that only another CPU would produce. Rule 3 and the record are what guard against that.
 - Windows is compile-checked only (`just wasm`), and aarch64 is not built.
-- Browser engines are not run until `bedrock.thread` and `bedrock.perf`.
+- One browser engine is run: `gates perf` times Chromium and requires the simd128 and scalar builds to compute the same bits. Other
+  engines are not run.

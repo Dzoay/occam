@@ -14,5 +14,9 @@ occam = { path = "../occam" }
 # Pinned to the version of wasm-bindgen-cli in scripts/toolchain.sh, which must match. See docs/decisions/2026-11-09-wasm-bindgen.md.
 wasm-bindgen = "=0.2.129"
 
+[[example]]
+name = "perf"
+crate-type = ["cdylib"]
+
 [lints]
 workspace = true

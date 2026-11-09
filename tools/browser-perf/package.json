@@ -1,0 +1,9 @@
+{
+  "name": "occam-browser-perf",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "description": "Times the browser build in a real browser, for `gates perf`.",
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

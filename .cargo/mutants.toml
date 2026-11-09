@@ -17,6 +17,9 @@ exclude_globs = [
     # Process glue: it runs git, cargo and the tools. Every gate's real run exercises it; unit tests cannot.
     "crates/occam-xtask/src/repo.rs",
     "crates/occam-xtask/src/main.rs",
+    # Measured by `gates perf`, whose record catches a change in what they compute. No test can.
+    "crates/occam/benches/*.rs",
+    "crates/occam-wasm/examples/*.rs",
 ]
 
 # Each gate's `run` gathers its input through `repo` and is exercised by running the gate, not by unit tests; the rules
@@ -24,6 +27,8 @@ exclude_globs = [
 exclude_re = [
     "replace run -> Verdict",
     "in run$",
+    "replace (measure|browser|built|counts|summaries) ",
+    "in (measure|browser|built|counts|summaries)$",
     "replace (main|usage) -> ExitCode",
     "in (main|usage)$",
 ]

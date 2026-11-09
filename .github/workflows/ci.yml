@@ -79,8 +79,27 @@ jobs:
           tools: just cargo-nextest cargo-deny cargo-shear wasmtime-cli
       - name: uv, which runs reuse
         run: pipx install "uv==0.13.7"
-      - run: just gate all --except mutants
+      - run: just gate all --except mutants,perf
       - run: just tools-test
+
+  # Instruction counts per operation class, and browser timing with its simd128-against-scalar ratio (L30, L31).
+  perf:
+    name: perf
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          targets: x86_64-unknown-linux-musl,wasm32-unknown-unknown
+          tools: just wasm-bindgen-cli gungraun-runner
+      - name: Valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: Playwright's Chromium
+        working-directory: tools/browser-perf
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Measure, and report on the PR
+        shell: bash
+        run: just perf | tee -a "$GITHUB_STEP_SUMMARY"
 
   mutants-shard:
     name: mutants (shard ${{ matrix.shard }} of 4)
@@ -118,7 +137,7 @@ jobs:
   # A goal, not a gate (L46): it is reported and never fails the run.
   ci-time:
     name: ci time
-    needs: [fmt, clippy, test, wasm, gates, mutants]
+    needs: [fmt, clippy, test, wasm, gates, perf, mutants]
     if: always()
     runs-on: ubuntu-24.04
     permissions:

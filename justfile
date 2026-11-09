@@ -103,7 +103,13 @@ tools-test: corpus-test
 
 # Everything except mutants and perf
 [group('gates')]
-gates: fmt-check clippy test-all wasm tools-test (gate "all" "--except" "mutants")
+gates: fmt-check clippy test-all wasm tools-test (gate "all" "--except" "mutants,perf")
+
+# Instruction counts per operation class, and browser timing; `just perf --update`: rewrite the record
+[env("CARGO_TARGET_DIR", target)]
+[group('gates')]
+perf *args:
+    cargo xtask gates perf "$@"
 
 # Mutation testing on the Rust changed since origin/main; `just mutants --shard 1/4`: one slice of it
 [env("CARGO_TARGET_DIR", target)]
