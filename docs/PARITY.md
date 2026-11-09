@@ -1,6 +1,6 @@
 # Parity list
 
-**Status: proposed, awaiting the user's approval (L35).** The user owns this list and its order. "Replacement done" in
+**Status: [approved by the user](decisions/2026-11-09-parity-approved.md), 2026-11-09 (L35).** The user owns this list and its order. "Replacement done" in
 [the plan](PLAN.md#2-what-done-means) means every row here.
 
 Each row is a behaviour occam must provide, written from the outside: what goes in and what comes out. Implementers work
