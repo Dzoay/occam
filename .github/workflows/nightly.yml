@@ -39,5 +39,4 @@ jobs:
           tools: just
       - name: uv, which runs the oracle harness
         run: pipx install "uv==0.13.7"
-      - run: just oracle build-second
       - run: just oracle-test

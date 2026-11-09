@@ -170,7 +170,7 @@ Schema `occam-oracle-result/1`, a successful case:
 | `threads` | The parallelism the case ran under. |
 | `status` | `ok` or `error`. |
 | `shape.volume`, `shape.area` | The engine's mass properties of the result. |
-| `shape.bbox` | `{"min": [x, y, z], "max": [x, y, z]}`, the tight optimal box with no tolerance added; `null` for an empty result. |
+| `shape.bbox` | `{"min": [x, y, z], "max": [x, y, z]}`, OCCT's optimal box with no tolerance added; `null` for an empty result. It is not always tight: on trimmed spherical faces it has been seen to reach past the shape, and it inflated a torus by 1e-7. Compare with an `abs_tol` of at least 1e-6, and treat an excess on a spherical face as a weakness of the oracle rather than of the result (L11). |
 | `shape.euler` | `V - E + 2F - L`, from `counts`: vertices, non-degenerate edges, faces and the wires of all faces. Degenerate edges collapse to a point and are not counted; a sphere gives 2, a cylinder 2, a plate with one through-hole 0. |
 | `shape.counts` | `vertices`, `edges` (non-degenerate only), `degenerate_edges`, `wires`, `faces`, `shells`, `solids`. Reported, never compared. |
 | `shape.valid` | The engine's checker's verdict. |
