@@ -3,6 +3,8 @@
 proc-macro2 occam-xtask xtask-dependencies
 serde occam-xtask xtask-dependencies
 serde_json occam-xtask xtask-dependencies
+serde occam-report report-json
+serde_json occam-report report-json
 syn occam-xtask xtask-dependencies
 toml occam-xtask xtask-dependencies
 itoa transitive xtask-dependencies

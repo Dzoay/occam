@@ -111,6 +111,12 @@ mutants-setup host:
 mutants-on host *args:
     scripts/remote-mutants.sh run "$@"
 
+# List every report code and remedy as JSON
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+errors:
+    cargo run --quiet -p occam-report --example catalogue
+
 # Check locked dependencies against the RustSec advisories; the nightly workflow runs this
 [group('tools')]
 advisories:

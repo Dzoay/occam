@@ -1,0 +1,15 @@
+[package]
+name = "occam-report"
+description = "Reports, codes and remedies: occam's errors as an API for agents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The kernel is otherwise std-only. See docs/decisions/2026-11-08-report-json.md.
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+
+[lints]
+workspace = true

@@ -11,22 +11,6 @@ layer. No geometry. The crates created here are `occam-report`, `occam-math`, `o
 
 ## Steps
 
-### `bedrock.report`
-
-`occam-report`, std-only:
-
-- `Report`: a stable `Code`, the entities involved, named values tagged by quantity, `Remedy` values with parameters
-  (L3), and partial failure state (L5). Failure paths may allocate.
-- `Outcome<T>`: a value plus diagnostics, so success reports too (L7).
-- Batch results, one per item (L6).
-- One JSON form with a schema version, written by hand (L4), and a listable catalogue of codes and remedies (L8).
-- Wording lives here, with numbers displayed in the caller's units (L9).
-- `followed_remedy!(code, remedy)`: a test registers the pair and retries using the parameters in the `Report` it received.
-- `gates errors`, which compares that registry with the catalogue.
-
-*Failing test first:* a `Report` round-trips through JSON unchanged, and a catalogued pair with no registered test fails
-`gates errors`.
-
 ### `bedrock.maths`
 
 `occam-math`'s skeleton: the determinism contract written down, the sealed `Real` trait with scalar and `[f64; W]` lane
