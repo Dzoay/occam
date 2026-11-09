@@ -45,7 +45,7 @@ These hold from the first commit. The first thirteen are [the user's priorities]
 | L11 | Geometric invariants are the arbiter; OCCT is a provisional oracle | `occam-verify` |
 | L18 | Layers are crates, and the allowed graph is checked | `gates layers` |
 | L19 | Every lint is on from the start, indexing and arithmetic included | workspace lints, probes |
-| L23 | Same inputs give identical bits on x86-64 at any thread count and on single-threaded wasm32, through one maths implementation | `gates determinism` |
+| L23 | Same inputs give identical bits at any thread count, and on x86-64 and single-threaded wasm32 for what `Real` computes, through [one maths choke point](decisions/2026-11-09-one-maths-choke-point.md) | `gates determinism` |
 | L28 | Threads and SIMD lanes compose: threads across items, lanes inside each task | `proving-ground.p4`; perf gate |
 | L30 | The browser build is timed on every PR from the first kernel | `gates perf` |
 | L34 | Provenance is clean ([decision](decisions/2026-11-08-licence-and-provenance.md)) | `gates provenance`, session split |

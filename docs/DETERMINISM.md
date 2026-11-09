@@ -1,7 +1,8 @@
 # The determinism contract
 
-In a CAD kernel a flipped last bit changes topology, so occam promises the same bits, not merely close answers (L23).
-`occam-math` is the one place numbers are computed, and [`gates determinism`](PLAN.md#5-gates) holds the promise.
+A last-bit difference can change what a kernel decides, and identical bits make every result reproducible and every
+parallel run testable (L23). `occam-math` is the one place numbers are computed, and
+[`gates determinism`](PLAN.md#5-gates) holds the promise.
 
 ## The promise
 
@@ -12,13 +13,16 @@ For the same inputs, every output has identical bits:
 - as `f64` or as `Lanes` of any width;
 - in debug and in release builds.
 
+That holds for everything `Real` computes today. Whether functions beyond it, such as `sin` and `atan2`, must be identical
+across targets is [measured rather than assumed](decisions/2026-11-09-one-maths-choke-point.md).
+
 ## The rules
 
 1. **One maths implementation.** The kernel computes through `occam_math::Real`, and its numbers are `f64`. `Real`'s
    operations (`+`, `-`, `*`, `/`, negation, `abs`, `sqrt`) are correctly rounded under IEEE 754, so they give the same
-   bits everywhere. An operation joins only if it can keep that promise.
-   [`proving-ground.s5`](plan/proving-ground.md) decides which of `sin`, `cos`, `atan2`, `acos` and the others occam
-   implements itself.
+   bits everywhere. Anything added later goes through this crate too, so that what it does can change in one place.
+   [`proving-ground.s5`](plan/proving-ground.md) measures which of `sin`, `cos`, `atan2`, `acos` and the others really
+   must be identical across targets, and what that costs.
 2. **Nothing else computes.** Clippy's `disallowed-methods` bans every `f64` method whose result Rust does not pin down:
    the transcendental functions and powers it documents as non-deterministic, with `to_degrees` and `to_radians`; `min`,
    `max` and `clamp`, which may return either zero; `algebraic_*`, which the optimiser may rewrite; and `mul_add`, which
