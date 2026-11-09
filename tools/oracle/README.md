@@ -15,12 +15,18 @@ CPython 3.13 (`.python-version`; `requires-python` allows 3.11 to 3.14). The whe
 `${XDG_CACHE_HOME:-$HOME/.cache}/occam-oracle/venv`. The harness's own code imports only the Python standard library and
 that wheel; only [`occam_oracle/occt_worker.py`](occam_oracle/occt_worker.py) imports the wheel.
 
+The second opinions are pinned separately, by commit, in [`occam_oracle/second.py`](occam_oracle/second.py); see
+[Second opinions](#second-opinions).
+
 ## How to run
 
 ```text
 just oracle run tools/oracle/examples       # write one result file per case
 just oracle check tools/oracle/examples     # compare them with each case's expect, apply the invariants
 just oracle register                        # check that divergences.json is well-formed
+just oracle build-second                    # clone and build the second opinions under the cache
+just oracle run --engine arris tools/oracle/examples
+just oracle compare --engines occt arris tools/oracle/examples
 just oracle-test                            # the harness's own tests
 ```
 
@@ -62,8 +68,8 @@ Rules, checked before anything runs:
 
 - `id` becomes a file name, so it may contain only letters, digits, `.`, `_` and `-`, starting with a letter or digit.
 - `origin` and `licence` are required for every case. A copyleft `licence` is refused.
-- Ops run in order. Each has a unique `id`, and a `target` or `tool` must name the `id` of an earlier op that made a
-  shape. `result` names the shape to measure.
+- Ops run in order. Each has a unique `id` drawn from the same alphabet as the case's, and a `target` or `tool` must name
+  the `id` of an earlier op that made a shape. `result` names the shape to measure.
 - Lengths and radii are finite and greater than zero, and `axis` is non-zero (a magnitude other than 1 is fine).
 
 | `op` | Fields |
@@ -183,6 +189,7 @@ A case that fails has `status: "error"` and neither `shape` nor `tessellations`:
 | `error.code` | Meaning |
 | --- | --- |
 | `op_failed` | The engine refused or failed the op named by `op` (its id) and `kind`. |
+| `op_unsupported` | This engine does not offer that operation. Nothing was attempted. |
 | `measure_failed` | Every op ran but measuring the result failed. |
 | `worker_crashed` | The child died; `op`/`kind` name the op in progress if any. |
 | `worker_timeout` | The child ran past `--timeout`. |
@@ -247,24 +254,71 @@ No `CSF_*` or other variable leaks in. Each case gets its own child, so one case
 Parallelism is fixed by `--threads N` (default 1), recorded as `threads` in the result. At 1 the booleans' and the mesher's
 parallel switches are off. Above 1 they are on and the engine's default thread pool is set to `N`.
 
-## Second opinions are not wired up yet
+## Second opinions
 
-The plan's second opinions (`arris`, `solidcore`) are held pending the user's decision, and no such engine runs here. The
-seam for them already exists:
+`arris` at release 0.10.0 (commit `f6860e379ba054888b087b8e141f47cd1e631eab`) is wired up. `just oracle build-second`
+clones that commit anonymously over https under `${XDG_CACHE_HOME:-$HOME/.cache}/occam-oracle/second/`, generates a small
+Rust project there from [`second/Cargo.toml.in`](second/Cargo.toml.in) and
+[`second/arris_driver.rs.in`](second/arris_driver.rs.in), and compiles it. Nothing of theirs enters the repository. Results
+go to `arris-0.10.0/threads-<n>/<case-id>.json` in the same format, with `oracle.package` the repository and
+`oracle.package_version` the commit. `just oracle compare --engines occt arris <cases>` then reports where two engines
+disagree, geometrically: volume and area within `--rel-tol`, the box within `--bbox-tol` of its diagonal, and validity. It
+exits 1 on a disagreement, and `SKIP` means an engine does not offer the operation, so nothing was compared.
 
-- The result format names its engine, so `occam-oracle-result/1` works for any engine.
-- An engine is an `Engine` in [`occam_oracle/runner.py`](occam_oracle/runner.py), and the worker it names speaks this
-  protocol: it is started as `python -B -s -P <worker> --case FILE --result FILE --progress FILE --threads N` in the
-  scrubbed environment, reads the case from `--case`, writes the op it is about to run to `--progress` (so a crash can
-  be blamed on an op), and writes one result document to `--result`.
-- `ENGINES` maps a name to an `Engine`, and `--engine` chooses one.
+The driver is written only from arris's README and [its published API docs](https://docs.rs/arris/0.10.0). Its source
+is not to be read, and that holds for anyone changing the driver.
+
+Where arris answers differently from the description above:
+
+- `bbox` is the extent of a mesh at a chord of 1e-4 of the diagonal, because arris documents no bounding-box query at this
+  release. It is exact for planar shapes and otherwise inside the true box by at most that chord.
+- A fillet's `in_box` uses the same meshed edges. `all` means every edge that is neither degenerate nor a seam.
+- `tessellate` passes `linear_deflection` as arris's chord, scaled by the diagonal when `relative` is true.
+  `angular_deflection` has no counterpart and is ignored.
+- `threads` is recorded but changes nothing: arris documents no parallel mode at this release.
+- `remove_face` is `op_unsupported`.
+- Sphere, cone and torus are built by a full revolve of a profile, since arris documents no such primitive at this
+  release. Arris's booleans at this release are documented for planes and cylinders; anything else is its own typed
+  refusal, reported as `op_failed`.
+
+`solidcore` is not wired up. See the pull request for what was tried.
+
+### Adding an engine
+
+An engine is an `Engine` in [`occam_oracle/runner.py`](occam_oracle/runner.py) or
+[`occam_oracle/second.py`](occam_oracle/second.py), and `ENGINES` maps its name to it. Its worker is started as
+`python -B -s -P <worker> <worker_args> --case FILE --result FILE --progress FILE --threads N` in the scrubbed environment.
+It reads the case, writes the op it is about to run to `--progress` so that a crash can be blamed on an op, and writes one
+result document to `--result`.
+
+A compiled kernel can skip JSON. [`occam_oracle/second_worker.py`](occam_oracle/second_worker.py) is a worker that
+translates for a driver started as `<driver> <progress-file>`. Its stdin has one op per line, `<op> <id> <fields...>`, in
+the order the case format lists them, then `result <id>`: floats in round-trip form, booleans as `0` or `1`, a fillet's
+`edges` as `all` or `box` and six numbers. Its stdout is one of:
+
+```text
+error <op-id> <message>              an op failed; a message ending "is not supported by this engine" is op_unsupported,
+                                     and one starting "measure:" against the result id is measure_failed
+ok                                   followed by these lines, in any order
+volume <f>
+area <f>
+bbox <minx> <miny> <minz> <maxx> <maxy> <maxz>
+counts <vertices> <edges> <degenerate> <wires> <faces> <shells> <solids>
+valid <0|1>
+closed <0|1>
+mesh <op-id> <points> <triangles>    then one `x y z` line per point and one `a b c` line per triangle, zero-based
+```
+
+Euler is computed from `counts`, and a mesh is judged by [`occam_oracle/meshcheck.py`](occam_oracle/meshcheck.py), the same
+rule as OCCT's.
 
 ## How `occam-verify` should consume this
 
 `occam-verify`, the Rust side, should:
 
 1. Take a results root, defaulting to `${XDG_CACHE_HOME:-$HOME/.cache}/occam-oracle/results`, and find each case at
-   `<root>/<engine>-<engine-version>/threads-<n>/<case-id>.json`.
+   `<root>/<engine>-<engine-version>/threads-<n>/<case-id>.json`, with `opencascade-8.0.1` as the reference directory and
+   `arris-0.10.0` as the second opinion.
 2. Parse the file as JSON and require `schema` to be `occam-oracle-result/1` and `oracle` to match the pin it was built
    against; treat anything else as "no result".
 3. Compare its own measurements with `shape` the way `check` does: with a tolerance per measure, and geometrically. Never

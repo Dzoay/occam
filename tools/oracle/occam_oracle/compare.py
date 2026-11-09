@@ -122,3 +122,35 @@ def check_volume_identity(group, members):
         "delta": abs(left - right),
         "tolerance": allowed,
     }
+
+
+def compare_results(left, right, rel_tol=1e-6, bbox_tol=1e-3):
+    """Whether two engines' results for one case agree: volume, area and box within tolerance, and the same validity.
+
+    Never topology (L12). `bbox_tol` is relative to the box diagonal, because a second opinion's box may be measured on
+    a mesh. `agree` is None when an engine does not offer the operation at all: nothing was compared. A case one engine
+    could do and the other failed is a disagreement to look at, not a pass.
+    """
+    if left["status"] != "ok" or right["status"] != "ok":
+        states = f"{left['oracle']['engine']}: {_status(left)}; {right['oracle']['engine']}: {_status(right)}"
+        unsupported = "op_unsupported" in (left.get("error", {}).get("code"), right.get("error", {}).get("code"))
+        return {"agree": None if unsupported else left["status"] == right["status"], "detail": states}
+    a, b = left["shape"], right["shape"]
+    problems = []
+    for name in ("volume", "area"):
+        if abs(a[name] - b[name]) > rel_tol * max(abs(a[name]), abs(b[name]), 1e-12):
+            problems.append(f"{name} {a[name]} vs {b[name]}")
+    if a["valid"] != b["valid"]:
+        problems.append(f"valid {a['valid']} vs {b['valid']}")
+    if a["bbox"] and b["bbox"]:
+        corners = list(zip(a["bbox"]["min"] + a["bbox"]["max"], b["bbox"]["min"] + b["bbox"]["max"]))
+        diagonal = sum((high - low) ** 2 for low, high in zip(a["bbox"]["min"], a["bbox"]["max"])) ** 0.5 or 1.0
+        if max(abs(p - q) for p, q in corners) > bbox_tol * diagonal:
+            problems.append(f"bbox {a['bbox']} vs {b['bbox']}")
+    return {"agree": not problems, "detail": "; ".join(problems) or f"volume {a['volume']}, area {a['area']}"}
+
+
+def _status(result):
+    if result["status"] == "ok":
+        return "ok"
+    return f"{result['error']['code']} at {result['error']['op']}: {result['error']['message']}"

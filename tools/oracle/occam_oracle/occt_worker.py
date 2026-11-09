@@ -8,6 +8,7 @@ Open CASCADE here is a black box: this file says what to build and measures what
 import argparse
 import collections
 import importlib.metadata
+import importlib.util
 import json
 import math
 import pathlib
@@ -39,6 +40,11 @@ from OCP.TopExp import TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
 from OCP.TopoDS import TopoDS, TopoDS_Shell, TopoDS_Solid
 from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+
+# The worker runs with -P, so its siblings are loaded by path rather than through sys.path.
+_SPEC = importlib.util.spec_from_file_location("meshcheck", pathlib.Path(__file__).with_name("meshcheck.py"))
+MESHCHECK = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(MESHCHECK)
 
 ENGINE = "opencascade"
 PACKAGE = "cadquery-ocp"
@@ -274,36 +280,6 @@ def op_remove_face(op, shapes, _threads):
     return solid
 
 
-def weld(points, tolerance):
-    """Merges points closer than `tolerance`; returns one id per point. Scans neighbouring cells of a uniform grid."""
-    cells = collections.defaultdict(list)
-    ids = [0] * len(points)
-    next_id = 0
-    limit = tolerance * tolerance
-    for index, (x, y, z) in enumerate(points):
-        cell = (math.floor(x / tolerance), math.floor(y / tolerance), math.floor(z / tolerance))
-        match = None
-        for i in (cell[0] - 1, cell[0], cell[0] + 1):
-            for j in (cell[1] - 1, cell[1], cell[1] + 1):
-                for k in (cell[2] - 1, cell[2], cell[2] + 1):
-                    for (px, py, pz), identity in cells.get((i, j, k), ()):
-                        if (px - x) ** 2 + (py - y) ** 2 + (pz - z) ** 2 <= limit:
-                            match = identity
-                            break
-                    if match is not None:
-                        break
-                if match is not None:
-                    break
-            if match is not None:
-                break
-        if match is None:
-            match = next_id
-            next_id += 1
-            cells[cell].append(((x, y, z), match))
-        ids[index] = match
-    return ids
-
-
 def weld_tolerance(shape, bounds):
     """Coincident within the larger of the shape's own edge and vertex tolerances and 1e-9 of its size."""
     largest = 0.0
@@ -347,24 +323,13 @@ def op_tessellate(op, shapes, threads):
     if bounds is None:
         raise OpFailure("there is nothing to tessellate")
     points, triangles = mesh_triangles(copy)
-    ids = weld(points, weld_tolerance(copy, bounds))
-    kept = []
-    for a, b, c in triangles:
-        triple = ids[a], ids[b], ids[c]
-        if len(set(triple)) == 3:
-            kept.append(triple)
-    directed = collections.Counter()
-    for a, b, c in kept:
-        directed.update(((a, b), (b, c), (c, a)))
-    watertight = bool(directed) and all(count == 1 and directed[(v, u)] == 1 for (u, v), count in directed.items())
+    stats = MESHCHECK.summarize(points, triangles, weld_tolerance(copy, bounds))
     return {
         "target": op["target"],
         "linear_deflection": op["linear_deflection"],
         "angular_deflection": op["angular_deflection"],
         "relative": relative,
-        "triangles": len(kept),
-        "vertices": len({vertex for triple in kept for vertex in triple}),
-        "watertight": watertight,
+        **stats,
     }
 
 

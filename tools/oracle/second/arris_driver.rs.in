@@ -1,0 +1,292 @@
+//! Drives arris through its documented interface (README and docs.rs, arris 0.10.0) for the occam oracle harness.
+//! Reads one operation per line on stdin, answers in lines on stdout. See tools/oracle/README.md.
+
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::panic::{catch_unwind, AssertUnwindSafe};
+
+use arris::check::{check, Level};
+use arris::geom::profile::{Profile, ProfileLoop, ProfileSegment};
+use arris::math::nalgebra::{Unit, UnitQuaternion};
+use arris::math::{Axis, Control, Frame, Isometry, Point2, Point3, Vec3};
+use arris::mesh::{tessellate, TriMesh};
+use arris::ops::measure::mass_properties;
+use arris::ops::{common, cut, fillet, fuse, primitive_box, primitive_cylinder, revolve, transform};
+use arris::topo::entity::BodyKind;
+use arris::topo::{Body, EdgeId, FaceId, Model};
+
+type Outcome = Result<String, String>;
+const NONE: Control<'static> = Control::NONE;
+
+struct Session {
+    model: Model,
+    bodies: HashMap<String, Body>,
+    output: String,
+}
+
+fn fail(error: impl std::fmt::Debug) -> String {
+    format!("{error:?}")
+}
+
+fn floats(words: &[&str]) -> Vec<f64> {
+    words.iter().map(|word| word.parse().expect("a number")).collect()
+}
+
+fn point(n: &[f64]) -> Point3 {
+    Point3::new(n[0], n[1], n[2])
+}
+
+fn vector(n: &[f64]) -> Vec3 {
+    Vec3::new(n[0], n[1], n[2])
+}
+
+/// A profile plane containing the axis: Y runs along the axis, X is perpendicular to it.
+fn axis_frame(origin: Point3, axis: Vec3) -> Result<Frame, String> {
+    let along = axis.normalize();
+    let helper = if along.x.abs() < 0.9 { Vec3::new(1.0, 0.0, 0.0) } else { Vec3::new(0.0, 1.0, 0.0) };
+    let x = (helper - along * helper.dot(&along)).normalize();
+    Frame::new(origin, x.cross(&along), x).map_err(fail)
+}
+
+fn revolved(model: &mut Model, frame: Frame, outer: ProfileLoop, origin: Point3, axis: Vec3) -> Result<Body, String> {
+    let profile = Profile { plane: frame, outer, holes: Vec::new() };
+    let axis = Axis::new(origin, axis).map_err(fail)?;
+    let (body, _) = revolve(model, &profile, axis, std::f64::consts::TAU, &NONE).map_err(fail)?;
+    Ok(body)
+}
+
+impl Session {
+    fn body(&self, name: &str) -> Result<Body, String> {
+        self.bodies.get(name).copied().ok_or_else(|| format!("no shape named {name}"))
+    }
+
+    fn make(&mut self, kind: &str, words: &[&str]) -> Result<Body, String> {
+        let m = &mut self.model;
+        match kind {
+            "box" => {
+                let n = floats(words);
+                let low = point(&n[3..6]);
+                let high = Point3::new(low.x + n[0], low.y + n[1], low.z + n[2]);
+                primitive_box(m, low, high, &NONE).map(|made| made.0).map_err(fail)
+            }
+            "cylinder" => {
+                let n = floats(words);
+                let axis = Axis::new(point(&n[2..5]), vector(&n[5..8])).map_err(fail)?;
+                primitive_cylinder(m, axis, n[0], n[1], &NONE).map(|made| made.0).map_err(fail)
+            }
+            "sphere" => {
+                let n = floats(words);
+                let (r, origin) = (n[0], point(&n[1..4]));
+                let axis = Vec3::new(0.0, 0.0, 1.0);
+                let outer = ProfileLoop::Path {
+                    start: Point2::new(0.0, -r),
+                    segments: vec![
+                        ProfileSegment::ArcTo { to: Point2::new(0.0, r), via: Point2::new(r, 0.0) },
+                        ProfileSegment::LineTo(Point2::new(0.0, -r)),
+                    ],
+                };
+                revolved(m, axis_frame(origin, axis)?, outer, origin, axis)
+            }
+            "cone" => {
+                let n = floats(words);
+                let (r1, r2, h) = (n[0], n[1], n[2]);
+                let (origin, axis) = (point(&n[3..6]), vector(&n[6..9]));
+                let mut corners = Vec::new();
+                if r1 > 0.0 {
+                    corners.push((r1, 0.0));
+                }
+                if r2 > 0.0 {
+                    corners.push((r2, h));
+                }
+                corners.push((0.0, h));
+                let segments = corners.iter().map(|&(x, y)| ProfileSegment::LineTo(Point2::new(x, y))).chain(std::iter::once(ProfileSegment::LineTo(Point2::new(0.0, 0.0)))).collect();
+                let outer = ProfileLoop::Path { start: Point2::new(0.0, 0.0), segments };
+                revolved(m, axis_frame(origin, axis)?, outer, origin, axis)
+            }
+            "torus" => {
+                let n = floats(words);
+                let (major, minor) = (n[0], n[1]);
+                let (origin, axis) = (point(&n[2..5]), vector(&n[5..8]));
+                let outer = ProfileLoop::Circle { center: Point2::new(major, 0.0), radius: minor };
+                revolved(m, axis_frame(origin, axis)?, outer, origin, axis)
+            }
+            "translate" => {
+                let n = floats(&words[1..]);
+                let target = self.body(words[0])?;
+                transform(&mut self.model, target, &Isometry::from_translation(vector(&n)), &NONE).map(|made| made.0).map_err(fail)
+            }
+            "rotate" => {
+                let n = floats(&words[1..]);
+                let target = self.body(words[0])?;
+                let centre = vector(&n[0..3]);
+                let rotation = UnitQuaternion::from_axis_angle(&Unit::new_normalize(vector(&n[3..6])), n[6].to_radians());
+                let motion = Isometry::new(rotation, centre - rotation * centre);
+                transform(&mut self.model, target, &motion, &NONE).map(|made| made.0).map_err(fail)
+            }
+            "fuse" | "cut" | "common" => {
+                let (a, b) = (self.body(words[0])?, self.body(words[1])?);
+                let m = &mut self.model;
+                match kind {
+                    "fuse" => fuse(m, a, b, &NONE),
+                    "cut" => cut(m, a, b, &NONE),
+                    _ => common(m, a, b, &NONE),
+                }
+                .map(|made| made.0)
+                .map_err(fail)
+            }
+            "fillet" => self.fillet(words),
+            other => Err(format!("{other} is not supported by this engine")),
+        }
+    }
+
+    /// Edges by the harness's rule: never degenerate or a seam, `all` or wholly inside the box, in order of bounding box.
+    fn fillet(&mut self, words: &[&str]) -> Result<Body, String> {
+        let target = self.body(words[0])?;
+        let radius: f64 = words[1].parse().map_err(fail)?;
+        let region = if words[2] == "box" { Some(floats(&words[3..9])) } else { None };
+        let mesh = tessellate(&self.model, target, fine_chord(&self.model, target)?, &NONE).map_err(fail)?;
+        let own_faces: Vec<FaceId> = self.model.faces(target).map_err(fail)?.iter().map(|face| face.id).collect();
+        let mut chosen = Vec::new();
+        for edge in self.model.edges(target).map_err(fail)? {
+            if self.model.edge(edge.id).map_err(fail)?.is_degenerate() {
+                continue;
+            }
+            let uses = uses_within(&self.model, &own_faces, edge.id)?;
+            if uses.len() >= 2 && uses.iter().all(|face| *face == uses[0]) {
+                continue;
+            }
+            let Some(range) = mesh.edges().iter().find(|item| item.edge == edge.id) else { continue };
+            let bounds = extent(mesh.edge_indices()[range.indices.clone()].iter().map(|&i| mesh.positions()[i as usize]));
+            if region.as_ref().map_or(true, |r| (0..3).all(|axis| r[axis] <= bounds[axis] && bounds[axis + 3] <= r[axis + 3])) {
+                chosen.push((bounds, edge));
+            }
+        }
+        if chosen.is_empty() {
+            return Err("the edge selector matched no edge".to_string());
+        }
+        chosen.sort_by(|a, b| a.0.partial_cmp(&b.0).expect("finite bounds"));
+        let edges: Vec<_> = chosen.into_iter().map(|(_, edge)| edge).collect();
+        fillet(&mut self.model, target, &edges, radius, &NONE).map(|made| made.0).map_err(fail)
+    }
+
+    fn tessellate(&mut self, id: &str, words: &[&str]) -> Result<(), String> {
+        let target = self.body(words[0])?;
+        let mut chord: f64 = words[1].parse().map_err(fail)?;
+        if words[3] == "1" {
+            let coarse = tessellate(&self.model, target, 1.0, &NONE).map_err(fail)?;
+            let box_ = extent(coarse.positions().iter().copied());
+            chord *= ((box_[3] - box_[0]).powi(2) + (box_[4] - box_[1]).powi(2) + (box_[5] - box_[2]).powi(2)).sqrt();
+        }
+        let mesh = tessellate(&self.model, target, chord, &NONE).map_err(fail)?;
+        write_mesh(&mut self.output, id, &mesh);
+        Ok(())
+    }
+
+    fn measure(&self, target: Body) -> Outcome {
+        let m = &self.model;
+        let mass = mass_properties(m, target, &NONE).map_err(fail)?;
+        let mesh = tessellate(m, target, fine_chord(m, target)?, &NONE).map_err(fail)?;
+        let bounds = extent(mesh.positions().iter().copied());
+        let faces = m.faces(target).map_err(fail)?;
+        let edges = m.edges(target).map_err(fail)?;
+        let own_faces: Vec<FaceId> = faces.iter().map(|face| face.id).collect();
+        let mut wires = 0;
+        for face in &faces {
+            wires += m.face(face.id).map_err(fail)?.loops().len();
+        }
+        let (mut degenerate, mut closed) = (0, true);
+        for edge in &edges {
+            if m.edge(edge.id).map_err(fail)?.is_degenerate() {
+                degenerate += 1;
+            } else if uses_within(m, &own_faces, edge.id)?.len() % 2 != 0 {
+                closed = false;
+            }
+        }
+        let vertices = m.vertices(target).map_err(fail)?.len();
+        let shells = m.shells(target).map_err(fail)?.len();
+        let solids = usize::from(m.body(target.id).map_err(fail)?.kind() == BodyKind::Solid);
+        let valid = check(m, target, Level::Full).is_ok();
+        let bbox = bounds.iter().map(f64::to_string).collect::<Vec<_>>().join(" ");
+        Ok(format!(
+            "volume {}\narea {}\nbbox {}\ncounts {} {} {} {} {} {} {}\nvalid {}\nclosed {}\n",
+            mass.volume, mass.area, bbox, vertices, edges.len() - degenerate, degenerate, wires, faces.len(), shells, solids, u8::from(valid), u8::from(closed)
+        ))
+    }
+}
+
+/// The faces of this body that use `edge`, once per use. An edge's uses are the model's: operands stay in the model and
+/// share the entities an operation did not touch, so a body's own uses are those on its own faces.
+fn uses_within(m: &Model, own_faces: &[FaceId], edge: EdgeId) -> Result<Vec<FaceId>, String> {
+    Ok(m.edge_uses(edge).map_err(fail)?.iter().map(|one| one.face).filter(|face| own_faces.contains(face)).collect())
+}
+
+/// A chord fine enough that a mesh's extent stands in for a tight box: arris documents no bounding-box query at 0.10.0.
+fn fine_chord(m: &Model, target: Body) -> Result<f64, String> {
+    let coarse = tessellate(m, target, 1.0, &NONE).map_err(fail)?;
+    let b = extent(coarse.positions().iter().copied());
+    Ok(((b[3] - b[0]).powi(2) + (b[4] - b[1]).powi(2) + (b[5] - b[2]).powi(2)).sqrt().max(1e-9) * 1e-4)
+}
+
+fn extent(points: impl Iterator<Item = [f64; 3]>) -> [f64; 6] {
+    let mut b = [f64::MAX, f64::MAX, f64::MAX, f64::MIN, f64::MIN, f64::MIN];
+    for p in points {
+        for axis in 0..3 {
+            b[axis] = b[axis].min(p[axis]);
+            b[axis + 3] = b[axis + 3].max(p[axis]);
+        }
+    }
+    b
+}
+
+fn write_mesh(output: &mut String, id: &str, mesh: &TriMesh) {
+    output.push_str(&format!("mesh {} {} {}\n", id, mesh.positions().len(), mesh.triangles().len()));
+    for p in mesh.positions() {
+        output.push_str(&format!("{} {} {}\n", p[0], p[1], p[2]));
+    }
+    for t in mesh.triangles() {
+        output.push_str(&format!("{} {} {}\n", t[0], t[1], t[2]));
+    }
+}
+
+fn step(session: &mut Session, kind: &str, id: &str, words: &[&str]) -> Result<(), String> {
+    if kind == "tessellate" {
+        return session.tessellate(id, words);
+    }
+    let made = session.make(kind, words)?;
+    session.bodies.insert(id.to_string(), made);
+    Ok(())
+}
+
+fn panic_text(payload: Box<dyn std::any::Any + Send>) -> String {
+    payload.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| payload.downcast_ref::<String>().cloned()).unwrap_or_else(|| "panic".to_string())
+}
+
+fn main() {
+    std::panic::set_hook(Box::new(|_| {}));
+    let progress = std::env::args().nth(1).expect("the progress file");
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input).expect("stdin");
+    let mut session = Session { model: Model::default(), bodies: HashMap::new(), output: String::new() };
+    let mut answer = String::new();
+    for line in input.lines() {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let (kind, id) = (words[0], words[1]);
+        std::fs::write(&progress, id).expect("the progress file");
+        if kind == "result" {
+            let outcome = session.body(id).and_then(|body| {
+                catch_unwind(AssertUnwindSafe(|| session.measure(body))).unwrap_or_else(|payload| Err(format!("panic: {}", panic_text(payload))))
+            });
+            answer = match outcome {
+                Ok(measured) => format!("ok\n{measured}{}", session.output),
+                Err(message) => format!("error {id} measure: {}\n", message.replace('\n', " ")),
+            };
+            break;
+        }
+        let outcome = catch_unwind(AssertUnwindSafe(|| step(&mut session, kind, id, &words[2..]))).unwrap_or_else(|payload| Err(format!("panic: {}", panic_text(payload))));
+        if let Err(message) = outcome {
+            answer = format!("error {id} {}\n", message.replace('\n', " "));
+            break;
+        }
+    }
+    std::io::stdout().write_all(answer.as_bytes()).expect("stdout");
+}

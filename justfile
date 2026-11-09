@@ -137,7 +137,7 @@ workflows:
 counts:
     cargo xtask gates counts --update
 
-# The OCCT oracle harness (`just oracle run tools/oracle/examples`, then `check` and `register`); a large download the first time
+# The oracle harness (`just oracle run tools/oracle/examples`, then `check`, `compare`, `register`, `build-second`); a large download the first time
 [env("UV_PROJECT_ENVIRONMENT", oracle_venv)]
 [group('oracle')]
 oracle *args:

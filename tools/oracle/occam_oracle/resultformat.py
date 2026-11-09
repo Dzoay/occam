@@ -11,6 +11,7 @@ SCHEMA = "occam-oracle-result/1"
 COUNTS = ("vertices", "edges", "degenerate_edges", "wires", "faces", "shells", "solids")
 ERROR_CODES = {
     "op_failed",
+    "op_unsupported",
     "measure_failed",
     "worker_crashed",
     "worker_timeout",

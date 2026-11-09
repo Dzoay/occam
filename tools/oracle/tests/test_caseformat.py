@@ -75,6 +75,9 @@ class InvalidCaseTests(unittest.TestCase):
         document = case("bad", [dict(box("a", (1, 1, 1)), colour="red")], "a")
         self.assert_rejected(document, "colour")
 
+    def test_op_ids_are_single_tokens(self):
+        self.assert_rejected(case("bad", [box("a b", (1, 1, 1))], "a b"), "ops[0]")
+
     def test_duplicate_ids_are_refused(self):
         self.assert_rejected(case("bad", [box("a", (1, 1, 1)), box("a", (2, 2, 2))], "a"), "'a'")
 

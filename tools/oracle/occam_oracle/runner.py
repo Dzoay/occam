@@ -1,17 +1,19 @@
 """Runs a case in a child process with a scrubbed environment and fixed parallelism (L16).
 
-The engine's work happens only in the child. A second-opinion engine is another `Engine` here whose worker speaks the
-same protocol (README.md); none is wired up yet.
+The engine's work happens only in the child. Each engine is an `Engine` whose worker speaks one protocol (README.md); the
+second opinions are defined in `second.py`.
 """
 
 import dataclasses
 import json
 import os
 import pathlib
+import signal
 import subprocess
 import sys
 import tempfile
 
+from . import second
 from .caseformat import validate_case
 from .resultformat import ResultError, error_result, validate_result
 from .canonical import dumps
@@ -29,6 +31,8 @@ class Engine:
     package: str
     package_version: str
     worker: pathlib.Path
+    worker_args: tuple = ()
+    missing: str | None = None  # why this engine cannot run yet, if it cannot
 
     def identity(self):
         return {
@@ -50,7 +54,7 @@ OCCT = Engine(
     package_version="8.0.1.1.0",
     worker=pathlib.Path(__file__).resolve().parent / "occt_worker.py",
 )
-ENGINES = {"occt": OCCT}
+ENGINES = {"occt": OCCT, **second.engines(Engine)}
 
 
 def scrubbed_env(home):
@@ -114,6 +118,7 @@ def run_case(case, engine=OCCT, threads=1, timeout=DEFAULT_TIMEOUT):
             "-s",  # no user site-packages
             "-P",  # the worker's directory is not added to the import path
             str(engine.worker),
+            *engine.worker_args,
             "--case",
             str(case_file),
             "--result",
@@ -123,22 +128,25 @@ def run_case(case, engine=OCCT, threads=1, timeout=DEFAULT_TIMEOUT):
             "--threads",
             str(threads),
         ]
+        worker = subprocess.Popen(  # pylint: disable=consider-using-with
+            command,
+            env=scrubbed_env(home),
+            cwd=home,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,  # so a timeout also reaches any process the worker started
+        )
         try:
-            completed = subprocess.run(
-                command,
-                env=scrubbed_env(home),
-                cwd=home,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
+            _, stderr = worker.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
+            os.killpg(worker.pid, signal.SIGKILL)
+            worker.communicate()
             return failure("worker_timeout", _in_progress(progress), f"the worker ran past the {timeout:g} second timeout")
-        if completed.returncode != 0 or not result_file.is_file():
-            print(f"oracle: {case['id']}: worker failed:\n{completed.stderr}", file=sys.stderr)
-            how = f"signal {-completed.returncode}" if completed.returncode < 0 else f"status {completed.returncode}"
+        if worker.returncode != 0 or not result_file.is_file():
+            print(f"oracle: {case['id']}: worker failed:\n{stderr}", file=sys.stderr)
+            how = f"signal {-worker.returncode}" if worker.returncode < 0 else f"status {worker.returncode}"
             return failure("worker_crashed", _in_progress(progress), f"the worker exited with {how}")
         try:
             result = json.loads(result_file.read_text(encoding="utf-8"))

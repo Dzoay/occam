@@ -1,0 +1,14 @@
+# Generated into the cache by `just oracle build-second`; named .in so nothing in this repository treats it as a manifest.
+[package]
+name = "@NAME@-driver"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+@DEPENDENCY@
+
+[profile.release]
+debug = false
+
+[workspace]

@@ -5,9 +5,10 @@ import json
 import pathlib
 import sys
 
+from . import second
 from .canonical import dumps
 from .caseformat import CaseError, case_files, load_case
-from .compare import check_case, check_volume_identity
+from .compare import check_case, check_volume_identity, compare_results
 from .register import check_register
 from .resultformat import ResultError, validate_result
 from .runner import ENGINES, default_results_root, result_path, run_case, write_result
@@ -27,13 +28,21 @@ def _load_cases(paths):
     return cases
 
 
+def _ready(name):
+    """The named engine, or a case-style error saying what is missing."""
+    engine = ENGINES[name]
+    if engine.missing:
+        raise CaseError(f"engine {name}: {engine.missing}")
+    return engine
+
+
 def _engine_arguments(parser):
     parser.add_argument("--engine", default="occt", choices=sorted(ENGINES))
     parser.add_argument("--threads", type=int, default=1, help="parallelism fixed for the run (default 1)")
 
 
 def command_run(args):
-    engine = ENGINES[args.engine]
+    engine = _ready(args.engine)
     root = pathlib.Path(args.out) if args.out else default_results_root()
     cases = _load_cases(args.paths)
     for case in cases:
@@ -98,6 +107,31 @@ def command_check(args):
     return 0 if passed else 1
 
 
+def command_build_second(args):
+    for name in args.names or sorted(second.PINS):
+        print(f"building {name} at {second.PINS[name].commit}")
+        print(f"built {second.build(name)}")
+    return 0
+
+
+def command_compare(args):
+    root = pathlib.Path(args.results) if args.results else default_results_root()
+    (first_name, second_name) = args.engines
+    first, other = ENGINES[first_name], ENGINES[second_name]
+    disagreements = 0
+    for case in _load_cases(args.paths):
+        left, left_missing = _read_result(case, first, args.threads, root)
+        right, right_missing = _read_result(case, other, args.threads, root)
+        if left_missing or right_missing:
+            print(f"SKIP  {case['id']}: a result file is missing")
+            continue
+        report = compare_results(left, right, rel_tol=args.rel_tol, bbox_tol=args.bbox_tol)
+        state = "SKIP" if report["agree"] is None else ("AGREE" if report["agree"] else "DIFFER")
+        disagreements += 1 if report["agree"] is False else 0
+        print(f"{state} {case['id']}: {report['detail']}")
+    return 1 if disagreements else 0
+
+
 def command_register(args):
     path = pathlib.Path(args.path) if args.path else DEFAULT_REGISTER
     try:
@@ -129,6 +163,17 @@ def _parser():
     check.add_argument("--json", action="store_true", help="print the full report as JSON")
     _engine_arguments(check)
     check.set_defaults(handler=command_check)
+    compare = commands.add_parser("compare", help="report where two engines' results disagree, geometrically")
+    compare.add_argument("paths", nargs="+", help="case files, or directories searched for *.json")
+    compare.add_argument("--engines", nargs=2, default=["occt", "arris"], metavar=("A", "B"), choices=sorted(ENGINES))
+    compare.add_argument("--results", help="root of the result tree (default: the `run` default)")
+    compare.add_argument("--threads", type=int, default=1)
+    compare.add_argument("--rel-tol", type=float, default=1e-6, help="relative tolerance on volume and area")
+    compare.add_argument("--bbox-tol", type=float, default=1e-3, help="tolerance on bounding-box coordinates, relative to the box diagonal")
+    compare.set_defaults(handler=command_compare)
+    build = commands.add_parser("build-second", help="clone and build the second-opinion engines under the cache")
+    build.add_argument("names", nargs="*", choices=[*sorted(second.PINS), []], help="default: all of them")
+    build.set_defaults(handler=command_build_second)
     register = commands.add_parser("register", help="check that the divergence register is well-formed")
     register.add_argument("path", nargs="?", help="the register file (default: the committed divergences.json)")
     register.set_defaults(handler=command_register)

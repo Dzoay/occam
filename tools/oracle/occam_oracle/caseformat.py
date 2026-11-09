@@ -114,8 +114,8 @@ def _check_op(op, index):
     if not isinstance(op, dict):
         raise CaseError(f"ops[{index}]: expected an object")
     op_id = op.get("id")
-    if not isinstance(op_id, str) or not op_id:
-        raise CaseError(f"ops[{index}]: missing id")
+    if not isinstance(op_id, str) or not _ID.match(op_id):
+        raise CaseError(f"ops[{index}]: id must be letters, digits, '.', '_' or '-', got {op_id!r}")
     name = f"op {op_id!r}"
     kind = op.get("op")
     if kind not in OPERATIONS:
