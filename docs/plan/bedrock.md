@@ -11,15 +11,6 @@ layer. No geometry. The crates created here are `occam-report`, `occam-math`, `o
 
 ## Steps
 
-### `bedrock.thread`
-
-One trivial operation through every crate listed above: measure the distance between two points, refusing a tolerance
-below the model's. It gives a `Report` on failure, a followed remedy, and an `Outcome` on success, through the `occam`
-composition crate, `occam-cli --json` and `occam-wasm`, under mutants. This proves the seams before there is any geometry
-to hide behind. Needs `wasm-bindgen` from O5.
-
-*Failing test first:* the command-line refusal is asserted as JSON, and following its remedy succeeds.
-
 ### `bedrock.perf`
 
 The instruction-count gate per operation class, browser timing reported on every PR with the simd128-against-scalar
