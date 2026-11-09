@@ -1,0 +1,11 @@
+# The OCCT oracle harness. Nothing here is committed but this file, the lock naming the wheel and the harness's own code:
+# the wheel itself is LGPL-2.1 and runs outside the workspace (docs/decisions/2026-11-09-occt-oracle.md).
+[project]
+name = "occam-oracle"
+version = "0.0.0"
+description = "Runs operation lists through a pinned OCCT binary and reports measurements."
+requires-python = ">=3.11,<3.15"
+dependencies = ["cadquery-ocp==8.0.1.1.0"]
+
+[tool.uv]
+package = false
