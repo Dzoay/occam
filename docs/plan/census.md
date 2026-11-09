@@ -10,19 +10,11 @@ run.
 
 **PR grouping:** one PR each.
 
+**Still to do from `census.oracle`:** `occam-verify` starts as the Rust side of the oracle: it reads oracle result files
+and compares them. A survey session cannot write to `crates/`, so an implementation session writes it from
+[the harness's formats](../../tools/oracle/README.md). The `solidcore` second opinion is not wired up yet.
+
 ## Steps
-
-### `census.oracle`
-
-`tools/oracle/`: OCCT 8.0.1 from the `cadquery-ocp` 8.0.1.1.0 wheel (CPython 3.11 or later), run through `uv` outside the
-workspace, in a scrubbed environment with threading fixed (L16). The harness runs an operation and reports volume, area, bounding box, Euler characteristic and
-validity. It compares geometrically, never by topology or bits (L12). A divergence register records disagreements, and
-invariants decide them (L11). `arris` and `solidcore` at pinned commits give second opinions, driven only through their
-documented interfaces.
-
-`occam-verify` starts here as the Rust side: it reads oracle result files and compares them.
-
-*Failing test first:* the harness rejects a deliberately wrong volume, and two runs give identical results.
 
 ### `census.corpus`
 

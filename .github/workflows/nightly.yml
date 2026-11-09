@@ -1,5 +1,6 @@
-# What should not wait for a PR. The full corpus, randomised boolean sequences and the OCCT comparison join this workflow
-# as they arrive (docs/PLAN.md section 5). For now it notices a new advisory against a locked dependency.
+# What should not wait for a PR. The full corpus and randomised boolean sequences join this workflow as they arrive
+# (docs/PLAN.md section 5). For now it notices a new advisory against a locked dependency and runs the OCCT oracle harness
+# against its pinned wheel, a large download that the PR gates do not need.
 name: nightly
 
 on:
@@ -27,3 +28,15 @@ jobs:
         with:
           tools: just cargo-deny
       - run: just advisories
+
+  oracle:
+    name: oracle
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          tools: just
+      - name: uv, which runs the oracle harness
+        run: pipx install "uv==0.13.7"
+      - run: just oracle-test
