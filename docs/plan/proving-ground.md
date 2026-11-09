@@ -79,6 +79,7 @@ checks that the output is identical at every thread count. O9 covers wider hardw
 | `proving-ground.p9` | How should tessellation parallelise? | Shared edges first, then faces independently, watertight by construction; CPU lanes against WebGPU compute | `occam-mesh`, renderer |
 | `proving-ground.p10` | What runs in the browser? (L30, L33) | wasm threads over `SharedArrayBuffer`, which needs COOP/COEP hosting and a nightly toolchain (O10); a worker pool with separate memories; one thread with simd128 | wasm facade, hosting |
 | `proving-ground.p11` | What runs the threads? | `std::thread::scope` with occam's own queue; `rayon`, which would be a dependency to ask about | Execution layer |
+| `proving-ground.p12` | Can the GPU generate display geometry? ([decision](../decisions/2026-11-09-gpu-drawing.md)) | Surfaces evaluated in a WebGPU shader and written straight to a vertex buffer, never read back; against CPU meshes uploaded for drawing; in a page with a render loop | Renderer |
 
 ## Closing the milestone
 
