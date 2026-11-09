@@ -47,8 +47,9 @@ family, open traits across families, and no downcasting (L21, L26).
 
 ### `proving-ground.s5`: the maths contract
 
-Which of `sin`, `cos`, `atan2`, `acos` and others occam must own for bit-identical results on native and wasm, and what
-that costs against std.
+What really needs to be identical on native and wasm, which of `sin`, `cos`, `atan2`, `acos` and others that means occam
+must own, and what that costs against std. Computing the same model in the browser and on a server is the case that would
+need it ([decision](../decisions/2026-11-09-one-maths-choke-point.md)).
 
 *Answers:* the contents of `occam-math` (L23).
 
