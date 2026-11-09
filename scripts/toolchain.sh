@@ -24,7 +24,7 @@ CARGO_TOOLS=(
   "gungraun-runner:gungraun-runner@$GUNGRAUN"
 )
 COMPONENTS=(clippy rustfmt)
-TARGETS=(wasm32-unknown-unknown wasm32-wasip2 x86_64-pc-windows-msvc)
+TARGETS=(wasm32-unknown-unknown wasm32-wasip2 x86_64-pc-windows-msvc x86_64-unknown-linux-musl)
 
 mode=${1:-}
 case "$mode" in

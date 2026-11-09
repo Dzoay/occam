@@ -10,11 +10,3 @@ layer. No geometry. The crates created here are `occam-report`, `occam-math`, `o
 **PR grouping:** `repo` and `gates` share a PR. Every other step gets its own.
 
 ## Steps
-
-### `bedrock.perf`
-
-The instruction-count gate per operation class, browser timing reported on every PR with the simd128-against-scalar
-ratio gated (L30), and baseline records stating the machine and governor. Hosted runners cannot pin a governor, so
-wall-clock numbers are goals only (L31). Needs `gungraun` from O5.
-
-*Failing test first:* a deliberately slowed `bedrock.thread` fails the gate.

@@ -11,5 +11,14 @@ occam-math = { path = "../occam-math" }
 occam-report = { path = "../occam-report" }
 occam-units = { path = "../occam-units" }
 
+# Native only, because gungraun-runner does not compile for wasm and the benchmarks do not run there.
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+# Pinned to the version of gungraun-runner in scripts/toolchain.sh, which must match. See docs/decisions/2026-11-09-gungraun.md.
+gungraun = "=0.20.0"
+
+[[bench]]
+name = "operations"
+harness = false
+
 [lints]
 workspace = true
