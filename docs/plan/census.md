@@ -12,15 +12,6 @@ run.
 
 ## Steps
 
-### `census.defects`
-
-A script fetches public OCCT and FreeCAD issues and strips code blocks and linked patches. Only the stripped text is read,
-for symptoms. The output ranks the 20 most common failure classes, such as failed booleans, fillets, tolerance trouble
-and topological naming. Only classes occam will build get recorded, each with the proof that would show it is designed
-out (L37, L39).
-
-*Output:* `docs/evidence/<date>-defect-classes.md`.
-
 ### `census.oracle`
 
 `tools/oracle/`: OCCT 8.0.1 from the `cadquery-ocp` 8.0.1.1.0 wheel (CPython 3.11 or later), run through `uv` outside the
