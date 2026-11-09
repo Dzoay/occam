@@ -88,6 +88,7 @@ the same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 |---|---|---|
 | `fmt`, `clippy` | Formatting; every lint with warnings denied, including no panics, indexing, arithmetic, printing, `Any` and hashed collections in kernel crates (L19, L23, L26) | `bedrock.repo` |
 | `test` | Every test through nextest on the host, and doctests | `bedrock.repo` |
+| `tools-test` | The survey scripts' tests, Python standard library only | `census.freecad-api` |
 | `wasm` | Tests on wasm32-wasip2; the browser target builds; a Windows check | `bedrock.repo` |
 | `gates layers` | The crate graph matches §4 (L18) | `bedrock.gates` |
 | `gates complexity` | Function and file length, duplication, with a shrink-only exemption list (L20) | `bedrock.gates` |
@@ -127,9 +128,9 @@ O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
 
 | Id | Decision | Recommendation | Needed by |
 |---|---|---|---|
-| O5 | Cargo dependencies, asked one at a time when their step arrives. Expected: `gungraun` (test only, `bedrock.perf`), `wasm-bindgen` (`bedrock.thread`), a property-test crate (test only), `fearless_simd` if P4 shows plain array lanes fall short, `rayon` if P11 favours it | Decide each on the evidence | when reached |
+| O5 | Cargo dependencies, asked one at a time when their step arrives. Expected: `gungraun` (test only, `bedrock.perf`), `wasm-bindgen` (`bedrock.thread`), a property-test crate (test only), `fearless_simd` if P4 shows plain array lanes fall short, `rayon` if P11 favours it. [Spikes may use those two already](decisions/2026-11-09-early-spikes.md) | Decide each on the evidence | when reached |
 | O6 | A lawyer's view of the provenance policy and oracle outputs | Worth having before the first public release | first release |
 | O7 | Reserve `occam` on crates.io and an npm scope | Reserve once there is something real to publish | first release |
 | O8 | The framework for the viewer's page | No framework for the viewer; decide again for the full web application | `view` |
 | O9 | A machine with more physical cores for the parallel investigations. This laptop has 4 | Start here, and decide after `proving-ground.p1` shows how far scaling matters | `proving-ground.p2` |
-| O10 | A nightly toolchain for wasm threads, which need `-Zbuild-std` | Decide after `proving-ground.p10` | `proving-ground.p10` |
+| O10 | A nightly toolchain for wasm threads, which need `-Zbuild-std`. [Spikes may use one already](decisions/2026-11-09-early-spikes.md) | Decide after `proving-ground.p10` | `proving-ground.p10` |
