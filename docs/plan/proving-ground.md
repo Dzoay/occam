@@ -1,7 +1,8 @@
 # Milestone: proving-ground
 
 Answer the questions that decide the data structures, using code that is thrown away (L51). Needs `census.oracle` and
-`census.corpus`, apart from [six investigations that start early](../decisions/2026-11-09-early-spikes.md).
+`census.corpus`, apart from the investigations that start early: [the first six](../decisions/2026-11-09-early-spikes.md)
+and [the second wave](../decisions/2026-11-09-second-wave.md).
 
 **Rules for spikes:** spike code lives on a long-lived `spikes` branch that is never merged, so later spikes can reuse
 earlier ones. Each spike states its question and measure first. Its PR to `main` holds only its written finding, in
