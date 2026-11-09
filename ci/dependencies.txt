@@ -22,3 +22,12 @@ zmij transitive xtask-dependencies
 equivalent transitive xtask-dependencies
 hashbrown transitive xtask-dependencies
 indexmap transitive xtask-dependencies
+wasm-bindgen occam-wasm wasm-bindgen
+bumpalo transitive wasm-bindgen
+cfg-if transitive wasm-bindgen
+once_cell transitive wasm-bindgen
+rustversion transitive wasm-bindgen
+wasm-bindgen transitive wasm-bindgen
+wasm-bindgen-macro transitive wasm-bindgen
+wasm-bindgen-macro-support transitive wasm-bindgen
+wasm-bindgen-shared transitive wasm-bindgen

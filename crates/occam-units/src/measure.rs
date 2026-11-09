@@ -20,11 +20,11 @@ mod sealed {
 pub trait Unit: sealed::Sealed + Copy + Debug + PartialEq + Send + Sync + 'static {}
 
 /// The internal unit of length.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct Millimetres;
 
 /// The internal unit of angle.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct Radians;
 
 impl Unit for Millimetres {}
@@ -194,6 +194,13 @@ mod tests {
     /// Multiplying and dividing by the same factor rounds twice, so a round trip is within two parts in 2^52.
     fn close(got: f64, want: f64) -> bool {
         (got - want).abs() <= 2.0 * f64::EPSILON * want.abs()
+    }
+
+    #[test]
+    fn measures_compare_by_size() {
+        assert!(Length::from_millimetres(1.0) < Length::from_millimetres(2.0));
+        assert!(Angle::from_radians(2.0) > Angle::from_radians(1.0));
+        assert_eq!(Length::from_millimetres(f64::NAN).partial_cmp(&Length::from_millimetres(1.0)), None);
     }
 
     #[test]

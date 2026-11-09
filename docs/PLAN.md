@@ -128,7 +128,7 @@ O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
 
 | Id | Decision | Recommendation | Needed by |
 |---|---|---|---|
-| O5 | Cargo dependencies, asked one at a time when their step arrives. Expected: `gungraun` (test only, `bedrock.perf`), `wasm-bindgen` (`bedrock.thread`), a property-test crate (test only), `fearless_simd` if P4 shows plain array lanes fall short, `rayon` if P11 favours it. [Spikes may use those two already](decisions/2026-11-09-early-spikes.md) | Decide each on the evidence | when reached |
+| O5 | Cargo dependencies, asked one at a time when their step arrives. Expected: `gungraun` (test only, `bedrock.perf`), [`wasm-bindgen`](decisions/2026-11-09-wasm-bindgen.md) (`bedrock.thread`), a property-test crate (test only), `fearless_simd` if P4 shows plain array lanes fall short, `rayon` if P11 favours it. [Spikes may use those two already](decisions/2026-11-09-early-spikes.md) | Decide each on the evidence | when reached |
 | O6 | A lawyer's view of the provenance policy and oracle outputs | Worth having before the first public release | first release |
 | O7 | Reserve `occam` on crates.io and an npm scope | Reserve once there is something real to publish | first release |
 | O8 | The framework for the viewer's page | No framework for the viewer; decide again for the full web application | `view` |

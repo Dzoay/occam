@@ -1,0 +1,18 @@
+[package]
+name = "occam-wasm"
+description = "The browser build: a thin facade over the occam crate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+occam = { path = "../occam" }
+# Pinned to the version of wasm-bindgen-cli in scripts/toolchain.sh, which must match. See docs/decisions/2026-11-09-wasm-bindgen.md.
+wasm-bindgen = "=0.2.129"
+
+[lints]
+workspace = true
