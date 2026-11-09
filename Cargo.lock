@@ -49,6 +49,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "occam-units"
+version = "0.0.0"
+dependencies = [
+ "occam-math",
+ "occam-report",
+]
+
+[[package]]
 name = "occam-xtask"
 version = "0.0.0"
 dependencies = [

@@ -29,7 +29,8 @@ text_enum! {
 impl LengthUnit {
     /// How many millimetres make one of this unit. Dividing by this is exact where it can be, as multiplying by its inverse
     /// is not: 25.4 mm would show as 0.9999999999999999 in.
-    pub(crate) const fn millimetres(self) -> f64 {
+    #[must_use]
+    pub const fn millimetres(self) -> f64 {
         match self {
             Self::Millimetre => 1.0,
             Self::Centimetre => 10.0,
@@ -41,7 +42,8 @@ impl LengthUnit {
 
 impl AngleUnit {
     /// How many of this unit make one radian.
-    pub(crate) const fn per_radian(self) -> f64 {
+    #[must_use]
+    pub const fn per_radian(self) -> f64 {
         match self {
             Self::Radian => 1.0,
             Self::Degree => 180.0 / std::f64::consts::PI,

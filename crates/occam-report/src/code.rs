@@ -27,6 +27,10 @@ text_enum! {
         Malformed = "report.malformed",
         /// The text given to [`Report::from_json`] uses a schema version this build cannot read.
         UnsupportedSchema = "report.unsupported-schema",
+        /// A number given as a length or an angle is NaN or infinite, or becomes infinite when converted.
+        NotFinite = "units.not-finite",
+        /// A tolerance is not a finite number greater than zero.
+        ToleranceOutOfRange = "units.tolerance-out-of-range",
     }
 }
 
@@ -67,6 +71,18 @@ impl Code {
                 summary: "The report uses a schema version this build cannot read.",
                 template: "Schema version {found} is not supported. This build reads version {supported}.",
                 remedies: &[RemedyKind::UseSchema],
+            },
+            Self::NotFinite => Entry {
+                severity: Severity::Error,
+                summary: "A number given as a length or an angle is not finite.",
+                template: "The number given is {value}, which is not finite in occam's internal units.",
+                remedies: &[],
+            },
+            Self::ToleranceOutOfRange => Entry {
+                severity: Severity::Error,
+                summary: "A tolerance must be a finite number greater than zero.",
+                template: "The tolerance {tolerance} is not a finite number greater than zero.",
+                remedies: &[],
             },
         }
     }
@@ -172,6 +188,22 @@ mod tests {
                     "summary": "The report uses a schema version this build cannot read.",
                     "template": "Schema version {found} is not supported. This build reads version {supported}.",
                     "remedies": ["use-schema"],
+                },
+                {
+                    "name": "NotFinite",
+                    "code": "units.not-finite",
+                    "severity": "error",
+                    "summary": "A number given as a length or an angle is not finite.",
+                    "template": "The number given is {value}, which is not finite in occam's internal units.",
+                    "remedies": [],
+                },
+                {
+                    "name": "ToleranceOutOfRange",
+                    "code": "units.tolerance-out-of-range",
+                    "severity": "error",
+                    "summary": "A tolerance must be a finite number greater than zero.",
+                    "template": "The tolerance {tolerance} is not a finite number greater than zero.",
+                    "remedies": [],
                 },
             ],
             "remedies": [
