@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "coaxial-stepped-cut-0002",
+  "origin": "tools/corpus/generate.py family coaxial-stepped-cut seed 26002",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 5.12,
+      "height": 7.282,
+      "origin": [
+        7.606,
+        -5.433,
+        15.537
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 2.041,
+      "height": 16.568,
+      "origin": [
+        7.606,
+        -5.433,
+        20.85
+      ],
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 573.940813153,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 424.221627606,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        2.486,
+        -10.553,
+        15.537
+      ],
+      "max": [
+        12.726,
+        -0.313,
+        22.819
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

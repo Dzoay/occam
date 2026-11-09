@@ -1,0 +1,45 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-crossed-steinmetz-0013-a",
+  "origin": "tools/corpus/generate.py family near-crossed-steinmetz seed 41013",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 14.492,
+      "height": 115.936,
+      "origin": [
+        -57.968,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "rotate",
+      "id": "ra",
+      "target": "a",
+      "axis_origin": [
+        -4.856,
+        -0.684,
+        -2.751
+      ],
+      "axis": [
+        -0.985,
+        -0.768,
+        -0.56
+      ],
+      "angle_degrees": 152.287
+    }
+  ],
+  "result": "ra",
+  "volume_identity": {
+    "group": "near-crossed-steinmetz-0013",
+    "role": "a"
+  }
+}

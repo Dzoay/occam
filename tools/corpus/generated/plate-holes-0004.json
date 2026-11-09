@@ -1,0 +1,159 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "plate-holes-0004",
+  "origin": "tools/corpus/generate.py family plate-holes seed 15004",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        51.199,
+        64.621,
+        1.952
+      ],
+      "origin": [
+        -8.401,
+        3.916,
+        5.313
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h0",
+      "radius": 4.604,
+      "height": 3.952,
+      "origin": [
+        0.886,
+        19.356,
+        4.313
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c0",
+      "target": "a",
+      "tool": "h0"
+    },
+    {
+      "op": "cylinder",
+      "id": "h1",
+      "radius": 4.503,
+      "height": 3.952,
+      "origin": [
+        18.2,
+        19.402,
+        4.313
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c1",
+      "target": "c0",
+      "tool": "h1"
+    },
+    {
+      "op": "cylinder",
+      "id": "h2",
+      "radius": 4.3,
+      "height": 3.952,
+      "origin": [
+        35.514,
+        17.704,
+        4.313
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c2",
+      "target": "c1",
+      "tool": "h2"
+    },
+    {
+      "op": "cylinder",
+      "id": "h3",
+      "radius": 3.379,
+      "height": 3.952,
+      "origin": [
+        0.628,
+        55.209,
+        4.313
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c3",
+      "target": "c2",
+      "tool": "h3"
+    },
+    {
+      "op": "cylinder",
+      "id": "h4",
+      "radius": 5.055,
+      "height": 3.952,
+      "origin": [
+        17.638,
+        51.046,
+        4.313
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c4",
+      "target": "c3",
+      "tool": "h4"
+    }
+  ],
+  "result": "c4",
+  "expect": {
+    "volume": {
+      "value": 5863.81169747,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 6728.04007856,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": -8
+    },
+    "bbox": {
+      "min": [
+        -8.401,
+        3.916,
+        5.313
+      ],
+      "max": [
+        42.798,
+        68.537,
+        7.265
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

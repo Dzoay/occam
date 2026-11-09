@@ -1,0 +1,69 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "box-corner-common-0002",
+  "origin": "tools/corpus/generate.py family box-corner-common seed 8002",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        25.684,
+        11.351,
+        3.719
+      ],
+      "origin": [
+        0.952,
+        -2.064,
+        -0.095
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        17.408,
+        15.025,
+        17.95
+      ],
+      "origin": [
+        12.29,
+        0.795,
+        1.874
+      ]
+    },
+    {
+      "op": "common",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 213.195906,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 323.585464,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        12.29,
+        0.795,
+        1.874
+      ],
+      "max": [
+        26.636,
+        9.287,
+        3.624
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

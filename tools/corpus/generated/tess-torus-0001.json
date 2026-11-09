@@ -1,0 +1,61 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "tess-torus-0001",
+  "origin": "tools/corpus/generate.py family tess-torus seed 35001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "torus",
+      "id": "a",
+      "major_radius": 9.334,
+      "minor_radius": 2.562,
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "tessellate",
+      "id": "m",
+      "target": "a",
+      "linear_deflection": 0.5,
+      "angular_deflection": 0.5
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 1209.36052449,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 944.075350893,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 0
+    },
+    "bbox": {
+      "min": [
+        -11.896,
+        -11.896,
+        -2.562
+      ],
+      "max": [
+        11.896,
+        11.896,
+        2.562
+      ],
+      "abs_tol": 1e-05
+    },
+    "watertight": {
+      "value": true
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-crossed-external-0018-b",
+  "origin": "tools/corpus/generate.py family near-crossed-external seed 39018",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 9.142,
+      "height": 100.416,
+      "origin": [
+        0.0,
+        -50.208,
+        21.693999998043
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "rotate",
+      "id": "rb",
+      "target": "b",
+      "axis_origin": [
+        -4.722,
+        -3.046,
+        -4.218
+      ],
+      "axis": [
+        0.185,
+        0.725,
+        0.19
+      ],
+      "angle_degrees": 124.768
+    }
+  ],
+  "result": "rb",
+  "volume_identity": {
+    "group": "near-crossed-external-0018",
+    "role": "b"
+  }
+}

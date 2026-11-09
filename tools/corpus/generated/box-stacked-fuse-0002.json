@@ -1,0 +1,69 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "box-stacked-fuse-0002",
+  "origin": "tools/corpus/generate.py family box-stacked-fuse seed 12002",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        3.841,
+        3.048,
+        22.659
+      ],
+      "origin": [
+        -3.978,
+        1.372,
+        5.54
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        2.309,
+        1.684,
+        3.413
+      ],
+      "origin": [
+        -3.196,
+        2.494,
+        28.199
+      ]
+    },
+    {
+      "op": "fuse",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 278.54821054,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 362.866656,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -3.978,
+        1.372,
+        5.54
+      ],
+      "max": [
+        -0.137,
+        4.42,
+        31.612
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

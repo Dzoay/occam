@@ -1,0 +1,69 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "box-corner-fuse-0004",
+  "origin": "tools/corpus/generate.py family box-corner-fuse seed 6004",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        7.122,
+        19.424,
+        4.9
+      ],
+      "origin": [
+        0.087,
+        -4.689,
+        5.967
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        8.586,
+        20.609,
+        8.782
+      ],
+      "origin": [
+        4.022,
+        10.177,
+        7.835
+      ]
+    },
+    {
+      "op": "fuse",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 2187.7759976,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 1327.486612,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        0.087,
+        -4.689,
+        5.967
+      ],
+      "max": [
+        12.608,
+        30.786,
+        16.617
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "coaxial-equal-fuse-0001",
+  "origin": "tools/corpus/generate.py family coaxial-equal-fuse seed 21001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 2.705,
+      "height": 20.413,
+      "origin": [
+        14.109,
+        14.453,
+        7.502
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 2.705,
+      "height": 28.11,
+      "origin": [
+        14.109,
+        20.396,
+        7.502
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "fuse",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 782.780124464,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 624.739565535,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        11.404,
+        14.453,
+        4.797
+      ],
+      "max": [
+        16.814,
+        48.506,
+        10.207
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

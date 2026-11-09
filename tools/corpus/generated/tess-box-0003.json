@@ -1,0 +1,59 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "tess-box-0003",
+  "origin": "tools/corpus/generate.py family tess-box seed 36003",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        6.136,
+        3.642,
+        5.705
+      ],
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "tessellate",
+      "id": "m",
+      "target": "a",
+      "linear_deflection": 0.01,
+      "angular_deflection": 0.2
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 127.49141496,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 156.261604,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max": [
+        6.136,
+        3.642,
+        5.705
+      ],
+      "abs_tol": 1e-05
+    },
+    "watertight": {
+      "value": true
+    }
+  }
+}

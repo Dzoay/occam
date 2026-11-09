@@ -1,0 +1,61 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "tess-cylinder-0002",
+  "origin": "tools/corpus/generate.py family tess-cylinder seed 34002",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 5.245,
+      "height": 16.053,
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "tessellate",
+      "id": "m",
+      "target": "a",
+      "linear_deflection": 0.05,
+      "angular_deflection": 0.5
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 1387.38521954,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 701.882127126,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -5.245,
+        -5.245,
+        0.0
+      ],
+      "max": [
+        5.245,
+        5.245,
+        16.053
+      ],
+      "abs_tol": 1e-05
+    },
+    "watertight": {
+      "value": true
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "arris-boolean-through-hole",
+  "origin": "arris-labs/arris@1a7bc1e660b9d20a677ac06a317de83200ffd639 tests/fixtures/boolean/through-hole/fixture.json: the recipe and its closed-form answer, converted by tools/corpus/import_arris.py; Copyright (c) 2026 Sergei Sergienko, under MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE at that commit)",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "plate",
+      "size": [
+        40,
+        30,
+        10
+      ],
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "hole",
+      "radius": 4,
+      "height": 12,
+      "origin": [
+        20,
+        15,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "result",
+      "target": "plate",
+      "tool": "hole"
+    }
+  ],
+  "result": "result",
+  "expect": {
+    "volume": {
+      "value": 11497.3451754,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 3950.79644737,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 0
+    }
+  }
+}

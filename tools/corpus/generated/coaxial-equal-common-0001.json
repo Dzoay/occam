@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "coaxial-equal-common-0001",
+  "origin": "tools/corpus/generate.py family coaxial-equal-common seed 22001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 1.764,
+      "height": 2.711,
+      "origin": [
+        0.967,
+        -16.582,
+        13.087
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 1.764,
+      "height": 18.089,
+      "origin": [
+        0.967,
+        -14.484,
+        13.087
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "common",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 5.9924926331,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 26.3455719222,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -0.797,
+        -14.484,
+        11.323
+      ],
+      "max": [
+        2.731,
+        -13.871,
+        14.851
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

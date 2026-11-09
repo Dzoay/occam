@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "coaxial-equal-cut-0003",
+  "origin": "tools/corpus/generate.py family coaxial-equal-cut seed 23003",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 0.655,
+      "height": 23.951,
+      "origin": [
+        7.594,
+        -0.423,
+        3.973
+      ],
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 0.655,
+      "height": 21.005,
+      "origin": [
+        14.213,
+        -0.423,
+        3.973
+      ],
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 8.92123241614,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 29.9360479005,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        7.594,
+        -1.078,
+        3.318
+      ],
+      "max": [
+        14.213,
+        0.232,
+        4.628
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-crossed-external-0016-union",
+  "origin": "tools/corpus/generate.py family near-crossed-external seed 39016",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 10.731,
+      "height": 85.848,
+      "origin": [
+        -42.924,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 7.971,
+      "height": 85.848,
+      "origin": [
+        0.0,
+        -42.924,
+        18.7019998341
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "rotate",
+      "id": "ra",
+      "target": "a",
+      "axis_origin": [
+        0.075,
+        3.45,
+        3.955
+      ],
+      "axis": [
+        -0.776,
+        -0.977,
+        0.461
+      ],
+      "angle_degrees": 136.521
+    },
+    {
+      "op": "rotate",
+      "id": "rb",
+      "target": "b",
+      "axis_origin": [
+        0.075,
+        3.45,
+        3.955
+      ],
+      "axis": [
+        -0.776,
+        -0.977,
+        0.461
+      ],
+      "angle_degrees": 136.521
+    },
+    {
+      "op": "fuse",
+      "id": "u",
+      "target": "ra",
+      "tool": "rb"
+    }
+  ],
+  "result": "u",
+  "volume_identity": {
+    "group": "near-crossed-external-0016",
+    "role": "union"
+  }
+}

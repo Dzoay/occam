@@ -1,0 +1,83 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-crossed-steinmetz-0018-intersection",
+  "origin": "tools/corpus/generate.py family near-crossed-steinmetz seed 41018",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 12.466,
+      "height": 99.728,
+      "origin": [
+        -49.864,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 12.466,
+      "height": 99.728,
+      "origin": [
+        0.0,
+        -49.864,
+        2.701e-09
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "rotate",
+      "id": "ra",
+      "target": "a",
+      "axis_origin": [
+        -2.059,
+        2.767,
+        -3.953
+      ],
+      "axis": [
+        0.698,
+        -0.135,
+        -0.781
+      ],
+      "angle_degrees": 88.833
+    },
+    {
+      "op": "rotate",
+      "id": "rb",
+      "target": "b",
+      "axis_origin": [
+        -2.059,
+        2.767,
+        -3.953
+      ],
+      "axis": [
+        0.698,
+        -0.135,
+        -0.781
+      ],
+      "angle_degrees": 88.833
+    },
+    {
+      "op": "common",
+      "id": "i",
+      "target": "ra",
+      "tool": "rb"
+    }
+  ],
+  "result": "i",
+  "volume_identity": {
+    "group": "near-crossed-steinmetz-0018",
+    "role": "intersection"
+  }
+}

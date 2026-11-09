@@ -1,0 +1,73 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "coaxial-stepped-fuse-0001",
+  "origin": "tools/corpus/generate.py family coaxial-stepped-fuse seed 24001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 1.646,
+      "height": 12.974,
+      "origin": [
+        -19.477,
+        -11.473,
+        7.477
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 0.87,
+      "height": 14.578,
+      "origin": [
+        -19.477,
+        -3.309,
+        7.477
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "op": "fuse",
+      "id": "c",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "c",
+  "expect": {
+    "volume": {
+      "value": 133.656122008,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 204.597352538,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -21.123,
+        -11.473,
+        5.831
+      ],
+      "max": [
+        -17.831,
+        11.269,
+        9.123
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

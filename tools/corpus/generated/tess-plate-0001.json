@@ -1,0 +1,81 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "tess-plate-0001",
+  "origin": "tools/corpus/generate.py family tess-plate seed 38001",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        24.642,
+        11.96,
+        1.56
+      ],
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h0",
+      "radius": 1.637,
+      "height": 3.56,
+      "origin": [
+        12.321,
+        5.98,
+        -1.0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c0",
+      "target": "a",
+      "tool": "h0"
+    },
+    {
+      "op": "tessellate",
+      "id": "m",
+      "target": "c0",
+      "linear_deflection": 0.5,
+      "angular_deflection": 0.5
+    }
+  ],
+  "result": "c0",
+  "expect": {
+    "volume": {
+      "value": 446.627340738,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 702.842890775,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 0
+    },
+    "bbox": {
+      "min": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max": [
+        24.642,
+        11.96,
+        1.56
+      ],
+      "abs_tol": 1e-05
+    },
+    "watertight": {
+      "value": true
+    }
+  }
+}

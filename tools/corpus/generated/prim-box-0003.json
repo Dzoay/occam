@@ -1,0 +1,49 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "prim-box-0003",
+  "origin": "tools/corpus/generate.py family prim-box seed 1003",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "a",
+      "size": [
+        4.939,
+        2.624,
+        13.903
+      ],
+      "origin": [
+        -2.131,
+        -1.866,
+        -18.963
+      ]
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 180.181990208,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 236.21665,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        -2.131,
+        -1.866,
+        -18.963
+      ],
+      "max": [
+        2.808,
+        0.758,
+        -5.06
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}

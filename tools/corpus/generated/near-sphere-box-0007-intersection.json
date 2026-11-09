@@ -1,0 +1,43 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-sphere-box-0007-intersection",
+  "origin": "tools/corpus/generate.py family near-sphere-box seed 42007",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "sphere",
+      "id": "a",
+      "radius": 2.122,
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "box",
+      "id": "b",
+      "size": [
+        8.488,
+        8.488,
+        4.244
+      ],
+      "origin": [
+        -4.244,
+        -4.244,
+        -6.3659996656
+      ]
+    },
+    {
+      "op": "common",
+      "id": "i",
+      "target": "a",
+      "tool": "b"
+    }
+  ],
+  "result": "i",
+  "volume_identity": {
+    "group": "near-sphere-box-0007",
+    "role": "intersection"
+  }
+}

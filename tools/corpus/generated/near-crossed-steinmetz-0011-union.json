@@ -1,0 +1,83 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "near-crossed-steinmetz-0011-union",
+  "origin": "tools/corpus/generate.py family near-crossed-steinmetz seed 41011",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cylinder",
+      "id": "a",
+      "radius": 5.398,
+      "height": 43.184,
+      "origin": [
+        -21.592,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "b",
+      "radius": 5.398,
+      "height": 43.184,
+      "origin": [
+        0.0,
+        -21.592,
+        0.03694
+      ],
+      "axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "op": "rotate",
+      "id": "ra",
+      "target": "a",
+      "axis_origin": [
+        -2.431,
+        1.709,
+        0.835
+      ],
+      "axis": [
+        0.682,
+        -0.601,
+        0.369
+      ],
+      "angle_degrees": 10.936
+    },
+    {
+      "op": "rotate",
+      "id": "rb",
+      "target": "b",
+      "axis_origin": [
+        -2.431,
+        1.709,
+        0.835
+      ],
+      "axis": [
+        0.682,
+        -0.601,
+        0.369
+      ],
+      "angle_degrees": 10.936
+    },
+    {
+      "op": "fuse",
+      "id": "u",
+      "target": "ra",
+      "tool": "rb"
+    }
+  ],
+  "result": "u",
+  "volume_identity": {
+    "group": "near-crossed-steinmetz-0011",
+    "role": "union"
+  }
+}

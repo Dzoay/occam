@@ -1,0 +1,212 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "arris-provenance-bolt-pattern-rebuild-thicker-wider",
+  "origin": "arris-labs/arris@1a7bc1e660b9d20a677ac06a317de83200ffd639 tests/fixtures/provenance/bolt-pattern-rebuild/fixture.json variant thicker-wider: the recipe and its closed-form answer, converted by tools/corpus/import_arris.py; Copyright (c) 2026 Sergei Sergienko, under MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE at that commit)",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "box",
+      "id": "plate",
+      "size": [
+        100,
+        100,
+        12
+      ],
+      "origin": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h0",
+      "radius": 3.5,
+      "height": 14,
+      "origin": [
+        85.0,
+        50.0,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h1",
+      "radius": 3.5,
+      "height": 14,
+      "origin": [
+        74.74873734152916,
+        74.74873734152916,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h2",
+      "radius": 3.5,
+      "height": 14,
+      "origin": [
+        50.0,
+        85.0,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h3",
+      "radius": 3.5,
+      "height": 14,
+      "origin": [
+        25.25126265847084,
+        74.74873734152916,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h4",
+      "radius": 3.5,
+      "height": 14,
+      "origin": [
+        15.0,
+        50.00000000000001,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h5",
+      "radius": 3.5,
+      "height": 14,
+      "origin": [
+        25.251262658470832,
+        25.25126265847084,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h6",
+      "radius": 3.5,
+      "height": 14,
+      "origin": [
+        49.99999999999999,
+        15.0,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cylinder",
+      "id": "h7",
+      "radius": 3.5,
+      "height": 14,
+      "origin": [
+        74.74873734152916,
+        25.251262658470832,
+        -1
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "op": "cut",
+      "id": "c0",
+      "target": "plate",
+      "tool": "h0"
+    },
+    {
+      "op": "cut",
+      "id": "c1",
+      "target": "c0",
+      "tool": "h1"
+    },
+    {
+      "op": "cut",
+      "id": "c2",
+      "target": "c1",
+      "tool": "h2"
+    },
+    {
+      "op": "cut",
+      "id": "c3",
+      "target": "c2",
+      "tool": "h3"
+    },
+    {
+      "op": "cut",
+      "id": "c4",
+      "target": "c3",
+      "tool": "h4"
+    },
+    {
+      "op": "cut",
+      "id": "c5",
+      "target": "c4",
+      "tool": "h5"
+    },
+    {
+      "op": "cut",
+      "id": "c6",
+      "target": "c5",
+      "tool": "h6"
+    },
+    {
+      "op": "cut",
+      "id": "result",
+      "target": "c6",
+      "tool": "h7"
+    }
+  ],
+  "result": "result",
+  "expect": {
+    "volume": {
+      "value": 116305.487039,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 26295.3981031,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": -14
+    }
+  }
+}

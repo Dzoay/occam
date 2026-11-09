@@ -1,0 +1,52 @@
+{
+  "schema": "occam-oracle-case/1",
+  "id": "prim-cone-0004",
+  "origin": "tools/corpus/generate.py family prim-cone seed 3004",
+  "licence": "MIT OR Apache-2.0",
+  "ops": [
+    {
+      "op": "cone",
+      "id": "a",
+      "radius1": 4.401,
+      "radius2": 1.425,
+      "height": 1.346,
+      "origin": [
+        17.687,
+        6.48,
+        8.647
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    }
+  ],
+  "result": "a",
+  "expect": {
+    "volume": {
+      "value": 39.0028366095,
+      "rel_tol": 1e-06
+    },
+    "area": {
+      "value": 127.00991609,
+      "rel_tol": 1e-06
+    },
+    "euler": {
+      "value": 2
+    },
+    "bbox": {
+      "min": [
+        13.286,
+        6.48,
+        4.246
+      ],
+      "max": [
+        22.088,
+        7.826,
+        13.048
+      ],
+      "abs_tol": 1e-05
+    }
+  }
+}
