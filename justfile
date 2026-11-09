@@ -165,6 +165,22 @@ workflows:
 counts:
     cargo xtask gates counts --update
 
+# OCCT's whole-operation timings on the generated corpus: the numbers occam has to beat. `just baseline run`, `node`, `report`
+[env("UV_PROJECT_ENVIRONMENT", oracle_venv)]
+[group('baseline')]
+baseline *args:
+    uv run --frozen --project tools/oracle python tools/baseline/baseline.py "$@"
+
+# `just baseline` on another machine over ssh, on a mirror of `tools/`, under the shared speed lock, results copied back
+[group('baseline')]
+baseline-on host *args:
+    scripts/remote-baseline.sh "$@"
+
+# The baseline harness's own tests, standard library only
+[group('baseline')]
+baseline-test *args:
+    python3 -B -m unittest discover -s tools/baseline/tests -t tools/baseline "$@"
+
 # The oracle harness (`just oracle run tools/oracle/examples`, then `check`, `compare`, `register`, `build-second`); a large download the first time
 [env("UV_PROJECT_ENVIRONMENT", oracle_venv)]
 [group('oracle')]
