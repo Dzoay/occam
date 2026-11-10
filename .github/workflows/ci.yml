@@ -43,6 +43,8 @@ jobs:
         with:
           components: clippy
       - run: just clippy
+      - name: The architecture's type sketch still compiles against the crates
+        run: just sketch
 
   test:
     name: test

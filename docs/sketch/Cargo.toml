@@ -1,0 +1,20 @@
+# The compiled type sketch of the seams in docs/ARCHITECTURE.md (L50). It is not a workspace member, nothing depends on
+# it, and it is never published. `just sketch` type-checks it. Each first-release milestone deletes the modules its
+# crates now hold, and the directory goes when the last one does.
+[package]
+name = "sketch"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+occam-math = { path = "../../crates/occam-math" }
+occam-report = { path = "../../crates/occam-report" }
+occam-units = { path = "../../crates/occam-units" }
+# Approved for the kernel: docs/decisions/2026-11-09-serde.md, 2026-11-10-rayon.md and 2026-11-10-fearless-simd.md.
+serde = { version = "1.0.229", features = ["derive"] }
+rayon = "1.12"
+fearless_simd = "1.2"

@@ -57,22 +57,21 @@ These hold from the first commit. The first thirteen are [the user's priorities]
 | Brief | Every entity has a stable id, and every operation returns what it created, changed and deleted | `occam-topo` |
 | Brief | Minimal dependencies: the kernel is std-only unless the user agrees otherwise | `gates deps` |
 
-## 4. Layers (provisional until `proving-ground` closes)
+## 4. Layers
 
-Each crate may depend only on crates above it in this list.
+Each crate may depend only on crates above it in this list. [ARCHITECTURE.md](ARCHITECTURE.md) is the design behind it.
 
 ```text
-occam-report      Report, codes, remedies, named values, entity references, the JSON schema
-occam-math        Real, SIMD lanes, exact predicates, intervals, the one maths implementation
-occam-units       Length, Angle, frames (world, local, UV), conversion at the API, Tolerance
-occam-geom        curves and surfaces: analytic, NURBS, mesh-backed; batch evaluation
-occam-intersect   curve and surface intersection
-occam-topo        the B-rep: arena, stable ids, provenance, immutable snapshots
-occam-check       the invariant checker
-occam-mesh        tessellation
-occam-ops         construction, booleans, blends (split as it grows)
-occam-io          STEP, the native format and its readable dump
-occam             the composition crate: everything below binds this and nothing else (L25)
+occam-report      Report, codes, remedies, fault classes, entity references and descriptions, the JSON schema
+occam-math        Real and lanes, owned sin_cos and atan2, dispatch, intervals, exact predicates, the execution layer
+occam-units       Length, Angle, frames, points, directions, tangents, placements, bounds, Tolerance; units at the API
+occam-geom        curves, parameter curves and surfaces: analytic, NURBS, mesh-backed; evaluation by order; presentation
+occam-intersect   curve and surface intersection: closed forms, then the hybrid; failures in the result
+occam-topo        the B-rep: records in copy-on-write chunks, stable ids, snapshots, the edit, history, the checker
+occam-mesh        tessellation: shared edges first, then faces; the watertight check
+occam-ops         operations as data: validation, construction, measurement, booleans, blends (split as it grows)
+occam-io          the native format and its readable dump, STEP
+occam             the composition crate, with the request runner and the describer: all below bind it alone (L25)
 occam-wasm, occam-cli, occam-capi, occam-mcp          thin facades
 occam-verify, occam-xtask                             oracles, corpus, gates; never published
 web/                                                  the renderer; consumes data only
@@ -124,7 +123,7 @@ drawings; the full web application; server-side rendering; a C ABI and a side-by
 
 ## 7. Decisions the user still owns
 
-O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
+O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md). O21, whether anything needs an exact derivative above the second, is answered by [the approved parity list](PARITY.md): rows 2.1 and 2.2 ask for evaluation to any derivative in `geometry`. [ARCHITECTURE.md](ARCHITECTURE.md#8-the-open-decisions-it-assumes) gives the assumed answer to each row below that `proving-ground.design` needs, and what changes if it differs.
 
 | Id | Decision | Recommendation | Needed by |
 |---|---|---|---|
@@ -135,7 +134,7 @@ O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
 | O9 | A machine with more physical cores for the parallel investigations. This laptop has 4 | Start here, and decide after `proving-ground.p1` shows how far scaling matters | `proving-ground.p2` |
 | O10 | A nightly toolchain for wasm threads, which need `-Zbuild-std`. [Spikes may use one already](decisions/2026-11-09-early-spikes.md) | P10 recommends keeping this open and not taking on nightly for real use. Nothing in the first release needs it. Reopen it if a real kernel has a model large enough that a copy per worker hurts, or tasks fine-grained enough that message passing dominates, or when `-Zbuild-std` stabilises | when one of those happens |
 | O11 | Whether "cannot decide at this resolution" is a normal outcome of a kernel operation (S2). In near-tangent chains it is the answer in about 44% of decisions, and a kernel that must always return a solid needs a policy on top | Yes, reported with its failure state | `proving-ground.design` |
-| O12 | The default `eps` (S2). Everything was measured relative to 1e-7 mm and swept to 1e-5 and 1e-9. At 1e-9 the intervals begin to run out of room at a scale of 8192 | Choose it with S1's results in hand | `proving-ground.design` |
+| O12 | The default `eps` (S2). Everything was measured relative to 1e-7 mm and swept to 1e-5 and 1e-9. At 1e-9 the intervals begin to run out of room at a scale of 8192 | 1e-7 mm and 1e-9 rad, the default for a new model when a request gives none: every finding measured there, and S1's "open" results at 1e-7 come from its flux test | `proving-ground.design` |
 | O13 | A stored per-entity accuracy for imported geometry, fixed at import and never grown (S2). Foreign geometry was not measured | Decide when import is in scope | when import is in scope |
 | O14 | Owning `sin_cos` and `atan2` for the first release (S5). It is the only way to get batch evaluation, at musl's accuracy of about 0.74 and 1.40 ulps where glibc's is about 0.5. The alternative is std, scalar-only, with bits that differ by target | Own them | `proving-ground.design` |
 | O15 | Fdlibm's coefficients in those functions, which are under Sun's notice (S5): carry the notice in `LICENSES/`, or generate new ones with our own minimax fit | Generate new ones, since the code is rewritten anyway | before `occam-math` gains them |
@@ -144,12 +143,11 @@ O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
 | O18 | Whether the first release requires anything of its hosting page, such as COOP/COEP (P10) | Require nothing, which keeps occam embeddable next to third-party content and gives up a 2 to 14% warm speed-up | `proving-ground.design` |
 | O19 | Which browsers the first release must support (P10, P12). Safari was not measured, and P12 measured only Firefox on two GPUs. [This also picks the renderer's API](decisions/2026-11-09-gpu-drawing.md) | Measure Safari before any release that claims to support it | `view` |
 | O20 | Whether the first release must serve continuous whole-surface editing of very large faces (P12) | No: draw the CPU mesh with local updates, and add write-through if a real workload asks for it | `view` |
-| O21 | Whether anything in scope needs an exact third derivative (S4), such as offset curvature or curvature-continuous blends. The ladder of position, first and second is the choice hardest to change once the seam freezes | Keep two orders and accept differencing, unless a named feature needs more | `proving-ground.design` |
-| O22 | Struct-of-arrays or array-of-structs inside topology chunks (S3/P3) | Struct-of-arrays for its read scaling, which makes edits about 45% dearer. The numbers do not force it, and hot and cold columns were not tried | `proving-ground.design` |
-| O23 | Narrowing L29 (S3/P3), because its wider claim did not hold | Record it as "batch NURBS by degree, for lanes, on targets with wide vectors, and group surfaces by kind to save memory" | `proving-ground.design` |
+| O22 | Struct-of-arrays or array-of-structs inside topology chunks (S3/P3) | Records, read through per-kind views so that the layout is the table module's alone. This reverses the earlier recommendation: struct-of-arrays won read scaling only on a memory-bound microbenchmark, and records win snapshots and edits | `proving-ground.design` |
+| O23 | Narrowing L29 (S3/P3), because its wider claim did not hold | Record it as "sort calls by family and degree; evaluate one surface at many points in a batch; use lanes per kernel class only where the vectorisation gate measures a gain; group stored surfaces by family when memory asks" | `proving-ground.design` |
 | O24 | What a loop below the resolvable size returns (P5). Today the hybrid returns a contact point for a loop of radius about 1e-5 at scale 4, with no warning, which is close in position and wrong in kind | A reported result saying "contact or loop smaller than `d`" | `proving-ground.design` |
-| O25 | Whether coincident surfaces (coplanar and coaxial-equal, the 32 reports in S1) get a follow-up to S1 or wait for the boolean design | None yet | `proving-ground.design` |
-| O26 | Whether `Report` carries geometry (a surface's type and parameters, and a position) or only ids that a caller resolves through a separate query (S6). An agent needs the information, and S6 does not say which way to supply it | None yet | `proving-ground.design` |
+| O25 | Whether coincident surfaces (coplanar and coaxial-equal, the 32 reports in S1) get a follow-up to S1 or wait for the boolean design | No spike: coincident surfaces become a step of `booleans`, written test-first from S1's 32 reports, and until then a reported failure with `move-apart` | `proving-ground.design` |
+| O26 | Whether `Report` carries geometry (a surface's type and parameters, and a position) or only ids that a caller resolves through a separate query (S6). An agent needs the information, and S6 does not say which way to supply it | Ids in the report, described by one resolver as the result leaves the kernel, with the descriptions inside the report | `proving-ground.design` |
 | O27 | Whether P1's comparison with OCCT should reach `main`. It holds family medians of the time ratio and counts of the cases where the prototype was faster, with no per-case OCCT number. [Kept out for now](decisions/2026-11-09-p1-occt-comparison.md) | Decide with O6's answer, because the figures are derived from oracle outputs | when O6 is answered |
 
 O11 onward come from the spike findings named in each row, which give the detail.

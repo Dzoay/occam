@@ -22,8 +22,6 @@ Every spike has merged its finding, in `docs/evidence/2026-11-09-<id>.md`. The q
 
 ## Closing the milestone
 
-### `proving-ground.design`
-
-Two design proposals from the findings, adversarial critics on each, no numeric scoring, and a compiled type sketch of
-the seams (L50). The result is `docs/ARCHITECTURE.md`. §4 of the plan is updated, the `spikes` branch is deleted, and
-[first-release.md](first-release.md) is revised.
+`proving-ground.design` made [ARCHITECTURE.md](../ARCHITECTURE.md) from two proposals and an adversarial critic on each,
+with [a compiled type sketch](../sketch/src/lib.rs) of the seams. [§4 of the plan](../PLAN.md#4-layers) and
+[the first-release outline](first-release.md) follow it. The exit gate is met when the user approves it.
