@@ -50,3 +50,9 @@ rustc_version transitive gungraun
 semver transitive gungraun
 unty-next transitive gungraun
 fearless_simd occam-math fearless-simd
+rayon occam-math rayon
+rayon-core transitive rayon
+crossbeam-deque transitive rayon
+crossbeam-epoch transitive rayon
+crossbeam-utils transitive rayon
+either transitive rayon

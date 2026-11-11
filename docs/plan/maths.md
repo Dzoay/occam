@@ -27,14 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.exec`
-
-`Exec`: `serial`, `threads`, `map` and `map_chunks` with `Grain`, over `rayon` natively and serial on wasm. The stream's
-threads go through `Exec::map`, so `gates determinism` covers it. A pool that cannot start is reported, never a panic.
-
-*Failing test first:* `map` and `map_chunks` return results in index order at 1, 2, 7 and 64 threads, with chunk
-boundaries that depend only on the chunk size.
-
 ### `maths.expansion`
 
 `Expansion`, Shewchuk's (1997) exact sums of non-overlapping doubles: two-sum, two-product by splitting (no fused

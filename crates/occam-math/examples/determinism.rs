@@ -3,16 +3,17 @@
 #![allow(clippy::print_stdout, clippy::print_stderr, reason = "a command-line tool prints")]
 
 use std::env;
+use std::num::NonZeroUsize;
 use std::process::ExitCode;
 
 use occam_math::stream::{self, OPERATIONS};
-use occam_math::{Lanes, Level, Real};
+use occam_math::{Exec, Lanes, Level, Real};
 
 const USAGE: &str = "usage: determinism --threads <count> [--level <name>] | determinism --levels";
 
 /// Prints the stream's hashes when run as `R`, one line per operation.
-fn show<R: Real>(executor: &str, level: Level, threads: usize) {
-    for (operation, hash) in OPERATIONS.iter().zip(stream::run::<R>(level, threads)) {
+fn show<R: Real>(executor: &str, level: Level, exec: &Exec) {
+    for (operation, hash) in OPERATIONS.iter().zip(stream::run::<R>(level, exec)) {
         println!("{operation} {executor} {hash:016x}");
     }
 }
@@ -22,7 +23,7 @@ enum Request {
     /// The names of the levels this machine has, widest first.
     Levels,
     /// The stream, on this many threads, at the level of this name, or the widest when there is none.
-    Run(usize, Option<String>),
+    Run(NonZeroUsize, Option<String>),
 }
 
 fn request() -> Option<Request> {
@@ -61,15 +62,23 @@ fn main() -> ExitCode {
             level
         }
     };
+    let exec = match Exec::threads(threads) {
+        Ok(exec) => exec,
+        Err(report) => {
+            eprintln!("{}", report.message(occam_report::DisplayUnits::default()));
+            return ExitCode::FAILURE;
+        }
+    };
     println!(
-        "build {} simd128={} threads={threads} level={}",
+        "build {} simd128={} threads={} level={}",
         env::consts::ARCH,
         cfg!(target_feature = "simd128"),
+        exec.thread_count(),
         level.name()
     );
-    show::<f64>("scalar", level, threads);
-    show::<Lanes<2>>("lanes2", level, threads);
-    show::<Lanes<4>>("lanes4", level, threads);
-    show::<Lanes<8>>("lanes8", level, threads);
+    show::<f64>("scalar", level, &exec);
+    show::<Lanes<2>>("lanes2", level, &exec);
+    show::<Lanes<4>>("lanes4", level, &exec);
+    show::<Lanes<8>>("lanes8", level, &exec);
     ExitCode::SUCCESS
 }

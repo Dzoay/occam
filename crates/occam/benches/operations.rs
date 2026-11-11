@@ -7,7 +7,7 @@ use std::hint::black_box;
 
 use gungraun::{library_benchmark, library_benchmark_group, main};
 use occam::{Angle, Lanes, Length, Model, Point, Real, Tolerance, World, distance};
-use occam_math::{Level, stream};
+use occam_math::{Exec, Level, stream};
 
 fn mm(value: f64) -> Length {
     Length::from_millimetres(value)
@@ -30,7 +30,7 @@ fn measure_distance() -> f64 {
 /// One thread, because the operation class is the arithmetic and threads add scheduling noise. The baseline level, so
 /// that the counts do not depend on the machine.
 fn maths<R: Real>() -> stream::Hashes {
-    stream::run::<R>(Level::baseline(), black_box(1))
+    stream::run::<R>(Level::baseline(), black_box(&Exec::serial()))
 }
 
 #[library_benchmark]

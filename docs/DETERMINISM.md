@@ -43,10 +43,11 @@ across targets is [measured rather than assumed](decisions/2026-11-09-one-maths-
 pattern, the infinities, both zeros, subnormals) and ordinary ones, hashed with FNV-1a per operation. The hash is 64-bit
 FNV-1a of the little-endian canonical bits of each output, and the blocks' hashes are folded in block order.
 
-`gates determinism` builds `crates/occam-math/examples/determinism.rs` for release on x86-64 at one thread and at many,
-and on wasm32-wasip2 baseline and simd128 under wasmtime. The native build also runs at every narrower instruction level
-the machine has, each block of the stream dispatched to it. Each run computes the stream as scalar and as two, four and
-eight lanes. Every hash must agree, and must equal the record in `ci/determinism-hashes.txt`.
+`gates determinism` builds `crates/occam-math/examples/determinism.rs` for release on x86-64, on one thread and on a
+pool of many through `Exec`, and on wasm32-wasip2 baseline and simd128 under wasmtime. The native build also runs at
+every narrower instruction level the machine has, each block of the stream dispatched to it. Each run computes the
+stream as scalar and as two, four and eight lanes. Every hash must agree, and must equal the record in
+`ci/determinism-hashes.txt`.
 
 The same stream is a test, so the suite checks it in debug builds on x86-64 and on wasm32 baseline and simd128 (`just
 test-all` and `just wasm`).

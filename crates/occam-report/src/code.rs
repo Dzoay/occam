@@ -37,6 +37,8 @@ text_enum! {
         ToleranceUsed = "measure.tolerance-used",
         /// A command-line argument is missing or is not understood.
         BadArgument = "cli.bad-argument",
+        /// The threads asked for could not be started.
+        ThreadsUnavailable = "exec.threads-unavailable",
     }
 }
 
@@ -47,6 +49,8 @@ text_enum! {
         UseSchema = "use-schema",
         /// Ask for the tolerance in the `tolerance` parameter, which is the model's.
         UseModelTolerance = "use-model-tolerance",
+        /// Run on the number of threads in the `threads` parameter.
+        UseThreads = "use-threads",
     }
 }
 
@@ -111,6 +115,12 @@ impl Code {
                            --model-tolerance LENGTH,ANGLE --tolerance LENGTH [--json], in millimetres and radians.",
                 remedies: &[],
             },
+            Self::ThreadsUnavailable => Entry {
+                severity: Severity::Error,
+                summary: "The threads asked for could not be started.",
+                template: "{threads} threads could not be started on this machine.",
+                remedies: &[RemedyKind::UseThreads],
+            },
         }
     }
 }
@@ -122,6 +132,9 @@ impl RemedyKind {
         match self {
             Self::UseSchema => "Use the schema version given.",
             Self::UseModelTolerance => "Ask for the model's tolerance, or for a coarser one.",
+            Self::UseThreads => {
+                "Run on the number of threads given. One thread needs none started, so it always works."
+            }
         }
     }
 
@@ -131,6 +144,7 @@ impl RemedyKind {
         match self {
             Self::UseSchema => &["version"],
             Self::UseModelTolerance => &["tolerance"],
+            Self::UseThreads => &["threads"],
         }
     }
 }
@@ -233,7 +247,7 @@ mod tests {
         ])
     }
 
-    fn measure_and_command_line_codes() -> Value {
+    fn measure_command_line_and_exec_codes() -> Value {
         json!([
             {
                 "name": "ToleranceBelowModel",
@@ -259,6 +273,14 @@ mod tests {
                 "template": "Argument {position} is not understood. Expected: occam distance --from X,Y,Z --to X,Y,Z --model-tolerance LENGTH,ANGLE --tolerance LENGTH [--json], in millimetres and radians.",
                 "remedies": [],
             },
+            {
+                "name": "ThreadsUnavailable",
+                "code": "exec.threads-unavailable",
+                "severity": "error",
+                "summary": "The threads asked for could not be started.",
+                "template": "{threads} threads could not be started on this machine.",
+                "remedies": ["use-threads"],
+            },
         ])
     }
 
@@ -276,13 +298,19 @@ mod tests {
                 "summary": "Ask for the model's tolerance, or for a coarser one.",
                 "parameters": ["tolerance"],
             },
+            {
+                "name": "UseThreads",
+                "kind": "use-threads",
+                "summary": "Run on the number of threads given. One thread needs none started, so it always works.",
+                "parameters": ["threads"],
+            },
         ])
     }
 
     #[test]
     fn the_catalogue_lists_every_code_and_remedy() {
         let value: Value = serde_json::from_str(&catalogue_json().unwrap()).unwrap();
-        let codes: Vec<Value> = [report_and_units_codes(), measure_and_command_line_codes()]
+        let codes: Vec<Value> = [report_and_units_codes(), measure_command_line_and_exec_codes()]
             .into_iter()
             .filter_map(|rows| rows.as_array().cloned())
             .flatten()

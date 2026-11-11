@@ -11,6 +11,7 @@
 )]
 
 mod dispatch;
+mod exec;
 mod hash;
 mod lanes;
 mod mask;
@@ -19,6 +20,7 @@ mod splitmix;
 pub mod stream;
 
 pub use dispatch::{LaneKernel, Level, dispatch};
+pub use exec::{Exec, Grain};
 pub use hash::{CANONICAL_NAN, Digest, canonical_bits};
 pub use lanes::Lanes;
 pub use mask::{LaneMask, Mask};
