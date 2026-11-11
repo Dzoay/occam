@@ -14,3 +14,5 @@ lt 388fa3a4fc8bcc43
 le c4c4fcb8fb8b157d
 up cb8328ba349db380
 down 62b62e061e1ec414
+sin 9bb6b2b7a4a14438
+cos 6a5b384ca7572916

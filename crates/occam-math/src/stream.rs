@@ -9,13 +9,14 @@ use crate::exec::{Exec, Grain};
 use crate::hash::Digest;
 use crate::real::Real;
 use crate::splitmix::SplitMix64;
+use crate::trig::sin_cos;
 
 /// How many operations the stream hashes.
-pub const OPERATION_COUNT: usize = 12;
+pub const OPERATION_COUNT: usize = 14;
 
 /// The operations, in the order [`Hashes`] gives them.
 pub const OPERATIONS: [&str; OPERATION_COUNT] =
-    ["add", "sub", "mul", "div", "neg", "abs", "sqrt", "mixed", "lt", "le", "up", "down"];
+    ["add", "sub", "mul", "div", "neg", "abs", "sqrt", "mixed", "lt", "le", "up", "down", "sin", "cos"];
 
 /// One hash per operation, in the order of [`OPERATIONS`].
 pub type Hashes = [u64; OPERATION_COUNT];
@@ -73,6 +74,7 @@ fn draw(generator: &mut SplitMix64) -> f64 {
 #[inline(always)]
 #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 fn outputs<R: Real>(a: R, b: R, c: R) -> [R; OPERATION_COUNT] {
+    let (sine, cosine) = sin_cos(a);
     [
         a + b,
         a - b,
@@ -86,6 +88,8 @@ fn outputs<R: Real>(a: R, b: R, c: R) -> [R; OPERATION_COUNT] {
         R::select(a.le(b), b, c),
         a.next_up(),
         a.next_down(),
+        sine,
+        cosine,
     ]
 }
 

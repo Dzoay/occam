@@ -10,6 +10,8 @@ import pathlib
 import struct
 import sys
 
+from sincos import sin_cos
+
 RECORD = pathlib.Path(__file__).resolve().parents[2] / "ci" / "determinism-hashes.txt"
 
 MASK = (1 << 64) - 1
@@ -139,6 +141,7 @@ def select(mask, yes, no):
 
 def outputs(a, b, c):
     """Every operation on one set of inputs, in the order of the record."""
+    sine, cosine = sin_cos(a)
     return [
         ("add", a + b),
         ("sub", a - b),
@@ -152,6 +155,8 @@ def outputs(a, b, c):
         ("le", select(a <= b, b, c)),
         ("up", math.nextafter(a, INFINITY)),
         ("down", math.nextafter(a, -INFINITY)),
+        ("sin", sine),
+        ("cos", cosine),
     ]
 
 

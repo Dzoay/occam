@@ -14,16 +14,26 @@ For the same inputs, every output has identical bits:
 - at every instruction level `dispatch` compiles a kernel for;
 - in debug and in release builds.
 
-That holds for everything `Real` computes today. Whether functions beyond it, such as `sin` and `atan2`, must be identical
-across targets is [measured rather than assumed](decisions/2026-11-09-one-maths-choke-point.md).
+That holds for everything `Real` computes, and for the functions `occam-math` owns: `sin_cos`, with `sin` and `cos`, its
+two halves. [S5](evidence/2026-11-09-s5.md) measured what else would need to be identical; computing one model in the
+browser and on a server is the case that would need more ([the decision](decisions/2026-11-09-one-maths-choke-point.md),
+O16), and the promise grows only with what is owned.
 
 ## The rules
 
 1. **One maths implementation.** The kernel computes through `occam_math::Real`, and its numbers are `f64`. `Real`'s
-   operations (`+`, `-`, `*`, `/`, negation, `abs`, `sqrt`) are correctly rounded under IEEE 754, so they give the same
-   bits everywhere. Anything added later goes through this crate too, so that what it does can change in one place.
-   [`proving-ground.s5`](plan/proving-ground.md) measures which of `sin`, `cos`, `atan2`, `acos` and the others really
-   must be identical across targets, and what that costs.
+   operations (`+`, `-`, `*`, `/`, negation, `abs`, `sqrt`, `next_up` and `next_down`) are correctly rounded or exact
+   under IEEE 754, so they give the same bits everywhere. Anything added later goes through this crate too, so that what
+   it does can change in one place.
+   - **`occam_math` owns `sin_cos`** (S5, O14), written over `Real` with `+ - * /` and integer operations only, so the
+     promise covers it at every lane width, thread count, level and target, in debug and in release. The record holds its
+     hashes, from the separate implementation.
+   - **It is not correctly rounded.** Its accuracy is stated and tested: `sin` and `cos` within 0.75 ulps on S5's sets,
+     measured by the separate implementation against a 120-digit reference (`tools/determinism/accuracy.py`). No caller
+     may rely on more.
+   - **Every other transcendental stays banned until `occam-math` owns it,** by rule 2. The ban holds for literal
+     arguments too: the compiler folds `f64::sin` of a literal with the libm of the machine that builds it, so one wasm
+     build gave different bits in release and debug (S5).
 2. **Nothing else computes.** Clippy's `disallowed-methods` bans every `f64` method whose result Rust does not pin down:
    the transcendental functions and powers it documents as non-deterministic, with `to_degrees` and `to_radians`; `min`,
    `max` and `clamp`, which may return either zero; `algebraic_*`, which the optimiser may rewrite; and `mul_add`, which

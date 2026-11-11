@@ -27,15 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.sin-cos`
-
-The owned `sin_cos`, `sin` and `cos` over `Real`: Cody and Waite reduction below about 1.6e6, Payne and Hanek above,
-and the fitted kernels. The Python twin computes the same bits, and the stream gains them.
-[DETERMINISM.md](../DETERMINISM.md) gains S5's first three statements.
-
-*Failing test first:* the stream's new hashes match the twin's record; within 0.75 ulps on S5's sets, measured by the
-twin against a 120-digit reference; special values exact.
-
 ### `maths.atan2`
 
 The owned `atan2` over `Real`, in the same way, with C99's special cases.

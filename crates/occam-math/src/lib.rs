@@ -24,6 +24,7 @@ mod splitmix;
 pub mod stream;
 #[cfg(test)]
 mod testing;
+mod trig;
 
 pub use dispatch::{LaneKernel, Level, dispatch};
 pub use exact::{fast_two_sum, split, two_product, two_sum};
@@ -35,3 +36,4 @@ pub use lanes::Lanes;
 pub use mask::{LaneMask, Mask};
 pub use predicate::{Predicate, Ring, Side, Tally, Verdict, decide_computed, decide_stored};
 pub use real::Real;
+pub use trig::{cos, sin, sin_cos};
