@@ -8,7 +8,9 @@ use std::ops::Range;
 #[cfg(not(target_family = "wasm"))]
 use std::sync::Arc;
 
-use occam_report::{Code, Fault, NamedValue, Remedy, RemedyKind, Report};
+use occam_report::Report;
+#[cfg(not(target_family = "wasm"))]
+use occam_report::{Code, Fault, NamedValue, Remedy, RemedyKind};
 
 /// How work is split into tasks. It changes the speed, never the bits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +37,7 @@ enum Runner {
 }
 
 /// The report for a pool of `count` threads that could not start, with the remedy that always works.
+#[cfg(not(target_family = "wasm"))]
 fn unavailable(count: NonZeroUsize) -> Report {
     let threads = u32::try_from(count.get()).unwrap_or(u32::MAX);
     Report::new(Code::ThreadsUnavailable, Fault::Internal)
@@ -93,7 +96,11 @@ impl Exec {
         F: Fn(usize) -> R + Send + Sync + 'static,
     {
         match &self.runner {
-            Runner::Serial => (0..n).map(f).collect(),
+            Runner::Serial => {
+                // Every grain is the same on one thread.
+                let _ = grain;
+                (0..n).map(f).collect()
+            }
             #[cfg(not(target_family = "wasm"))]
             Runner::Pool(pool) => {
                 use rayon::prelude::*;
@@ -125,10 +132,12 @@ impl Exec {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(target_family = "wasm"))]
     use std::sync::Mutex;
     use std::thread;
     use std::time::Duration;
 
+    #[cfg(not(target_family = "wasm"))]
     use occam_report::followed_remedy;
 
     use super::*;
