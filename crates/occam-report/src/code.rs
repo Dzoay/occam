@@ -39,6 +39,8 @@ text_enum! {
         BadArgument = "cli.bad-argument",
         /// The threads asked for could not be started.
         ThreadsUnavailable = "exec.threads-unavailable",
+        /// A direction was asked of a vector too short to have one.
+        DegenerateDirection = "geom.degenerate-direction",
     }
 }
 
@@ -120,6 +122,12 @@ impl Code {
                 summary: "The threads asked for could not be started.",
                 template: "{threads} threads could not be started on this machine.",
                 remedies: &[RemedyKind::UseThreads],
+            },
+            Self::DegenerateDirection => Entry {
+                severity: Severity::Error,
+                summary: "A vector no longer than the model's tolerance has no direction.",
+                template: "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction.",
+                remedies: &[],
             },
         }
     }
@@ -280,6 +288,14 @@ mod tests {
                 "summary": "The threads asked for could not be started.",
                 "template": "{threads} threads could not be started on this machine.",
                 "remedies": ["use-threads"],
+            },
+            {
+                "name": "DegenerateDirection",
+                "code": "geom.degenerate-direction",
+                "severity": "error",
+                "summary": "A vector no longer than the model's tolerance has no direction.",
+                "template": "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction.",
+                "remedies": [],
             },
         ])
     }

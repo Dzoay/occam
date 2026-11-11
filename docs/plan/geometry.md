@@ -26,15 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.units`
-
-`occam-units` gains `Vec3`, `Direction<F>`, `Tangent<F>`, `ParamKind`, `Placement<A, B>` built with the owned
-`sin_cos`, and `Bounds`, which holds everything it bounds, rounding included. `Tolerance` gains `band`,
-`near_tangent_shift` and `in_parameter`.
-
-*Failing test first:* compile-fail fixtures for adding a `Tangent` to a `Point` and for a `Direction` built unchecked;
-a placement and its inverse round-trip a point within the band; a box of computed points holds every point exactly.
-
 ### `geometry.schema`
 
 Report schema 2: `EntityRef` with kind, slot and generation in one text form (`edge:41/1`) and the new kinds, the fault
