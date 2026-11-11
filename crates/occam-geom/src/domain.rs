@@ -42,6 +42,16 @@ impl ParamRange {
         t.is_finite() && (self.wrap == Wrap::Periodic || (self.lo <= t && t <= self.hi))
     }
 
+    /// What its values measure, as a report names it.
+    #[must_use]
+    pub const fn quantity(self) -> Quantity {
+        match self.kind {
+            ParamKind::Length => Quantity::Length,
+            ParamKind::Angle => Quantity::Angle,
+            ParamKind::Knot => Quantity::Ratio,
+        }
+    }
+
     /// Refuses a parameter that is not [contained](ParamRange::contains).
     ///
     /// # Errors
@@ -51,16 +61,44 @@ impl ParamRange {
         if self.contains(t) {
             return Ok(());
         }
-        let quantity = match self.kind {
-            ParamKind::Length => Quantity::Length,
-            ParamKind::Angle => Quantity::Angle,
-            ParamKind::Knot => Quantity::Ratio,
-        };
+        let quantity = self.quantity();
         Err(Report::new(Code::UndefinedParameter, Fault::InvalidInput)
             .with_reason(Reason::OutsideDomain)
             .with_value(NamedValue::new("parameter", quantity, t))
             .with_value(NamedValue::new("low", quantity, self.lo))
             .with_value(NamedValue::new("high", quantity, self.hi)))
+    }
+}
+
+impl ParamRange {
+    /// The part of this range from `lo` to `hi`, as a curve trimmed by parameter has (PARITY 1.4). For a periodic
+    /// parameter, `hi` may be up to a period beyond `lo`, and a whole period makes the ends meet again.
+    ///
+    /// # Errors
+    ///
+    /// [`Code::UndefinedParameter`] for an end outside the range, or for `hi` not above `lo`.
+    pub fn trimmed(self, lo: f64, hi: f64) -> Result<Self, Report> {
+        self.check(lo)?;
+        let periodic = self.wrap == Wrap::Periodic;
+        let top = if periodic { lo + (self.hi - self.lo) } else { self.hi };
+        let part = Self { lo, hi: top, wrap: Wrap::Open, kind: self.kind };
+        Self { lo: lo.next_up(), ..part }.check(hi)?;
+        let wrap = if periodic && hi >= top { Wrap::Closed } else { Wrap::Open };
+        Ok(Self { hi, wrap, ..part })
+    }
+
+    /// `t` moved to the nearer end where it is beyond one. A periodic parameter is never beyond an end.
+    #[must_use]
+    pub fn clamp(self, t: f64) -> f64 {
+        if self.wrap == Wrap::Periodic {
+            t
+        } else if t < self.lo {
+            self.lo
+        } else if t > self.hi {
+            self.hi
+        } else {
+            t
+        }
     }
 }
 
@@ -182,6 +220,47 @@ mod tests {
             assert_eq!(named("low"), Some((Some(0.0), quantity)));
             assert_eq!(named("high"), Some((Some(1.0), quantity)));
         }
+    }
+
+    #[test]
+    fn a_trimmed_range_holds_from_one_end_to_the_other() {
+        let line = ParamRange::unbounded(ParamKind::Length).trimmed(-2.0, 5.0).unwrap();
+        assert_eq!(line, ParamRange { lo: -2.0, hi: 5.0, wrap: Wrap::Open, kind: ParamKind::Length });
+        let turn = closed(0.0, 4.0, Wrap::Periodic);
+        assert_eq!(turn.trimmed(3.0, 6.5).unwrap(), closed(3.0, 6.5, Wrap::Open), "past the seam, within a period");
+        assert_eq!(turn.trimmed(-1.0, 3.0).unwrap(), closed(-1.0, 3.0, Wrap::Closed), "a whole period meets itself");
+        let shifted = closed(-1.0, 3.0, Wrap::Periodic);
+        assert_eq!(
+            shifted.trimmed(2.0, 5.5).unwrap(),
+            closed(2.0, 5.5, Wrap::Open),
+            "a period is its length, not its end"
+        );
+        let arc = closed(1.0, 2.0, Wrap::Open);
+        assert_eq!(arc.trimmed(1.25, 2.0).unwrap(), closed(1.25, 2.0, Wrap::Open));
+    }
+
+    #[test]
+    fn a_trim_outside_the_range_or_back_to_front_is_refused() {
+        let turn = closed(0.0, 4.0, Wrap::Periodic);
+        let parameter = |report: Report| report.value("parameter").and_then(NamedValue::number);
+        assert_eq!(parameter(turn.trimmed(3.0, 7.5).unwrap_err()), Some(7.5), "longer than a period");
+        assert_eq!(turn.trimmed(f64::NAN, 1.0).unwrap_err().code, Code::UndefinedParameter);
+        let arc = closed(1.0, 2.0, Wrap::Open);
+        assert_eq!(parameter(arc.trimmed(0.5, 1.5).unwrap_err()), Some(0.5));
+        assert_eq!(parameter(arc.trimmed(1.5, 2.5).unwrap_err()), Some(2.5));
+        for (lo, hi) in [(1.5, 1.5), (1.75, 1.25)] {
+            assert_eq!(parameter(arc.trimmed(lo, hi).unwrap_err()), Some(hi), "{lo} {hi}");
+        }
+    }
+
+    #[test]
+    fn a_parameter_beyond_an_end_is_clamped_to_it() {
+        let arc = closed(1.0, 2.0, Wrap::Open);
+        assert_eq!(
+            [arc.clamp(0.5), arc.clamp(1.5), arc.clamp(2.5), arc.clamp(1.0), arc.clamp(2.0)],
+            [1.0, 1.5, 2.0, 1.0, 2.0]
+        );
+        assert_eq!(closed(0.0, 1.0, Wrap::Periodic).clamp(7.25), 7.25);
     }
 
     #[test]

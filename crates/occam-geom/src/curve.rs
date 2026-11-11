@@ -9,7 +9,9 @@ use occam_units::{Bounds, Length, Point, Tangent, Tolerance, UvPoint, World};
 use crate::batch::Scratch;
 use crate::domain::ParamRange;
 use crate::identity::{Content, FamilyName, Shape};
-use crate::support::finite;
+use crate::nearest::nearest;
+use crate::support::{finite, foot_at};
+use crate::surface::Closest;
 
 /// The first layer, which a curve family implements, generic over [`Real`]. As for [`crate::Parametric`], the `eval_*`
 /// methods are total and give NaN where the curve is undefined.
@@ -39,12 +41,37 @@ pub trait ParametricCurve: Sized + Send + Sync + 'static {
     /// A box holding the curve from `lo` to `hi`, rounding included.
     fn bounds(&self, lo: f64, hi: f64) -> Bounds;
 
-    /// The parameter of the foot of `p`, which is finite.
+    /// The parameter of the foot of `p`, which is finite: [`ParametricCurve::closest`]'s, unless the family has a
+    /// cheaper way to it.
     ///
     /// # Errors
     ///
     /// Where the solver stopped, carried in the report (L5).
-    fn invert(&self, p: Point<World>, seed: Option<f64>, tol: Tolerance, scratch: &mut Scratch) -> Result<f64, Report>;
+    fn invert(&self, p: Point<World>, seed: Option<f64>, tol: Tolerance, scratch: &mut Scratch) -> Result<f64, Report> {
+        Ok(Self::closest(self, p, seed, tol, scratch)?.at)
+    }
+
+    /// The point of the curve, within its range, closest to `p`, which is finite. Found by a search that every family
+    /// shares, within [`ParametricCurve::search`]; a family with a closed form gives that instead.
+    ///
+    /// # Errors
+    ///
+    /// Where the solver stopped, carried in the report (L5).
+    fn closest(
+        &self,
+        p: Point<World>,
+        _seed: Option<f64>,
+        _tol: Tolerance,
+        scratch: &mut Scratch,
+    ) -> Result<Closest<f64>, Report> {
+        Ok(foot_at(self, p, nearest(self, p, self.search(p), scratch)))
+    }
+
+    /// Where the foot of `p` can be, finite at both ends: the range, which a family with an unbounded range narrows.
+    fn search(&self, _p: Point<World>) -> (f64, f64) {
+        let range = self.range();
+        (range.lo, range.hi)
+    }
 
     /// The family's name.
     fn family(&self) -> FamilyName;
@@ -82,6 +109,19 @@ pub trait Curve: Send + Sync {
         out: &mut Vec<Tangent<World>>,
         scratch: &mut Scratch,
     ) -> Result<(), Report>;
+
+    /// As [`ParametricCurve::closest`].
+    ///
+    /// # Errors
+    ///
+    /// `units.not-finite` for a point that is not finite, and what [`ParametricCurve::closest`] reports.
+    fn closest(
+        &self,
+        p: Point<World>,
+        seed: Option<f64>,
+        tol: Tolerance,
+        scratch: &mut Scratch,
+    ) -> Result<Closest<f64>, Report>;
 
     /// As [`ParametricCurve::invert`].
     ///
@@ -128,6 +168,17 @@ impl<C: ParametricCurve> Curve for C {
         out.clear();
         ParametricCurve::range(self).check(t)?;
         ParametricCurve::derivatives(self, t, order, out, scratch)
+    }
+
+    fn closest(
+        &self,
+        p: Point<World>,
+        seed: Option<f64>,
+        tol: Tolerance,
+        scratch: &mut Scratch,
+    ) -> Result<Closest<f64>, Report> {
+        finite(p)?;
+        ParametricCurve::closest(self, p, seed, tol, scratch)
     }
 
     fn invert(&self, p: Point<World>, seed: Option<f64>, tol: Tolerance, scratch: &mut Scratch) -> Result<f64, Report> {
@@ -225,6 +276,16 @@ mod tests {
             scratch: &mut Scratch,
         ) -> Result<f64, Report> {
             ParametricCurve::invert(&self.0, p, seed, tol, scratch)
+        }
+
+        fn closest(
+            &self,
+            p: Point<World>,
+            seed: Option<f64>,
+            tol: Tolerance,
+            scratch: &mut Scratch,
+        ) -> Result<Closest<f64>, Report> {
+            ParametricCurve::closest(&self.0, p, seed, tol, scratch)
         }
 
         fn family(&self) -> FamilyName {

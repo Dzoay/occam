@@ -16,24 +16,35 @@
 )]
 
 mod analytic;
+mod axes;
 mod batch;
+mod circle;
 #[cfg(test)]
 mod conformance;
 mod curve;
 mod domain;
+mod ellipse;
+mod hyperbola;
 mod identity;
 mod line;
+mod nearest;
+mod parabola;
 mod plane;
 #[cfg(test)]
 mod source_check;
 mod support;
 mod surface;
+mod turn;
 
 pub use analytic::Analytic;
 pub use batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
+pub use circle::Circle;
 pub use curve::{Curve, ParamCurve, ParametricCurve};
 pub use domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
+pub use ellipse::Ellipse;
+pub use hyperbola::Hyperbola;
 pub use identity::{BatchKey, Content, FamilyName, Shape};
 pub use line::Line;
+pub use parabola::Parabola;
 pub use plane::Plane;
 pub use surface::{BsplineSurface, Closest, Parametric, Surface, TriangleView};

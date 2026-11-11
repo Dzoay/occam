@@ -2,27 +2,39 @@
 //! The line: `origin + t direction`, where `direction` is a unit axis, so the parameter is a length.
 
 use occam_math::{Interval, Real};
-use occam_report::{NamedValue, Quantity, Report, Value};
+use occam_report::{NamedValue, Report};
 use occam_units::{Bounds, Direction, ParamKind, Point, Tangent, Tolerance, Vec3, World};
 
+use crate::axes::direction;
 use crate::batch::Scratch;
 use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
 use crate::identity::{Content, FamilyName, Shape};
-use crate::support::{enclose, exact, splat};
+use crate::support::{enclose, exact, foot_at, splat};
+use crate::surface::Closest;
 
-/// A line, unbounded.
+/// A line, unbounded or trimmed to a segment.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Line {
     origin: Vec3,
     direction: Vec3,
+    range: ParamRange,
 }
 
 impl Line {
-    /// The line through `origin` along `direction`, with the parameter the distance from `origin`.
+    /// The line through `origin` along `direction`, unbounded, with the parameter the distance from `origin`.
     #[must_use]
     pub fn new(origin: Point<World>, direction: Direction<World>) -> Self {
-        Self { origin: origin.to_vec3(), direction: direction.get() }
+        Self { origin: origin.to_vec3(), direction: direction.get(), range: ParamRange::unbounded(ParamKind::Length) }
+    }
+
+    /// The segment from parameter `lo` to `hi`.
+    ///
+    /// # Errors
+    ///
+    /// As [`ParamRange::trimmed`].
+    pub fn trimmed(self, lo: f64, hi: f64) -> Result<Self, Report> {
+        Ok(Self { range: self.range.trimmed(lo, hi)?, ..self })
     }
 
     /// Intervals holding the exact coordinates of the point at `t`.
@@ -58,7 +70,7 @@ impl ParametricCurve for Line {
     }
 
     fn range(&self) -> ParamRange {
-        ParamRange::unbounded(ParamKind::Length)
+        self.range
     }
 
     fn bounds(&self, lo: f64, hi: f64) -> Bounds {
@@ -72,7 +84,17 @@ impl ParametricCurve for Line {
         _tol: Tolerance,
         _scratch: &mut Scratch,
     ) -> Result<f64, Report> {
-        Ok((p.to_vec3() - self.origin).dot(self.direction))
+        Ok(self.range.clamp((p.to_vec3() - self.origin).dot(self.direction)))
+    }
+
+    fn closest(
+        &self,
+        p: Point<World>,
+        seed: Option<f64>,
+        tol: Tolerance,
+        scratch: &mut Scratch,
+    ) -> Result<Closest<f64>, Report> {
+        Ok(foot_at(self, p, ParametricCurve::invert(self, p, seed, tol, scratch)?))
     }
 
     fn family(&self) -> FamilyName {
@@ -82,22 +104,21 @@ impl ParametricCurve for Line {
     fn content(&self, out: &mut Content) {
         out.push_vec3(self.origin);
         out.push_vec3(self.direction);
+        out.push(self.range.lo);
+        out.push(self.range.hi);
     }
 
     fn shape(&self) -> Shape {
         let (o, d) = (self.origin, self.direction);
-        let direction = NamedValue {
-            name: "direction".to_string(),
-            quantity: Quantity::Ratio,
-            value: Value::Point([d.x, d.y, d.z]),
-        };
-        Shape { form: "line", values: vec![NamedValue::point("origin", [o.x, o.y, o.z]), direction] }
+        let direction = direction("direction", d);
+        let (from, to) = (NamedValue::length("from", self.range.lo), NamedValue::length("to", self.range.hi));
+        Shape { form: "line", values: vec![NamedValue::point("origin", [o.x, o.y, o.z]), direction, from, to] }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use occam_report::Code;
+    use occam_report::{Code, Quantity, Value};
 
     use super::*;
     use crate::conformance::{self, Check, WrongSecondCurve, tolerance};
@@ -112,6 +133,28 @@ mod tests {
     fn the_line_passes_the_conformance_suite() {
         let failures = conformance::curve(&line(), -50.0, 70.0);
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn a_segment_passes_the_conformance_suite() {
+        let failures = conformance::curve(&line().trimmed(-20.0, 30.0).unwrap(), -20.0, 30.0);
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn a_point_beyond_a_segment_is_closest_to_its_end() {
+        let segment = line().trimmed(-20.0, 30.0).unwrap();
+        let beyond = Point::from_vec3(segment.point(30.0).to_vec3() + segment.first(0.0).1.rate() * 4.0);
+        let c = Curve::closest(&segment, beyond, None, tolerance(), &mut Scratch::default()).unwrap();
+        assert_eq!((c.at, c.point), (30.0, segment.point(30.0)));
+        assert!((c.distance.millimetres() - 4.0).abs() < 1e-12);
+        let before = Point::from_vec3(segment.point(-20.0).to_vec3() - segment.first(0.0).1.rate() * 2.0);
+        assert_eq!(Curve::invert(&segment, before, None, tolerance(), &mut Scratch::default()).unwrap(), -20.0);
+        assert_eq!(Curve::range(&segment).lo, -20.0);
+        let mut content = Content::default();
+        Curve::content(&segment, &mut content);
+        assert_eq!(content.words()[11..], [(-20.0f64).to_bits(), 30.0f64.to_bits()]);
+        assert!(line().trimmed(5.0, 5.0).is_err());
     }
 
     #[test]
@@ -168,7 +211,8 @@ mod tests {
     fn its_shape_and_content_name_what_defines_it() {
         let c = line();
         let shape = Curve::shape(&c);
-        assert_eq!((shape.form, shape.values.len()), ("line", 2));
+        assert_eq!((shape.form, shape.values.len()), ("line", 4));
+        assert_eq!(shape.values[2], NamedValue::length("from", f64::NEG_INFINITY));
         assert_eq!(shape.values[0], NamedValue::point("origin", [12.0, 3.5, -7.0]));
         assert_eq!(
             shape.values[1].value,
@@ -180,7 +224,7 @@ mod tests {
         assert_eq!(shape.values[1].quantity, Quantity::Ratio);
         let mut content = Content::default();
         Curve::content(&c, &mut content);
-        assert_eq!(content.words().len(), 1 + 4 + 6);
+        assert_eq!(content.words().len(), 13, "the name's length and four letters, two vectors and the range");
         assert_eq!(Curve::family(&c), FamilyName("line"));
         assert_eq!(Curve::fit(&c), None);
         assert_eq!(Curve::range(&c), ParamRange::unbounded(ParamKind::Length));

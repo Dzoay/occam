@@ -2,8 +2,11 @@
 //! What every family's formulas share: stored numbers in lanes, and boxes that hold the exact values of computed points.
 
 use occam_math::{Interval, Real};
-use occam_report::{Code, Fault, NamedValue, Report};
+use occam_report::{Code, Fault, NamedValue, Reason, Report};
 use occam_units::{Bounds, Length, Point, Vec3, World};
+
+use crate::curve::ParametricCurve;
+use crate::surface::Closest;
 
 /// A stored vector in every lane.
 #[inline(always)]
@@ -26,9 +29,34 @@ pub(crate) fn enclose(points: impl IntoIterator<Item = [Interval; 3]>) -> Bounds
     Bounds::of(corners).unwrap_or_else(everything)
 }
 
+/// An interval holding every number from `lo` to `hi`.
+pub(crate) fn span(lo: f64, hi: f64) -> Interval {
+    let mid = 0.5 * lo + 0.5 * hi;
+    let (above, below) = (hi - mid, mid - lo);
+    Interval::new(mid, (if below > above { below } else { above }).next_up())
+}
+
 /// The box holding all of space.
 pub(crate) fn everything() -> Bounds {
     Bounds::around(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0)), Length::from_millimetres(f64::INFINITY))
+}
+
+/// What a curve's [`Closest`] is when its foot is at `t`.
+pub(crate) fn foot_at<C: ParametricCurve>(curve: &C, p: Point<World>, t: f64) -> Closest<f64> {
+    let point = curve.eval_point(t);
+    Closest { at: t, point, distance: Length::from_millimetres((p.to_vec3() - point.to_vec3()).norm()) }
+}
+
+/// `size` in millimetres, which must be a finite number greater than zero, as a radius is.
+pub(crate) fn positive(size: Length) -> Result<f64, Report> {
+    let millimetres = size.millimetres();
+    if millimetres > 0.0 && millimetres.is_finite() {
+        Ok(millimetres)
+    } else {
+        Err(Report::new(Code::SizeNotPositive, Fault::InvalidInput)
+            .with_reason(Reason::RadiusNotPositive)
+            .with_value(NamedValue::length("size", millimetres)))
+    }
 }
 
 /// Refuses a point with a coordinate that is not finite, naming the first.
@@ -78,6 +106,33 @@ mod tests {
             assert_eq!(report.value("value").and_then(NamedValue::number).map(f64::to_bits), Some(bad.to_bits()));
         }
         assert_eq!(finite(point(0.0, 0.0, f64::NEG_INFINITY)).unwrap_err().code, Code::NotFinite);
+    }
+
+    #[test]
+    fn a_span_holds_both_ends() {
+        for (lo, hi) in [(0.1, 0.7), (-3.0, 1e-300), (2.5, 2.5), (-1e300, 1e300), (1.0 / 3.0, 2.0 / 3.0)] {
+            let held = span(lo, hi);
+            assert!(held.lower() <= lo && held.upper() >= hi, "{lo} {hi}: {held:?}");
+            assert!(held.upper() - held.lower() <= (hi - lo) * 1.000_001 + 1e-15 * (lo.abs() + hi.abs()), "{lo} {hi}");
+        }
+        let lopsided = span(1.0, 1.0 + 2.0 * f64::EPSILON);
+        assert!(lopsided.lower() <= 1.0 && lopsided.upper() >= 1.0 + 2.0 * f64::EPSILON);
+        // The midpoint of 2^-10 + 2^-53 and 1 + 2^-52 rounds up by 2^-54, so the half below it is the larger by 2^-53,
+        // more than the step down from the low end, which is much finer than the midpoint's.
+        let (lo, hi) = (1.0 / 1024.0 + f64::EPSILON / 2.0, 1.0 + f64::EPSILON);
+        let uneven = span(lo, hi);
+        assert!(uneven.lower() <= lo && uneven.upper() >= hi, "{uneven:?}");
+    }
+
+    #[test]
+    fn a_size_must_be_finite_and_above_zero() {
+        assert_eq!(positive(Length::from_millimetres(2.5)).unwrap(), 2.5);
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let report = positive(Length::from_millimetres(bad)).unwrap_err();
+            assert_eq!((report.code, report.reason), (Code::SizeNotPositive, Some(Reason::RadiusNotPositive)));
+            let size = report.value("size").and_then(NamedValue::number).unwrap();
+            assert_eq!(size.to_bits(), bad.to_bits());
+        }
     }
 
     #[test]

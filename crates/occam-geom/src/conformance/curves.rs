@@ -65,30 +65,68 @@ fn differences(c: &dyn Curve, params: &[f64], h: f64, found: &mut Findings) {
     }
 }
 
+/// A unit vector across the tangent `d`.
+fn across(d: Vec3) -> Vec3 {
+    let axes = [Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 1.0)];
+    unit(
+        axes.map(|axis| d.cross(axis))
+            .into_iter()
+            .fold(Vec3::new(0.0, 0.0, 0.0), |a, b| if b.norm() > a.norm() { b } else { a }),
+    )
+}
+
+/// The closest point to `off` is no further than any sample, lies on the curve within its range, and is as far as it
+/// says; `invert` finds a foot as near.
+fn off_the_curve(c: &dyn Curve, off: Point<World>, dense: &[Point<World>], found: &mut Findings) {
+    let (tol, mut scratch) = (tolerance(), Scratch::default());
+    let band = tol.band().millimetres();
+    let nearest = dense.iter().map(|q| distance(*q, off)).fold(f64::INFINITY, |a, b| if b < a { b } else { a });
+    let answer = c.closest(off, None, tol, &mut scratch);
+    let good = answer.as_ref().is_ok_and(|a| {
+        let d = a.distance.millimetres();
+        d <= nearest + band
+            && (distance(a.point, off) - d).abs() <= band
+            && distance(c.point(a.at), a.point) <= band
+            && c.range().contains(a.at)
+    });
+    found.expect(Check::Closest, good, || format!("{off:?} is closest to {answer:?}, against {nearest} sampled"));
+    let foot = c.invert(off, None, tol, &mut scratch);
+    let as_near =
+        |t: &f64| answer.as_ref().is_ok_and(|a| distance(c.point(*t), off) <= a.distance.millimetres() + band);
+    found.expect(Check::Closest, foot.as_ref().is_ok_and(as_near), || format!("{off:?} inverts to {foot:?}"));
+}
+
 fn closest(c: &dyn Curve, lo: f64, hi: f64, found: &mut Findings) {
     let (tol, mut scratch) = (tolerance(), Scratch::default());
     let band = tol.band().millimetres();
-    let dense: Vec<Point<World>> = fractions(2000).map(|f| c.point(lerp(lo, hi, f))).collect();
+    let ends = [c.point(lo), c.point(hi)];
+    let dense: Vec<Point<World>> = fractions(4000).map(|f| c.point(lerp(lo, hi, f))).chain(ends).collect();
     for (f, i) in fractions(4).zip(0u32..) {
         let t = lerp(lo, hi, f);
         let (p, d) = c.first(t);
         let back = c.invert(p, None, tol, &mut scratch);
-        found.expect(Check::Closest, back.as_ref().is_ok_and(|b| distance(c.point(*b), p) <= band), || {
-            format!("{p:?} at {t} inverts to {back:?}")
-        });
-        let across = [Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 1.0)]
-            .map(|axis| d.rate().cross(axis))
-            .into_iter()
-            .fold(Vec3::new(0.0, 0.0, 0.0), |a, b| if b.norm() > a.norm() { b } else { a });
-        let off = Point::from_vec3(p.to_vec3() + unit(across) * (0.4 + 0.1 * f64::from(i)));
-        let nearest = dense.iter().map(|q| distance(*q, off)).fold(f64::INFINITY, |a, b| if b < a { b } else { a });
-        let foot = c.invert(off, None, tol, &mut scratch);
-        let good = foot.as_ref().is_ok_and(|s| distance(c.point(*s), off) <= nearest + band);
-        found.expect(Check::Closest, good, || format!("{off:?} inverts to {foot:?}, against {nearest} sampled"));
+        let inverted = back.as_ref().is_ok_and(|b| distance(c.point(*b), p) <= band);
+        found.expect(Check::Closest, inverted, || format!("{p:?} at {t} inverts to {back:?}"));
+        let on = c.closest(p, None, tol, &mut scratch);
+        let itself = on.as_ref().is_ok_and(|a| a.distance.millimetres() <= band && distance(a.point, p) <= band);
+        found.expect(Check::Closest, itself, || format!("{p:?} at {t} is closest to {on:?}"));
+        for height in [0.4 + 0.1 * f64::from(i), 3.0 + 2.0 * f64::from(i)] {
+            off_the_curve(c, Point::from_vec3(p.to_vec3() + across(d.rate()) * height), &dense, found);
+        }
     }
-    let refused = c.invert(Point::from_vec3(Vec3::new(0.0, f64::NAN, 0.0)), None, tol, &mut scratch);
-    let refused = refused.is_err_and(|report| report.code == Code::NotFinite);
-    found.expect(Check::Closest, refused, || "a point that is not finite was not refused".to_string());
+    for (end, outward) in [(lo, -1.0), (hi, 1.0)] {
+        let (p, d) = c.first(end);
+        let beyond = p.to_vec3() + unit(d.rate()) * (0.5 * outward) + across(d.rate()) * 0.2;
+        off_the_curve(c, Point::from_vec3(beyond), &dense, found);
+    }
+    let nan = Point::from_vec3(Vec3::new(0.0, f64::NAN, 0.0));
+    let refused = |code: Option<Code>| code == Some(Code::NotFinite);
+    let (inverted, nearest) = (c.invert(nan, None, tol, &mut scratch), c.closest(nan, None, tol, &mut scratch));
+    found.expect(
+        Check::Closest,
+        refused(inverted.err().map(|r| r.code)) && refused(nearest.err().map(|r| r.code)),
+        || "a point that is not finite was not refused".to_string(),
+    );
 }
 
 fn bounds(c: &dyn Curve, lo: f64, hi: f64, found: &mut Findings) {

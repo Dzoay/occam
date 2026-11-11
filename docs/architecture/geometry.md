@@ -14,7 +14,8 @@ flowchart TB
 
 Curves repeat both layers as `ParametricCurve` and `Curve`, and parameter curves on a surface as `ParamCurve`. The
 blanket impl is also where a call is checked: a parameter outside the domain, or a point that is not finite, is refused
-there, so no family repeats it.
+there, so no family repeats it. A curve answers the same questions over one parameter, `closest` included, and can be
+trimmed by parameter; where no formula gives a foot, a search shared by every family finds it.
 
 ## What a surface answers
 

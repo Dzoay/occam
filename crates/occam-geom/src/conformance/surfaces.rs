@@ -170,7 +170,7 @@ fn closest(s: &dyn Surface, window: UvBox, found: &mut Findings) {
             let d = c.distance.millimetres();
             d <= nearest + band
                 && (distance(c.point, off) - d).abs() <= band
-                && distance(s.point(c.uv), c.point) <= band
+                && distance(s.point(c.at), c.point) <= band
         });
         found.expect(Check::Closest, good, || format!("{off:?} is closest to {answer:?}, against {nearest} sampled"));
     }

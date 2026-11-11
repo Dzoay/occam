@@ -43,6 +43,8 @@ text_enum! {
         DegenerateDirection = "geom.degenerate-direction",
         /// A curve or surface was asked for a parameter where it is not defined.
         UndefinedParameter = "geom.undefined-parameter",
+        /// A curve or surface was given a size that is not a finite number greater than zero.
+        SizeNotPositive = "geom.size-not-positive",
     }
 }
 
@@ -94,7 +96,8 @@ impl Code {
             | Self::BadArgument
             | Self::ThreadsUnavailable
             | Self::DegenerateDirection
-            | Self::UndefinedParameter => Severity::Error,
+            | Self::UndefinedParameter
+            | Self::SizeNotPositive => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -112,6 +115,9 @@ impl Code {
             Self::ThreadsUnavailable => "The threads asked for could not be started.",
             Self::DegenerateDirection => "A vector no longer than the model's tolerance has no direction.",
             Self::UndefinedParameter => "A curve or surface is not defined at the parameter asked for.",
+            Self::SizeNotPositive => {
+                "A curve or surface was given a size that is not a finite number greater than zero."
+            }
         }
     }
 
@@ -135,6 +141,7 @@ impl Code {
                 "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction."
             }
             Self::UndefinedParameter => "The parameter {parameter} is outside the domain from {low} to {high}.",
+            Self::SizeNotPositive => "The size given, {size}, is not a finite number greater than zero.",
         }
     }
 
@@ -150,7 +157,8 @@ impl Code {
             | Self::ToleranceUsed
             | Self::BadArgument
             | Self::DegenerateDirection
-            | Self::UndefinedParameter => &[],
+            | Self::UndefinedParameter
+            | Self::SizeNotPositive => &[],
         }
     }
 }
@@ -325,6 +333,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A curve or surface is not defined at the parameter asked for.",
                 "template": "The parameter {parameter} is outside the domain from {low} to {high}.",
+                "remedies": [],
+            },
+            {
+                "name": "SizeNotPositive",
+                "code": "geom.size-not-positive",
+                "severity": "error",
+                "summary": "A curve or surface was given a size that is not a finite number greater than zero.",
+                "template": "The size given, {size}, is not a finite number greater than zero.",
                 "remedies": [],
             },
         ])

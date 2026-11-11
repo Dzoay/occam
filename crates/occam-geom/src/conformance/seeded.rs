@@ -130,6 +130,16 @@ impl<C: ParametricCurve> ParametricCurve for WrongSecondCurve<C> {
         ParametricCurve::invert(&self.0, p, seed, tol, scratch)
     }
 
+    fn closest(
+        &self,
+        p: Point<World>,
+        seed: Option<f64>,
+        tol: Tolerance,
+        scratch: &mut Scratch,
+    ) -> Result<Closest<f64>, Report> {
+        ParametricCurve::closest(&self.0, p, seed, tol, scratch)
+    }
+
     fn family(&self) -> FamilyName {
         ParametricCurve::family(&self.0)
     }

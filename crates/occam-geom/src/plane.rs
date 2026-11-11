@@ -1,13 +1,12 @@
 //! Source: original
 //! The plane: `origin + u x + v y`, where `x` and `y` are perpendicular unit axes, so both parameters are lengths.
 
-use occam_math::{Interval, Real};
-use occam_report::{NamedValue, Quantity, Report, Value};
-use occam_units::{
-    Bounds, Direction, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, World,
-};
+use occam_math::Real;
+use occam_report::Report;
+use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::analytic::Analytic;
+use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::domain::{Domain, ParamRange, UvBox};
 use crate::identity::{Content, FamilyName, Shape};
@@ -17,52 +16,27 @@ use crate::surface::{Closest, Parametric};
 /// A plane, unbounded.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Plane {
-    origin: Vec3,
-    x: Vec3,
-    y: Vec3,
-    normal: Direction<World>,
+    axes: Axes,
 }
 
 impl Plane {
     /// The XY plane of `placement`: through its origin, with `u` along its X axis, `v` along its Y, and facing its Z.
     #[must_use]
     pub fn placed(placement: &Placement<Local, World>) -> Self {
-        let axis = |x, y, z| placement.direction(Direction::normalised(Vec3::new(x, y, z)));
-        Self {
-            origin: placement.point(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0))).to_vec3(),
-            x: axis(1.0, 0.0, 0.0).get(),
-            y: axis(0.0, 1.0, 0.0).get(),
-            normal: axis(0.0, 0.0, 1.0),
-        }
+        Self { axes: Axes::of(placement) }
     }
-
-    /// Intervals holding the exact coordinates of the point at `uv`.
-    fn reach(&self, uv: UvPoint) -> [Interval; 3] {
-        let (u, v) = (exact(uv.u()), exact(uv.v()));
-        let coordinate = |at: f64, along_u: f64, along_v: f64| exact(at) + exact(along_u) * u + exact(along_v) * v;
-        let (at, along_u, along_v) = (self.origin, self.x, self.y);
-        [
-            coordinate(at.x, along_u.x, along_v.x),
-            coordinate(at.y, along_u.y, along_v.y),
-            coordinate(at.z, along_u.z, along_v.z),
-        ]
-    }
-}
-
-/// A point with its three coordinates in a named value: a direction's are ratios.
-fn direction(name: &str, d: Vec3) -> NamedValue {
-    NamedValue { name: name.to_string(), quantity: Quantity::Ratio, value: Value::Point([d.x, d.y, d.z]) }
 }
 
 impl Parametric for Plane {
     #[inline(always)]
     fn eval_point<R: Real>(&self, uv: UvPoint<R>) -> Point<World, R> {
-        Point::from_vec3(splat(self.origin) + splat(self.x) * uv.u() + splat(self.y) * uv.v())
+        self.axes.at(uv.u(), uv.v())
     }
 
     #[inline(always)]
     fn eval_first<R: Real>(&self, uv: UvPoint<R>) -> Jet1<R> {
-        Jet1 { point: self.eval_point(uv), du: Tangent::new(splat(self.x)), dv: Tangent::new(splat(self.y)) }
+        let (du, dv) = (Tangent::new(splat(self.axes.x)), Tangent::new(splat(self.axes.y)));
+        Jet1 { point: self.eval_point(uv), du, dv }
     }
 
     #[inline(always)]
@@ -81,8 +55,8 @@ impl Parametric for Plane {
         for degree in 1..=order {
             for in_v in 0..=degree {
                 let rate = match (degree, in_v) {
-                    (1, 0) => self.x,
-                    (1, _) => self.y,
+                    (1, 0) => self.axes.x,
+                    (1, _) => self.axes.y,
                     _ => Vec3::new(0.0, 0.0, 0.0),
                 };
                 out.push(Tangent::new(rate));
@@ -96,7 +70,7 @@ impl Parametric for Plane {
     }
 
     fn bounds(&self, patch: UvBox) -> Bounds {
-        enclose(patch.corners().map(|corner| self.reach(corner)))
+        enclose(patch.corners().map(|corner| self.axes.reach(exact(corner.u()), exact(corner.v()))))
     }
 
     fn invert(
@@ -106,8 +80,8 @@ impl Parametric for Plane {
         _tol: Tolerance,
         _scratch: &mut Scratch,
     ) -> Result<UvPoint, Report> {
-        let d = p.to_vec3() - self.origin;
-        Ok(UvPoint::new(d.dot(self.x), d.dot(self.y)))
+        let (u, v) = self.axes.coordinates(p);
+        Ok(UvPoint::new(u, v))
     }
 
     fn closest(
@@ -119,7 +93,7 @@ impl Parametric for Plane {
     ) -> Result<Closest, Report> {
         let uv = Parametric::invert(self, p, seed, tol, scratch)?;
         let point = self.eval_point(uv);
-        Ok(Closest { uv, point, distance: Length::from_millimetres((p.to_vec3() - point.to_vec3()).norm()) })
+        Ok(Closest { at: uv, point, distance: Length::from_millimetres((p.to_vec3() - point.to_vec3()).norm()) })
     }
 
     fn family(&self) -> FamilyName {
@@ -127,30 +101,23 @@ impl Parametric for Plane {
     }
 
     fn content(&self, out: &mut Content) {
-        for v in [self.origin, self.x, self.y, self.normal.get()] {
-            out.push_vec3(v);
-        }
+        self.axes.push(out);
     }
 
     fn shape(&self) -> Shape {
-        let o = self.origin;
-        let values = vec![
-            NamedValue::point("origin", [o.x, o.y, o.z]),
-            direction("normal", self.normal.get()),
-            direction("u-axis", self.x),
-        ];
-        Shape { form: "plane", values }
+        Shape { form: "plane", values: self.axes.values("origin") }
     }
 
     fn analytic(&self, _tol: Tolerance) -> Option<Analytic> {
-        Some(Analytic::Plane { origin: Point::from_vec3(self.origin), normal: self.normal })
+        Some(Analytic::Plane { origin: Point::from_vec3(self.axes.origin), normal: self.axes.normal })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use occam_math::Level;
-    use occam_report::Code;
+    use occam_report::{Code, NamedValue};
+    use occam_units::Direction;
 
     use super::*;
     use crate::conformance::{self, Check, WrongSecond, placement, tolerance};
@@ -237,7 +204,7 @@ mod tests {
         let normal = place_normal();
         let above = Point::from_vec3(foot.to_vec3() + normal * 2.5);
         let c = Surface::closest(&s, above, None, tolerance(), &mut Scratch::default()).unwrap();
-        assert!((c.uv.u() - 4.0).abs() < 1e-12 && (c.uv.v() + 3.0).abs() < 1e-12, "{:?}", c.uv);
+        assert!((c.at.u() - 4.0).abs() < 1e-12 && (c.at.v() + 3.0).abs() < 1e-12, "{:?}", c.at);
         assert!(near(c.point.to_vec3(), foot.to_vec3()));
         assert!((c.distance.millimetres() - 2.5).abs() < 1e-12);
         let refused = Surface::invert(
@@ -261,8 +228,8 @@ mod tests {
         let shape = Surface::shape(&s);
         assert_eq!(shape.form, "plane");
         assert_eq!(shape.values[0], NamedValue::point("origin", [o.x, o.y, o.z]));
-        assert_eq!(shape.values[1], direction("normal", place_normal()));
-        assert_eq!(shape.values[2], direction("u-axis", s.first(UvPoint::new(0.0, 0.0)).du.rate()));
+        assert_eq!(shape.values[1], crate::axes::direction("normal", place_normal()));
+        assert_eq!(shape.values[2], crate::axes::direction("x-axis", s.first(UvPoint::new(0.0, 0.0)).du.rate()));
         assert_eq!(shape.values.len(), 3);
         let mut content = Content::default();
         Surface::content(&s, &mut content);

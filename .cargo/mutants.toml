@@ -41,6 +41,23 @@ exclude_re = [
     # as both paths of tools/determinism/exp.py show.
     "exp\\.rs:260:27: replace < with <= in expm1_one$",
     "exp\\.rs:263:13: replace < with <= in expm1_one$",
+    # occam-geom. Where the two sides of a comparison are equal, both branches give the same value: the smaller or
+    # larger of two equal numbers, an end and a parameter at it, an angle at the start of its turn, and equal halves of a
+    # span. In `refine`, a zero rate of change is the root, which Newton's step then leaves where it is, and a step onto
+    # an end of the bracket, where the rate's sign is known, carries on from there as a step inside it would.
+    "(turn|hyperbola)\\.rs:\\d+:\\d+: replace > with >= in larger$",
+    "turn\\.rs:\\d+:\\d+: replace < with <= in (smaller|above)$",
+    "hyperbola\\.rs:\\d+:\\d+: replace < with <= in smaller_larger$",
+    "domain\\.rs:\\d+:\\d+: replace (< with <=|> with >=) in ParamRange::clamp$",
+    "support\\.rs:\\d+:\\d+: replace > with >= in span$",
+    "parabola\\.rs:\\d+:\\d+: replace (< with <=|> with >=) in <impl ParametricCurve for Parabola>::bounds$",
+    "nearest\\.rs:\\d+:\\d+: replace < with <= in refine$",
+    # By line. An arc holds `φ + π` where it holds `φ − π`, a whole turn away, which `above` takes off.
+    "turn\\.rs:85:34: replace \\+ with - in arc_box$",
+    # By line. Each changes only how much a search refines, and so only its speed: refining a piece where the slope does
+    # not turn from falling to rising ends at one of its ends, which is no nearer than the nearest found.
+    "nearest\\.rs:81:21: replace < with <= in nearest$",
+    "nearest\\.rs:81:27: replace && with \\|\\| in nearest$",
     "replace run -> Verdict",
     "in run$",
     "replace (measure|browser|built|counts|summaries|levels) ",

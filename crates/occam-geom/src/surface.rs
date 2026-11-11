@@ -12,11 +12,12 @@ use crate::domain::{Degeneracy, Domain, UvBox};
 use crate::identity::{BatchKey, Content, FamilyName, Shape};
 use crate::support::finite;
 
-/// The closest point of a surface to a point.
+/// The closest point of a curve or surface to a point, at a parameter of type `P`: a [`UvPoint`] on a surface and an
+/// `f64` on a curve.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Closest {
-    /// Its parameters.
-    pub uv: UvPoint,
+pub struct Closest<P = UvPoint> {
+    /// Its parameter.
+    pub at: P,
     /// The point.
     pub point: Point<World>,
     /// How far it is.
@@ -467,7 +468,7 @@ mod tests {
         assert_eq!(s.analytic(tolerance()), None, "the default presents no exact form");
         let p = Point::from_vec3(Vec3::new(1.0, 2.0, 3.0));
         let (uv, mut scratch) = (s.invert(p, None, tolerance(), &mut scratch_of()).unwrap(), scratch_of());
-        assert_eq!(s.closest(p, None, tolerance(), &mut scratch).unwrap().uv, uv);
+        assert_eq!(s.closest(p, None, tolerance(), &mut scratch).unwrap().at, uv);
     }
 
     fn scratch_of() -> Scratch {

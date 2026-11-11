@@ -14,7 +14,7 @@ pub enum ParamKind {
     Length,
     /// A turn, in radians, which comes round again.
     Angle,
-    /// A B-spline's knot value, with no unit of its own.
+    /// A parameter with no unit of its own: a B-spline's knot value, or a hyperbola's parameter.
     Knot,
 }
 

@@ -81,6 +81,16 @@ pub(crate) fn placement() -> Placement<Local, World> {
     turn.then(&Placement::identity()).then(&shift)
 }
 
+/// A point given in [`placement`]'s frame, in `World`.
+pub(crate) fn local(x: f64, y: f64, z: f64) -> Vec3 {
+    placement().point(Point::from_vec3(Vec3::new(x, y, z))).to_vec3()
+}
+
+/// Whether two vectors agree to a part in 10^12 of the larger and one.
+pub(crate) fn agree(a: Vec3, b: Vec3) -> bool {
+    (a - b).norm() <= 1e-12 * (1.0 + b.norm())
+}
+
 /// The fractions of the way across a range at which the suite samples it: `n` of them, none at an end.
 fn fractions(n: u32) -> impl Iterator<Item = f64> {
     (0..n).map(move |k| (f64::from(k) + 0.37) / f64::from(n))

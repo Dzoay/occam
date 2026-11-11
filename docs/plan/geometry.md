@@ -26,13 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.curves`
-
-Circles, ellipses, hyperbolas and parabolas, trimmed by parameter, to any derivative, with closed-form `invert` and
-`closest` where one exists (rows 1.4, 2.1).
-
-*Failing test first:* the suite over each family, and closed-form points and derivatives at named parameters.
-
 ### `geometry.surfaces`
 
 Cylinders, cones, spheres and tori, with their seams and their degeneracies (a sphere's poles, a cone's apex), in lanes
