@@ -107,6 +107,7 @@ gate *args="all":
 tools-test: corpus-test
     python3 -m unittest discover -s tools/census/tests
     python3 -B -m unittest discover -s tools/determinism/tests -t tools/determinism
+    python3 -B -m unittest discover -s tools/coefficients/tests -t tools/coefficients
 
 # Everything except mutants and perf
 [group('gates')]
@@ -182,6 +183,11 @@ counts:
 [group('tools')]
 determinism-record *args:
     python3 -B tools/determinism/stream.py "$@"
+
+# Regenerate the owned trigonometry's fitted coefficients and constants; `--check` says whether the committed file is current
+[group('tools')]
+coefficients *args:
+    python3 -B tools/coefficients/fit.py "$@"
 
 # OCCT's whole-operation timings on the generated corpus: the numbers occam has to beat. `just baseline run`, `node`, `report`
 [env("UV_PROJECT_ENVIRONMENT", oracle_venv)]

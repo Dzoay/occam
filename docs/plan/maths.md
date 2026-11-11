@@ -27,15 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.coefficients`
-
-`tools/coefficients/`, in Python's standard library with exact fractions: minimax fits for the `sin`, `cos` and `atan`
-kernels, π/2 split for Cody and Waite's reduction, and the bits of 2/π for Payne and Hanek's. It writes one Rust file,
-which `tools-test` checks is up to date. [The coefficients are our own](../decisions/2026-11-11-own-coefficients.md).
-
-*Failing test first:* each fit's error on a dense grid is within its target, and the constants match values computed
-independently to 120 digits.
-
 ### `maths.sin-cos`
 
 The owned `sin_cos`, `sin` and `cos` over `Real`: Cody and Waite reduction below about 1.6e6, Payne and Hanek above,
