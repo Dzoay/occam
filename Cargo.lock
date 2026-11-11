@@ -191,6 +191,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "occam-geom"
+version = "0.0.0"
+dependencies = [
+ "occam-math",
+ "occam-report",
+ "occam-units",
+]
+
+[[package]]
 name = "occam-math"
 version = "0.0.0"
 dependencies = [

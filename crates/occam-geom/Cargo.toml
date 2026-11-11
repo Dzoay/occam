@@ -1,0 +1,15 @@
+[package]
+name = "occam-geom"
+description = "Curves, parameter curves and surfaces behind one seam in two layers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+occam-math = { path = "../occam-math" }
+occam-report = { path = "../occam-report" }
+occam-units = { path = "../occam-units" }
+
+[lints]
+workspace = true

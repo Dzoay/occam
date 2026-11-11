@@ -26,6 +26,8 @@ exclude_globs = [
 # it applies are in the module's pure functions, which are mutated. The same goes for `gates::main` and `usage`, and for
 # `gates determinism`'s `levels`, which runs the probe and hands its output to `parsed_levels`.
 exclude_re = [
+    # The default is the empty slice, and so is this mutant: the same function, which no test can tell apart.
+    "replace Parametric::degeneracies -> &\\[Degeneracy\\] with Vec::leak\\(Vec::new\\(\\)\\)",
     "replace run -> Verdict",
     "in run$",
     "replace (measure|browser|built|counts|summaries|levels) ",

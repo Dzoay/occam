@@ -26,16 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.seam`
-
-`occam-geom` with `Parametric` and `Surface`, `ParametricCurve` and `Curve`, and `ParamCurve`: evaluation by order,
-`derivatives` to any order, `eval_batch` with caller-owned scratch through `dispatch`, `invert` and `closest` that say
-where they stopped, domains, degeneracies, `family`, `batch_key`, `content` and `shape`, and the presentation defaults.
-The conformance suite, S4's eight checks, as one harness any family runs. The plane and the line.
-
-*Failing test first:* the suite fails on a plane and a line seeded with a wrong second derivative, and passes on the
-real ones; a source check finds no family named outside its own module and no downcast.
-
 ### `geometry.curves`
 
 Circles, ellipses, hyperbolas and parabolas, trimmed by parameter, to any derivative, with closed-form `invert` and

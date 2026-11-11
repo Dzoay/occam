@@ -12,7 +12,9 @@ flowchart TB
   surf --> pres["What it can present<br/>analytic · to_bspline · triangles"]
 ```
 
-Curves repeat both layers as `ParametricCurve` and `Curve`, and parameter curves on a surface as `ParamCurve`.
+Curves repeat both layers as `ParametricCurve` and `Curve`, and parameter curves on a surface as `ParamCurve`. The
+blanket impl is also where a call is checked: a parameter outside the domain, or a point that is not finite, is refused
+there, so no family repeats it.
 
 ## What a surface answers
 
@@ -20,7 +22,7 @@ Curves repeat both layers as `ParametricCurve` and `Curve`, and parameter curves
 |---|---|
 | `eval_point`, `eval_first`, `eval_second` | The hot paths. Nothing beyond the order asked for is computed; an undefined parameter gives NaN |
 | `derivatives(uv, order)` | Every partial derivative to any order, exact where the family can be (PARITY 2.1, 2.2, O21) |
-| `eval_batch(uv, order, out, scratch, level)` | One surface at many points. The caller owns outputs and scratch, so nothing allocates. Returns a bit per point: defined or not |
+| `eval_batch(uv, order, out, scratch, level)` | One surface at many points. The caller owns outputs and scratch, so nothing allocates once they have grown. A bit per point in `out`: defined or not |
 | `invert`, `closest` | A foot's parameters; the full closest-point solve. Both report where the solver stopped |
 | `domain`, `bounds(patch)`, `degeneracies` | Each parameter's kind; a conservative box; poles and apexes, declared at construction |
 | `family`, `batch_key`, `content` | For sorting calls and ordering pairs. `content` is the canonical bits, never a pointer |
