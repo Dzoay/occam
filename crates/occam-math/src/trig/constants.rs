@@ -38,10 +38,7 @@ pub(crate) const PI_HI: f64 = f64::from_bits(0x4009_21FB_5444_2D18);
 pub(crate) const PI_LO: f64 = f64::from_bits(0x3CA1_A626_3314_5C07);
 
 /// 3π/4 rounded to the nearest double, 2.3561944901923448370.
-pub(crate) const THREE_PIO4_HI: f64 = f64::from_bits(0x4002_D97C_7F33_21D2);
-
-/// 3π/4 less `THREE_PIO4_HI`, rounded to the nearest double, 9.1848509936051484375e-17.
-pub(crate) const THREE_PIO4_LO: f64 = f64::from_bits(0x3C9A_7939_4C9E_8A0A);
+pub(crate) const THREE_PIO4: f64 = f64::from_bits(0x4002_D97C_7F33_21D2);
 
 /// atan(1/2) rounded to the nearest double, 0.46364760900080609352.
 pub(crate) const ATAN_HALF_HI: f64 = f64::from_bits(0x3FDD_AC67_0561_BB4F);

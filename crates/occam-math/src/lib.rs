@@ -36,4 +36,4 @@ pub use lanes::Lanes;
 pub use mask::{LaneMask, Mask};
 pub use predicate::{Predicate, Ring, Side, Tally, Verdict, decide_computed, decide_stored};
 pub use real::Real;
-pub use trig::{cos, sin, sin_cos};
+pub use trig::{atan2, cos, sin, sin_cos};

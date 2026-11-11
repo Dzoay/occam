@@ -35,7 +35,7 @@ disallowed-methods = [
     { path = "f64::asin", reason = "not bit-identical across targets, and occam-math does not own it yet (S5, L23)" },
     { path = "f64::acos", reason = "not bit-identical across targets, and occam-math does not own it yet (S5, L23)" },
     { path = "f64::atan", reason = "not bit-identical across targets, and occam-math does not own it yet (S5, L23)" },
-    { path = "f64::atan2", reason = "not bit-identical across targets, and occam-math does not own it yet (S5, L23)" },
+    { path = "f64::atan2", reason = "not bit-identical across targets: use occam_math::atan2, which is (S5, L23)" },
     { path = "f64::sin_cos", reason = "not bit-identical across targets: use occam_math::sin_cos, which is (S5, L23)" },
     { path = "f64::exp_m1", reason = "not bit-identical across targets, and occam-math does not own it yet (S5, L23)" },
     { path = "f64::ln_1p", reason = "not bit-identical across targets, and occam-math does not own it yet (S5, L23)" },

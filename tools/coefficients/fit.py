@@ -143,8 +143,9 @@ def reduction_constants(pi, atan_half):
     c3 = truncated(half - c1 - c2, SPLIT_BITS)
     constants = {"PIO2_C1": c1, "PIO2_C2": c2, "PIO2_C3": c3, "PIO2_C4": nearest_double(half - c1 - c2 - c3)}
     constants["INV_PIO2"] = nearest_double(2 / pi)
-    for name, value in (("PIO2", half), ("PIO4", pi / 4), ("PI", pi), ("THREE_PIO4", 3 * pi / 4)):
+    for name, value in (("PIO2", half), ("PIO4", pi / 4), ("PI", pi)):
         constants |= double_double(name, value)
+    constants["THREE_PIO4"] = nearest_double(3 * pi / 4)
     return constants | double_double("ATAN_HALF", atan_half)
 
 
@@ -438,7 +439,7 @@ HEADER = """\
 //! The owned trigonometry's constants, fitted and computed by `tools/coefficients/fit.py`. Generated: do not edit; run
 //! `python3 -B tools/coefficients/fit.py` to regenerate it."""
 
-DOUBLE_DOUBLES = (("PIO2", "π/2"), ("PIO4", "π/4"), ("PI", "π"), ("THREE_PIO4", "3π/4"), ("ATAN_HALF", "atan(1/2)"))
+DOUBLE_DOUBLES = (("PIO2", "π/2"), ("PIO4", "π/4"), ("PI", "π"), ("ATAN_HALF", "atan(1/2)"))
 
 
 @in_context
@@ -500,6 +501,8 @@ def render(built):
         blocks.append(scalar(f"{name}_HI", c[f"{name}_HI"], f"{what} rounded to the nearest double, {{}}."))
         low = f"{what} less `{name}_HI`, rounded to the nearest double, {{}}."
         blocks.append(scalar(f"{name}_LO", c[f"{name}_LO"], low))
+        if name == "PI":
+            blocks.append(scalar("THREE_PIO4", c["THREE_PIO4"], "3π/4 rounded to the nearest double, {}."))
     words = [hex_literal(word) for word in built.two_over_pi]
     blocks.append(
         array(

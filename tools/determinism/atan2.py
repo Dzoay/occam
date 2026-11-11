@@ -8,7 +8,7 @@ bit for bit. C99's special cases come out of the same steps and two final select
 
 import math
 
-from constants import ATAN, ATAN_HALF_HI, ATAN_HALF_LO, PI_HI, PI_LO, PIO2_HI, PIO2_LO, PIO4_HI, PIO4_LO, THREE_PIO4_HI
+from constants import ATAN, ATAN_HALF_HI, ATAN_HALF_LO, PI_HI, PI_LO, PIO2_HI, PIO2_LO, PIO4_HI, PIO4_LO, THREE_PIO4
 from sincos import horner, select, two_sum
 
 TINY_DIVISOR = 2.0**-1000  # below this the pair is scaled up, so the quotient keeps its bits
@@ -53,5 +53,5 @@ def atan2(y, x):
     both_zero = select(d <= 0.0, n, 1.0) <= 0.0
     both_inf = math.inf <= select(math.inf <= d, n, 0.0)
     angle = select(both_zero, select(neg_x, PI_HI, 0.0), angle)
-    angle = select(both_inf, select(neg_x, THREE_PIO4_HI, PIO4_HI), angle)
+    angle = select(both_inf, select(neg_x, THREE_PIO4, PIO4_HI), angle)
     return math.copysign(angle, y)

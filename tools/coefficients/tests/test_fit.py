@@ -161,7 +161,9 @@ class ConstantTests(unittest.TestCase):
 
     def test_each_low_part_is_the_rest_of_its_value_rounded(self):
         pi, atan_half = Fraction(self.pi), Fraction(self.atan_half)
-        for name, value in (("PIO2", pi / 2), ("PIO4", pi / 4), ("PI", pi), ("THREE_PIO4", 3 * pi / 4)):
+        three_quarters = from_bits(self.committed["THREE_PIO4"][0])
+        self.assertLessEqual(abs(3 * pi / 4 - three_quarters), Fraction(2) ** (fit.exponent(three_quarters) - 53))
+        for name, value in (("PIO2", pi / 2), ("PIO4", pi / 4), ("PI", pi)):
             with self.subTest(name=name):
                 high, low = from_bits(self.committed[f"{name}_HI"][0]), from_bits(self.committed[f"{name}_LO"][0])
                 self.assertLessEqual(abs(value - high), Fraction(2) ** (fit.exponent(high) - 53))

@@ -10,6 +10,7 @@ import pathlib
 import struct
 import sys
 
+from atan2 import atan2
 from sincos import sin_cos
 
 RECORD = pathlib.Path(__file__).resolve().parents[2] / "ci" / "determinism-hashes.txt"
@@ -157,6 +158,8 @@ def outputs(a, b, c):
         ("down", math.nextafter(a, -INFINITY)),
         ("sin", sine),
         ("cos", cosine),
+        ("copysign", math.copysign(a, b)),
+        ("atan2", atan2(a, b)),
     ]
 
 

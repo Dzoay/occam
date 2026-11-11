@@ -9,14 +9,16 @@ use crate::exec::{Exec, Grain};
 use crate::hash::Digest;
 use crate::real::Real;
 use crate::splitmix::SplitMix64;
-use crate::trig::sin_cos;
+use crate::trig::{atan2, sin_cos};
 
 /// How many operations the stream hashes.
-pub const OPERATION_COUNT: usize = 14;
+pub const OPERATION_COUNT: usize = 16;
 
 /// The operations, in the order [`Hashes`] gives them.
-pub const OPERATIONS: [&str; OPERATION_COUNT] =
-    ["add", "sub", "mul", "div", "neg", "abs", "sqrt", "mixed", "lt", "le", "up", "down", "sin", "cos"];
+pub const OPERATIONS: [&str; OPERATION_COUNT] = [
+    "add", "sub", "mul", "div", "neg", "abs", "sqrt", "mixed", "lt", "le", "up", "down", "sin", "cos", "copysign",
+    "atan2",
+];
 
 /// One hash per operation, in the order of [`OPERATIONS`].
 pub type Hashes = [u64; OPERATION_COUNT];
@@ -90,6 +92,8 @@ fn outputs<R: Real>(a: R, b: R, c: R) -> [R; OPERATION_COUNT] {
         a.next_down(),
         sine,
         cosine,
+        a.copysign(b),
+        atan2(a, b),
     ]
 }
 

@@ -27,12 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.atan2`
-
-The owned `atan2` over `Real`, in the same way, with C99's special cases.
-
-*Failing test first:* as for `maths.sin-cos`, within 1.5 ulps, and every signed zero and infinity case.
-
 ### `maths.vectorise`
 
 The vectorisation check in `gates perf`: every lane kernel (comparison masks, the predicate filter, `sin_cos` and

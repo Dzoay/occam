@@ -133,6 +133,11 @@ impl<const W: usize> Real for Lanes<W> {
     }
 
     #[inline(always)]
+    fn copysign(self, sign: Self) -> Self {
+        self.zip(sign, f64::copysign)
+    }
+
+    #[inline(always)]
     fn next_up(self) -> Self {
         self.map(f64::next_up)
     }
@@ -191,6 +196,8 @@ mod tests {
         assert_eq!(bits(a.abs().to_array()), bits([1.5, 2.25, 0.1, 1e300]));
         let roots = Lanes::new([4.0, 2.0, 0.0, -0.0]).sqrt();
         assert_eq!(bits(roots.to_array()), bits([2.0, f64::from_bits(0x3FF6_A09E_667F_3BCD), 0.0, -0.0]));
+        let signs = Lanes::new([-0.0, 0.0, -1.0, 2.0]).copysign(Lanes::new([1.0, -0.0, 3.0, -4.0]));
+        assert_eq!(bits(signs.to_array()), bits([0.0, -0.0, 1.0, -2.0]));
         let steps = [1.0, -0.0, f64::MAX, f64::NEG_INFINITY];
         assert_eq!(bits(Lanes::new(steps).next_up().to_array()), bits(steps.map(f64::next_up)));
         assert_eq!(bits(Lanes::new(steps).next_down().to_array()), bits(steps.map(f64::next_down)));

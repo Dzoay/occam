@@ -58,6 +58,11 @@ pub trait Real:
     #[must_use]
     fn sqrt(self) -> Self;
 
+    /// `self`'s magnitude with `sign`'s sign bit, both zeros included. `sign` must not be a NaN that arithmetic made,
+    /// whose sign Rust leaves unspecified (`docs/DETERMINISM.md` rule 3).
+    #[must_use]
+    fn copysign(self, sign: Self) -> Self;
+
     /// The next double above: the smallest subnormal above either zero, `-f64::MAX` above minus infinity, infinity
     /// above itself, and NaN for NaN. Exact, so bounds rounded outward need no rounding modes.
     #[must_use]
@@ -107,6 +112,11 @@ impl Real for f64 {
     #[inline(always)]
     fn sqrt(self) -> Self {
         f64::sqrt(self)
+    }
+
+    #[inline(always)]
+    fn copysign(self, sign: Self) -> Self {
+        f64::copysign(self, sign)
     }
 
     #[inline(always)]
@@ -192,6 +202,14 @@ mod tests {
         assert_eq!(Real::next_up(f64::NEG_INFINITY), f64::MIN);
         assert_eq!(Real::next_down(f64::INFINITY), f64::MAX);
         assert!(Real::next_up(f64::NAN).is_nan());
+    }
+
+    #[test]
+    fn copysign_takes_the_sign_bit_zeros_included() {
+        assert_eq!(Real::copysign(2.5, -0.0), -2.5);
+        assert_eq!(Real::copysign(-2.5, 0.0), 2.5);
+        assert_eq!(Real::copysign(0.0, -1.0).to_bits(), (-0.0_f64).to_bits());
+        assert_eq!(Real::copysign(f64::INFINITY, -3.0), f64::NEG_INFINITY);
     }
 
     #[test]

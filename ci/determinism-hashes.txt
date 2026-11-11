@@ -16,3 +16,5 @@ up cb8328ba349db380
 down 62b62e061e1ec414
 sin 9bb6b2b7a4a14438
 cos 6a5b384ca7572916
+copysign 0106ff3b2619b2d6
+atan2 b99ccd55fd3bd491
