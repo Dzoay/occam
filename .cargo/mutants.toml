@@ -52,8 +52,17 @@ exclude_re = [
     "support\\.rs:\\d+:\\d+: replace > with >= in span$",
     "parabola\\.rs:\\d+:\\d+: replace (< with <=|> with >=) in <impl ParametricCurve for Parabola>::bounds$",
     "nearest\\.rs:\\d+:\\d+: replace < with <= in refine$",
-    # By line. An arc holds `φ + π` where it holds `φ − π`, a whole turn away, which `above` takes off.
-    "turn\\.rs:85:34: replace \\+ with - in arc_box$",
+    # Where the least `ρ` of a round meridian is exactly 0, either box holds it. On a cone's axis, its two lines through
+    # the axis are as near, and every point of the circle at that `v` is a foot.
+    "meridian\\.rs:\\d+:\\d+: replace < with <= in along_circle$",
+    # By line. Only a sphere's meridian crosses the axis, and its centre is 0, so its reach there is its radius of
+    # either sign, and the box is the same from either corner.
+    "meridian\\.rs:206:34: replace \\+ with - in along_circle$",
+    "cone\\.rs:\\d+:\\d+: replace < with <= in <impl Parametric for Cone>::invert$",
+    # By line. An arc holds `φ + π` where it holds `φ − π`, and a cone's mirrored line is at `u + π` as at `u − π`: a
+    # whole turn apart, which `above` takes off.
+    "turn\\.rs:80:30: replace \\+ with - in swing$",
+    "cone\\.rs:104:34: replace \\+ with - in <impl Parametric for Cone>::invert$",
     # By line. Each changes only how much a search refines, and so only its speed: refining a piece where the slope does
     # not turn from falling to rising ends at one of its ends, which is no nearer than the nearest found.
     "nearest\\.rs:81:21: replace < with <= in nearest$",

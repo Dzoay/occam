@@ -104,7 +104,8 @@ pub trait Parametric: Sized + Send + Sync + 'static {
         scratch: &mut Scratch,
     ) -> Result<UvPoint, Report>;
 
-    /// The point of the surface closest to `p`, which is finite.
+    /// The point of the surface closest to `p`, which is finite. By default the point at [`Parametric::invert`]'s
+    /// parameters, which is the closest point wherever `invert` finds the true foot.
     ///
     /// # Errors
     ///
@@ -115,7 +116,11 @@ pub trait Parametric: Sized + Send + Sync + 'static {
         seed: Option<UvPoint>,
         tol: Tolerance,
         scratch: &mut Scratch,
-    ) -> Result<Closest, Report>;
+    ) -> Result<Closest, Report> {
+        let at = self.invert(p, seed, tol, scratch)?;
+        let point = self.eval_point(at);
+        Ok(Closest { at, point, distance: Length::from_millimetres((p.to_vec3() - point.to_vec3()).norm()) })
+    }
 
     /// The family's name.
     fn family(&self) -> FamilyName;

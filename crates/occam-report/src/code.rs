@@ -45,6 +45,8 @@ text_enum! {
         UndefinedParameter = "geom.undefined-parameter",
         /// A curve or surface was given a size that is not a finite number greater than zero.
         SizeNotPositive = "geom.size-not-positive",
+        /// A curve or surface was given a size or an angle outside the range its form allows.
+        OutOfRange = "geom.out-of-range",
     }
 }
 
@@ -97,7 +99,8 @@ impl Code {
             | Self::ThreadsUnavailable
             | Self::DegenerateDirection
             | Self::UndefinedParameter
-            | Self::SizeNotPositive => Severity::Error,
+            | Self::SizeNotPositive
+            | Self::OutOfRange => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -118,6 +121,7 @@ impl Code {
             Self::SizeNotPositive => {
                 "A curve or surface was given a size that is not a finite number greater than zero."
             }
+            Self::OutOfRange => "A curve or surface was given a size or an angle outside the range its form allows.",
         }
     }
 
@@ -142,6 +146,7 @@ impl Code {
             }
             Self::UndefinedParameter => "The parameter {parameter} is outside the domain from {low} to {high}.",
             Self::SizeNotPositive => "The size given, {size}, is not a finite number greater than zero.",
+            Self::OutOfRange => "The value given, {value}, is not strictly between {low} and {high}.",
         }
     }
 
@@ -158,7 +163,8 @@ impl Code {
             | Self::BadArgument
             | Self::DegenerateDirection
             | Self::UndefinedParameter
-            | Self::SizeNotPositive => &[],
+            | Self::SizeNotPositive
+            | Self::OutOfRange => &[],
         }
     }
 }
@@ -319,6 +325,11 @@ mod tests {
                 "template": "{threads} threads could not be started on this machine.",
                 "remedies": ["use-threads"],
             },
+        ])
+    }
+
+    fn geom_codes() -> Value {
+        json!([
             {
                 "name": "DegenerateDirection",
                 "code": "geom.degenerate-direction",
@@ -341,6 +352,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A curve or surface was given a size that is not a finite number greater than zero.",
                 "template": "The size given, {size}, is not a finite number greater than zero.",
+                "remedies": [],
+            },
+            {
+                "name": "OutOfRange",
+                "code": "geom.out-of-range",
+                "severity": "error",
+                "summary": "A curve or surface was given a size or an angle outside the range its form allows.",
+                "template": "The value given, {value}, is not strictly between {low} and {high}.",
                 "remedies": [],
             },
         ])
@@ -372,7 +391,7 @@ mod tests {
     #[test]
     fn the_catalogue_lists_every_code_and_remedy() {
         let value: Value = serde_json::from_str(&catalogue_json().unwrap()).unwrap();
-        let codes: Vec<Value> = [report_and_units_codes(), measure_command_line_and_exec_codes()]
+        let codes: Vec<Value> = [report_and_units_codes(), measure_command_line_and_exec_codes(), geom_codes()]
             .into_iter()
             .filter_map(|rows| rows.as_array().cloned())
             .flatten()

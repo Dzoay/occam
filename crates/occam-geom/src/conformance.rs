@@ -13,7 +13,7 @@ use occam_math::canonical_bits;
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tangent, Tolerance, Vec3, Vector, World};
 
 pub(crate) use curves::curve;
-pub(crate) use seeded::{WrongSecond, WrongSecondCurve};
+pub(crate) use seeded::{WrongSecondCurve, wrong_form, wrong_second};
 pub(crate) use surfaces::surface;
 
 /// What the suite checks.
@@ -89,6 +89,32 @@ pub(crate) fn local(x: f64, y: f64, z: f64) -> Vec3 {
 /// Whether two vectors agree to a part in 10^12 of the larger and one.
 pub(crate) fn agree(a: Vec3, b: Vec3) -> bool {
     (a - b).norm() <= 1e-12 * (1.0 + b.norm())
+}
+
+/// How far the box of `s` over `patch` reaches beyond the extremes of `n` by `n` points of it, edges included, in the
+/// coordinate where it reaches furthest: a box that holds the patch and is no larger shows a little more than the
+/// spacing of the samples misses.
+pub(crate) fn slack(s: &dyn crate::Surface, patch: crate::UvBox, n: u32) -> f64 {
+    let at = |f: f64, lo: f64, hi: f64| lerp(lo, hi, f);
+    let points: Vec<Vec3> = (0..=n)
+        .flat_map(|i| (0..=n).map(move |j| (f64::from(i) / f64::from(n), f64::from(j) / f64::from(n))))
+        .map(|(fu, fv)| {
+            let uv = occam_units::UvPoint::new(at(fu, patch.lo.u(), patch.hi.u()), at(fv, patch.lo.v(), patch.hi.v()));
+            s.point(uv).to_vec3()
+        })
+        .collect();
+    let b = s.bounds(patch);
+    let (low, high) = (b.low().to_vec3(), b.high().to_vec3());
+    let least =
+        |pick: fn(Vec3) -> f64| points.iter().map(|p| pick(*p)).fold(f64::INFINITY, |a, x| if x < a { x } else { a });
+    let most = |pick: fn(Vec3) -> f64| {
+        points.iter().map(|p| pick(*p)).fold(f64::NEG_INFINITY, |a, x| if x > a { x } else { a })
+    };
+    let picks: [fn(Vec3) -> f64; 3] = [|v| v.x, |v| v.y, |v| v.z];
+    picks
+        .into_iter()
+        .map(|pick| (least(pick) - pick(low)) + (pick(high) - most(pick)))
+        .fold(0.0, |a, x| if x > a { x } else { a })
 }
 
 /// The fractions of the way across a range at which the suite samples it: `n` of them, none at an end.

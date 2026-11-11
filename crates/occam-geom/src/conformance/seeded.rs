@@ -1,6 +1,6 @@
 //! Source: original
 //! Families with a seeded fault, which the suite must catch: each passes everything through to a real family except a
-//! second derivative wrong by a thousandth.
+//! second derivative wrong by a thousandth, or, for a surface, the form it presents.
 
 use occam_math::Real;
 use occam_report::Report;
@@ -15,21 +15,46 @@ use crate::{
 /// The seeded error.
 const SEED: Vec3 = Vec3::new(1e-3, 0.0, 0.0);
 
-/// A surface whose second derivative in `u`, from `eval_second` alone, is wrong.
-pub(crate) struct WrongSecond<S>(pub S);
+/// What is wrong with a [`Seeded`] surface.
+#[derive(Clone, Copy)]
+enum Fault {
+    /// Its second derivative in `u`, from `eval_second` alone, is wrong by [`SEED`].
+    Second,
+    /// It presents this form rather than its own.
+    Form(Analytic),
+}
 
-impl<S: Parametric> Parametric for WrongSecond<S> {
+/// A surface with a seeded fault.
+pub(crate) struct Seeded<S> {
+    surface: S,
+    fault: Fault,
+}
+
+/// `surface` with a second derivative in `u`, from `eval_second` alone, that is wrong.
+pub(crate) const fn wrong_second<S>(surface: S) -> Seeded<S> {
+    Seeded { surface, fault: Fault::Second }
+}
+
+/// `surface` presenting `form` rather than its own.
+pub(crate) const fn wrong_form<S>(surface: S, form: Analytic) -> Seeded<S> {
+    Seeded { surface, fault: Fault::Form(form) }
+}
+
+impl<S: Parametric> Parametric for Seeded<S> {
     fn eval_point<R: Real>(&self, uv: UvPoint<R>) -> Point<World, R> {
-        self.0.eval_point(uv)
+        self.surface.eval_point(uv)
     }
 
     fn eval_first<R: Real>(&self, uv: UvPoint<R>) -> Jet1<R> {
-        self.0.eval_first(uv)
+        self.surface.eval_first(uv)
     }
 
     fn eval_second<R: Real>(&self, uv: UvPoint<R>) -> Jet2<R> {
-        let jet = self.0.eval_second(uv);
-        Jet2 { duu: Tangent::new(jet.duu.rate() + splat(SEED)), ..jet }
+        let jet = self.surface.eval_second(uv);
+        match self.fault {
+            Fault::Second => Jet2 { duu: Tangent::new(jet.duu.rate() + splat(SEED)), ..jet },
+            Fault::Form(_) => jet,
+        }
     }
 
     fn derivatives(
@@ -39,15 +64,15 @@ impl<S: Parametric> Parametric for WrongSecond<S> {
         out: &mut Vec<Tangent<World>>,
         scratch: &mut Scratch,
     ) -> Result<(), Report> {
-        Parametric::derivatives(&self.0, uv, order, out, scratch)
+        Parametric::derivatives(&self.surface, uv, order, out, scratch)
     }
 
     fn domain(&self) -> Domain {
-        Parametric::domain(&self.0)
+        Parametric::domain(&self.surface)
     }
 
     fn bounds(&self, patch: UvBox) -> Bounds {
-        Parametric::bounds(&self.0, patch)
+        Parametric::bounds(&self.surface, patch)
     }
 
     fn invert(
@@ -57,7 +82,7 @@ impl<S: Parametric> Parametric for WrongSecond<S> {
         tol: Tolerance,
         scratch: &mut Scratch,
     ) -> Result<UvPoint, Report> {
-        Parametric::invert(&self.0, p, seed, tol, scratch)
+        Parametric::invert(&self.surface, p, seed, tol, scratch)
     }
 
     fn closest(
@@ -67,27 +92,30 @@ impl<S: Parametric> Parametric for WrongSecond<S> {
         tol: Tolerance,
         scratch: &mut Scratch,
     ) -> Result<Closest, Report> {
-        Parametric::closest(&self.0, p, seed, tol, scratch)
+        Parametric::closest(&self.surface, p, seed, tol, scratch)
     }
 
     fn family(&self) -> FamilyName {
-        Parametric::family(&self.0)
+        Parametric::family(&self.surface)
     }
 
     fn content(&self, out: &mut Content) {
-        Parametric::content(&self.0, out);
+        Parametric::content(&self.surface, out);
     }
 
     fn shape(&self) -> Shape {
-        Parametric::shape(&self.0)
+        Parametric::shape(&self.surface)
     }
 
     fn degeneracies(&self) -> &[Degeneracy] {
-        Parametric::degeneracies(&self.0)
+        Parametric::degeneracies(&self.surface)
     }
 
     fn analytic(&self, tol: Tolerance) -> Option<Analytic> {
-        Parametric::analytic(&self.0, tol)
+        match self.fault {
+            Fault::Form(form) => Some(form),
+            Fault::Second => Parametric::analytic(&self.surface, tol),
+        }
     }
 }
 

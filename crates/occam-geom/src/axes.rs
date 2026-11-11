@@ -1,5 +1,6 @@
 //! Source: original
-//! [`Axes`]: a placement's origin and its X, Y and Z axes in `World`, which the plane and the conics are written in.
+//! [`Axes`]: a placement's origin and its X, Y and Z axes in `World`, which the plane, the conics and the surfaces
+//! turned about an axis are written in.
 
 use occam_math::{Interval, Real};
 use occam_report::{NamedValue, Quantity, Value};
@@ -50,6 +51,12 @@ impl Axes {
     pub(crate) fn coordinates(&self, p: Point<World>) -> (f64, f64) {
         let d = p.to_vec3() - self.origin;
         (d.dot(self.x), d.dot(self.y))
+    }
+
+    /// `p`'s coordinates along the three axes, from the origin.
+    pub(crate) fn local(&self, p: Point<World>) -> Vec3 {
+        let d = p.to_vec3() - self.origin;
+        Vec3::new(d.dot(self.x), d.dot(self.y), d.dot(self.normal.get()))
     }
 
     /// Intervals holding the exact coordinates of `origin + a x + b y` for every `a` and `b` in theirs.

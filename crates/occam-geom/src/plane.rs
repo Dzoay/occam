@@ -3,7 +3,7 @@
 
 use occam_math::Real;
 use occam_report::Report;
-use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Bounds, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
@@ -11,7 +11,7 @@ use crate::batch::{Jet1, Jet2, Scratch};
 use crate::domain::{Domain, ParamRange, UvBox};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::support::{enclose, exact, splat};
-use crate::surface::{Closest, Parametric};
+use crate::surface::Parametric;
 
 /// A plane, unbounded.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -84,18 +84,6 @@ impl Parametric for Plane {
         Ok(UvPoint::new(u, v))
     }
 
-    fn closest(
-        &self,
-        p: Point<World>,
-        seed: Option<UvPoint>,
-        tol: Tolerance,
-        scratch: &mut Scratch,
-    ) -> Result<Closest, Report> {
-        let uv = Parametric::invert(self, p, seed, tol, scratch)?;
-        let point = self.eval_point(uv);
-        Ok(Closest { at: uv, point, distance: Length::from_millimetres((p.to_vec3() - point.to_vec3()).norm()) })
-    }
-
     fn family(&self) -> FamilyName {
         FamilyName("plane")
     }
@@ -120,7 +108,7 @@ mod tests {
     use occam_units::Direction;
 
     use super::*;
-    use crate::conformance::{self, Check, WrongSecond, placement, tolerance};
+    use crate::conformance::{self, Check, placement, tolerance, wrong_second};
     use crate::surface::Surface;
 
     fn plane() -> Plane {
@@ -143,7 +131,7 @@ mod tests {
 
     #[test]
     fn the_suite_catches_a_plane_with_a_wrong_second_derivative() {
-        let failed = conformance::checks(&conformance::surface(&WrongSecond(plane()), window()));
+        let failed = conformance::checks(&conformance::surface(&wrong_second(plane()), window()));
         assert_eq!(failed, [Check::Orders, Check::Differences]);
     }
 

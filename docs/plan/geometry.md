@@ -26,13 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.surfaces`
-
-Cylinders, cones, spheres and tori, with their seams and their degeneracies (a sphere's poles, a cone's apex), in lanes
-through the owned `sin_cos` and `atan2` (row 1.5).
-
-*Failing test first:* the suite over each family, including points on each seam and at each degenerate line.
-
 ### `geometry.splines`
 
 B-spline and Bézier curves and surfaces, rational or not: evaluation and derivatives to any order, `eval_batch` in lanes

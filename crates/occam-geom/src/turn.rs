@@ -61,31 +61,34 @@ pub(crate) fn above(angle: f64, lo: f64) -> f64 {
 }
 
 /// The smaller of two numbers, the first if they are equal.
-fn smaller(a: f64, b: f64) -> f64 {
+pub(crate) fn smaller(a: f64, b: f64) -> f64 {
     if b < a { b } else { a }
 }
 
 /// The larger of two numbers, the first if they are equal.
-fn larger(a: f64, b: f64) -> f64 {
+pub(crate) fn larger(a: f64, b: f64) -> f64 {
     if b > a { b } else { a }
 }
 
-/// The box of `origin + a cos t x + b sin t y` for `t` from `lo` to `hi`, rounding included. Each coordinate is
-/// `o + A cos(t − φ)`, so it reaches `o ± A` where the arc holds `φ` or `φ + π`, and is otherwise extreme at the ends,
-/// `from` and `to`.
+/// The least and the greatest of `o + x cos t + y sin t` for `t` from `lo` to `hi`, both finite, whose values at the ends
+/// are `ends`. It is `o + A cos(t − φ)`, so it reaches `o ± A` where the range holds `φ` or `φ + π`, and is otherwise
+/// extreme at an end.
+pub(crate) fn swing(o: f64, (x, y): (f64, f64), (lo, hi): (f64, f64), ends: (f64, f64)) -> (f64, f64) {
+    let whole = hi - lo >= TAU;
+    let holds = |angle: f64| whole || above(angle, lo) <= hi;
+    let (amplitude, phase) = ((x * x + y * y).sqrt(), atan2(y, x));
+    let low = if holds(phase + PI) { o - amplitude } else { smaller(ends.0, ends.1) };
+    let high = if holds(phase) { o + amplitude } else { larger(ends.0, ends.1) };
+    (low, high)
+}
+
+/// The box of `origin + a cos t x + b sin t y` for `t` from `lo` to `hi`, rounding included: each coordinate's
+/// [`swing`], with the ends `from` and `to`.
 pub(crate) fn arc_box(axes: &Axes, radii: (f64, f64), (lo, hi): (f64, f64), (from, to): (Vec3, Vec3)) -> Bounds {
     if !(lo.is_finite() && hi.is_finite()) {
         return everything();
     }
-    let whole = hi - lo >= TAU;
-    let holds = |angle: f64| whole || above(angle, lo) <= hi;
-    let extremes = |o: f64, x: f64, y: f64, ends: (f64, f64)| {
-        let (along_x, along_y) = (radii.0 * x, radii.1 * y);
-        let (amplitude, phase) = ((along_x * along_x + along_y * along_y).sqrt(), atan2(along_y, along_x));
-        let low = if holds(phase + PI) { o - amplitude } else { smaller(ends.0, ends.1) };
-        let high = if holds(phase) { o + amplitude } else { larger(ends.0, ends.1) };
-        (low, high)
-    };
+    let extremes = |o: f64, x: f64, y: f64, ends: (f64, f64)| swing(o, (radii.0 * x, radii.1 * y), (lo, hi), ends);
     let (at, first, second) = (axes.origin, axes.x, axes.y);
     let [(lx, hx), (ly, hy), (lz, hz)] = [
         extremes(at.x, first.x, second.x, (from.x, to.x)),

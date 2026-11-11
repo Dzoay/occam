@@ -2,7 +2,7 @@
 //! What every family's formulas share: stored numbers in lanes, and boxes that hold the exact values of computed points.
 
 use occam_math::{Interval, Real};
-use occam_report::{Code, Fault, NamedValue, Reason, Report};
+use occam_report::{Code, Fault, NamedValue, Quantity, Reason, Report};
 use occam_units::{Bounds, Length, Point, Vec3, World};
 
 use crate::curve::ParametricCurve;
@@ -50,13 +50,32 @@ pub(crate) fn foot_at<C: ParametricCurve>(curve: &C, p: Point<World>, t: f64) ->
 /// `size` in millimetres, which must be a finite number greater than zero, as a radius is.
 pub(crate) fn positive(size: Length) -> Result<f64, Report> {
     let millimetres = size.millimetres();
-    if millimetres > 0.0 && millimetres.is_finite() {
-        Ok(millimetres)
-    } else {
-        Err(Report::new(Code::SizeNotPositive, Fault::InvalidInput)
-            .with_reason(Reason::RadiusNotPositive)
-            .with_value(NamedValue::length("size", millimetres)))
+    if millimetres > 0.0 && millimetres.is_finite() { Ok(millimetres) } else { Err(not_positive(millimetres)) }
+}
+
+/// `size` in millimetres, which must be a finite number not below zero, as a cone's radius where it is placed is. Zero
+/// of either sign is +0, so that equal sizes have equal bits.
+pub(crate) fn not_negative(size: Length) -> Result<f64, Report> {
+    let millimetres = size.millimetres();
+    if millimetres >= 0.0 && millimetres.is_finite() { Ok(millimetres.abs()) } else { Err(not_positive(millimetres)) }
+}
+
+/// The refusal of a size of `millimetres`.
+fn not_positive(millimetres: f64) -> Report {
+    Report::new(Code::SizeNotPositive, Fault::InvalidInput)
+        .with_reason(Reason::RadiusNotPositive)
+        .with_value(NamedValue::length("size", millimetres))
+}
+
+/// `value`, which must lie strictly between `low` and `high`, all measuring `quantity`.
+pub(crate) fn between(value: f64, (low, high): (f64, f64), quantity: Quantity) -> Result<f64, Report> {
+    if low < value && value < high {
+        return Ok(value);
     }
+    Err(Report::new(Code::OutOfRange, Fault::InvalidInput)
+        .with_value(NamedValue::new("value", quantity, value))
+        .with_value(NamedValue::new("low", quantity, low))
+        .with_value(NamedValue::new("high", quantity, high)))
 }
 
 /// Refuses a point with a coordinate that is not finite, naming the first.
@@ -132,6 +151,31 @@ mod tests {
             assert_eq!((report.code, report.reason), (Code::SizeNotPositive, Some(Reason::RadiusNotPositive)));
             let size = report.value("size").and_then(NamedValue::number).unwrap();
             assert_eq!(size.to_bits(), bad.to_bits());
+        }
+    }
+
+    #[test]
+    fn a_size_that_may_be_zero_must_be_finite_and_not_below_it() {
+        assert_eq!(not_negative(Length::from_millimetres(2.5)).unwrap(), 2.5);
+        assert_eq!(not_negative(Length::from_millimetres(-0.0)).unwrap().to_bits(), 0.0f64.to_bits(), "+0, not -0");
+        for bad in [-1e-300, f64::NAN, f64::INFINITY] {
+            let report = not_negative(Length::from_millimetres(bad)).unwrap_err();
+            assert_eq!((report.code, report.reason), (Code::SizeNotPositive, Some(Reason::RadiusNotPositive)));
+        }
+    }
+
+    #[test]
+    fn a_value_must_lie_strictly_between_its_bounds() {
+        assert_eq!(between(0.5, (0.0, 1.0), Quantity::Angle).unwrap(), 0.5);
+        for bad in [0.0, 1.0, -0.5, 2.0, f64::NAN] {
+            let report = between(bad, (0.0, 1.0), Quantity::Angle).unwrap_err();
+            assert_eq!((report.code, report.fault), (Code::OutOfRange, Some(Fault::InvalidInput)));
+            let named = |name: &str| report.value(name).map(|v| (v.number().map(f64::to_bits), v.quantity));
+            assert_eq!(named("value"), Some((Some(bad.to_bits()), Quantity::Angle)));
+            assert_eq!(
+                (named("low"), named("high")),
+                (Some((Some(0), Quantity::Angle)), Some((Some(1f64.to_bits()), Quantity::Angle)))
+            );
         }
     }
 

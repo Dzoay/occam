@@ -1,12 +1,12 @@
 //! Source: original
 //! The suite's checks of a surface, through [`Surface`] alone, over a window of its parameters.
 
-use occam_math::Level;
+use occam_math::{Level, sin_cos};
 use occam_report::Code;
 use occam_units::{Point, Tangent, UvPoint, Vec3, World};
 
 use super::{Check, Failure, Findings, bits, close, distance, finite, fractions, junk, lerp, rates, tolerance, unit};
-use crate::{Analytic, Content, Jets, Order, Param, Scratch, Surface, UvBox, Wrap};
+use crate::{Analytic, Content, Degeneracy, Jets, Order, Param, Scratch, Surface, UvBox, Wrap};
 
 /// Every check of `s` over `window`, which must lie in its domain. What failed, or nothing.
 pub(crate) fn surface(s: &dyn Surface, window: UvBox) -> Vec<Failure> {
@@ -146,11 +146,31 @@ fn differences(s: &dyn Surface, window: UvBox, found: &mut Findings) {
     }
 }
 
+/// Points on each seam, at both ends of a parameter whose ends meet, and on each degenerate line.
+fn edges(s: &dyn Surface, window: UvBox) -> Vec<UvPoint> {
+    let domain = s.domain();
+    let mut out = vec![];
+    for f in [0.21, 0.64] {
+        let (u, v) = (lerp(window.lo.u(), window.hi.u(), f), lerp(window.lo.v(), window.hi.v(), f));
+        if domain.u.wrap != Wrap::Open {
+            out.extend([UvPoint::new(domain.u.lo, v), UvPoint::new(domain.u.hi, v)]);
+        }
+        if domain.v.wrap != Wrap::Open {
+            out.extend([UvPoint::new(u, domain.v.lo), UvPoint::new(u, domain.v.hi)]);
+        }
+        let on_line = |line: &Degeneracy| match line.param {
+            Param::U => UvPoint::new(line.at, v),
+            Param::V => UvPoint::new(u, line.at),
+        };
+        out.extend(s.degeneracies().iter().map(on_line));
+    }
+    out
+}
+
 fn closest(s: &dyn Surface, window: UvBox, found: &mut Findings) {
     let (tol, mut scratch) = (tolerance(), Scratch::default());
     let band = tol.band().millimetres();
-    let dense: Vec<Point<World>> = samples(window, 30).into_iter().map(|uv| s.point(uv)).collect();
-    for (uv, i) in samples(window, 3).into_iter().zip(0u32..) {
+    for uv in samples(window, 3).into_iter().chain(edges(s, window)) {
         let p = s.point(uv);
         let back = s.invert(p, None, tol, &mut scratch);
         let inverted = back.as_ref().is_ok_and(|b| distance(s.point(*b), p) <= band);
@@ -158,6 +178,10 @@ fn closest(s: &dyn Surface, window: UvBox, found: &mut Findings) {
         let on = s.closest(p, None, tol, &mut scratch);
         let itself = on.as_ref().is_ok_and(|c| c.distance.millimetres() <= band && distance(c.point, p) <= band);
         found.expect(Check::Closest, itself, || format!("{p:?} at {uv:?} is closest to {on:?}"));
+    }
+    let dense: Vec<Point<World>> = samples(window, 30).into_iter().map(|uv| s.point(uv)).collect();
+    for (uv, i) in samples(window, 3).into_iter().zip(0u32..) {
+        let p = s.point(uv);
         let jet = s.first(uv);
         let normal = unit(jet.du.rate().cross(jet.dv.rate()));
         if !finite(normal) {
@@ -248,24 +272,50 @@ fn degeneracies(s: &dyn Surface, window: UvBox, found: &mut Findings) {
     }
 }
 
+/// `w` split into its part across `axis`, a unit vector, and its height along it.
+fn about(w: Vec3, axis: Vec3) -> (Vec3, f64) {
+    let height = w.dot(axis);
+    (w - axis * height, height)
+}
+
+/// How far `p` is from `form`, signed, and the form's normal at the point of it nearest `p`, facing as the form does:
+/// along the plane's normal, away from the axis of a cylinder and a cone, and away from the centre of a sphere and of a
+/// torus's tube.
+fn from_form(form: Analytic, p: Vec3) -> (f64, Vec3) {
+    match form {
+        Analytic::Plane { origin, normal } => ((p - origin.to_vec3()).dot(normal.get()), normal.get()),
+        Analytic::Cylinder { on_axis, axis, radius } => {
+            let (across, _) = about(p - on_axis.to_vec3(), axis.get());
+            (across.norm() - radius.millimetres(), unit(across))
+        }
+        Analytic::Cone { apex, axis, half_angle } => {
+            let (across, height) = about(p - apex.to_vec3(), axis.get());
+            let (sin, cos) = sin_cos(half_angle.radians());
+            (across.norm() * cos - height.abs() * sin, unit(across) * cos - axis.get() * (sin * height.signum()))
+        }
+        Analytic::Sphere { centre, radius } => {
+            let w = p - centre.to_vec3();
+            (w.norm() - radius.millimetres(), unit(w))
+        }
+        Analytic::Torus { centre, axis, major, minor } => {
+            let w = p - centre.to_vec3();
+            let off = w - unit(about(w, axis.get()).0) * major.millimetres();
+            (off.norm() - minor.millimetres(), unit(off))
+        }
+    }
+}
+
 fn normals(s: &dyn Surface, window: UvBox, found: &mut Findings) {
     let tol = tolerance();
-    match s.analytic(tol) {
-        None => {}
-        Some(Analytic::Plane { origin, normal }) => {
-            for uv in samples(window, 4) {
-                let height = (s.point(uv).to_vec3() - origin.to_vec3()).dot(normal.get());
-                let jet = s.first(uv);
-                let of_derivatives = unit(jet.du.rate().cross(jet.dv.rate()));
-                let on = height.abs() <= tol.band().millimetres() && (of_derivatives - normal.get()).norm() <= 1e-9;
-                found.expect(Check::Normals, on, || {
-                    format!("at {uv:?}, {height} off the plane, normal {of_derivatives:?}")
-                });
-            }
-        }
-        Some(other) => {
-            found.expect(Check::Normals, false, || format!("the suite cannot check a presented {other:?} yet"));
-        }
+    let Some(form) = s.analytic(tol) else { return };
+    for uv in samples(window, 4) {
+        let (off, normal) = from_form(form, s.point(uv).to_vec3());
+        let jet = s.first(uv);
+        let of_derivatives = unit(jet.du.rate().cross(jet.dv.rate()));
+        let on = off.abs() <= tol.band().millimetres() && (of_derivatives - normal).norm() <= 1e-9;
+        found.expect(Check::Normals, on, || {
+            format!("at {uv:?}, {off} off {form:?}, normal {of_derivatives:?}, not {normal:?}")
+        });
     }
 }
 
