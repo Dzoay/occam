@@ -2,7 +2,7 @@
 
 use occam_report::Report;
 
-use crate::math::Exec;
+use occam_math::Exec;
 use crate::topo::{Body, Id, Snapshot};
 
 /// The native format: the records as JSON, which is also the readable dump (PARITY 2.17, L8). It carries a schema

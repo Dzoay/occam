@@ -11,18 +11,29 @@ For the same inputs, every output has identical bits:
 - on x86-64 and on single-threaded wasm32, in its baseline and simd128 builds;
 - at any thread count;
 - as `f64` or as `Lanes` of any width;
+- at every instruction level `dispatch` compiles a kernel for;
 - in debug and in release builds.
 
-That holds for everything `Real` computes today. Whether functions beyond it, such as `sin` and `atan2`, must be identical
-across targets is [measured rather than assumed](decisions/2026-11-09-one-maths-choke-point.md).
+That holds for everything `Real` computes, and for the functions `occam-math` owns: `sin_cos`, with `sin` and `cos`, its
+two halves, and `atan2`. [S5](evidence/2026-11-09-s5.md) measured what else would need to be identical. Computing one
+model in the browser and on a server is the case that would need more
+([the decision](decisions/2026-11-09-one-maths-choke-point.md), O16), and the promise grows only with what is owned.
 
 ## The rules
 
 1. **One maths implementation.** The kernel computes through `occam_math::Real`, and its numbers are `f64`. `Real`'s
-   operations (`+`, `-`, `*`, `/`, negation, `abs`, `sqrt`) are correctly rounded under IEEE 754, so they give the same
-   bits everywhere. Anything added later goes through this crate too, so that what it does can change in one place.
-   [`proving-ground.s5`](plan/proving-ground.md) measures which of `sin`, `cos`, `atan2`, `acos` and the others really
-   must be identical across targets, and what that costs.
+   operations (`+`, `-`, `*`, `/`, negation, `abs`, `sqrt`, `next_up`, `next_down` and `copysign`) are correctly
+   rounded or exact under IEEE 754, so they give the same bits everywhere. Anything added later goes through this crate
+   too, so that what it does can change in one place.
+   - **`occam_math` owns `sin_cos` and `atan2`** (S5, O14), written over `Real` with `+ - * /` and integer operations
+     only, so the promise covers them at every lane width, thread count, level and target, in debug and in release. The
+     record holds their hashes, from the separate implementation.
+   - **They are not correctly rounded.** Their accuracy is stated and tested: `sin` and `cos` within 0.75 ulps, and
+     `atan2` within 1.5, on S5's sets, measured by the separate implementation against a 120-digit reference
+     (`tools/determinism/accuracy.py`). No caller may rely on more.
+   - **Every other transcendental stays banned until `occam-math` owns it,** by rule 2. The ban holds for literal
+     arguments too: the compiler folds `f64::sin` of a literal with the libm of the machine that builds it, so one wasm
+     build gave different bits in release and debug (S5).
 2. **Nothing else computes.** Clippy's `disallowed-methods` bans every `f64` method whose result Rust does not pin down:
    the transcendental functions and powers it documents as non-deterministic, with `to_degrees` and `to_radians`; `min`,
    `max` and `clamp`, which may return either zero; `algebraic_*`, which the optimiser may rewrite; and `mul_add`, which
@@ -35,6 +46,11 @@ across targets is [measured rather than assumed](decisions/2026-11-09-one-maths-
    first, and the kernel has no hashed collections (Clippy's `disallowed-types`).
 5. **One build of the numbers.** No `target-cpu`, and no floating-point flags. Fused operations and reordering are never
    turned on: Rust performs neither unless asked to.
+6. **No decision on a computed value compares it with exactly zero** (S5). It uses a band, through `decide_computed`,
+   which answers `Undecided` rather than guess, or a predicate on stored inputs, through `decide_stored`, which is
+   exact. Identical bits make a decision repeatable, not right: a last-bit difference between libraries flips decisions
+   made with no band. A band moves the boundary rather than removing it, so the side of a periodic seam and a count
+   that lands on an integer need rules of their own ([the determinism topic](architecture/determinism.md#the-rules)).
 
 ## What holds it
 
@@ -42,9 +58,11 @@ across targets is [measured rather than assumed](decisions/2026-11-09-one-maths-
 pattern, the infinities, both zeros, subnormals) and ordinary ones, hashed with FNV-1a per operation. The hash is 64-bit
 FNV-1a of the little-endian canonical bits of each output, and the blocks' hashes are folded in block order.
 
-`gates determinism` builds `crates/occam-math/examples/determinism.rs` for release on x86-64 at one thread and at many,
-and on wasm32-wasip2 baseline and simd128 under wasmtime. Each build runs the stream as scalar and as two, four and eight
-lanes. Every hash must agree, and must equal the record in `ci/determinism-hashes.txt`.
+`gates determinism` builds `crates/occam-math/examples/determinism.rs` for release on x86-64, on one thread and on a
+pool of many through `Exec`, and on wasm32-wasip2 baseline and simd128 under wasmtime. The native build also runs at
+every narrower instruction level the machine has, each block of the stream dispatched to it. Each run computes the
+stream as scalar and as two, four and eight lanes. Every hash must agree, and must equal the record in
+`ci/determinism-hashes.txt`.
 
 The same stream is a test, so the suite checks it in debug builds on x86-64 and on wasm32 baseline and simd128 (`just
 test-all` and `just wasm`).
@@ -52,10 +70,12 @@ test-all` and `just wasm`).
 ## The recorded hashes
 
 `ci/determinism-hashes.txt` comes from a separate implementation in another language, which shares no code with
-`occam-math`. So a wrong answer that every build agrees on, such as a dropped NaN canonicalisation, still fails.
+`occam-math`: [`tools/determinism/stream.py`](../tools/determinism/stream.py), on CPython's IEEE doubles. So a wrong
+answer that every build agrees on, such as a dropped NaN canonicalisation, still fails. `just tools-test` checks that
+the record is what it computes, and `just determinism-record` prints it.
 
-Changing a recorded hash changes the contract. Do it only when the stream's definition changes on purpose, derive the
-new values from a separate implementation again, and say so in the PR.
+Changing a recorded hash changes the contract. Do it only when the stream's definition changes on purpose: change the
+separate implementation first, take the new values from it, and say so in the PR.
 
 ## What it does not cover yet
 

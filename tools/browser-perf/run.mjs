@@ -52,6 +52,43 @@ for (let round = 0; round < ROUNDS; round += 1) {
     results[build] = result;
   }
 }
+// Each lane kernel in the simd128 build, at width 1 and at its width, alternating in the same way.
+const KERNELS = ["masks", "filter", "sines", "angles"];
+const REPEATS = 50;
+const kernelTimed = (name, lanes) =>
+  page.evaluate(
+    async ({ name, lanes, repeats }) => {
+      const module = await import(`/simd128/perf.js`);
+      await module.default();
+      const start = performance.now();
+      const result = module.kernel(name, lanes, repeats);
+      return { ms: performance.now() - start, result, width: module.kernel_width(name) };
+    },
+    { name, lanes, repeats: REPEATS },
+  );
+const kernels = [];
+for (const name of KERNELS) {
+  const fastest = { one: Infinity, lanes: Infinity };
+  const gave = {};
+  let width = 0;
+  for (let round = 0; round < ROUNDS; round += 1) {
+    for (const lanes of [false, true]) {
+      const key = lanes ? "lanes" : "one";
+      const { ms, result, width: found } = await kernelTimed(name, lanes);
+      fastest[key] = Math.min(fastest[key], ms);
+      gave[key] = result;
+      width = found;
+    }
+  }
+  kernels.push({
+    name,
+    width,
+    one_ms: fastest.one,
+    lanes_ms: fastest.lanes,
+    one_result: gave.one,
+    lanes_result: gave.lanes,
+  });
+}
 await browser.close();
 server.close();
 console.log(
@@ -60,5 +97,6 @@ console.log(
     simd128_ms: best.simd128,
     scalar_result: results.scalar,
     simd128_result: results.simd128,
+    kernels,
   }),
 );

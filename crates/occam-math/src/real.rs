@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::lanes::Lanes;
+use crate::mask::Mask;
 
 mod sealed {
     use super::Lanes;
@@ -37,6 +38,9 @@ pub trait Real:
     /// How many numbers one value holds.
     const LANES: usize;
 
+    /// Which lanes a comparison held in.
+    type Mask: Mask;
+
     /// A value holding `x` in every lane.
     fn splat(x: f64) -> Self;
 
@@ -53,34 +57,91 @@ pub trait Real:
     /// The square root: NaN below zero, and -0 for -0.
     #[must_use]
     fn sqrt(self) -> Self;
+
+    /// `self`'s magnitude with `sign`'s sign bit, both zeros included. `sign` must not be a NaN that arithmetic made,
+    /// whose sign Rust leaves unspecified (`docs/DETERMINISM.md` rule 3).
+    #[must_use]
+    fn copysign(self, sign: Self) -> Self;
+
+    /// The next double above: the smallest subnormal above either zero, `-f64::MAX` above minus infinity, infinity
+    /// above itself, and NaN for NaN. Exact, so bounds rounded outward need no rounding modes.
+    #[must_use]
+    fn next_up(self) -> Self;
+
+    /// The next double below, as [`Real::next_up`] mirrored.
+    #[must_use]
+    fn next_down(self) -> Self;
+
+    /// The lanes where `self` is less than `rhs`. Exact, and false where either side is NaN. The two zeros are equal.
+    fn lt(self, rhs: Self) -> Self::Mask;
+
+    /// The lanes where `self` is at most `rhs`. Exact, and false where either side is NaN. The two zeros are equal.
+    fn le(self, rhs: Self) -> Self::Mask;
+
+    /// `yes` in the lanes where `mask` holds and `no` in the others, bits unchanged. This is the way to a minimum or a
+    /// maximum: `f64::min` stays banned, because which zero it returns differs by target.
+    #[must_use]
+    fn select(mask: Self::Mask, yes: Self, no: Self) -> Self;
 }
 
 impl Real for f64 {
     const LANES: usize = 1;
 
-    #[inline]
+    type Mask = bool;
+
+    #[inline(always)]
     fn splat(x: f64) -> Self {
         x
     }
 
-    #[inline]
+    #[inline(always)]
     fn from_fn(mut next: impl FnMut() -> f64) -> Self {
         next()
     }
 
-    #[inline]
+    #[inline(always)]
     fn for_each_lane(self, mut visit: impl FnMut(f64)) {
         visit(self);
     }
 
-    #[inline]
+    #[inline(always)]
     fn abs(self) -> Self {
         f64::abs(self)
     }
 
-    #[inline]
+    #[inline(always)]
     fn sqrt(self) -> Self {
         f64::sqrt(self)
+    }
+
+    #[inline(always)]
+    fn copysign(self, sign: Self) -> Self {
+        f64::copysign(self, sign)
+    }
+
+    #[inline(always)]
+    fn next_up(self) -> Self {
+        f64::next_up(self)
+    }
+
+    #[inline(always)]
+    fn next_down(self) -> Self {
+        f64::next_down(self)
+    }
+
+    #[inline(always)]
+    fn lt(self, rhs: Self) -> bool {
+        self < rhs
+    }
+
+    #[inline(always)]
+    fn le(self, rhs: Self) -> bool {
+        self <= rhs
+    }
+
+    #[inline(always)]
+    fn select(mask: bool, yes: Self, no: Self) -> Self {
+        if mask { yes } else { no }
     }
 }
 
@@ -102,6 +163,53 @@ mod tests {
         assert_eq!(<f64 as Real>::abs(-2.5), 2.5);
         assert_eq!(<f64 as Real>::abs(2.5), 2.5);
         assert_eq!(<f64 as Real>::abs(-0.0).to_bits(), 0.0_f64.to_bits());
+    }
+
+    #[test]
+    fn comparisons_are_false_where_either_side_is_nan() {
+        for (a, b) in [(f64::NAN, 1.0), (1.0, f64::NAN), (f64::NAN, f64::NAN), (f64::NAN, f64::INFINITY)] {
+            assert!(!Real::lt(a, b), "{a} < {b}");
+            assert!(!Real::le(a, b), "{a} <= {b}");
+        }
+    }
+
+    #[test]
+    fn comparisons_are_exact_and_the_zeros_are_equal() {
+        assert!(Real::lt(1.0, 1.0 + f64::EPSILON));
+        assert!(!Real::lt(1.0, 1.0));
+        assert!(Real::le(1.0, 1.0));
+        assert!(!Real::le(1.0 + f64::EPSILON, 1.0));
+        assert!(Real::lt(f64::NEG_INFINITY, f64::MIN));
+        assert!(!Real::lt(-0.0, 0.0));
+        assert!(Real::le(-0.0, 0.0) && Real::le(0.0, -0.0));
+    }
+
+    #[test]
+    fn select_takes_one_side_with_its_bits_unchanged() {
+        assert_eq!(f64::select(true, -0.0, 0.0).to_bits(), (-0.0_f64).to_bits());
+        assert_eq!(f64::select(false, -0.0, 0.0).to_bits(), 0.0_f64.to_bits());
+        assert_eq!(f64::select(true, 2.5, f64::NAN), 2.5);
+        assert!(f64::select(false, 2.5, f64::NAN).is_nan());
+    }
+
+    #[test]
+    fn the_next_double_steps_one_place_and_crosses_zero_and_the_extremes() {
+        assert_eq!(Real::next_up(1.0), 1.0 + f64::EPSILON);
+        assert_eq!(Real::next_down(1.0), 1.0 - f64::EPSILON / 2.0);
+        assert_eq!(Real::next_up(-0.0).to_bits(), 1);
+        assert_eq!(Real::next_down(0.0).to_bits(), (-f64::from_bits(1)).to_bits());
+        assert_eq!(Real::next_up(f64::MAX), f64::INFINITY);
+        assert_eq!(Real::next_up(f64::NEG_INFINITY), f64::MIN);
+        assert_eq!(Real::next_down(f64::INFINITY), f64::MAX);
+        assert!(Real::next_up(f64::NAN).is_nan());
+    }
+
+    #[test]
+    fn copysign_takes_the_sign_bit_zeros_included() {
+        assert_eq!(Real::copysign(2.5, -0.0), -2.5);
+        assert_eq!(Real::copysign(-2.5, 0.0), 2.5);
+        assert_eq!(Real::copysign(0.0, -1.0).to_bits(), (-0.0_f64).to_bits());
+        assert_eq!(Real::copysign(f64::INFINITY, -3.0), f64::NEG_INFINITY);
     }
 
     #[test]

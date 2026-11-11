@@ -4,6 +4,7 @@
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
+use crate::mask::LaneMask;
 use crate::real::Real;
 
 /// `W` numbers side by side. Every operation works lane by lane.
@@ -24,13 +25,23 @@ impl<const W: usize> Lanes<W> {
     }
 
     /// `op` on every lane.
-    #[inline]
+    #[inline(always)]
     fn map(self, op: impl Fn(f64) -> f64) -> Self {
         Self(self.0.map(op))
     }
 
+    /// `test` on every pair of lanes.
+    #[inline(always)]
+    fn compare(self, rhs: Self, test: impl Fn(f64, f64) -> bool) -> LaneMask<W> {
+        let mut mask = [false; W];
+        for ((held, a), b) in mask.iter_mut().zip(self.0).zip(rhs.0) {
+            *held = test(a, b);
+        }
+        LaneMask::new(mask)
+    }
+
     /// `op` on every pair of lanes.
-    #[inline]
+    #[inline(always)]
     fn zip(mut self, rhs: Self, op: impl Fn(f64, f64) -> f64) -> Self {
         for (lane, other) in self.0.iter_mut().zip(rhs.0) {
             *lane = op(*lane, other);
@@ -42,7 +53,7 @@ impl<const W: usize> Lanes<W> {
 impl<const W: usize> Add for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn add(self, rhs: Self) -> Self {
         self.zip(rhs, |a, b| a + b)
     }
@@ -51,7 +62,7 @@ impl<const W: usize> Add for Lanes<W> {
 impl<const W: usize> Sub for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn sub(self, rhs: Self) -> Self {
         self.zip(rhs, |a, b| a - b)
     }
@@ -60,7 +71,7 @@ impl<const W: usize> Sub for Lanes<W> {
 impl<const W: usize> Mul for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn mul(self, rhs: Self) -> Self {
         self.zip(rhs, |a, b| a * b)
     }
@@ -69,7 +80,7 @@ impl<const W: usize> Mul for Lanes<W> {
 impl<const W: usize> Div for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn div(self, rhs: Self) -> Self {
         self.zip(rhs, |a, b| a / b)
     }
@@ -78,7 +89,7 @@ impl<const W: usize> Div for Lanes<W> {
 impl<const W: usize> Neg for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn neg(self) -> Self {
         self.map(|a| -a)
     }
@@ -87,31 +98,73 @@ impl<const W: usize> Neg for Lanes<W> {
 impl<const W: usize> Real for Lanes<W> {
     const LANES: usize = W;
 
-    #[inline]
+    type Mask = LaneMask<W>;
+
+    #[inline(always)]
     fn splat(x: f64) -> Self {
         Self([x; W])
     }
 
-    #[inline]
+    /// A plain loop, because `array::from_fn` can fall out of line and stop a kernel vectorising (P4).
+    #[inline(always)]
     fn from_fn(mut next: impl FnMut() -> f64) -> Self {
-        Self(std::array::from_fn(|_| next()))
+        let mut lanes = [0.0; W];
+        for lane in &mut lanes {
+            *lane = next();
+        }
+        Self(lanes)
     }
 
-    #[inline]
+    #[inline(always)]
     fn for_each_lane(self, mut visit: impl FnMut(f64)) {
         for lane in self.0 {
             visit(lane);
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn abs(self) -> Self {
         self.map(f64::abs)
     }
 
-    #[inline]
+    #[inline(always)]
     fn sqrt(self) -> Self {
         self.map(f64::sqrt)
+    }
+
+    #[inline(always)]
+    fn copysign(self, sign: Self) -> Self {
+        self.zip(sign, f64::copysign)
+    }
+
+    #[inline(always)]
+    fn next_up(self) -> Self {
+        self.map(f64::next_up)
+    }
+
+    #[inline(always)]
+    fn next_down(self) -> Self {
+        self.map(f64::next_down)
+    }
+
+    #[inline(always)]
+    fn lt(self, rhs: Self) -> LaneMask<W> {
+        self.compare(rhs, |a, b| a < b)
+    }
+
+    #[inline(always)]
+    fn le(self, rhs: Self) -> LaneMask<W> {
+        self.compare(rhs, |a, b| a <= b)
+    }
+
+    #[inline(always)]
+    fn select(mask: LaneMask<W>, yes: Self, mut no: Self) -> Self {
+        for ((lane, held), picked) in no.0.iter_mut().zip(mask.to_array()).zip(yes.0) {
+            if held {
+                *lane = picked;
+            }
+        }
+        no
     }
 }
 
@@ -143,6 +196,28 @@ mod tests {
         assert_eq!(bits(a.abs().to_array()), bits([1.5, 2.25, 0.1, 1e300]));
         let roots = Lanes::new([4.0, 2.0, 0.0, -0.0]).sqrt();
         assert_eq!(bits(roots.to_array()), bits([2.0, f64::from_bits(0x3FF6_A09E_667F_3BCD), 0.0, -0.0]));
+        let signs = Lanes::new([-0.0, 0.0, -1.0, 2.0]).copysign(Lanes::new([1.0, -0.0, 3.0, -4.0]));
+        assert_eq!(bits(signs.to_array()), bits([0.0, -0.0, 1.0, -2.0]));
+        let steps = [1.0, -0.0, f64::MAX, f64::NEG_INFINITY];
+        assert_eq!(bits(Lanes::new(steps).next_up().to_array()), bits(steps.map(f64::next_up)));
+        assert_eq!(bits(Lanes::new(steps).next_down().to_array()), bits(steps.map(f64::next_down)));
+    }
+
+    #[test]
+    fn comparisons_work_lane_by_lane_and_are_false_beside_nan() {
+        let a = Lanes::new([1.0, f64::NAN, -0.0, 2.0]);
+        let b = Lanes::new([2.0, 1.0, 0.0, 2.0]);
+        assert_eq!(a.lt(b).to_array(), [true, false, false, false]);
+        assert_eq!(a.le(b).to_array(), [true, false, true, true]);
+        assert_eq!(b.lt(a).to_array(), [false, false, false, false]);
+        assert_eq!(b.le(a).to_array(), [false, false, true, true]);
+    }
+
+    #[test]
+    fn select_works_lane_by_lane_with_bits_unchanged() {
+        let mask = LaneMask::new([true, false, true, false]);
+        let picked = Lanes::select(mask, Lanes::new([-0.0, 1.0, 2.0, 3.0]), Lanes::new([0.0, -1.0, f64::NAN, -0.0]));
+        assert_eq!(bits(picked.to_array()), bits([-0.0, -1.0, 2.0, -0.0]));
     }
 
     #[test]

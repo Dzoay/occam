@@ -12,3 +12,7 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 |---|---|---|---|
 | `fnv-1a` | spec | n/a | Fowler, Noll, Vo, Eastlake, Hansen. *The FNV Non-Cryptographic Hash Algorithm*. RFC 9923, IETF |
 | `splitmix64` | paper | n/a | Steele, Lea, Flood. *Fast Splittable Pseudorandom Number Generators*. OOPSLA 2014 |
+| `shewchuk-1997` | paper | n/a | Shewchuk. *Adaptive Precision Floating-Point Arithmetic and Fast Robust Geometric Predicates*. Discrete & Computational Geometry 18(3), 1997 |
+| `rump-1999` | paper | n/a | Rump. *Fast and Parallel Interval Arithmetic*. BIT Numerical Mathematics 39(3), 1999 |
+| `cody-waite-1980` | book | n/a | Cody, Waite. *Software Manual for the Elementary Functions*. Prentice-Hall, 1980 |
+| `payne-hanek-1983` | paper | n/a | Payne, Hanek. *Radian Reduction for Trigonometric Functions*. ACM SIGNUM Newsletter 18(1), 1983 |

@@ -11,7 +11,7 @@ use occam_units::{Length, Point, Tolerance, UvPoint, World};
 use serde::{Deserialize, Serialize};
 
 use crate::geom::{Curve, ParamCurve, Surface};
-use crate::math::Exec;
+use occam_math::Exec;
 use crate::report::{Description, EntityKind, EntityRef, StepRole};
 
 mod sealed {

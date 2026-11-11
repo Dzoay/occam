@@ -102,10 +102,12 @@ wasm:
 gate *args="all":
     cargo xtask gates "$@"
 
-# The survey scripts' tests, Python standard library only
+# The Python tools' tests, standard library only
 [group('gates')]
 tools-test: corpus-test
     python3 -m unittest discover -s tools/census/tests
+    python3 -B -m unittest discover -s tools/determinism/tests -t tools/determinism
+    python3 -B -m unittest discover -s tools/coefficients/tests -t tools/coefficients
 
 # Everything except mutants and perf
 [group('gates')]
@@ -176,6 +178,16 @@ workflows:
 [group('tools')]
 counts:
     cargo xtask gates counts --update
+
+# The determinism stream's record, from its separate implementation; `--check` compares it with ci/determinism-hashes.txt
+[group('tools')]
+determinism-record *args:
+    python3 -B tools/determinism/stream.py "$@"
+
+# Regenerate the owned trigonometry's fitted coefficients and constants; `--check` says whether the committed file is current
+[group('tools')]
+coefficients *args:
+    python3 -B tools/coefficients/fit.py "$@"
 
 # OCCT's whole-operation timings on the generated corpus: the numbers occam has to beat. `just baseline run`, `node`, `report`
 [env("UV_PROJECT_ENVIRONMENT", oracle_venv)]

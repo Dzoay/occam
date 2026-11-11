@@ -6,5 +6,15 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[dependencies]
+occam-report = { path = "../occam-report" }
+# Named only here: lane kernels dispatched to the widest instruction level. docs/decisions/2026-11-10-fearless-simd.md
+fearless_simd = "1.2.0"
+
+# Named only by `Exec`: the kernel's threads. wasm32 runs single-threaded in each worker (P10), so it is not built there.
+# docs/decisions/2026-11-10-rayon.md
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+rayon = "1.12.0"
+
 [lints]
 workspace = true

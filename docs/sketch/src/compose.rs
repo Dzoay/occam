@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::math::Exec;
+use occam_math::Exec;
 use crate::ops::{Ran, Request};
 use crate::report::{Details, EntityRef};
 use crate::topo::{Describe, Snapshot};

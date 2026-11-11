@@ -1,12 +1,13 @@
 //! Source: original
-//! The workload for browser timing: bicubic Bézier surface points by de Casteljau's algorithm, two lanes at a time. `gates
-//! perf` builds it with and without simd128 and compares the two in one run (L30).
+//! The workloads for browser timing. Bicubic Bézier surface points by de Casteljau's algorithm, two lanes at a time:
+//! `gates perf` builds it with and without simd128 and compares the two in one run (L30). And each lane kernel of
+//! `occam_math::workloads`, at width 1 and at its width, which the simd128 build must show clearly faster (L29).
 #![allow(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 #![allow(missing_docs, reason = "an example")]
 
 use std::hint::black_box;
 
-use occam::{Lanes, Real};
+use occam::{Lanes, Real, width, workloads};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A point on the cubic with these control points, at `at`.
@@ -56,4 +57,54 @@ fn sweep(grid: u32) -> f64 {
 #[must_use]
 pub fn run(grid: u32) -> f64 {
     sweep(grid)
+}
+
+/// A lane kernel's inputs: how many numbers make one item, their scale, and a seed.
+fn items(name: &str) -> Vec<f64> {
+    match name {
+        "masks" => workloads::inputs(3, 4.0, 1),
+        "filter" => workloads::inputs(6, 2.0, 2),
+        "sines" => workloads::inputs(1, 4.0, 3),
+        "angles" => workloads::inputs(2, 2.0, 4),
+        _ => Vec::new(),
+    }
+}
+
+/// The width a lane kernel runs at on wasm32, or 0 for no such kernel.
+#[wasm_bindgen]
+#[must_use]
+pub fn kernel_width(name: &str) -> u32 {
+    let found = match name {
+        "masks" => width::MASK,
+        "filter" => width::FILTER,
+        "sines" | "angles" => width::ANALYTIC,
+        _ => 0,
+    };
+    u32::try_from(found).unwrap_or(0)
+}
+
+/// Runs a lane kernel `repeats` times over its inputs, at its width or at width 1, and gives the sum of every result.
+/// The same bits at either width (L23).
+#[wasm_bindgen]
+#[must_use]
+pub fn kernel(name: &str, lanes: bool, repeats: u32) -> f64 {
+    let items = items(name);
+    let run = |items: &[f64]| -> Vec<f64> {
+        match (name, lanes) {
+            ("masks", false) => workloads::masks::<f64>(items),
+            ("masks", true) => workloads::masks::<Lanes<{ width::MASK }>>(items),
+            ("filter", false) => workloads::filter::<f64>(items),
+            ("filter", true) => workloads::filter::<Lanes<{ width::FILTER }>>(items),
+            ("sines", false) => workloads::sines::<f64>(items),
+            ("sines", true) => workloads::sines::<Lanes<{ width::ANALYTIC }>>(items),
+            ("angles", false) => workloads::angles::<f64>(items),
+            ("angles", true) => workloads::angles::<Lanes<{ width::ANALYTIC }>>(items),
+            _ => Vec::new(),
+        }
+    };
+    let mut total = 0.0;
+    for _ in 0..repeats {
+        total += run(black_box(&items)).iter().sum::<f64>();
+    }
+    total
 }

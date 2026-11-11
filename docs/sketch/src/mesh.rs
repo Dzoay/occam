@@ -7,7 +7,7 @@ use std::sync::Arc;
 use occam_report::Report;
 use occam_units::{Angle, Length, Point, World};
 
-use crate::math::{Exec, Grain};
+use occam_math::{Exec, Grain};
 use crate::topo::{Edge, Face, Id, Snapshot};
 use crate::units::Direction;
 

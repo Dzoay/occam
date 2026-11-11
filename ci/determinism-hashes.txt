@@ -1,6 +1,7 @@
 # `gates determinism` and occam-math's stream test: what the determinism stream must hash to, `<operation> <hash>`, in
 # the order of `OPERATIONS`. The hashes come from a separate implementation in another language that shares no code with
-# occam-math, so a wrong answer every build agrees on still fails. See docs/DETERMINISM.md before changing one.
+# occam-math (tools/determinism/stream.py), so a wrong answer every build agrees on still fails. See docs/DETERMINISM.md
+# before changing one.
 add 50382d54f8339cda
 sub b0f526b8252a008b
 mul b30db6db5c765f83
@@ -9,3 +10,11 @@ neg 53e16bd586ca5946
 abs ed474bec39feb50f
 sqrt 6ac4107e18e9e69a
 mixed ea1fdb104c21523a
+lt 388fa3a4fc8bcc43
+le c4c4fcb8fb8b157d
+up cb8328ba349db380
+down 62b62e061e1ec414
+sin 9bb6b2b7a4a14438
+cos 6a5b384ca7572916
+copysign 0106ff3b2619b2d6
+atan2 b99ccd55fd3bd491

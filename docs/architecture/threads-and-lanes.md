@@ -1,6 +1,6 @@
 # Threads and lanes
 
-[Architecture](../ARCHITECTURE.md) › Threads and lanes · crate `occam-math` · sketch [`math.rs`](../sketch/src/math.rs)
+[Architecture](../ARCHITECTURE.md) › Threads and lanes · crate [`occam-math`](../../crates/occam-math/src/lib.rs)
 
 Threads go across items; lanes go inside each task. They multiply: four lanes (1.48×) and six threads (5.5×) gave 8.2×
 one scalar thread (P6).
@@ -37,8 +37,10 @@ flowchart LR
 | Tessellation | edges, then faces; in the browser about 64 calls a job | one surface at many points |
 
 **Lane width is set per kernel class,** inside the family that runs it: masks 8 (4 on wasm), predicate filters 4,
-splines 4 to 8 (2 where spans change), rational derivatives 1, marching scalar. Every lane kernel must pass a
-`gates perf` check that it vectorised and beats width 1 on each target, or it runs at width 1.
+analytic `sin_cos` and `atan2` 4, splines 4 to 8 (2 where spans change), rational derivatives 1, marching scalar. The
+measured ones live in [`occam_math::width`](../../crates/occam-math/src/width.rs). Every lane kernel must pass a
+`gates perf` check that it vectorised and beats width 1 on each target, or it runs at width 1: natively at most 90% of
+width 1's instructions, and in the browser's simd128 build at least 1.15 times as fast.
 
 **Two limits.** Beyond the last-level cache, cheap kernels gain nothing from threads; the remedy is fewer bytes per
 point. A finer grain inside one large face waits for a real profile.

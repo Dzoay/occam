@@ -14,7 +14,5 @@ publish = false
 occam-math = { path = "../../crates/occam-math" }
 occam-report = { path = "../../crates/occam-report" }
 occam-units = { path = "../../crates/occam-units" }
-# Approved for the kernel: docs/decisions/2026-11-09-serde.md, 2026-11-10-rayon.md and 2026-11-10-fearless-simd.md.
+# Approved for the kernel: docs/decisions/2026-11-09-serde.md.
 serde = { version = "1.0.229", features = ["derive"] }
-rayon = "1.12"
-fearless_simd = "1.2"

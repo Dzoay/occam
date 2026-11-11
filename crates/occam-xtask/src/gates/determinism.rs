@@ -1,5 +1,6 @@
 //! `gates determinism`: the same inputs give identical bits on every build the contract covers (L23,
-//! `docs/DETERMINISM.md`). The stream's probe is built and run as each of them, and every hash is compared.
+//! `docs/DETERMINISM.md`). The stream's probe is built and run as each of them, natively at every instruction level the
+//! machine has, and every hash is compared.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::thread;
@@ -26,30 +27,47 @@ struct Build {
     arch: &'static str,
     simd128: bool,
     threads: usize,
+    /// The instruction level it runs at. A native build is told it; a wasm build has one, fixed when it is built.
+    level: String,
 }
 
-/// Every build the contract covers. They are release builds, as what ships is; the test suite covers the debug ones.
-fn builds(threads: usize) -> [Build; 4] {
-    let native = |threads: usize| Build {
-        name: format!("x86-64, {threads} thread(s)"),
+/// Every build the contract covers: natively at the widest level on one thread and on many, on wasm32 with and without
+/// simd128, then natively at each narrower level the machine has. They are release builds, as what ships is; the test
+/// suite covers the debug ones. `levels` is the machine's, widest first.
+fn builds(threads: usize, levels: &[String]) -> Vec<Build> {
+    let native = |threads: usize, level: &str| Build {
+        name: format!("x86-64, {threads} thread(s), {level}"),
         triple: None,
         arch: "x86_64",
         simd128: false,
         threads,
+        level: level.to_string(),
     };
-    let wasm = |name: &str, simd128: bool| Build {
+    let wasm = |name: &str, simd128: bool, level: &str| Build {
         name: name.to_string(),
         triple: Some(WASM),
         arch: "wasm32",
         simd128,
         threads: 1,
+        level: level.to_string(),
     };
-    [native(1), native(threads), wasm("wasm32, baseline", false), wasm("wasm32, simd128", true)]
+    let widest = levels.first().map_or("sse2", String::as_str);
+    let mut found = vec![
+        native(1, widest),
+        native(threads, widest),
+        wasm("wasm32, baseline", false, "fallback"),
+        wasm("wasm32, simd128", true, "simd128"),
+    ];
+    found.extend(levels.iter().skip(1).map(|level| native(1, level)));
+    found
 }
+
+/// The probe's arguments before its own, for the native build.
+const NATIVE: [&str; 7] = ["run", "--quiet", "--release", "-p", "occam-math", "--example", "determinism"];
 
 /// Cargo's arguments for `build`. The simd128 build has a target directory of its own, because its flags differ.
 fn cargo_args<'a>(build: &'a Build, simd_dir: &'a str, threads: &'a str) -> Vec<&'a str> {
-    let mut args = vec!["run", "--quiet", "--release", "-p", "occam-math", "--example", "determinism"];
+    let mut args = NATIVE.to_vec();
     if let Some(triple) = build.triple {
         args.extend(["--target", triple]);
     }
@@ -57,7 +75,32 @@ fn cargo_args<'a>(build: &'a Build, simd_dir: &'a str, threads: &'a str) -> Vec<
         args.extend(["--target-dir", simd_dir, "--config", SIMD128]);
     }
     args.extend(["--", "--threads", threads]);
+    if build.triple.is_none() {
+        args.extend(["--level", &build.level]);
+    }
     args
+}
+
+/// A finding for a probe that did not run.
+fn run_failed(what: &str, errors: &str) -> Vec<Finding> {
+    let message = format!("{what} did not run: {errors}");
+    vec![Finding::new("determinism.run-failed", STREAM, message, "run `just toolchain`, then fix what it reports")]
+}
+
+/// The levels the probe printed, one a line, or why there are none.
+fn parsed_levels(ok: bool, output: &str, errors: &str) -> Result<Vec<String>, Vec<Finding>> {
+    let levels: Vec<String> = output.lines().filter(|line| !line.is_empty()).map(str::to_string).collect();
+    if !ok || levels.is_empty() {
+        return Err(run_failed("the level query", errors));
+    }
+    Ok(levels)
+}
+
+/// The instruction levels this machine has, widest first, as the native probe names them.
+fn levels(repo: &Repo) -> Result<Vec<String>, Vec<Finding>> {
+    let args: Vec<&str> = NATIVE.iter().copied().chain(["--", "--levels"]).collect();
+    let (ok, output, errors) = repo.capture(env!("CARGO"), &args).map_err(|e| vec![e])?;
+    parsed_levels(ok, &output, &errors)
 }
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
@@ -65,18 +108,12 @@ pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     let threads = thread::available_parallelism().map_or(2, |count| count.get().max(2));
     let simd_dir = repo.nested_target("simd");
     let mut runs = Vec::new();
-    for build in builds(threads) {
+    for build in builds(threads, &levels(repo)?) {
         let count = build.threads.to_string();
         let (ok, output, errors) =
             repo.capture(env!("CARGO"), &cargo_args(&build, &simd_dir, &count)).map_err(|e| vec![e])?;
         if !ok {
-            let message = format!("{} did not run: {errors}", build.name);
-            return Err(vec![Finding::new(
-                "determinism.run-failed",
-                STREAM,
-                message,
-                "run `just toolchain`, then fix what it reports",
-            )]);
+            return Err(run_failed(&build.name, &errors));
         }
         runs.push((build, output));
     }
@@ -93,7 +130,8 @@ fn malformed(build: &Build, line: &str) -> Finding {
 /// The hashes one run printed, after checking that it really was the build it was meant to be.
 fn parse<'a>(build: &Build, output: &'a str, findings: &mut Vec<Finding>) -> Rows<'a> {
     let mut lines = output.lines();
-    let want = format!("build {} simd128={} threads={}", build.arch, build.simd128, build.threads);
+    let want =
+        format!("build {} simd128={} threads={} level={}", build.arch, build.simd128, build.threads, build.level);
     match lines.next() {
         Some(line) if line == want => {}
         Some(line) if line.starts_with("build ") => {
@@ -222,8 +260,12 @@ mod tests {
     const OPERATIONS: [&str; 2] = ["add", "sqrt"];
     const GOOD: &str = "# what the stream must hash to\n\nadd 00000000000000aa\nsqrt 00000000000000aa\n";
 
+    fn header(build: &Build) -> String {
+        format!("build {} simd128={} threads={} level={}", build.arch, build.simd128, build.threads, build.level)
+    }
+
     fn output(build: &Build, hash: &str) -> String {
-        let header = format!("build {} simd128={} threads={}", build.arch, build.simd128, build.threads);
+        let header = header(build);
         let rows = OPERATIONS
             .iter()
             .flat_map(|operation| EXECUTORS.iter().map(move |executor| format!("{operation} {executor} {hash}")));
@@ -231,14 +273,22 @@ mod tests {
         lines.join("\n") + "\n"
     }
 
-    fn agreeing() -> Vec<(Build, String)> {
-        builds(4)
+    fn levels(names: &[&str]) -> Vec<String> {
+        names.iter().map(|name| (*name).to_string()).collect()
+    }
+
+    fn agreeing_at(names: &[&str]) -> Vec<(Build, String)> {
+        builds(4, &levels(names))
             .into_iter()
             .map(|build| {
                 let text = output(&build, "00000000000000aa");
                 (build, text)
             })
             .collect()
+    }
+
+    fn agreeing() -> Vec<(Build, String)> {
+        agreeing_at(&["avx2"])
     }
 
     #[test]
@@ -259,7 +309,10 @@ mod tests {
         assert_eq!(found[0].file, STREAM);
         assert!(found[0].message.contains("sqrt"), "{found:?}");
         let message = &found[0].message;
-        assert!(message.starts_with("sqrt differs: 00000000000000aa from x86-64, 1 thread(s) scalar"), "{found:?}");
+        assert!(
+            message.starts_with("sqrt differs: 00000000000000aa from x86-64, 1 thread(s), avx2 scalar"),
+            "{found:?}"
+        );
         assert!(message.contains("and 12 more; "), "{found:?}");
         assert!(message.ends_with("00000000000000bb from wasm32, baseline lanes4"), "{found:?}");
     }
@@ -279,7 +332,7 @@ mod tests {
         runs[1].1 = runs[1].1.replace("add scalar 00000000000000aa", "add scalar 00000000000000dd");
         let found = check(&runs, GOOD).unwrap_err();
         assert_eq!(found[0].code, "determinism.mismatch");
-        assert!(found[0].message.contains("00000000000000dd from x86-64, 4 thread(s) scalar"), "{found:?}");
+        assert!(found[0].message.contains("00000000000000dd from x86-64, 4 thread(s), avx2 scalar"), "{found:?}");
     }
 
     #[test]
@@ -322,7 +375,7 @@ mod tests {
     fn a_build_with_no_hashes_is_a_failure() {
         let mut runs = agreeing();
         for (build, text) in &mut runs {
-            *text = format!("build {} simd128={} threads={}\n", build.arch, build.simd128, build.threads);
+            *text = format!("{}\n", header(build));
         }
         assert!(codes(&check(&runs, GOOD)).contains(&"determinism.no-hashes"));
     }
@@ -391,9 +444,52 @@ mod tests {
     }
 
     #[test]
+    fn a_level_that_differs_is_named() {
+        let mut runs = agreeing_at(&["avx2", "sse4.2", "sse2"]);
+        assert_eq!(runs.len(), 6);
+        runs[5].1 = runs[5].1.replace("add lanes4 00000000000000aa", "add lanes4 00000000000000ee");
+        let found = check(&runs, GOOD).unwrap_err();
+        assert_eq!(codes(&Err(found.clone())), ["determinism.mismatch"]);
+        assert!(found[0].message.ends_with("00000000000000ee from x86-64, 1 thread(s), sse2 lanes4"), "{found:?}");
+    }
+
+    #[test]
+    fn a_native_build_at_the_wrong_level_is_a_failure() {
+        let mut runs = agreeing_at(&["avx2", "sse2"]);
+        runs[4].1 = runs[4].1.replace("level=sse2", "level=avx2");
+        let found = check(&runs, GOOD).unwrap_err();
+        assert_eq!(codes(&Err(found.clone())), ["determinism.wrong-build"]);
+        assert!(found[0].message.contains("x86-64, 1 thread(s), sse2"), "{found:?}");
+    }
+
+    #[test]
+    fn the_levels_are_the_probes_lines() {
+        assert_eq!(parsed_levels(true, "avx2\n\nsse2\n", ""), Ok(levels(&["avx2", "sse2"])));
+    }
+
+    #[test]
+    fn a_level_query_that_failed_or_printed_nothing_is_a_failure() {
+        let failed = parsed_levels(false, "avx2\n", "no cargo").unwrap_err();
+        assert_eq!(codes(&Err(failed.clone())), ["determinism.run-failed"]);
+        assert_eq!(failed[0].message, "the level query did not run: no cargo");
+        let nothing = parsed_levels(true, "\n", "").unwrap_err();
+        assert_eq!(nothing.iter().map(|finding| finding.code).collect::<Vec<_>>(), ["determinism.run-failed"]);
+    }
+
+    #[test]
+    fn every_narrower_level_runs_once_on_one_thread() {
+        let found = builds(6, &levels(&["avx512", "avx2", "sse4.2", "sse2"]));
+        let natives: Vec<(usize, &str)> =
+            found.iter().filter(|build| build.triple.is_none()).map(|b| (b.threads, b.level.as_str())).collect();
+        assert_eq!(natives, [(1, "avx512"), (6, "avx512"), (1, "avx2"), (1, "sse4.2"), (1, "sse2")]);
+        let wasm: Vec<&str> = found.iter().filter(|build| build.triple.is_some()).map(|b| b.level.as_str()).collect();
+        assert_eq!(wasm, ["fallback", "simd128"]);
+    }
+
+    #[test]
     fn the_builds_are_native_at_one_and_many_threads_and_wasm_with_and_without_simd128() {
-        let found = builds(6);
-        let [one, many, baseline, simd] = &found;
+        let found = builds(6, &levels(&["sse2"]));
+        let [one, many, baseline, simd] = found.as_slice() else { panic!("{} builds", found.len()) };
         assert_eq!((one.threads, one.triple, one.arch, one.simd128), (1, None, "x86_64", false));
         assert_eq!((many.threads, many.triple, many.arch, many.simd128), (6, None, "x86_64", false));
         assert_eq!(
@@ -401,21 +497,25 @@ mod tests {
             (1, Some(WASM), "wasm32", false)
         );
         assert_eq!((simd.threads, simd.triple, simd.arch, simd.simd128), (1, Some(WASM), "wasm32", true));
-        assert_eq!(many.name, "x86-64, 6 thread(s)");
+        assert_eq!(many.name, "x86-64, 6 thread(s), sse2");
     }
 
     #[test]
     fn only_the_simd128_build_has_its_own_target_directory_and_flag() {
-        let [native, _, baseline, simd] = builds(2);
+        let found = builds(2, &levels(&["avx2"]));
+        let [native, _, baseline, simd] = found.as_slice() else { panic!("{} builds", found.len()) };
         let joined = |build: &Build| cargo_args(build, "SIMD-DIR", "3").join(" ");
-        assert_eq!(joined(&native), "run --quiet --release -p occam-math --example determinism -- --threads 3");
         assert_eq!(
-            joined(&baseline),
+            joined(native),
+            "run --quiet --release -p occam-math --example determinism -- --threads 3 --level avx2"
+        );
+        assert_eq!(
+            joined(baseline),
             "run --quiet --release -p occam-math --example determinism --target wasm32-wasip2 -- --threads 3"
         );
         let want = format!(
             "run --quiet --release -p occam-math --example determinism --target wasm32-wasip2 --target-dir SIMD-DIR --config {SIMD128} -- --threads 3"
         );
-        assert_eq!(joined(&simd), want);
+        assert_eq!(joined(simd), want);
     }
 }
