@@ -8,13 +8,15 @@ the hosting page (O18).
 ```mermaid
 flowchart LR
   page["Page main thread<br/>no wasm here"] -->|"request"| ed["Editing worker<br/>holds the model"]
-  ed -->|"native text,<br/>transferred"| m1["Mesh worker"] & m2["Mesh worker"] & m3["Mesh worker"]
+  ed -->|"native bytes,<br/>a copy each"| m1["Mesh worker"] & m2["Mesh worker"] & m3["Mesh worker"]
   m1 & m2 & m3 -->|"mesh parts"| page
   page --> gpu(["GPU"])
 ```
 
-- **One editing worker** holds the model and runs requests. After each edit it publishes the model as native text.
-- **Mesh workers** load that text read-only and mesh ranges of faces, about 64 calls a job.
+- **One editing worker** holds the model and runs requests. After each edit it publishes the model as native bytes.
+  Each mesh worker gets its own copy as an `ArrayBuffer`, which skips the UTF-16 conversion a JavaScript string needs
+  at both ends.
+- **Mesh workers** load those bytes read-only and mesh ranges of faces, about 64 calls a job.
 - **No wasm runs on the page's main thread.**
 - **Each call's output is deterministic.** The page's assembly of the parts is display-only, like GPU output.
 - **An edit is one long call** on its worker. Splitting a boolean across calls waits for the `view` milestone's timing.

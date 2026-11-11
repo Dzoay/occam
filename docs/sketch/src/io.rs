@@ -9,19 +9,23 @@ use crate::topo::{Body, Id, Snapshot};
 /// version from the first commit, the tolerance, the step counter and every slot's generation, so ids survive a save and
 /// a load and a loaded model hashes as the saved one did.
 ///
+/// Bytes, not text: JSON is UTF-8, so nothing changes today, and a binary encoding, added if the `construction` exit
+/// finds JSON too slow, needs no new signature.
+///
 /// # Errors
 ///
 /// A report naming the record that would not encode, such as a geometry family with no encoding yet.
-pub fn save(model: &Snapshot) -> Result<String, Report> {
+pub fn save(model: &Snapshot) -> Result<Vec<u8>, Report> {
     unimplemented!()
 }
 
-/// Loads and checks the whole model (`Snapshot::check_all`): nothing from outside is trusted.
+/// Parses, then checks the whole model (`Snapshot::check_all`): nothing from outside is trusted. The `construction`
+/// exit times the two steps apart, so a slow load is blamed on the right one.
 ///
 /// # Errors
 ///
 /// Every failure, each naming its record.
-pub fn load(text: &str, exec: &Exec) -> Result<Snapshot, Vec<Report>> {
+pub fn load(bytes: &[u8], exec: &Exec) -> Result<Snapshot, Vec<Report>> {
     unimplemented!()
 }
 

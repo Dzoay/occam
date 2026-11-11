@@ -34,7 +34,7 @@ pub fn describe(model: &Snapshot, entities: &[EntityRef]) -> Vec<Option<crate::r
     entities.iter().map(|&entity| model.describe(entity)).collect()
 }
 
-/// What `occam-wasm` wraps, one per worker (P10). The editing worker runs requests and publishes the native text after
+/// What `occam-wasm` wraps, one per worker (P10). The editing worker runs requests and publishes the native bytes after
 /// each edit; mesh workers load it read-only and mesh ranges of faces. Each call's output is under the determinism
 /// contract; the page's assembly of mesh parts is display only, as GPU output is.
 pub struct Session {
@@ -46,13 +46,13 @@ impl Session {
     /// # Errors
     ///
     /// As `occam_io::load`.
-    pub fn open(native: &str) -> Result<Self, Vec<occam_report::Report>> {
+    pub fn open(native: &[u8]) -> Result<Self, Vec<occam_report::Report>> {
         unimplemented!()
     }
 
-    /// The request's results as JSON, with the new model's native text when it changed.
+    /// The request's results as JSON, with the new model's native bytes when it changed.
     #[must_use]
-    pub fn run(&mut self, request: &str) -> (String, Option<String>) {
+    pub fn run(&mut self, request: &str) -> (String, Option<Vec<u8>>) {
         unimplemented!()
     }
 }
