@@ -11,16 +11,22 @@
 )]
 
 mod dispatch;
+mod exact;
 mod exec;
+mod expansion;
 mod hash;
 mod lanes;
 mod mask;
 mod real;
 mod splitmix;
 pub mod stream;
+#[cfg(test)]
+mod testing;
 
 pub use dispatch::{LaneKernel, Level, dispatch};
+pub use exact::{fast_two_sum, split, two_product, two_sum};
 pub use exec::{Exec, Grain};
+pub use expansion::Expansion;
 pub use hash::{CANONICAL_NAN, Digest, canonical_bits};
 pub use lanes::Lanes;
 pub use mask::{LaneMask, Mask};

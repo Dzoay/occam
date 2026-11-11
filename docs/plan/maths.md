@@ -27,14 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.expansion`
-
-`Expansion`, Shewchuk's (1997) exact sums of non-overlapping doubles: two-sum, two-product by splitting (no fused
-multiply-add), sum, scale, product and sign.
-
-*Failing test first:* sums and products of doubles chosen so the exact answer fits an `i128` equal that answer, and
-the sign is exact where plain `f64` gets it wrong.
-
 ### `maths.interval`
 
 `Interval<R>`, Rump's (1999) midpoint and radius, made outward without rounding modes by stepping each bound to the
