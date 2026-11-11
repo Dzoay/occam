@@ -18,7 +18,8 @@ flowchart TD
   cert -->|"straddles the band"| und(["Undecided:<br/>reported"])
 ```
 
-- **`decide_stored`** works on stored numbers. It is never undecided.
+- **`decide_stored`** works on stored numbers. It is undecided only for an input that is not finite, or too large or
+  too small for the exact stage to be exact at the predicate's degree (found in `maths`).
 - **`decide_computed`** works on computed values. It answers `Undecided`, "cannot decide at this resolution" (O11),
   which becomes [a report](reports.md#cannot-decide-at-this-resolution).
 - **`Interval`** is a midpoint and radius rounded outward with `+ - * /` and `sqrt` only: no rounding modes.

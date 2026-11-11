@@ -27,15 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.predicate`
-
-`Ring`, `Predicate<N>`, `Side`, `Verdict` and `Tally`. `decide_stored` runs the interval filter in `Lanes<4>` and the
-exact stage for what it cannot certify. `decide_computed` answers `Undecided` when an enclosure straddles the band's
-edge. [DETERMINISM.md](../DETERMINISM.md) gains S5's fourth statement: no computed value is compared with exactly zero.
-
-*Failing test first:* on near-degenerate orientation inputs, `decide_stored` agrees with the exact sign every time; on
-ordinary inputs the tally shows no exact fallback; a straddling enclosure is `Undecided`.
-
 ### `maths.coefficients`
 
 `tools/coefficients/`, in Python's standard library with exact fractions: minimax fits for the `sin`, `cos` and `atan`

@@ -36,6 +36,11 @@ across targets is [measured rather than assumed](decisions/2026-11-09-one-maths-
    first, and the kernel has no hashed collections (Clippy's `disallowed-types`).
 5. **One build of the numbers.** No `target-cpu`, and no floating-point flags. Fused operations and reordering are never
    turned on: Rust performs neither unless asked to.
+6. **No decision on a computed value compares it with exactly zero** (S5). It uses a band, through `decide_computed`,
+   which answers `Undecided` rather than guess, or a predicate on stored inputs, through `decide_stored`, which is
+   exact. Identical bits make a decision repeatable, not right: a last-bit difference between libraries flips decisions
+   made with no band. A band moves the boundary rather than removing it, so the side of a periodic seam and a count
+   that lands on an integer need rules of their own ([the determinism topic](architecture/determinism.md#the-rules)).
 
 ## What holds it
 

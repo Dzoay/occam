@@ -30,7 +30,7 @@ flowchart LR
 - **Ids are given only in `Edit`,** on one thread, in plan order, lowest free slot first. Phases use indices local to
   an item.
 - **Content, never pointers.** `Arc::ptr_eq` and `std::ptr::eq` are banned in kernel crates.
-- **A computed value is never compared with exactly zero** (rule 4): it uses the band, or a predicate on exact inputs.
+- **A computed value is never compared with exactly zero** (rule 6): it uses the band, or a predicate on exact inputs.
   - A point within the band of a periodic seam belongs to the chart the face's sheet names.
   - A count taken from a computed value uses its interval's upper end, so it always rounds the same way.
 
@@ -48,7 +48,7 @@ tolerance, with NaNs made canonical.
 
 - [P8](../evidence/2026-11-09-p8.md): a cached curve took a slower path because pointer identity said "different" where
   content was equal, hence the pointer ban.
-- [S5](../evidence/2026-11-09-s5.md): rule 4 and the owned functions.
+- [S5](../evidence/2026-11-09-s5.md): rule 6 and the owned functions.
 - [P2](../evidence/2026-11-09-p2.md): candidate-order merges gave identical output at every thread count.
 
 </details>
