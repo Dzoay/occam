@@ -59,6 +59,12 @@ test *args:
 fmt:
     cargo fmt --all
 
+# Type-check docs/sketch, the compiled sketch of the seams in docs/ARCHITECTURE.md, which no workspace build includes
+[env("CARGO_TARGET_DIR", target)]
+[group('check')]
+sketch:
+    cargo check --manifest-path docs/sketch/Cargo.toml
+
 # Formatting, unchanged
 [group('gates')]
 fmt-check:
