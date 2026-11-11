@@ -75,42 +75,42 @@ impl Real for f64 {
 
     type Mask = bool;
 
-    #[inline]
+    #[inline(always)]
     fn splat(x: f64) -> Self {
         x
     }
 
-    #[inline]
+    #[inline(always)]
     fn from_fn(mut next: impl FnMut() -> f64) -> Self {
         next()
     }
 
-    #[inline]
+    #[inline(always)]
     fn for_each_lane(self, mut visit: impl FnMut(f64)) {
         visit(self);
     }
 
-    #[inline]
+    #[inline(always)]
     fn abs(self) -> Self {
         f64::abs(self)
     }
 
-    #[inline]
+    #[inline(always)]
     fn sqrt(self) -> Self {
         f64::sqrt(self)
     }
 
-    #[inline]
+    #[inline(always)]
     fn lt(self, rhs: Self) -> bool {
         self < rhs
     }
 
-    #[inline]
+    #[inline(always)]
     fn le(self, rhs: Self) -> bool {
         self <= rhs
     }
 
-    #[inline]
+    #[inline(always)]
     fn select(mask: bool, yes: Self, no: Self) -> Self {
         if mask { yes } else { no }
     }

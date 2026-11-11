@@ -25,13 +25,13 @@ impl<const W: usize> Lanes<W> {
     }
 
     /// `op` on every lane.
-    #[inline]
+    #[inline(always)]
     fn map(self, op: impl Fn(f64) -> f64) -> Self {
         Self(self.0.map(op))
     }
 
     /// `test` on every pair of lanes.
-    #[inline]
+    #[inline(always)]
     fn compare(self, rhs: Self, test: impl Fn(f64, f64) -> bool) -> LaneMask<W> {
         let mut mask = [false; W];
         for ((held, a), b) in mask.iter_mut().zip(self.0).zip(rhs.0) {
@@ -41,7 +41,7 @@ impl<const W: usize> Lanes<W> {
     }
 
     /// `op` on every pair of lanes.
-    #[inline]
+    #[inline(always)]
     fn zip(mut self, rhs: Self, op: impl Fn(f64, f64) -> f64) -> Self {
         for (lane, other) in self.0.iter_mut().zip(rhs.0) {
             *lane = op(*lane, other);
@@ -53,7 +53,7 @@ impl<const W: usize> Lanes<W> {
 impl<const W: usize> Add for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn add(self, rhs: Self) -> Self {
         self.zip(rhs, |a, b| a + b)
     }
@@ -62,7 +62,7 @@ impl<const W: usize> Add for Lanes<W> {
 impl<const W: usize> Sub for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn sub(self, rhs: Self) -> Self {
         self.zip(rhs, |a, b| a - b)
     }
@@ -71,7 +71,7 @@ impl<const W: usize> Sub for Lanes<W> {
 impl<const W: usize> Mul for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn mul(self, rhs: Self) -> Self {
         self.zip(rhs, |a, b| a * b)
     }
@@ -80,7 +80,7 @@ impl<const W: usize> Mul for Lanes<W> {
 impl<const W: usize> Div for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn div(self, rhs: Self) -> Self {
         self.zip(rhs, |a, b| a / b)
     }
@@ -89,7 +89,7 @@ impl<const W: usize> Div for Lanes<W> {
 impl<const W: usize> Neg for Lanes<W> {
     type Output = Self;
 
-    #[inline]
+    #[inline(always)]
     fn neg(self) -> Self {
         self.map(|a| -a)
     }
@@ -100,13 +100,13 @@ impl<const W: usize> Real for Lanes<W> {
 
     type Mask = LaneMask<W>;
 
-    #[inline]
+    #[inline(always)]
     fn splat(x: f64) -> Self {
         Self([x; W])
     }
 
     /// A plain loop, because `array::from_fn` can fall out of line and stop a kernel vectorising (P4).
-    #[inline]
+    #[inline(always)]
     fn from_fn(mut next: impl FnMut() -> f64) -> Self {
         let mut lanes = [0.0; W];
         for lane in &mut lanes {
@@ -115,34 +115,34 @@ impl<const W: usize> Real for Lanes<W> {
         Self(lanes)
     }
 
-    #[inline]
+    #[inline(always)]
     fn for_each_lane(self, mut visit: impl FnMut(f64)) {
         for lane in self.0 {
             visit(lane);
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn abs(self) -> Self {
         self.map(f64::abs)
     }
 
-    #[inline]
+    #[inline(always)]
     fn sqrt(self) -> Self {
         self.map(f64::sqrt)
     }
 
-    #[inline]
+    #[inline(always)]
     fn lt(self, rhs: Self) -> LaneMask<W> {
         self.compare(rhs, |a, b| a < b)
     }
 
-    #[inline]
+    #[inline(always)]
     fn le(self, rhs: Self) -> LaneMask<W> {
         self.compare(rhs, |a, b| a <= b)
     }
 
-    #[inline]
+    #[inline(always)]
     fn select(mask: LaneMask<W>, yes: Self, mut no: Self) -> Self {
         for ((lane, held), picked) in no.0.iter_mut().zip(mask.to_array()).zip(yes.0) {
             if held {

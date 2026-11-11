@@ -11,6 +11,7 @@ For the same inputs, every output has identical bits:
 - on x86-64 and on single-threaded wasm32, in its baseline and simd128 builds;
 - at any thread count;
 - as `f64` or as `Lanes` of any width;
+- at every instruction level `dispatch` compiles a kernel for;
 - in debug and in release builds.
 
 That holds for everything `Real` computes today. Whether functions beyond it, such as `sin` and `atan2`, must be identical
@@ -43,8 +44,9 @@ pattern, the infinities, both zeros, subnormals) and ordinary ones, hashed with 
 FNV-1a of the little-endian canonical bits of each output, and the blocks' hashes are folded in block order.
 
 `gates determinism` builds `crates/occam-math/examples/determinism.rs` for release on x86-64 at one thread and at many,
-and on wasm32-wasip2 baseline and simd128 under wasmtime. Each build runs the stream as scalar and as two, four and eight
-lanes. Every hash must agree, and must equal the record in `ci/determinism-hashes.txt`.
+and on wasm32-wasip2 baseline and simd128 under wasmtime. The native build also runs at every narrower instruction level
+the machine has, each block of the stream dispatched to it. Each run computes the stream as scalar and as two, four and
+eight lanes. Every hash must agree, and must equal the record in `ci/determinism-hashes.txt`.
 
 The same stream is a test, so the suite checks it in debug builds on x86-64 and on wasm32 baseline and simd128 (`just
 test-all` and `just wasm`).

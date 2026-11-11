@@ -49,3 +49,4 @@ rapidhash transitive gungraun
 rustc_version transitive gungraun
 semver transitive gungraun
 unty-next transitive gungraun
+fearless_simd occam-math fearless-simd

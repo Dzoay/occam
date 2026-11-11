@@ -13,12 +13,12 @@ pub trait Mask: Copy + Debug + Send + Sync + 'static {
 }
 
 impl Mask for bool {
-    #[inline]
+    #[inline(always)]
     fn any(self) -> bool {
         self
     }
 
-    #[inline]
+    #[inline(always)]
     fn all(self) -> bool {
         self
     }
@@ -43,12 +43,12 @@ impl<const W: usize> LaneMask<W> {
 }
 
 impl<const W: usize> Mask for LaneMask<W> {
-    #[inline]
+    #[inline(always)]
     fn any(self) -> bool {
         self.0.iter().any(|&lane| lane)
     }
 
-    #[inline]
+    #[inline(always)]
     fn all(self) -> bool {
         self.0.iter().all(|&lane| lane)
     }

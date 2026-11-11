@@ -27,13 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.dispatch`
-
-`Level::detect`, `Level::baseline`, the `LaneKernel` trait and `dispatch` over `fearless_simd`. The determinism example
-runs the stream through `dispatch` at every level the machine has, and `gates determinism` compares them.
-
-*Failing test first:* the stream run through `dispatch` at the detected level gives the recorded hashes.
-
 ### `maths.exec`
 
 `Exec`: `serial`, `threads`, `map` and `map_chunks` with `Grain`, over `rayon` natively and serial on wasm. The stream's

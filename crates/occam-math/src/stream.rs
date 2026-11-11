@@ -2,8 +2,10 @@
 //! The determinism stream: a fixed sequence of operations whose outputs must hash the same on every build
 //! (`docs/DETERMINISM.md`). `gates determinism` runs it through `examples/determinism.rs`.
 
+use std::marker::PhantomData;
 use std::thread;
 
+use crate::dispatch::{LaneKernel, Level, dispatch};
 use crate::hash::Digest;
 use crate::real::Real;
 use crate::splitmix::SplitMix64;
@@ -67,6 +69,7 @@ fn draw(generator: &mut SplitMix64) -> f64 {
 }
 
 /// Every operation on one set of inputs.
+#[inline(always)]
 #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 fn outputs<R: Real>(a: R, b: R, c: R) -> [R; OPERATION_COUNT] {
     [
@@ -84,6 +87,7 @@ fn outputs<R: Real>(a: R, b: R, c: R) -> [R; OPERATION_COUNT] {
 }
 
 /// The hashes of one block: its inputs depend on `index` alone, so a block gives the same hashes on any thread.
+#[inline(always)]
 fn block<R: Real>(index: u64) -> Hashes {
     let [mut first, mut second, mut third] =
         [0, 1, 2].map(|operand| SplitMix64::new((index << 2).wrapping_add(operand)));
@@ -98,9 +102,24 @@ fn block<R: Real>(index: u64) -> Hashes {
     digests.map(Digest::finish)
 }
 
-/// The hashes of a run of blocks.
-fn blocks<R: Real>(indices: &[u64]) -> Vec<Hashes> {
-    indices.iter().map(|index| block::<R>(*index)).collect()
+/// One block as a lane kernel, so that it is compiled for the level it is dispatched to.
+struct Block<R> {
+    index: u64,
+    real: PhantomData<R>,
+}
+
+impl<R: Real> LaneKernel for Block<R> {
+    type Output = Hashes;
+
+    #[inline(always)]
+    fn run(self) -> Hashes {
+        block::<R>(self.index)
+    }
+}
+
+/// The hashes of a run of blocks, each dispatched to `level`.
+fn blocks<R: Real>(level: Level, indices: &[u64]) -> Vec<Hashes> {
+    indices.iter().map(|index| dispatch(level, Block::<R> { index: *index, real: PhantomData })).collect()
 }
 
 /// The stream's hash for each operation, given the blocks' hashes in block order.
@@ -114,17 +133,17 @@ fn combine(blocks: impl IntoIterator<Item = Hashes>) -> Hashes {
     digests.map(Digest::finish)
 }
 
-/// Runs the stream as `R`, the blocks shared among `threads` threads, and gives the hash of each operation. The calling
-/// thread takes the first share and the others are spawned, so one thread spawns nothing. Results are merged in block
-/// order, which is why the thread count cannot matter.
+/// Runs the stream as `R`, compiled for `level`, the blocks shared among `threads` threads, and gives the hash of each
+/// operation. The calling thread takes the first share and the others are spawned, so one thread spawns nothing. Results
+/// are merged in block order, which is why the thread count cannot matter.
 #[must_use]
-pub fn run<R: Real>(threads: usize) -> Hashes {
+pub fn run<R: Real>(level: Level, threads: usize) -> Hashes {
     let indices: Vec<u64> = (0..BLOCKS).collect();
     let mut shares = indices.chunks(indices.len().div_ceil(threads.max(1)));
     let own = shares.next().unwrap_or_default();
     combine(thread::scope(|scope| {
-        let workers: Vec<_> = shares.map(|share| scope.spawn(move || blocks::<R>(share))).collect();
-        let mut merged = blocks::<R>(own);
+        let workers: Vec<_> = shares.map(|share| scope.spawn(move || blocks::<R>(level, share))).collect();
+        let mut merged = blocks::<R>(level, own);
         // A worker that panicked adds no blocks, so the hashes disagree and the gate fails.
         for worker in workers {
             merged.extend(worker.join().unwrap_or_default());
@@ -150,23 +169,38 @@ mod tests {
         })
     }
 
+    fn baseline() -> Level {
+        Level::baseline()
+    }
+
     #[test]
     fn a_stream_of_operations_gives_the_same_hash_on_every_target_scalar_and_lanes() {
         let want = want();
-        assert_eq!(run::<f64>(1), want, "scalar");
-        assert_eq!(run::<Lanes<2>>(1), want, "two lanes");
-        assert_eq!(run::<Lanes<4>>(1), want, "four lanes");
-        assert_eq!(run::<Lanes<8>>(1), want, "eight lanes");
+        assert_eq!(run::<f64>(baseline(), 1), want, "scalar");
+        assert_eq!(run::<Lanes<2>>(baseline(), 1), want, "two lanes");
+        assert_eq!(run::<Lanes<4>>(baseline(), 1), want, "four lanes");
+        assert_eq!(run::<Lanes<8>>(baseline(), 1), want, "eight lanes");
+    }
+
+    #[test]
+    fn the_stream_gives_the_recorded_hashes_at_every_level_this_machine_has() {
+        let want = want();
+        for level in Level::available() {
+            assert_eq!(run::<f64>(level, 1), want, "scalar at {}", level.name());
+            assert_eq!(run::<Lanes<2>>(level, 1), want, "two lanes at {}", level.name());
+            assert_eq!(run::<Lanes<4>>(level, 1), want, "four lanes at {}", level.name());
+            assert_eq!(run::<Lanes<8>>(level, 1), want, "eight lanes at {}", level.name());
+        }
     }
 
     #[test]
     fn every_lane_width_from_one_to_eight_agrees() {
         let want = want();
-        assert_eq!(run::<Lanes<1>>(1), want);
-        assert_eq!(run::<Lanes<3>>(1), want);
-        assert_eq!(run::<Lanes<5>>(1), want);
-        assert_eq!(run::<Lanes<6>>(1), want);
-        assert_eq!(run::<Lanes<7>>(1), want);
+        assert_eq!(run::<Lanes<1>>(baseline(), 1), want);
+        assert_eq!(run::<Lanes<3>>(baseline(), 1), want);
+        assert_eq!(run::<Lanes<5>>(baseline(), 1), want);
+        assert_eq!(run::<Lanes<6>>(baseline(), 1), want);
+        assert_eq!(run::<Lanes<7>>(baseline(), 1), want);
     }
 
     // Threads are not available on wasm32-wasip2, where the stream is single-threaded by contract.
@@ -175,8 +209,8 @@ mod tests {
     fn the_hash_does_not_depend_on_the_thread_count() {
         let want = want();
         for threads in [0, 2, 3, 7, 64, 200] {
-            assert_eq!(run::<f64>(threads), want, "{threads} threads");
-            assert_eq!(run::<Lanes<4>>(threads), want, "{threads} threads, four lanes");
+            assert_eq!(run::<f64>(Level::detect(), threads), want, "{threads} threads");
+            assert_eq!(run::<Lanes<4>>(Level::detect(), threads), want, "{threads} threads, four lanes");
         }
     }
 

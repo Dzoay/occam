@@ -5,6 +5,12 @@
 //! identical bits on every target, at every thread count, scalar and in lanes. `docs/DETERMINISM.md` is the contract, and
 //! `gates determinism` holds it.
 
+#![expect(
+    clippy::inline_always,
+    reason = "a kernel compiles at a dispatched instruction level only through what is inlined into it (P4)"
+)]
+
+mod dispatch;
 mod hash;
 mod lanes;
 mod mask;
@@ -12,6 +18,7 @@ mod real;
 mod splitmix;
 pub mod stream;
 
+pub use dispatch::{LaneKernel, Level, dispatch};
 pub use hash::{CANONICAL_NAN, Digest, canonical_bits};
 pub use lanes::Lanes;
 pub use mask::{LaneMask, Mask};
