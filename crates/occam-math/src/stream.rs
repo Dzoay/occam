@@ -11,10 +11,11 @@ use crate::real::Real;
 use crate::splitmix::SplitMix64;
 
 /// How many operations the stream hashes.
-pub const OPERATION_COUNT: usize = 10;
+pub const OPERATION_COUNT: usize = 12;
 
 /// The operations, in the order [`Hashes`] gives them.
-pub const OPERATIONS: [&str; OPERATION_COUNT] = ["add", "sub", "mul", "div", "neg", "abs", "sqrt", "mixed", "lt", "le"];
+pub const OPERATIONS: [&str; OPERATION_COUNT] =
+    ["add", "sub", "mul", "div", "neg", "abs", "sqrt", "mixed", "lt", "le", "up", "down"];
 
 /// One hash per operation, in the order of [`OPERATIONS`].
 pub type Hashes = [u64; OPERATION_COUNT];
@@ -83,6 +84,8 @@ fn outputs<R: Real>(a: R, b: R, c: R) -> [R; OPERATION_COUNT] {
         ((a + b) * c - a / b).abs().sqrt(),
         R::select(a.lt(b), a, b),
         R::select(a.le(b), b, c),
+        a.next_up(),
+        a.next_down(),
     ]
 }
 

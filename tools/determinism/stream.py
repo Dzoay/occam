@@ -150,6 +150,8 @@ def outputs(a, b, c):
         ("mixed", sqrt(abs((a + b) * c - div(a, b)))),
         ("lt", select(a < b, a, b)),
         ("le", select(a <= b, b, c)),
+        ("up", math.nextafter(a, INFINITY)),
+        ("down", math.nextafter(a, -INFINITY)),
     ]
 
 

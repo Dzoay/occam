@@ -63,6 +63,8 @@ disallowed-methods = [
 arithmetic-side-effects-allowed = [
     "lanes::Lanes",
     "occam_math::Lanes",
+    "interval::Interval",
+    "occam_math::Interval",
     "measure::Measure",
     "occam_units::Measure",
     "frame::Triple",

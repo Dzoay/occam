@@ -58,6 +58,15 @@ pub trait Real:
     #[must_use]
     fn sqrt(self) -> Self;
 
+    /// The next double above: the smallest subnormal above either zero, `-f64::MAX` above minus infinity, infinity
+    /// above itself, and NaN for NaN. Exact, so bounds rounded outward need no rounding modes.
+    #[must_use]
+    fn next_up(self) -> Self;
+
+    /// The next double below, as [`Real::next_up`] mirrored.
+    #[must_use]
+    fn next_down(self) -> Self;
+
     /// The lanes where `self` is less than `rhs`. Exact, and false where either side is NaN. The two zeros are equal.
     fn lt(self, rhs: Self) -> Self::Mask;
 
@@ -98,6 +107,16 @@ impl Real for f64 {
     #[inline(always)]
     fn sqrt(self) -> Self {
         f64::sqrt(self)
+    }
+
+    #[inline(always)]
+    fn next_up(self) -> Self {
+        f64::next_up(self)
+    }
+
+    #[inline(always)]
+    fn next_down(self) -> Self {
+        f64::next_down(self)
     }
 
     #[inline(always)]
@@ -161,6 +180,18 @@ mod tests {
         assert_eq!(f64::select(false, -0.0, 0.0).to_bits(), 0.0_f64.to_bits());
         assert_eq!(f64::select(true, 2.5, f64::NAN), 2.5);
         assert!(f64::select(false, 2.5, f64::NAN).is_nan());
+    }
+
+    #[test]
+    fn the_next_double_steps_one_place_and_crosses_zero_and_the_extremes() {
+        assert_eq!(Real::next_up(1.0), 1.0 + f64::EPSILON);
+        assert_eq!(Real::next_down(1.0), 1.0 - f64::EPSILON / 2.0);
+        assert_eq!(Real::next_up(-0.0).to_bits(), 1);
+        assert_eq!(Real::next_down(0.0).to_bits(), (-f64::from_bits(1)).to_bits());
+        assert_eq!(Real::next_up(f64::MAX), f64::INFINITY);
+        assert_eq!(Real::next_up(f64::NEG_INFINITY), f64::MIN);
+        assert_eq!(Real::next_down(f64::INFINITY), f64::MAX);
+        assert!(Real::next_up(f64::NAN).is_nan());
     }
 
     #[test]

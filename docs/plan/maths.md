@@ -27,14 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.interval`
-
-`Interval<R>`, Rump's (1999) midpoint and radius, made outward without rounding modes by stepping each bound to the
-next double: `+ - * /` and `sqrt`.
-
-*Failing test first:* for random intervals and points inside them, the exact result, checked with `Expansion`, lies
-inside the computed interval.
-
 ### `maths.predicate`
 
 `Ring`, `Predicate<N>`, `Side`, `Verdict` and `Tally`. `decide_stored` runs the interval filter in `Lanes<4>` and the
