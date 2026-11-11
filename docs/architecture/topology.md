@@ -81,7 +81,7 @@ flowchart LR
 ```
 
 - **A side table keyed by id,** beside the records and never in them, so no geometric code reads it. Any entity may
-  have a name, a colour, both or neither. STEP import fills it (PARITY 2.9).
+  have a name, a colour, both or neither. STEP import fills it and export writes it (PARITY 2.9).
 - **`commit` carries them along lineage.** A split, trimmed or copied entity takes its source's; a merge keeps only
   what every source shares. What the edit sets itself wins. Removing an entity removes them.
 - **Stored like the records,** in copy-on-write chunks, so a snapshot costs the same. Saved in the native file and

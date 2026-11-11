@@ -117,7 +117,8 @@ Named, not numbered. They run in this order.
 | after that | Named below; planned when reached | none yet |
 
 **After the first release**, in no fixed order and each needing the user's go-ahead: the 2D sketch solver; the document
-layer (feature tree, persistent naming, incremental recompute); shell, offset and draft; sweep and loft; hidden-line
+layer (feature tree, persistent naming, incremental recompute);
+[assemblies](decisions/2026-11-11-assemblies-after-release.md); shell, offset and draft; sweep and loft; hidden-line
 drawings; the full web application; server-side rendering; a C ABI and a side-by-side shim at FreeCAD's `Part` layer
 (L39); an MCP server.
 

@@ -52,7 +52,7 @@ sketching and drawing modules.
 | 2.6 | Moments of inertia and principal axes, per solid and per face | part of 170 | *later* |
 | 2.7 | Tight axis-aligned bounding box of any shape | 140 | `construction` |
 | 2.8 | Tangent, normal and curvature at a parameter along a curve or on a surface | 130 | `geometry` |
-| 2.9 | STEP import of solids with names and colours kept; unsupported entities reported, never dropped silently | part of 110 | `exchange` |
+| 2.9 | STEP import of solids with names and colours kept, and export writing them back ([decided](decisions/2026-11-11-step-export-names-and-colours.md)); unsupported entities reported, never dropped silently | part of 110 | `exchange` |
 | 2.10 | Minimum distance between two shapes, with the nearest points; closest point on a curve or surface | 100 | *later* |
 | 2.11 | Rigid and scaling transforms of a shape, with a copy that keeps ids distinct | 75 | `construction` |
 | 2.12 | Sewing a set of faces into a shell and shells into a solid, reporting free edges | part of 75 | *later* |
