@@ -8,7 +8,7 @@ use std::ops::Range;
 #[cfg(not(target_family = "wasm"))]
 use std::sync::Arc;
 
-use occam_report::{Code, NamedValue, Remedy, RemedyKind, Report};
+use occam_report::{Code, Fault, NamedValue, Remedy, RemedyKind, Report};
 
 /// How work is split into tasks. It changes the speed, never the bits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,7 +37,7 @@ enum Runner {
 /// The report for a pool of `count` threads that could not start, with the remedy that always works.
 fn unavailable(count: NonZeroUsize) -> Report {
     let threads = u32::try_from(count.get()).unwrap_or(u32::MAX);
-    Report::new(Code::ThreadsUnavailable)
+    Report::new(Code::ThreadsUnavailable, Fault::Internal)
         .with_value(NamedValue::count("threads", threads))
         .with_remedy(Remedy::new(RemedyKind::UseThreads).with_value(NamedValue::count("threads", 1)))
 }
@@ -225,14 +225,14 @@ mod tests {
     fn threads_that_cannot_start_are_reported_with_how_many() {
         let report = refused().unwrap_err();
         assert_eq!(report.code, Code::ThreadsUnavailable);
-        assert_eq!(report.value("threads").map(|value| value.value), Some(4.0));
+        assert_eq!(report.value("threads").and_then(NamedValue::number), Some(4.0));
     }
 
     #[cfg(not(target_family = "wasm"))]
     #[test]
     fn following_the_remedy_succeeds() {
         followed_remedy!(refused().unwrap_err(), Code::ThreadsUnavailable, RemedyKind::UseThreads, |remedy| {
-            let threads = remedy.value("threads").map_or(0.0, |value| value.value);
+            let threads = remedy.value("threads").and_then(NamedValue::number).unwrap_or(0.0);
             assert_eq!(threads, 1.0);
             let exec = Exec::threads(count(1))?;
             assert_eq!(exec.map(3, Grain::Auto, |index| index), [0, 1, 2]);

@@ -5,7 +5,7 @@
 use std::marker::PhantomData;
 
 use occam_math::Real;
-use occam_report::{Code, NamedValue, Report};
+use occam_report::{Code, Fault, NamedValue, Report};
 
 use crate::frame::{Frame, Vector};
 use crate::tolerance::Tolerance;
@@ -30,7 +30,7 @@ impl<F: Frame> Direction<F> {
         if length > band && length.is_finite() {
             Ok(Self::normalised(v.to_vec3()))
         } else {
-            Err(Report::new(Code::DegenerateDirection)
+            Err(Report::new(Code::DegenerateDirection, Fault::InvalidInput)
                 .with_value(NamedValue::length("length", length))
                 .with_value(NamedValue::length("tolerance", band)))
         }
@@ -107,8 +107,8 @@ mod tests {
     fn a_vector_within_the_tolerance_has_no_direction() {
         let report = Direction::along(vector(1e-7, 0.0, 0.0), tolerance()).unwrap_err();
         assert_eq!(report.code, Code::DegenerateDirection);
-        assert_eq!(report.value("length").map(|v| v.value), Some(1e-7));
-        assert_eq!(report.value("tolerance").map(|v| v.value), Some(1e-6));
+        assert_eq!(report.value("length").and_then(NamedValue::number), Some(1e-7));
+        assert_eq!(report.value("tolerance").and_then(NamedValue::number), Some(1e-6));
         assert!(Direction::along(vector(1e-6, 0.0, 0.0), tolerance()).is_err(), "the band includes its edge");
         assert!(Direction::along(vector(2e-6, 0.0, 0.0), tolerance()).is_ok());
         assert!(Direction::along(vector(f64::INFINITY, 0.0, 0.0), tolerance()).is_err());

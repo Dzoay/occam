@@ -42,17 +42,17 @@ macro_rules! followed_remedy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::NamedValue;
+    use crate::{Fault, NamedValue};
 
     fn report() -> Report {
-        Report::new(Code::UnsupportedSchema)
+        Report::new(Code::UnsupportedSchema, Fault::InvalidInput)
             .with_remedy(Remedy::new(RemedyKind::UseSchema).with_value(NamedValue::count("version", 1)))
     }
 
     #[test]
     fn the_retry_receives_the_reports_parameters() {
         let version = follow_remedy(&report(), Code::UnsupportedSchema, RemedyKind::UseSchema, |remedy| {
-            Ok(remedy.value("version").map(|v| v.value))
+            Ok(remedy.value("version").and_then(NamedValue::number))
         });
         assert_eq!(version, Ok(Some(1.0)));
     }
@@ -65,14 +65,14 @@ mod tests {
 
     #[test]
     fn a_pair_the_catalogue_does_not_have_is_refused() {
-        let plain = Report::new(Code::Malformed);
+        let plain = Report::new(Code::Malformed, Fault::InvalidInput);
         let got = follow_remedy(&plain, Code::Malformed, RemedyKind::UseSchema, |_| Ok(()));
         assert_eq!(got, Err("the catalogue does not pair report.malformed with use-schema".to_string()));
     }
 
     #[test]
     fn a_report_that_does_not_offer_the_remedy_is_refused() {
-        let bare = Report::new(Code::UnsupportedSchema);
+        let bare = Report::new(Code::UnsupportedSchema, Fault::InvalidInput);
         let got = follow_remedy(&bare, Code::UnsupportedSchema, RemedyKind::UseSchema, |_| Ok(()));
         assert_eq!(got, Err("the report does not offer use-schema".to_string()));
     }
@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn a_retry_that_fails_again_is_reported() {
         let got: Result<(), String> = follow_remedy(&report(), Code::UnsupportedSchema, RemedyKind::UseSchema, |_| {
-            Err(Report::new(Code::Malformed))
+            Err(Report::new(Code::Malformed, Fault::InvalidInput))
         });
         assert_eq!(got, Err("following use-schema failed again with report.malformed".to_string()));
     }
@@ -89,7 +89,7 @@ mod tests {
     #[should_panic(expected = "the report does not offer use-schema")]
     fn the_macro_fails_the_test_when_the_remedy_does_not_work() {
         followed_remedy!(
-            Report::new(Code::UnsupportedSchema),
+            Report::new(Code::UnsupportedSchema, Fault::InvalidInput),
             Code::UnsupportedSchema,
             RemedyKind::UseSchema,
             |_| Ok::<(), Report>(())

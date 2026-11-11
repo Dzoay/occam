@@ -2,7 +2,7 @@
 //! The tolerance a model is built to (L22). It belongs to the model and is passed around with it: there is no default, and its
 //! constructor is not `const`, so it cannot be a global.
 
-use occam_report::{Code, NamedValue, Quantity, Report};
+use occam_report::{Code, Fault, NamedValue, Quantity, Report};
 
 use crate::measure::{Angle, Length};
 
@@ -30,7 +30,11 @@ fn in_range(value: f64, quantity: Quantity) -> Result<(), Report> {
     if value > 0.0 && value.is_finite() {
         Ok(())
     } else {
-        Err(Report::new(Code::ToleranceOutOfRange).with_value(NamedValue::new("tolerance", quantity, value)))
+        Err(Report::new(Code::ToleranceOutOfRange, Fault::InvalidInput).with_value(NamedValue::new(
+            "tolerance",
+            quantity,
+            value,
+        )))
     }
 }
 
@@ -135,7 +139,7 @@ mod tests {
             let report = Tolerance::new(mm(bad), rad(1e-9)).unwrap_err();
             assert_eq!(report.code, Code::ToleranceOutOfRange, "{bad}");
             let named = report.value("tolerance").unwrap();
-            assert_eq!((named.value.to_bits(), named.quantity), (bad.to_bits(), Quantity::Length));
+            assert_eq!((named.number().unwrap().to_bits(), named.quantity), (bad.to_bits(), Quantity::Length));
         }
     }
 
@@ -145,7 +149,7 @@ mod tests {
             let report = Tolerance::new(mm(1e-7), rad(bad)).unwrap_err();
             assert_eq!(report.code, Code::ToleranceOutOfRange, "{bad}");
             let named = report.value("tolerance").unwrap();
-            assert_eq!((named.value.to_bits(), named.quantity), (bad.to_bits(), Quantity::Angle));
+            assert_eq!((named.number().unwrap().to_bits(), named.quantity), (bad.to_bits(), Quantity::Angle));
         }
     }
 }

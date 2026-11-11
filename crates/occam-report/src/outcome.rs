@@ -117,19 +117,22 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::{Code, NamedValue};
+    use crate::{Code, Fault, NamedValue};
 
     fn note() -> Report {
-        Report::new(Code::Malformed).with_value(NamedValue::count("line", 3)).with_value(NamedValue::count("column", 4))
+        Report::new(Code::Malformed, Fault::InvalidInput)
+            .with_value(NamedValue::count("line", 3))
+            .with_value(NamedValue::count("column", 4))
     }
 
     const NOTE_WORDS: &str = "The text is not a valid report: the problem is at line 3, column 4.";
 
     fn note_json() -> Value {
         json!({
-            "schema": 1,
+            "schema": 2,
             "code": "report.malformed",
             "severity": "error",
+            "fault": "invalid-input",
             "message": NOTE_WORDS,
             "entities": [],
             "values": [
@@ -145,7 +148,7 @@ mod tests {
         let outcome = Outcome::new(5).with_diagnostic(note());
         assert_eq!(outcome.diagnostics, [note()]);
         let value: Value = serde_json::from_str(&outcome.to_json(DisplayUnits::default()).unwrap()).unwrap();
-        assert_eq!(value, json!({"schema": 1, "value": 5, "diagnostics": [note_json()]}));
+        assert_eq!(value, json!({"schema": 2, "value": 5, "diagnostics": [note_json()]}));
     }
 
     fn batch() -> Batch<u8> {
@@ -167,7 +170,7 @@ mod tests {
     fn a_batch_has_one_entry_per_item_in_order() {
         let value: Value = serde_json::from_str(&batch().to_json(DisplayUnits::default()).unwrap()).unwrap();
         let want = json!({
-            "schema": 1,
+            "schema": 2,
             "succeeded": 2,
             "failed": 1,
             "items": [

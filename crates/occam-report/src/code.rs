@@ -41,6 +41,8 @@ text_enum! {
         ThreadsUnavailable = "exec.threads-unavailable",
         /// A direction was asked of a vector too short to have one.
         DegenerateDirection = "geom.degenerate-direction",
+        /// A curve or surface was asked for a parameter where it is not defined.
+        UndefinedParameter = "geom.undefined-parameter",
     }
 }
 
@@ -73,62 +75,82 @@ impl Code {
     /// What the catalogue says about this code.
     #[must_use]
     pub const fn entry(self) -> Entry {
+        Entry {
+            severity: self.severity(),
+            summary: self.summary(),
+            template: self.template(),
+            remedies: self.remedies(),
+        }
+    }
+
+    /// How serious it is.
+    const fn severity(self) -> Severity {
         match self {
-            Self::Malformed => Entry {
-                severity: Severity::Error,
-                summary: "The text is not a report.",
-                template: "The text is not a valid report: the problem is at line {line}, column {column}.",
-                remedies: &[],
-            },
-            Self::UnsupportedSchema => Entry {
-                severity: Severity::Error,
-                summary: "The report uses a schema version this build cannot read.",
-                template: "Schema version {found} is not supported. This build reads version {supported}.",
-                remedies: &[RemedyKind::UseSchema],
-            },
-            Self::NotFinite => Entry {
-                severity: Severity::Error,
-                summary: "A number given as a length or an angle is not finite.",
-                template: "The number given is {value}, which is not finite in occam's internal units.",
-                remedies: &[],
-            },
-            Self::ToleranceOutOfRange => Entry {
-                severity: Severity::Error,
-                summary: "A tolerance must be a finite number greater than zero.",
-                template: "The tolerance {tolerance} is not a finite number greater than zero.",
-                remedies: &[],
-            },
-            Self::ToleranceBelowModel => Entry {
-                severity: Severity::Error,
-                summary: "An operation cannot work to a finer tolerance than its model is built to.",
-                template: "The tolerance asked for, {requested}, is finer than the model's tolerance, {model}.",
-                remedies: &[RemedyKind::UseModelTolerance],
-            },
-            Self::ToleranceUsed => Entry {
-                severity: Severity::Note,
-                summary: "The tolerance an operation worked to.",
-                template: "The operation worked to a tolerance of {tolerance}.",
-                remedies: &[],
-            },
-            Self::BadArgument => Entry {
-                severity: Severity::Error,
-                summary: "A command-line argument is missing or is not understood.",
-                template: "Argument {position} is not understood. Expected: occam distance --from X,Y,Z --to X,Y,Z \
-                           --model-tolerance LENGTH,ANGLE --tolerance LENGTH [--json], in millimetres and radians.",
-                remedies: &[],
-            },
-            Self::ThreadsUnavailable => Entry {
-                severity: Severity::Error,
-                summary: "The threads asked for could not be started.",
-                template: "{threads} threads could not be started on this machine.",
-                remedies: &[RemedyKind::UseThreads],
-            },
-            Self::DegenerateDirection => Entry {
-                severity: Severity::Error,
-                summary: "A vector no longer than the model's tolerance has no direction.",
-                template: "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction.",
-                remedies: &[],
-            },
+            Self::Malformed
+            | Self::UnsupportedSchema
+            | Self::NotFinite
+            | Self::ToleranceOutOfRange
+            | Self::ToleranceBelowModel
+            | Self::BadArgument
+            | Self::ThreadsUnavailable
+            | Self::DegenerateDirection
+            | Self::UndefinedParameter => Severity::Error,
+            Self::ToleranceUsed => Severity::Note,
+        }
+    }
+
+    /// One sentence on what it means.
+    const fn summary(self) -> &'static str {
+        match self {
+            Self::Malformed => "The text is not a report.",
+            Self::UnsupportedSchema => "The report uses a schema version this build cannot read.",
+            Self::NotFinite => "A number given as a length or an angle is not finite.",
+            Self::ToleranceOutOfRange => "A tolerance must be a finite number greater than zero.",
+            Self::ToleranceBelowModel => "An operation cannot work to a finer tolerance than its model is built to.",
+            Self::ToleranceUsed => "The tolerance an operation worked to.",
+            Self::BadArgument => "A command-line argument is missing or is not understood.",
+            Self::ThreadsUnavailable => "The threads asked for could not be started.",
+            Self::DegenerateDirection => "A vector no longer than the model's tolerance has no direction.",
+            Self::UndefinedParameter => "A curve or surface is not defined at the parameter asked for.",
+        }
+    }
+
+    /// The wording, with `{name}` for each value it shows.
+    const fn template(self) -> &'static str {
+        match self {
+            Self::Malformed => "The text is not a valid report: the problem is at line {line}, column {column}.",
+            Self::UnsupportedSchema => "Schema version {found} is not supported. This build reads version {supported}.",
+            Self::NotFinite => "The number given is {value}, which is not finite in occam's internal units.",
+            Self::ToleranceOutOfRange => "The tolerance {tolerance} is not a finite number greater than zero.",
+            Self::ToleranceBelowModel => {
+                "The tolerance asked for, {requested}, is finer than the model's tolerance, {model}."
+            }
+            Self::ToleranceUsed => "The operation worked to a tolerance of {tolerance}.",
+            Self::BadArgument => {
+                "Argument {position} is not understood. Expected: occam distance --from X,Y,Z --to X,Y,Z \
+                 --model-tolerance LENGTH,ANGLE --tolerance LENGTH [--json], in millimetres and radians."
+            }
+            Self::ThreadsUnavailable => "{threads} threads could not be started on this machine.",
+            Self::DegenerateDirection => {
+                "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction."
+            }
+            Self::UndefinedParameter => "The parameter {parameter} is outside the domain from {low} to {high}.",
+        }
+    }
+
+    /// The kinds of fix it can suggest.
+    const fn remedies(self) -> &'static [RemedyKind] {
+        match self {
+            Self::UnsupportedSchema => &[RemedyKind::UseSchema],
+            Self::ToleranceBelowModel => &[RemedyKind::UseModelTolerance],
+            Self::ThreadsUnavailable => &[RemedyKind::UseThreads],
+            Self::Malformed
+            | Self::NotFinite
+            | Self::ToleranceOutOfRange
+            | Self::ToleranceUsed
+            | Self::BadArgument
+            | Self::DegenerateDirection
+            | Self::UndefinedParameter => &[],
         }
     }
 }
@@ -297,6 +319,14 @@ mod tests {
                 "template": "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction.",
                 "remedies": [],
             },
+            {
+                "name": "UndefinedParameter",
+                "code": "geom.undefined-parameter",
+                "severity": "error",
+                "summary": "A curve or surface is not defined at the parameter asked for.",
+                "template": "The parameter {parameter} is outside the domain from {low} to {high}.",
+                "remedies": [],
+            },
         ])
     }
 
@@ -331,7 +361,7 @@ mod tests {
             .filter_map(|rows| rows.as_array().cloned())
             .flatten()
             .collect();
-        assert_eq!(value, json!({"schema": 1, "codes": codes, "remedies": remedies()}));
+        assert_eq!(value, json!({"schema": 2, "codes": codes, "remedies": remedies()}));
     }
 
     #[test]

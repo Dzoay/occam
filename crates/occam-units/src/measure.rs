@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use occam_math::Real;
-use occam_report::{AngleUnit, Code, LengthUnit, NamedValue, Quantity, Report};
+use occam_report::{AngleUnit, Code, Fault, LengthUnit, NamedValue, Quantity, Report};
 
 mod sealed {
     /// Only this crate says what can be measured.
@@ -48,7 +48,11 @@ fn checked(internal: f64, given: f64) -> Result<f64, Report> {
     if internal.is_finite() {
         Ok(internal)
     } else {
-        Err(Report::new(Code::NotFinite).with_value(NamedValue::new("value", Quantity::Ratio, given)))
+        Err(Report::new(Code::NotFinite, Fault::InvalidInput).with_value(NamedValue::new(
+            "value",
+            Quantity::Ratio,
+            given,
+        )))
     }
 }
 
@@ -254,7 +258,7 @@ mod tests {
         for x in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             let report = Length::new(x, LengthUnit::Millimetre).unwrap_err();
             assert_eq!(report.code, Code::NotFinite);
-            assert_eq!(report.value("value").unwrap().value.to_bits(), x.to_bits());
+            assert_eq!(report.value("value").unwrap().number().unwrap().to_bits(), x.to_bits());
             assert_eq!(Angle::new(x, AngleUnit::Radian).unwrap_err().code, Code::NotFinite);
         }
     }
@@ -263,7 +267,7 @@ mod tests {
     fn a_finite_number_too_large_for_millimetres_is_refused_as_the_caller_gave_it() {
         let report = Length::new(1e308, LengthUnit::Metre).unwrap_err();
         assert_eq!(report.code, Code::NotFinite);
-        assert_eq!(report.value("value").unwrap().value, 1e308);
+        assert_eq!(report.value("value").unwrap().number(), Some(1e308));
     }
 
     #[test]

@@ -26,15 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.schema`
-
-Report schema 2: `EntityRef` with kind, slot and generation in one text form (`edge:41/1`) and the new kinds, the fault
-class, the closed list of reasons, the stage, a named value that holds a point, the tolerance in force, and the geometry
-codes with their remedies. A report of schema 1 is refused with `use-schema`.
-
-*Failing test first:* a schema 2 report round-trips through JSON with a point value and every new field; each new code
-and remedy pair has a followed-remedy test (L2).
-
 ### `geometry.seam`
 
 `occam-geom` with `Parametric` and `Surface`, `ParametricCurve` and `Curve`, and `ParamCurve`: evaluation by order,

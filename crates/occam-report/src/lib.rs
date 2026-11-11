@@ -39,6 +39,7 @@ macro_rules! text_enum {
 
 mod code;
 mod display;
+mod fault;
 mod follow;
 mod json;
 mod outcome;
@@ -47,8 +48,9 @@ mod value;
 
 pub use code::{Code, Entry, RemedyKind, Severity, catalogue_json};
 pub use display::{AngleUnit, DisplayUnits, LengthUnit};
+pub use fault::{Fault, Reason, Stage};
 pub use follow::follow_remedy;
 pub use json::SCHEMA;
 pub use outcome::{Batch, Outcome};
 pub use report::{Details, Partial, Remedy, Report};
-pub use value::{EntityKind, EntityRef, NamedValue, Quantity};
+pub use value::{EntityKind, EntityRef, NamedValue, Quantity, Value};

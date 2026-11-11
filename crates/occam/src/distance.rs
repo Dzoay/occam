@@ -3,7 +3,7 @@
 //! geometry to hide behind.
 
 use occam_math::Real;
-use occam_report::{AngleUnit, Code, DisplayUnits, LengthUnit, NamedValue, Outcome, Remedy, RemedyKind, Report};
+use occam_report::{AngleUnit, Code, DisplayUnits, Fault, LengthUnit, NamedValue, Outcome, Remedy, RemedyKind, Report};
 use occam_units::{Angle, Length, Point, Tolerance, World};
 
 use crate::Model;
@@ -35,7 +35,7 @@ pub struct Answer {
 }
 
 fn too_fine(asked: Length, model: Length) -> Report {
-    Report::new(Code::ToleranceBelowModel)
+    Report::new(Code::ToleranceBelowModel, Fault::InvalidInput)
         .with_value(NamedValue::length("requested", asked.millimetres()))
         .with_value(NamedValue::length("model", model.millimetres()))
         .with_remedy(
@@ -63,7 +63,7 @@ pub fn distance(
     let gap = to - from;
     let (x, y, z) = (gap.x().millimetres(), gap.y().millimetres(), gap.z().millimetres());
     let length = Length::new(Real::sqrt(x * x + y * y + z * z), LengthUnit::Millimetre)?;
-    let used = Report::new(Code::ToleranceUsed).with_value(NamedValue::length("tolerance", tolerance.millimetres()));
+    let used = Report::note(Code::ToleranceUsed).with_value(NamedValue::length("tolerance", tolerance.millimetres()));
     Ok(Outcome::new(length).with_diagnostic(used))
 }
 
@@ -133,7 +133,7 @@ mod tests {
     #[test]
     fn success_says_what_tolerance_was_used() {
         let got = distance(model(0.001), origin(), point(3.0, 4.0, 0.0), mm(0.01)).unwrap();
-        let note = Report::new(Code::ToleranceUsed).with_value(NamedValue::length("tolerance", 0.01));
+        let note = Report::note(Code::ToleranceUsed).with_value(NamedValue::length("tolerance", 0.01));
         assert_eq!(got.diagnostics, [note]);
     }
 
@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn following_the_remedy_succeeds() {
         followed_remedy!(refusal(), Code::ToleranceBelowModel, RemedyKind::UseModelTolerance, |remedy| {
-            let tolerance = remedy.value("tolerance").map_or(0.0, |value| value.value);
+            let tolerance = remedy.value("tolerance").and_then(NamedValue::number).unwrap_or(0.0);
             let got = distance(
                 model(0.001),
                 origin(),
@@ -191,7 +191,7 @@ mod tests {
     fn an_answer_gives_the_outcome_as_json_and_in_words() {
         let got = distance_json(&query(0.01));
         let json = concat!(
-            r#"{"schema":1,"value":5.0,"diagnostics":[{"schema":1,"code":"measure.tolerance-used","severity":"note","#,
+            r#"{"schema":2,"value":5.0,"diagnostics":[{"schema":2,"code":"measure.tolerance-used","severity":"note","#,
             r#""message":"The operation worked to a tolerance of 0.01 mm.","entities":[],"#,
             r#""values":[{"name":"tolerance","quantity":"length","value":0.01}],"remedies":[]}]}"#,
         );
@@ -204,7 +204,7 @@ mod tests {
         let words = "The tolerance asked for, 0.0001 mm, is finer than the model's tolerance, 0.001 mm.";
         let json = format!(
             concat!(
-                r#"{{"schema":1,"code":"measure.tolerance-below-model","severity":"error","message":"{}","entities":[],"#,
+                r#"{{"schema":2,"code":"measure.tolerance-below-model","severity":"error","fault":"invalid-input","message":"{}","entities":[],"#,
                 r#""values":[{{"name":"requested","quantity":"length","value":0.0001}},"#,
                 r#"{{"name":"model","quantity":"length","value":0.001}}],"#,
                 r#""remedies":[{{"kind":"use-model-tolerance","entities":[],"#,
