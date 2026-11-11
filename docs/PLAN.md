@@ -116,7 +116,8 @@ Named, not numbered. They run in this order.
 | `census` | FreeCAD usage census, parity list, OCCT oracle, corpus, whole-operation baselines. Runs alongside `bedrock` | [plan/census.md](plan/census.md) |
 | `proving-ground` | Throwaway prototypes, the parallel investigations, then the architecture | [plan/proving-ground.md](plan/proving-ground.md) |
 | `maths` | The first milestone of the first release: lanes, dispatch, threads, robust decisions, owned `sin_cos` and `atan2` | [plan/maths.md](plan/maths.md) |
-| first release | `geometry`, `topology`, `construction`, `view`, `intersection`, `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
+| `geometry` | Every curve and surface family through the two-layer seam, the new unit types, and report schema 2 | [plan/geometry.md](plan/geometry.md) |
+| first release | `topology`, `construction`, `view`, `intersection`, `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 
 **After the first release**, in no fixed order and each needing the user's go-ahead: the 2D sketch solver; the document
