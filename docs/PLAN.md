@@ -115,7 +115,8 @@ Named, not numbered. They run in this order.
 | `bedrock` | Repo, all gates, the error model, units, one trivial operation through every layer | [plan/bedrock.md](plan/bedrock.md) |
 | `census` | FreeCAD usage census, parity list, OCCT oracle, corpus, whole-operation baselines. Runs alongside `bedrock` | [plan/census.md](plan/census.md) |
 | `proving-ground` | Throwaway prototypes, the parallel investigations, then the architecture | [plan/proving-ground.md](plan/proving-ground.md) |
-| first release | `maths`, `geometry`, `topology`, `construction`, `view`, `intersection`, `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
+| `maths` | The first milestone of the first release: lanes, dispatch, threads, robust decisions, owned `sin_cos` and `atan2` | [plan/maths.md](plan/maths.md) |
+| first release | `geometry`, `topology`, `construction`, `view`, `intersection`, `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 
 **After the first release**, in no fixed order and each needing the user's go-ahead: the 2D sketch solver; the document
@@ -127,7 +128,7 @@ FreeCAD's `Part` layer (L39); an MCP server.
 
 ## 7. Decisions the user still owns
 
-O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md). O21, whether anything needs an exact derivative above the second, is answered by [the approved parity list](PARITY.md): rows 2.1 and 2.2 ask for evaluation to any derivative in `geometry`. O11, O12, O14, O16, O18 and O22 to O26 are [answered with the architecture](decisions/2026-11-11-the-architecture-and-its-answers.md), and [its decisions page](architecture/open-decisions.md) keeps the reasoning.
+O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md). O21, whether anything needs an exact derivative above the second, is answered by [the approved parity list](PARITY.md): rows 2.1 and 2.2 ask for evaluation to any derivative in `geometry`. O11, O12, O14, O16, O18 and O22 to O26 are [answered with the architecture](decisions/2026-11-11-the-architecture-and-its-answers.md), and [its decisions page](architecture/open-decisions.md) keeps the reasoning. O15 is [answered](decisions/2026-11-11-own-coefficients.md): occam fits its own coefficients.
 
 | Id | Decision | Recommendation | Needed by |
 |---|---|---|---|
@@ -138,7 +139,6 @@ O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
 | O9 | A machine with more physical cores for the parallel investigations. This laptop has 4 | Start here, and decide after `proving-ground.p1` shows how far scaling matters | `proving-ground.p2` |
 | O10 | A nightly toolchain for wasm threads, which need `-Zbuild-std`. [Spikes may use one already](decisions/2026-11-09-early-spikes.md) | P10 recommends keeping this open and not taking on nightly for real use. Nothing in the first release needs it. Reopen it if a real kernel has a model large enough that a copy per worker hurts, or tasks fine-grained enough that message passing dominates, or when `-Zbuild-std` stabilises | when one of those happens |
 | O13 | A stored per-entity accuracy for imported geometry, fixed at import and never grown (S2). Foreign geometry was not measured | Decide when import is in scope | when import is in scope |
-| O15 | Fdlibm's coefficients in those functions, which are under Sun's notice (S5): carry the notice in `LICENSES/`, or generate new ones with our own minimax fit | Generate new ones, since the code is rewritten anyway | before `occam-math` gains them |
 | O17 | x86-64-v3 code paths (S3/P3), and whether [`DETERMINISM.md`](DETERMINISM.md) rule 5, "No `target-cpu`", stays as written (P4). The NURBS gain exists only there. Having it means hand-written detection, a new dependency, or a build that excludes older CPUs | Leave this until a real kernel profile shows NURBS evaluation is worth it. Rule 5 needs no change if `dispatch!` is taken under O5 | when a kernel profile asks for it |
 | O19 | Which browsers the first release must support (P10, P12). Safari was not measured, and P12 measured only Firefox on two GPUs. [This also picks the renderer's API](decisions/2026-11-09-gpu-drawing.md) | Measure Safari before any release that claims to support it | `view` |
 | O20 | Whether the first release must serve continuous whole-surface editing of very large faces (P12) | No: draw the CPU mesh with local updates, and add write-through if a real workload asks for it | `view` |
