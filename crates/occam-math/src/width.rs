@@ -8,11 +8,11 @@
 /// as width 1 at 4 with simd128.
 pub const MASK: usize = if cfg!(target_family = "wasm") { 4 } else { 8 };
 
-/// The predicate filter, interval arithmetic on four decisions at once (P6): 63% of width 1's instructions, and 1.9
+/// The predicate filter, interval arithmetic on four decisions at once (P6): 48% of width 1's instructions, and 1.9
 /// times as fast with simd128.
 pub const FILTER: usize = 4;
 
-/// Analytic kernels, `sin_cos` and `atan2`, as the analytic surfaces evaluate and invert them in bulk: 72% of width 1's
-/// instructions for each at 4, and 1.9 and 1.4 times as fast with simd128. At 2 on x86-64, `atan2` took more
+/// Analytic kernels, `sin_cos` and `atan2`, as the analytic surfaces evaluate and invert them in bulk: 72% and 73% of
+/// width 1's instructions at 4, and 1.9 and 1.4 times as fast with simd128. At 2 on x86-64, `atan2` took more
 /// instructions than at width 1.
 pub const ANALYTIC: usize = 4;

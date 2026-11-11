@@ -39,7 +39,9 @@ impl Wide {
         } else if shift == 0 {
             self.lo
         } else {
-            self.lo.checked_shr(shift).unwrap_or(0) | self.hi.checked_shl(128_u32.wrapping_sub(shift)).unwrap_or(0)
+            // The two parts share no bits, so adding them joins them.
+            let low = self.lo.checked_shr(shift).unwrap_or(0);
+            low.wrapping_add(self.hi.checked_shl(128_u32.wrapping_sub(shift)).unwrap_or(0))
         }
     }
 }
@@ -59,7 +61,8 @@ fn window(first: u32) -> [u64; 3] {
     let piece = |index: usize| {
         let high = at(index).checked_shl(offset).unwrap_or(0);
         let low = at(index.saturating_add(1)).checked_shr(64_u32.saturating_sub(offset)).unwrap_or(0);
-        if offset == 0 { at(index) } else { high | low }
+        // The two parts share no bits, so adding them joins them.
+        if offset == 0 { at(index) } else { high.wrapping_add(low) }
     };
     [piece(word), piece(word.saturating_add(1)), piece(word.saturating_add(2))]
 }
@@ -90,7 +93,8 @@ pub fn reduce(x: f64) -> (f64, f64, f64) {
     }
     let bits = x.abs().to_bits();
     let exponent = i32::try_from((bits >> 52) & 0x7FF).unwrap_or(0).wrapping_sub(1075);
-    let mantissa = (bits & 0x000F_FFFF_FFFF_FFFF) | 0x0010_0000_0000_0000;
+    // The fraction and the implicit leading bit share no bits, so adding them joins them.
+    let mantissa = (bits & 0x000F_FFFF_FFFF_FFFF).wrapping_add(0x0010_0000_0000_0000);
     let first = u32::try_from(exponent.saturating_sub(1).max(1)).unwrap_or(1);
     let all = product(mantissa, window(first));
     // The binary point of the product, counted up from its lowest bit: from 190 to 224 here, so above 128.
@@ -108,7 +112,8 @@ pub fn reduce(x: f64) -> (f64, f64, f64) {
     } else {
         (fraction, false)
     };
-    if x < 0.0 {
+    // `x` is finite and far from zero here, so its sign bit is its sign.
+    if x.is_sign_negative() {
         negative = !negative;
         quadrant = 4_u128.wrapping_sub(quadrant) & 3;
     }

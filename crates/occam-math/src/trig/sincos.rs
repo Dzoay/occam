@@ -153,6 +153,15 @@ mod tests {
     }
 
     #[test]
+    fn a_deep_cancellation_keeps_every_piece_of_the_reduction() {
+        // 2^19 times π/2 rounded is a whole number of turns away from -2^19 (π/2 - PIO2_HI), so its sine is that, about
+        // -3.21e-11: PIO2_C4's part moves it by about 14 ulps, so a reduction that dropped or flipped it would show.
+        let x = super::super::constants::PIO2_HI * 524_288.0;
+        assert!(ulps(sin(x), -3.210_338_105_156_837_6e-11) <= 1.0, "{}", sin(x));
+        assert!(ulps(cos(x), 1.0) <= 1.0);
+    }
+
+    #[test]
     fn sine_is_odd_and_cosine_even_at_every_size() {
         let mut generator = SplitMix64::new(51);
         for _ in 0..20_000 {

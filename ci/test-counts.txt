@@ -3,7 +3,7 @@
 occam 11
 occam-cli::bin/occam 7
 occam-cli::cli 4
-occam-math 98
+occam-math 105
 occam-report 36
 occam-units 25
 occam-verify 30

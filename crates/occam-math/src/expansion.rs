@@ -102,11 +102,8 @@ impl Expansion {
         if !self.0.iter().all(|component| component.is_finite()) {
             return None;
         }
-        Some(
-            self.0
-                .last()
-                .map_or(Ordering::Equal, |largest| if *largest > 0.0 { Ordering::Greater } else { Ordering::Less }),
-        )
+        // The largest component is finite and never zero, so it compares with zero.
+        self.0.last().map_or(Some(Ordering::Equal), |largest| largest.partial_cmp(&0.0))
     }
 
     /// An approximation of the value: the components summed from the smallest.

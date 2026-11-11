@@ -189,6 +189,13 @@ mod tests {
         assert_eq!(Exec::threads(count(3)).unwrap().thread_count(), 1);
     }
 
+    #[test]
+    fn one_thread_is_the_calling_thread() {
+        let caller = thread::current().id();
+        let ran_on = Exec::threads(count(1)).unwrap().map(4, Grain::Each, |_| thread::current().id());
+        assert!(ran_on.iter().all(|id| *id == caller), "one thread starts no pool");
+    }
+
     #[cfg(not(target_family = "wasm"))]
     #[test]
     fn a_pool_shares_the_items_among_its_threads() {

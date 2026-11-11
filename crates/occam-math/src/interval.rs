@@ -39,11 +39,12 @@ fn down<R: Real>(x: R) -> R {
     x - step(x)
 }
 
-/// At least how far the exact result of one operation can be from `rounded`, its rounded value.
+/// At least how far the exact result of one operation can be from `rounded`, its rounded value: half a unit in its last
+/// place, at most 2^-53 of it when it is normal, and [`up`]'s smallest subnormal covers one too small to be normal.
 #[inline(always)]
 #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 fn rounding<R: Real>(rounded: R) -> R {
-    up(R::splat(HALF_ULP) * rounded.abs() + R::splat(TINY))
+    up(R::splat(HALF_ULP) * rounded.abs())
 }
 
 /// The larger of two non-negative bounds, or NaN if the first is NaN.
@@ -279,6 +280,26 @@ mod tests {
         assert!(root.radius() > 0.0 && root.radius() <= 4.0 * f64::EPSILON, "{root:?}");
     }
 
+    /// Whether `radius` is at least `want`, and no more than a few units in the last place of `scale` above it.
+    fn tight(radius: f64, want: f64, scale: f64) -> bool {
+        radius >= want && radius <= want + 8.0 * f64::EPSILON * scale
+    }
+
+    #[test]
+    fn each_radius_is_the_textbook_bound_and_little_more() {
+        let (a, b) = (Interval::new(2.0, 0.5), Interval::new(3.0, 0.25));
+        assert!(tight((a + b).radius(), 0.75, 5.0), "{:?}", a + b);
+        assert!(tight((a - b).radius(), 0.75, 5.0), "{:?}", a - b);
+        // |a| rb + |b| ra + ra rb = 0.5 + 1.5 + 0.125.
+        assert!(tight((a * b).radius(), 2.125, 6.0), "{:?}", a * b);
+        // (ra |b| + |a| rb) / (|b| (|b| - rb)) = (1.5 + 0.5) / (3 * 2.75).
+        assert!(tight((a / b).radius(), 2.0 / 8.25, 1.0), "{:?}", a / b);
+        // sqrt of [3, 5] is about [1.732, 2.236] around sqrt 4 = 2.
+        let root = Interval::new(4.0, 1.0).sqrt();
+        assert_eq!(root.mid(), 2.0);
+        assert!(tight(root.radius(), 2.0 - 3.0_f64.sqrt(), 2.0), "{root:?}");
+    }
+
     #[test]
     fn the_bounds_lie_outside_what_it_holds() {
         let a = Interval::new(1.0, 1e-20);
@@ -301,6 +322,7 @@ mod tests {
         let root = Interval::new(-4.0, 1.0).sqrt();
         assert!(root.mid().is_nan() || root.radius().is_nan());
         let straddling = Interval::new(-1.0, 4.0).sqrt();
+        assert!((straddling.mid() - 3.0_f64.sqrt() / 2.0).abs() < 1e-12, "{straddling:?} is centred on [0, sqrt 3]");
         assert!(straddling.mid() - straddling.radius() <= 0.0, "{straddling:?} reaches zero");
         let top = of(straddling.mid()).sum(&of(straddling.radius()));
         assert_eq!(top.product(&top).difference(&of(3.0)).sign(), Some(Ordering::Greater), "{straddling:?} reaches 3");

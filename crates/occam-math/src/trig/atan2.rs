@@ -43,7 +43,8 @@ pub fn atan2<R: Real>(y: R, x: R) -> R {
     let atan = ratio + (ratio * square) * polynomial;
     let offset_hi = R::select(swap, splat(PIO2_HI), R::select(x_negative, splat(PI_HI), zero));
     let offset_lo = R::select(swap, splat(PIO2_LO), R::select(x_negative, splat(PI_LO), zero));
-    let sign = R::select(x_negative, -one, one) * R::select(swap, -one, one);
+    // Minus when exactly one of `x_negative` and `swap` holds.
+    let sign = R::select(x_negative, R::select(swap, one, -one), R::select(swap, -one, one));
     let (high, error) = two_sum(offset_hi, sign * theta_hi);
     let angle = high + (error + (offset_lo + sign * (theta_lo + atan)));
     let infinity = splat(f64::INFINITY);

@@ -272,6 +272,7 @@ pub fn decide_computed<const N: usize, P: Predicate<N>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lanes::Lanes;
     use crate::splitmix::SplitMix64;
     use crate::testing::{double, scaled};
 
@@ -403,6 +404,53 @@ mod tests {
             }
         }
         assert!(tally.undecided > 0 && tally.decided > 0 && tally.exact == 0, "{tally:?}");
+    }
+
+    /// `2a + b - c`, which uses every operation of a ring.
+    fn every_operation<T: Ring>([a, b, c]: &[T; 3]) -> T {
+        T::of(2.0).mul(a).add(b).sub(c)
+    }
+
+    #[test]
+    fn every_ring_does_every_operation() {
+        let inputs = [1.5, 0.25, 4.0];
+        assert_eq!(every_operation(&inputs), -0.75);
+        assert_eq!(every_operation(&inputs.map(Interval::exact)).mid(), -0.75);
+        assert_eq!(every_operation(&inputs.map(Expansion::of)), Expansion::of(-0.75));
+        let lanes = every_operation(&inputs.map(|x| Interval::exact(Lanes::<2>::splat(x))));
+        assert_eq!(lanes.mid().to_array(), [-0.75; 2]);
+    }
+
+    #[test]
+    fn the_band_is_certain_only_when_the_enclosure_is_clear_of_its_edges() {
+        assert_eq!(certain(-3.0, -2.5, 2.0), Some(Side::Below));
+        assert_eq!(certain(-3.0, -2.0, 2.0), None, "touching -eps from below could be within");
+        assert_eq!(certain(2.5, 3.0, 2.0), Some(Side::Above));
+        assert_eq!(certain(2.0, 3.0, 2.0), None, "touching eps from above could be within");
+        assert_eq!(certain(-2.0, 2.0, 2.0), Some(Side::Within));
+        assert_eq!(certain(-2.1, 2.0, 2.0), None);
+        assert_eq!(certain(-2.0, 2.1, 2.0), None);
+        assert_eq!(certain(f64::NAN, 1.0, 2.0), None);
+    }
+
+    #[test]
+    fn stored_inputs_that_would_underflow_are_undecided_rather_than_wrong() {
+        // The value is 1e-400, which no double holds: the exact stage would lose it and call the points collinear.
+        let items = [[0.0, 0.0, 1e-200, 0.0, 0.0, 1e-200]];
+        let mut out = Vec::new();
+        let tally = decide_stored(&Orientation, &items, 0.0, &mut out);
+        assert_eq!(out, [Verdict::Undecided]);
+        assert_eq!(tally, Tally { decided: 0, exact: 1, undecided: 1 });
+    }
+
+    #[test]
+    fn the_exact_range_narrows_with_the_degree() {
+        let item = [1e100, 1e-100, 0.0];
+        assert!(exact_range(&item, 2));
+        assert!(!exact_range(&item, 4), "1e100 is above 2^240");
+        assert!(!exact_range(&[1e-150, 1.0, 1.0], 2), "1e-150 is below 2^-427");
+        assert!(!exact_range(&[f64::INFINITY, 1.0, 1.0], 2));
+        assert!(exact_range(&[-1e100, -1.0, -1e-100], 2), "the sign does not matter");
     }
 
     #[test]
