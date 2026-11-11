@@ -21,7 +21,7 @@ flowchart LR
 - **Each description** gives form, parameters, extent and position in the caller's units, origin, and neighbours.
 - **`occam describe`** asks the same resolver later, for many ids at once.
 
-This is the recommendation for [O26](open-decisions.md#o26-how-an-agent-learns-what-an-entity-is).
+This is the answer to [O26](open-decisions.md#o26-how-an-agent-learns-what-an-entity-is).
 
 ## What changes in schema 2
 

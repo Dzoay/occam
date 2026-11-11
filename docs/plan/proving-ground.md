@@ -24,4 +24,5 @@ Every spike has merged its finding, in `docs/evidence/2026-11-09-<id>.md`. The q
 
 `proving-ground.design` made [ARCHITECTURE.md](../ARCHITECTURE.md) from two proposals and an adversarial critic on each,
 with [a compiled type sketch](../sketch/src/lib.rs) of the seams. [§4 of the plan](../PLAN.md#4-layers) and
-[the first-release outline](first-release.md) follow it. The exit gate is met when the user approves it.
+[the first-release outline](first-release.md) follow it. The user
+[approved it](../decisions/2026-11-11-the-architecture-and-its-answers.md) on 2026-11-11, which meets the exit gate.

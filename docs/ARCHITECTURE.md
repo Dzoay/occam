@@ -1,11 +1,13 @@
 # Architecture
 
-**Status: proposed, for the user's approval** (the exit gate of [`proving-ground`](plan/proving-ground.md)).
+**Status: [approved by the user](decisions/2026-11-11-the-architecture-and-its-answers.md), 2026-11-11,** as where
+the first release starts: a milestone that finds it wrong changes the topic page and says so.
 
 The design of occam's first release. This page is the map; each topic page has a diagram, and links down to its type
 sketch and evidence.
 
-> **Waiting on you:** four questions, on [one page](architecture/open-decisions.md).
+> **Answered:** the four questions and the assumed answers, as recommended, on
+> [one page](architecture/open-decisions.md).
 
 ## How a request moves through it
 
@@ -29,7 +31,7 @@ flowchart LR
 
 | | Topic | In one line |
 |---|---|---|
-| **Start** | [**Open decisions**](architecture/open-decisions.md) | Four questions for you |
+| **Start** | [**Decisions**](architecture/open-decisions.md) | Four questions and the assumed answers, all answered |
 | | [Crates](architecture/crates.md) | The layers |
 | | [The bracket test](architecture/bracket-test.md) | The acceptance test, step by step |
 | **Foundations** | [Units](architecture/units.md) | Typed quantities, one tolerance per model |
