@@ -89,7 +89,7 @@ the same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 |---|---|---|
 | `fmt`, `clippy` | Formatting; every lint with warnings denied, including no panics, indexing, arithmetic, printing, `Any` and hashed collections in kernel crates (L19, L23, L26) | `bedrock.repo` |
 | `test` | Every test through nextest on the host, and doctests | `bedrock.repo` |
-| `tools-test` | The survey scripts' tests, Python standard library only | `census.freecad-api` |
+| `tools-test` | The Python tools' tests (the surveys, the corpus, the determinism record), standard library only | `census.freecad-api` |
 | `wasm` | Tests on wasm32-wasip2; the browser target builds; a Windows check | `bedrock.repo` |
 | `gates layers` | The crate graph matches §4 (L18) | `bedrock.gates` |
 | `gates complexity` | Function and file length, duplication, with a shrink-only exemption list (L20) | `bedrock.gates` |

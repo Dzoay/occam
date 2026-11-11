@@ -7,10 +7,12 @@
 
 mod hash;
 mod lanes;
+mod mask;
 mod real;
 mod splitmix;
 pub mod stream;
 
 pub use hash::{CANONICAL_NAN, Digest, canonical_bits};
 pub use lanes::Lanes;
+pub use mask::{LaneMask, Mask};
 pub use real::Real;

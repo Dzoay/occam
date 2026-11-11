@@ -27,14 +27,6 @@ every step that changes the stream re-derives the record from it first.
 
 ## Steps
 
-### `maths.compare`
-
-`Real` gains a mask type, `lt` and `le`, which are false where either side is NaN, and `select`, the way to a minimum or
-a maximum. `Lanes::from_fn` becomes a plain loop (P4). The stream gains a selecting operation.
-
-*Failing test first:* NaN lanes compare false, `select` keeps the sign of zero it is given, and the stream's new hash
-matches the record.
-
 ### `maths.dispatch`
 
 `Level::detect`, `Level::baseline`, the `LaneKernel` trait and `dispatch` over `fearless_simd`. The determinism example

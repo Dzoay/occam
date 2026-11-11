@@ -52,10 +52,12 @@ test-all` and `just wasm`).
 ## The recorded hashes
 
 `ci/determinism-hashes.txt` comes from a separate implementation in another language, which shares no code with
-`occam-math`. So a wrong answer that every build agrees on, such as a dropped NaN canonicalisation, still fails.
+`occam-math`: [`tools/determinism/stream.py`](../tools/determinism/stream.py), on CPython's IEEE doubles. So a wrong
+answer that every build agrees on, such as a dropped NaN canonicalisation, still fails. `just tools-test` checks that
+the record is what it computes, and `just determinism-record` prints it.
 
-Changing a recorded hash changes the contract. Do it only when the stream's definition changes on purpose, derive the
-new values from a separate implementation again, and say so in the PR.
+Changing a recorded hash changes the contract. Do it only when the stream's definition changes on purpose: change the
+separate implementation first, take the new values from it, and say so in the PR.
 
 ## What it does not cover yet
 

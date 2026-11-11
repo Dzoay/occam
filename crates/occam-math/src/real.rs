@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::lanes::Lanes;
+use crate::mask::Mask;
 
 mod sealed {
     use super::Lanes;
@@ -37,6 +38,9 @@ pub trait Real:
     /// How many numbers one value holds.
     const LANES: usize;
 
+    /// Which lanes a comparison held in.
+    type Mask: Mask;
+
     /// A value holding `x` in every lane.
     fn splat(x: f64) -> Self;
 
@@ -53,10 +57,23 @@ pub trait Real:
     /// The square root: NaN below zero, and -0 for -0.
     #[must_use]
     fn sqrt(self) -> Self;
+
+    /// The lanes where `self` is less than `rhs`. Exact, and false where either side is NaN. The two zeros are equal.
+    fn lt(self, rhs: Self) -> Self::Mask;
+
+    /// The lanes where `self` is at most `rhs`. Exact, and false where either side is NaN. The two zeros are equal.
+    fn le(self, rhs: Self) -> Self::Mask;
+
+    /// `yes` in the lanes where `mask` holds and `no` in the others, bits unchanged. This is the way to a minimum or a
+    /// maximum: `f64::min` stays banned, because which zero it returns differs by target.
+    #[must_use]
+    fn select(mask: Self::Mask, yes: Self, no: Self) -> Self;
 }
 
 impl Real for f64 {
     const LANES: usize = 1;
+
+    type Mask = bool;
 
     #[inline]
     fn splat(x: f64) -> Self {
@@ -82,6 +99,21 @@ impl Real for f64 {
     fn sqrt(self) -> Self {
         f64::sqrt(self)
     }
+
+    #[inline]
+    fn lt(self, rhs: Self) -> bool {
+        self < rhs
+    }
+
+    #[inline]
+    fn le(self, rhs: Self) -> bool {
+        self <= rhs
+    }
+
+    #[inline]
+    fn select(mask: bool, yes: Self, no: Self) -> Self {
+        if mask { yes } else { no }
+    }
 }
 
 #[cfg(test)]
@@ -102,6 +134,33 @@ mod tests {
         assert_eq!(<f64 as Real>::abs(-2.5), 2.5);
         assert_eq!(<f64 as Real>::abs(2.5), 2.5);
         assert_eq!(<f64 as Real>::abs(-0.0).to_bits(), 0.0_f64.to_bits());
+    }
+
+    #[test]
+    fn comparisons_are_false_where_either_side_is_nan() {
+        for (a, b) in [(f64::NAN, 1.0), (1.0, f64::NAN), (f64::NAN, f64::NAN), (f64::NAN, f64::INFINITY)] {
+            assert!(!Real::lt(a, b), "{a} < {b}");
+            assert!(!Real::le(a, b), "{a} <= {b}");
+        }
+    }
+
+    #[test]
+    fn comparisons_are_exact_and_the_zeros_are_equal() {
+        assert!(Real::lt(1.0, 1.0 + f64::EPSILON));
+        assert!(!Real::lt(1.0, 1.0));
+        assert!(Real::le(1.0, 1.0));
+        assert!(!Real::le(1.0 + f64::EPSILON, 1.0));
+        assert!(Real::lt(f64::NEG_INFINITY, f64::MIN));
+        assert!(!Real::lt(-0.0, 0.0));
+        assert!(Real::le(-0.0, 0.0) && Real::le(0.0, -0.0));
+    }
+
+    #[test]
+    fn select_takes_one_side_with_its_bits_unchanged() {
+        assert_eq!(f64::select(true, -0.0, 0.0).to_bits(), (-0.0_f64).to_bits());
+        assert_eq!(f64::select(false, -0.0, 0.0).to_bits(), 0.0_f64.to_bits());
+        assert_eq!(f64::select(true, 2.5, f64::NAN), 2.5);
+        assert!(f64::select(false, 2.5, f64::NAN).is_nan());
     }
 
     #[test]
