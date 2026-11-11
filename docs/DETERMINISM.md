@@ -15,7 +15,7 @@ For the same inputs, every output has identical bits:
 - in debug and in release builds.
 
 That holds for everything `Real` computes, and for the functions `occam-math` owns: `sin_cos`, with `sin` and `cos`, its
-two halves, and `atan2`. [S5](evidence/2026-11-09-s5.md) measured what else would need to be identical. Computing one
+two halves, `atan2`, `exp`, `expm1`, and `sinh_cosh` with `sinh` and `cosh`. [S5](evidence/2026-11-09-s5.md) measured what else would need to be identical. Computing one
 model in the browser and on a server is the case that would need more
 ([the decision](decisions/2026-11-09-one-maths-choke-point.md), O16), and the promise grows only with what is owned.
 
@@ -28,9 +28,15 @@ model in the browser and on a server is the case that would need more
    - **`occam_math` owns `sin_cos` and `atan2`** (S5, O14), written over `Real` with `+ - * /` and integer operations
      only, so the promise covers them at every lane width, thread count, level and target, in debug and in release. The
      record holds their hashes, from the separate implementation.
+   - **`occam_math` owns `exp` and `expm1`** as well, Arm's `exp` by way of phasekit
+     ([the decision](decisions/2026-11-11-exp-from-arm.md)), and `sinh_cosh` on them, written over `Real`. `exp` and
+     `expm1` read a table and branch, so they are written for one `f64`, with integer operations on its bits, and in
+     lanes each lane runs them alone through `Real::map`: the same bits as a single call, by construction.
    - **They are not correctly rounded.** Their accuracy is stated and tested: `sin` and `cos` within 0.75 ulps, and
-     `atan2` within 1.5, on S5's sets, measured by the separate implementation against a 120-digit reference
-     (`tools/determinism/accuracy.py`). No caller may rely on more.
+     `atan2` within 1.5, on S5's sets; `exp` within 0.51 (Arm's bound), `expm1` within 0.65, and `sinh` and `cosh`
+     within 1.1 below 709 in magnitude and within 1.6 from 709 to where they overflow. Each is measured by
+     the separate implementation against a reference of at least 120 digits (`tools/determinism/accuracy.py`). No caller
+     may rely on more.
    - **Every other transcendental stays banned until `occam-math` owns it,** by rule 2. The ban holds for literal
      arguments too: the compiler folds `f64::sin` of a literal with the libm of the machine that builds it, so one wasm
      build gave different bits in release and debug (S5).

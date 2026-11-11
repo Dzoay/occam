@@ -50,6 +50,11 @@ pub trait Real:
     /// Calls `visit` on every lane, lane 0 first.
     fn for_each_lane(self, visit: impl FnMut(f64));
 
+    /// `op` on every lane, lane 0 first, for a function of one `f64` that has no lane form, such as [`crate::exp`]
+    /// with its table and branches. Each lane gets the bits `op` gives that lane's number alone.
+    #[must_use]
+    fn map(self, op: impl Fn(f64) -> f64) -> Self;
+
     /// The absolute value.
     #[must_use]
     fn abs(self) -> Self;
@@ -102,6 +107,11 @@ impl Real for f64 {
     #[inline(always)]
     fn for_each_lane(self, mut visit: impl FnMut(f64)) {
         visit(self);
+    }
+
+    #[inline(always)]
+    fn map(self, op: impl Fn(f64) -> f64) -> Self {
+        op(self)
     }
 
     #[inline(always)]

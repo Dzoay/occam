@@ -18,3 +18,7 @@ sin 9bb6b2b7a4a14438
 cos 6a5b384ca7572916
 copysign 0106ff3b2619b2d6
 atan2 b99ccd55fd3bd491
+exp 5533c3694f30147c
+expm1 1218affb2dff024a
+sinh 1c15c1eed9b5e099
+cosh caed7066fa406c2f

@@ -6,18 +6,20 @@ use std::marker::PhantomData;
 
 use crate::dispatch::{LaneKernel, Level, dispatch};
 use crate::exec::{Exec, Grain};
+use crate::exp::{exp, expm1};
 use crate::hash::Digest;
+use crate::hyperbolic::sinh_cosh;
 use crate::real::Real;
 use crate::splitmix::SplitMix64;
 use crate::trig::{atan2, sin_cos};
 
 /// How many operations the stream hashes.
-pub const OPERATION_COUNT: usize = 16;
+pub const OPERATION_COUNT: usize = 20;
 
 /// The operations, in the order [`Hashes`] gives them.
 pub const OPERATIONS: [&str; OPERATION_COUNT] = [
     "add", "sub", "mul", "div", "neg", "abs", "sqrt", "mixed", "lt", "le", "up", "down", "sin", "cos", "copysign",
-    "atan2",
+    "atan2", "exp", "expm1", "sinh", "cosh",
 ];
 
 /// One hash per operation, in the order of [`OPERATIONS`].
@@ -77,6 +79,7 @@ fn draw(generator: &mut SplitMix64) -> f64 {
 #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 fn outputs<R: Real>(a: R, b: R, c: R) -> [R; OPERATION_COUNT] {
     let (sine, cosine) = sin_cos(a);
+    let (hyperbolic_sine, hyperbolic_cosine) = sinh_cosh(a);
     [
         a + b,
         a - b,
@@ -94,6 +97,10 @@ fn outputs<R: Real>(a: R, b: R, c: R) -> [R; OPERATION_COUNT] {
         cosine,
         a.copysign(b),
         atan2(a, b),
+        exp(a),
+        expm1(a),
+        hyperbolic_sine,
+        hyperbolic_cosine,
     ]
 }
 

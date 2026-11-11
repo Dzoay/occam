@@ -15,4 +15,5 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | `shewchuk-1997` | paper | n/a | Shewchuk. *Adaptive Precision Floating-Point Arithmetic and Fast Robust Geometric Predicates*. Discrete & Computational Geometry 18(3), 1997 |
 | `rump-1999` | paper | n/a | Rump. *Fast and Parallel Interval Arithmetic*. BIT Numerical Mathematics 39(3), 1999 |
 | `cody-waite-1980` | book | n/a | Cody, Waite. *Software Manual for the Elementary Functions*. Prentice-Hall, 1980 |
+| `arm-optimized-routines` | code | MIT OR Apache-2.0 WITH LLVM-exception | Arm Limited. *optimized-routines* v26.07, `math/exp.c` and `math/exp_data.c`, <https://github.com/ARM-software/optimized-routines>, as phasekit ported it ([the decision](decisions/2026-11-11-exp-from-arm.md)) |
 | `payne-hanek-1983` | paper | n/a | Payne, Hanek. *Radian Reduction for Trigonometric Functions*. ACM SIGNUM Newsletter 18(1), 1983 |
