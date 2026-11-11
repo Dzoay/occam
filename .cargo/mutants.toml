@@ -23,12 +23,13 @@ exclude_globs = [
 ]
 
 # Each gate's `run` gathers its input through `repo` and is exercised by running the gate, not by unit tests; the rules
-# it applies are in the module's pure functions, which are mutated. The same goes for `gates::main` and `usage`.
+# it applies are in the module's pure functions, which are mutated. The same goes for `gates::main` and `usage`, and for
+# `gates determinism`'s `levels`, which runs the probe and hands its output to `parsed_levels`.
 exclude_re = [
     "replace run -> Verdict",
     "in run$",
-    "replace (measure|browser|built|counts|summaries) ",
-    "in (measure|browser|built|counts|summaries)$",
+    "replace (measure|browser|built|counts|summaries|levels) ",
+    "in (measure|browser|built|counts|summaries|levels)$",
     "replace (main|usage) -> ExitCode",
     "in (main|usage)$",
 ]

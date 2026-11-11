@@ -87,15 +87,20 @@ fn run_failed(what: &str, errors: &str) -> Vec<Finding> {
     vec![Finding::new("determinism.run-failed", STREAM, message, "run `just toolchain`, then fix what it reports")]
 }
 
+/// The levels the probe printed, one a line, or why there are none.
+fn parsed_levels(ok: bool, output: &str, errors: &str) -> Result<Vec<String>, Vec<Finding>> {
+    let levels: Vec<String> = output.lines().filter(|line| !line.is_empty()).map(str::to_string).collect();
+    if !ok || levels.is_empty() {
+        return Err(run_failed("the level query", errors));
+    }
+    Ok(levels)
+}
+
 /// The instruction levels this machine has, widest first, as the native probe names them.
 fn levels(repo: &Repo) -> Result<Vec<String>, Vec<Finding>> {
     let args: Vec<&str> = NATIVE.iter().copied().chain(["--", "--levels"]).collect();
     let (ok, output, errors) = repo.capture(env!("CARGO"), &args).map_err(|e| vec![e])?;
-    let levels: Vec<String> = output.lines().filter(|line| !line.is_empty()).map(str::to_string).collect();
-    if !ok || levels.is_empty() {
-        return Err(run_failed("the level query", &errors));
-    }
-    Ok(levels)
+    parsed_levels(ok, &output, &errors)
 }
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
@@ -455,6 +460,20 @@ mod tests {
         let found = check(&runs, GOOD).unwrap_err();
         assert_eq!(codes(&Err(found.clone())), ["determinism.wrong-build"]);
         assert!(found[0].message.contains("x86-64, 1 thread(s), sse2"), "{found:?}");
+    }
+
+    #[test]
+    fn the_levels_are_the_probes_lines() {
+        assert_eq!(parsed_levels(true, "avx2\n\nsse2\n", ""), Ok(levels(&["avx2", "sse2"])));
+    }
+
+    #[test]
+    fn a_level_query_that_failed_or_printed_nothing_is_a_failure() {
+        let failed = parsed_levels(false, "avx2\n", "no cargo").unwrap_err();
+        assert_eq!(codes(&Err(failed.clone())), ["determinism.run-failed"]);
+        assert_eq!(failed[0].message, "the level query did not run: no cargo");
+        let nothing = parsed_levels(true, "\n", "").unwrap_err();
+        assert_eq!(nothing.iter().map(|finding| finding.code).collect::<Vec<_>>(), ["determinism.run-failed"]);
     }
 
     #[test]

@@ -415,6 +415,17 @@ mod tests {
     }
 
     #[test]
+    fn only_kernels_above_width_one_are_counted_as_ahead() {
+        let rows = [("sincos_w1", 1000), ("sincos_w4", 700), ("sincos_w8", 600)];
+        let record = "sincos_w1 1000\nsincos_w4 700\nsincos_w8 600\n";
+        let got = check(record, &measured(&rows));
+        assert_eq!(
+            got,
+            Ok("3 operation classes within 2% of the record, 2 lane kernels clearly ahead of width 1".to_string())
+        );
+    }
+
+    #[test]
     fn a_lane_kernel_seeded_to_run_scalar_fails() {
         let record = "sincos_w1 1000\nsincos_w4 1010\n";
         let found = check(record, &measured(&[("sincos_w1", 1000), ("sincos_w4", 1010)])).unwrap_err();
