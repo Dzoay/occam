@@ -192,6 +192,32 @@ struct Slot<R> {
     record: Option<R>,
 }
 
+/// A colour as STEP gives it: red, green and blue, each from 0 to 1.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Colour {
+    pub red: f64,
+    pub green: f64,
+    pub blue: f64,
+}
+
+/// An entity's name and colour (PARITY 2.9). Either may be absent.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Attributes {
+    pub name: Option<String>,
+    pub colour: Option<Colour>,
+}
+
+type AttributeChunk = Arc<Vec<Option<Attributes>>>;
+
+/// Names and colours by entity: beside the records and never in them, so no geometric code reads them. Kept per kind in
+/// copy-on-write chunks of `CHUNK` slots, as the records are, so taking a snapshot costs what S3-P3 measured. A chunk
+/// with no entries is never allocated.
+#[derive(Clone, Default)]
+pub struct AttributeTable {
+    /// By `EntityKind`, then by chunk.
+    chunks: Vec<Vec<Option<AttributeChunk>>>,
+}
+
 /// An immutable version of a model. Cloning shares every chunk (S3-P3: 183 µs at a million faces, against 31 ms for a
 /// plain arena).
 #[derive(Clone)]
@@ -210,6 +236,7 @@ pub struct Snapshot {
     surfaces: Table<SurfaceGeom>,
     curves: Table<CurveGeom>,
     pcurves: Table<ParamCurveGeom>,
+    attributes: AttributeTable,
 }
 
 macro_rules! kinds {
@@ -381,6 +408,12 @@ impl Snapshot {
         unimplemented!()
     }
 
+    /// The entity's name and colour, if it has either.
+    #[must_use]
+    pub fn attributes(&self, entity: EntityRef) -> Option<&Attributes> {
+        unimplemented!()
+    }
+
     /// Live ids of a kind in slot order: the order everything iterates, hashes and lists in (PARITY 1.1).
     #[must_use]
     pub fn ids<K: Kind>(&self) -> Vec<Id<K>> {
@@ -402,7 +435,8 @@ impl Snapshot {
         unimplemented!()
     }
 
-    /// Every live record in slot order, every geometry's `Content`, and the tolerance, NaNs canonicalised (L23).
+    /// Every live record in slot order, every geometry's `Content`, the names and colours, and the tolerance, NaNs
+    /// canonicalised (L23).
     #[must_use]
     pub fn digest(&self) -> u64 {
         unimplemented!()
@@ -460,10 +494,21 @@ impl Edit {
         unimplemented!()
     }
 
+    /// Removes the record, and its name and colour with it.
+    ///
     /// # Errors
     ///
     /// `topo.stale-id` if `id` is not live.
     pub fn remove<K: Kind>(&mut self, id: Id<K>) -> Result<(), Report> {
+        unimplemented!()
+    }
+
+    /// Sets or clears an entity's name and colour. What is set here wins over what `commit` carries along lineage.
+    ///
+    /// # Errors
+    ///
+    /// `topo.stale-id` if `entity` is not live or reserved here.
+    pub fn set_attributes(&mut self, entity: EntityRef, attributes: Option<Attributes>) -> Result<(), Report> {
         unimplemented!()
     }
 
@@ -475,6 +520,9 @@ impl Edit {
     /// Checks what was created or changed and its neighbours, plus the global counts (Euler characteristic, shells per
     /// body), then hands back the new snapshot. Nothing else makes a snapshot, so no unchecked model exists, in release
     /// builds too. Checking only what changed keeps the check's cost following the edit (P1's plate ladder).
+    ///
+    /// It also carries names and colours along the lineage `derive` recorded: a split, trimmed or copied entity takes
+    /// its source's, and a merged one keeps only what all its sources share.
     ///
     /// # Errors
     ///

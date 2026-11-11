@@ -72,6 +72,23 @@ flowchart LR
 - `Changes` lists what was created, changed and deleted, and each new entity's lineage.
 - `Snapshot::check_all` checks the whole model, for loading, importing and tests.
 
+## Names and colours
+
+```mermaid
+flowchart LR
+  a["face:12/1<br/>lid · red"] -->|"split"| b["face:40/1<br/>lid · red"] & c["face:41/1<br/>lid · red"]
+  d["face:7/1<br/>red"] & e["face:8/1<br/>blue"] -->|"merged"| f["face:9/1<br/>no colour"]
+```
+
+- **A side table keyed by id,** beside the records and never in them, so no geometric code reads it. Any entity may
+  have a name, a colour, both or neither. STEP import fills it (PARITY 2.9).
+- **`commit` carries them along lineage.** A split, trimmed or copied entity takes its source's; a merge keeps only
+  what every source shares. What the edit sets itself wins. Removing an entity removes them.
+- **Stored like the records,** in copy-on-write chunks, so a snapshot costs the same. Saved in the native file and
+  covered by the digest.
+- **Groups and tags** in the later [document layer](../PLAN.md#6-milestones) can extend this table instead of adding
+  a second mechanism.
+
 <details>
 <summary>Evidence</summary>
 

@@ -22,6 +22,6 @@ hold.
 | `view` | P9's mesher, with its limits and the watertight check on every output; P10's worker pool; P12's renderer contract | 1.7 | Mesh buffers asserted; watertight; timed in the browser |
 | `intersection` | The method list, closed forms then the hybrid; failures in the result; `BelowResolution`; coincidence detected; edge box tests checked by digest | none | Oracle and closed-form agreement across the corpus (goal) |
 | `booleans` | P2's phases with frozen outputs; only touched faces prepared; a sort-and-sweep broad phase; every failing pair reported; coincident surfaces (O25); point classification; the decisions tally | 1.11, 2.14 | Invariants on all returned results (gate); randomised sequences nightly; S6's blind control rerun on boolean failures (goal) |
-| `exchange` | STEP read and write | 1.9, 2.9 | Round trip through the OCCT oracle; losses reported |
+| `exchange` | STEP read and write; the table of [names and colours](../architecture/topology.md#names-and-colours) | 1.9, 2.9 | Round trip through the OCCT oracle; losses reported |
 | `blends` | Constant-radius fillets with a radius per edge, the feasible radius computed first; chamfers; per-edge results | 1.14, 2.16 | Remedies followed by test, including the feasible radius |
 | `release` | The bracket test, docs for agents, licence review | none | The bracket test passes and the user says release |

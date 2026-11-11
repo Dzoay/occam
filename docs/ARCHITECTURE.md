@@ -37,7 +37,7 @@ flowchart LR
 | | [Threads and lanes](architecture/threads-and-lanes.md) | Parallel maps, results in index order |
 | | [Determinism](architecture/determinism.md) | Same bits on any thread count or target |
 | **Model** | [Geometry](architecture/geometry.md) | Curves and surfaces |
-| | [Topology](architecture/topology.md) | Entities, ids, snapshots, the edit |
+| | [Topology](architecture/topology.md) | Entities, ids, snapshots, the edit, names and colours |
 | **Algorithms** | [Intersection](architecture/intersection.md) | Closed forms, then a hybrid |
 | | [Operations](architecture/operations.md) | Requests as data, one result per item |
 | | [The boolean](architecture/boolean.md) | Seven pure phases |

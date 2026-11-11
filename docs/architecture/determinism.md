@@ -34,8 +34,8 @@ flowchart LR
   - A point within the band of a periodic seam belongs to the chart the face's sheet names.
   - A count taken from a computed value uses its interval's upper end, so it always rounds the same way.
 
-A snapshot's digest covers every live record in slot order, every geometry's content and the tolerance, with NaNs made
-canonical.
+A snapshot's digest covers every live record in slot order, every geometry's content, the names and colours, and the
+tolerance, with NaNs made canonical.
 
 ## The gate grows by milestone
 
