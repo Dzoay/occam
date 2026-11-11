@@ -25,6 +25,8 @@ pub mod stream;
 #[cfg(test)]
 mod testing;
 mod trig;
+pub mod width;
+pub mod workloads;
 
 pub use dispatch::{LaneKernel, Level, dispatch};
 pub use exact::{fast_two_sum, split, two_product, two_sum};

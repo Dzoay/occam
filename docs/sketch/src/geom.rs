@@ -7,7 +7,7 @@ use occam_math::Real;
 use occam_report::{NamedValue, Report};
 use occam_units::{Angle, Length, Point, Tolerance, UvPoint, World};
 
-use crate::math::Level;
+use occam_math::Level;
 use crate::units::{Bounds, Direction, ParamKind, Tangent};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

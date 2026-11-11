@@ -7,7 +7,7 @@ use occam_report::{AngleUnit, Batch, LengthUnit, Outcome, Report};
 use occam_units::{Length, Point, UvPoint, World};
 use serde::Deserialize;
 
-use crate::math::Exec;
+use occam_math::Exec;
 use crate::report::{EntityRef, Stage};
 use crate::topo::{Body, Changes, Describe, Edge, Face, Id, Snapshot};
 

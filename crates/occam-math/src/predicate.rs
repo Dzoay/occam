@@ -147,7 +147,7 @@ impl Tally {
 }
 
 /// The items the filter runs together.
-const WIDTH: usize = 4;
+const WIDTH: usize = crate::width::FILTER;
 
 /// The side a value certainly lies on, given bounds below and above it, if it can be certified.
 fn certain(lower: f64, upper: f64, eps: f64) -> Option<Side> {

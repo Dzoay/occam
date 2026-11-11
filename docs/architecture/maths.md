@@ -1,6 +1,6 @@
 # Maths
 
-[Architecture](../ARCHITECTURE.md) › Maths · crate `occam-math` · sketch [`math.rs`](../sketch/src/math.rs)
+[Architecture](../ARCHITECTURE.md) › Maths · crate [`occam-math`](../../crates/occam-math/src/lib.rs)
 
 All computing goes through one crate: numbers that run as `f64` or in lanes, owned trigonometry, and decisions that
 are either exact or say they cannot decide.

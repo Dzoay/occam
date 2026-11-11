@@ -5,32 +5,21 @@ comparison and selection in lanes, dispatch to the widest instruction level, the
 its own `sin_cos` and `atan2`. The design is [the maths topic](../architecture/maths.md) and
 [threads and lanes](../architecture/threads-and-lanes.md); the contract is [DETERMINISM.md](../DETERMINISM.md).
 
-```mermaid
-flowchart LR
-  compare --> dispatch --> exec
-  expansion --> interval --> predicate
-  coefficients --> sincos["sin-cos"] --> atan2
-  exec & predicate & atan2 --> vectorise
-```
-
 **Exit (gate):** `just gates`, `just mutants` and `just perf` are green; `gates determinism` gives the same bits across
 targets, thread counts and dispatch levels, the owned functions included, against hashes from a separate
 implementation; and the vectorisation check in `gates perf` holds every lane kernel.
 
 **PR grouping:** every step shares one PR, with a commit each, so that CI runs once (the user's request, 2026-11-11).
 
-**Throughout.** `f64::sin`, `f64::atan2` and the rest stay banned. New dependencies are the two already approved,
+**Throughout.** `f64::sin`, `f64::atan2` and the rest stay banned. The new dependencies are the two already approved,
 [`fearless_simd`](../decisions/2026-11-10-fearless-simd.md) and [`rayon`](../decisions/2026-11-10-rayon.md), each named
 only in `occam-math`. Randomised tests draw from the crate's own `SplitMix64`, so they draw the same cases on every
-target. The determinism stream's separate implementation joins `tools/determinism/`, in Python's standard library, and
-every step that changes the stream re-derives the record from it first.
+target. The determinism stream's separate implementation is `tools/determinism/`, in Python's standard library, and
+every change to the stream takes its record from it first.
 
-## Steps
+## Closing the milestone
 
-### `maths.vectorise`
-
-The vectorisation check in `gates perf`: every lane kernel (comparison masks, the predicate filter, `sin_cos` and
-`atan2`) beats width 1 at its chosen width on x86-64 by instruction count and in the browser with simd128, or runs at
-width 1. The type sketch's `math.rs` is deleted.
-
-*Failing test first:* a lane kernel seeded to run scalar fails the check.
+Every step has merged, one commit each in one PR, whose body holds what was measured. The owned functions'
+[coefficients are our own](../decisions/2026-11-11-own-coefficients.md), their accuracy is in
+[DETERMINISM.md](../DETERMINISM.md), and the lane widths `gates perf` holds are in `occam_math::width`. The type
+sketch's `math.rs` is gone: the sketch now uses the real crate.

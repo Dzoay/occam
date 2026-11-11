@@ -1,8 +1,16 @@
 # `gates perf`: instructions per operation class, `<class> <instructions>`. `just perf --update` rewrites the numbers.
-# Recorded on an Intel Core i7-1165G7 (governor irrelevant: these are instruction counts under Valgrind's callgrind), from a
+# Recorded on an Intel Core i7-8700K (governor irrelevant: these are instruction counts under Valgrind's callgrind), from a
 # static x86_64-unknown-linux-musl build, so that no machine's libc or CPU features change them. rustc 1.99.1, gungraun 0.20.0.
-maths_lanes2 28409040
-maths_lanes4 22696968
-maths_lanes8 23120719
-maths_scalar 28812244
+angles_w1 645914
+angles_w4 463377
+filter_w1 1012572
+filter_w4 634720
+masks_w1 123749
+masks_w8 32619
+maths_lanes2 83766393
+maths_lanes4 67148786
+maths_lanes8 64129123
+maths_scalar 84787559
 measure_distance 2632
+sines_w1 775021
+sines_w4 556907

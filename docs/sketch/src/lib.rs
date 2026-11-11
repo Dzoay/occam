@@ -10,8 +10,6 @@
 
 pub mod report;
 
-pub mod math;
-
 pub mod units;
 
 pub mod geom;

@@ -26,6 +26,11 @@ const FLOOR: u64 = 98;
 /// 1.0, so "not slower" would not notice lanes that stop vectorising. Timing the two builds in one run leaves a few percent of
 /// noise, and the workload measures about 1.8, so this is well clear of both.
 const MIN_GAIN: f64 = 1.25;
+/// A lane kernel run at width `N`, measured as `<kernel>_w<N>`, may take at most this percentage of the instructions of
+/// the same kernel at width 1, `<kernel>_w1`; a kernel that cannot runs at width 1 (L29, the threads and lanes topic).
+const MOST_AT_WIDTH: u64 = 90;
+/// In the browser's simd128 build, a lane kernel at its width must be at least this many times as fast as at width 1.
+const MIN_LANE_GAIN: f64 = 1.15;
 
 /// One browser run: how long each build took, and what each computed.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -34,6 +39,20 @@ struct Timing {
     simd128_ms: f64,
     scalar_result: f64,
     simd128_result: f64,
+    /// Each lane kernel in the simd128 build, at its width and at width 1.
+    #[serde(default)]
+    kernels: Vec<KernelTiming>,
+}
+
+/// One lane kernel in the browser's simd128 build: how long it took at width 1 and at its width, and what each gave.
+#[derive(Debug, PartialEq, Deserialize)]
+struct KernelTiming {
+    name: String,
+    width: u32,
+    one_ms: f64,
+    lanes_ms: f64,
+    one_result: f64,
+    lanes_result: f64,
 }
 
 fn is_entry(line: &str) -> bool {
@@ -60,6 +79,44 @@ fn compared(class: &str, recorded: u64, count: u64) -> Option<Finding> {
         return Some(Finding::new("perf.stale", RECORD, message, "lower the record: run `just perf --update`"));
     }
     None
+}
+
+/// The kernel and width of a class named `<kernel>_w<width>`.
+fn kernel_width(class: &str) -> Option<(&str, u32)> {
+    let (kernel, width) = class.rsplit_once("_w")?;
+    Some((kernel, width.parse().ok()?))
+}
+
+/// Every lane kernel measured at a width above 1 takes clearly fewer instructions than at width 1.
+fn check_widths(measured: &BTreeMap<String, u64>) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for (class, count) in measured {
+        let Some((kernel, width)) = kernel_width(class).filter(|(_, width)| *width > 1) else {
+            continue;
+        };
+        let one = format!("{kernel}_w1");
+        match measured.get(&one) {
+            None => findings.push(Finding::new(
+                "perf.no-width-one",
+                BENCH,
+                format!("{class} has no {one} to be compared with"),
+                "benchmark the same kernel at width 1 too",
+            )),
+            Some(base) if count.saturating_mul(100) > base.saturating_mul(MOST_AT_WIDTH) => {
+                let message = format!(
+                    "{kernel} at width {width} takes {count} instructions, against {base} at width 1; it must take at most {MOST_AT_WIDTH}%"
+                );
+                findings.push(Finding::new(
+                    "perf.not-vectorised",
+                    BENCH,
+                    message,
+                    "find out why it does not vectorise, or run it at width 1 (L29)",
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    findings
 }
 
 fn check(record: &str, measured: &BTreeMap<String, u64>) -> Verdict {
@@ -106,7 +163,13 @@ fn check(record: &str, measured: &BTreeMap<String, u64>) -> Verdict {
             UPDATE,
         ));
     }
-    verdict(format!("{} operation classes within 2% of the record", measured.len()), findings)
+    findings.extend(check_widths(measured));
+    let kernels = measured.keys().filter(|class| kernel_width(class).is_some_and(|(_, width)| width > 1)).count();
+    let summary = format!(
+        "{} operation classes within 2% of the record, {kernels} lane kernels clearly ahead of width 1",
+        measured.len()
+    );
+    verdict(summary, findings)
 }
 
 /// Comparing the two builds of one run, so that the machine and its load cancel out (L30).
@@ -128,6 +191,33 @@ fn check_browser(timing: &Timing) -> Vec<Finding> {
     if timing.simd128_result.to_bits() != timing.scalar_result.to_bits() {
         let message = format!("simd128 computed {} and scalar {}", timing.simd128_result, timing.scalar_result);
         findings.push(Finding::new("perf.simd128-differs", WORKLOAD, message, "see docs/DETERMINISM.md (L23)"));
+    }
+    findings.extend(timing.kernels.iter().flat_map(check_kernel));
+    findings
+}
+
+/// A lane kernel in the simd128 build is clearly faster at its width than at width 1, and gives the same bits.
+fn check_kernel(kernel: &KernelTiming) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let gained = kernel.one_ms >= kernel.lanes_ms * MIN_LANE_GAIN;
+    if !gained {
+        let message = format!(
+            "in the browser, {} at width {} took {} ms and at width 1 {} ms; it must be {MIN_LANE_GAIN} times as fast",
+            kernel.name, kernel.width, kernel.lanes_ms, kernel.one_ms
+        );
+        findings.push(Finding::new(
+            "perf.lanes-no-gain",
+            WORKLOAD,
+            message,
+            "find out why it does not vectorise with simd128, or run it at width 1 on wasm (L29)",
+        ));
+    }
+    if kernel.one_result.to_bits() != kernel.lanes_result.to_bits() {
+        let message = format!(
+            "{} gave {} at width {} and {} at width 1",
+            kernel.name, kernel.lanes_result, kernel.width, kernel.one_result
+        );
+        findings.push(Finding::new("perf.lanes-differ", WORKLOAD, message, "see docs/DETERMINISM.md (L23)"));
     }
     findings
 }
@@ -249,11 +339,17 @@ fn measure(repo: &Repo) -> Verdict {
     let mut findings = native.as_ref().err().cloned().unwrap_or_default();
     findings.extend(check_browser(&timing));
     let ratio = timing.scalar_ms / timing.simd128_ms;
+    let kernels: Vec<String> = timing
+        .kernels
+        .iter()
+        .map(|kernel| format!("{} {:.2}x at width {}", kernel.name, kernel.one_ms / kernel.lanes_ms, kernel.width))
+        .collect();
     let summary = format!(
-        "{}; in the browser, scalar {:.1} ms, simd128 {:.1} ms, {ratio:.2} times as fast",
+        "{}; in the browser, scalar {:.1} ms, simd128 {:.1} ms, {ratio:.2} times as fast; lane kernels with simd128: {}",
         native.unwrap_or_default(),
         timing.scalar_ms,
-        timing.simd128_ms
+        timing.simd128_ms,
+        kernels.join(", ")
     );
     verdict(summary, findings)
 }
@@ -301,7 +397,47 @@ mod tests {
     #[test]
     fn a_passing_run_says_how_many_classes_it_held() {
         let got = check(RECORD_TEXT, &measured(&[("alpha", 1000), ("beta", 2000)]));
-        assert_eq!(got, Ok("2 operation classes within 2% of the record".to_string()));
+        assert_eq!(
+            got,
+            Ok("2 operation classes within 2% of the record, 0 lane kernels clearly ahead of width 1".to_string())
+        );
+    }
+
+    const KERNELS: &str = "sincos_w1 1000\nsincos_w4 900\nmeasure 5\n";
+
+    #[test]
+    fn a_lane_kernel_clearly_ahead_of_width_one_passes() {
+        let got = check(KERNELS, &measured(&[("sincos_w1", 1000), ("sincos_w4", 900), ("measure", 5)]));
+        assert_eq!(
+            got,
+            Ok("3 operation classes within 2% of the record, 1 lane kernels clearly ahead of width 1".to_string())
+        );
+    }
+
+    #[test]
+    fn a_lane_kernel_seeded_to_run_scalar_fails() {
+        let record = "sincos_w1 1000\nsincos_w4 1010\n";
+        let found = check(record, &measured(&[("sincos_w1", 1000), ("sincos_w4", 1010)])).unwrap_err();
+        assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["perf.not-vectorised"]);
+        assert!(found[0].message.starts_with("sincos at width 4 takes 1010 instructions, against 1000"), "{found:?}");
+        let barely = "sincos_w1 1000\nsincos_w4 901\n";
+        assert_eq!(
+            codes(&check(barely, &measured(&[("sincos_w1", 1000), ("sincos_w4", 901)]))),
+            ["perf.not-vectorised"]
+        );
+    }
+
+    #[test]
+    fn a_lane_kernel_without_its_width_one_fails() {
+        assert_eq!(codes(&check("atan2_w2 10\n", &measured(&[("atan2_w2", 10)]))), ["perf.no-width-one"]);
+    }
+
+    #[test]
+    fn only_names_ending_in_a_width_are_lane_kernels() {
+        assert_eq!(kernel_width("sincos_w4"), Some(("sincos", 4)));
+        assert_eq!(kernel_width("mask_box_w16"), Some(("mask_box", 16)));
+        assert_eq!(kernel_width("maths_lanes4"), None);
+        assert_eq!(kernel_width("swap_wide"), None);
     }
 
     #[test]
@@ -343,7 +479,34 @@ mod tests {
     }
 
     fn timing(scalar_ms: f64, simd128_ms: f64) -> Timing {
-        Timing { scalar_ms, simd128_ms, scalar_result: 1.5, simd128_result: 1.5 }
+        Timing { scalar_ms, simd128_ms, scalar_result: 1.5, simd128_result: 1.5, kernels: Vec::new() }
+    }
+
+    fn kernel(one_ms: f64, lanes_ms: f64) -> KernelTiming {
+        KernelTiming { name: "sincos".to_string(), width: 2, one_ms, lanes_ms, one_result: 0.5, lanes_result: 0.5 }
+    }
+
+    #[test]
+    fn a_browser_kernel_clearly_faster_at_its_width_passes() {
+        let run = Timing { kernels: vec![kernel(115.0, 100.0), kernel(300.0, 100.0)], ..timing(100.0, 50.0) };
+        assert_eq!(browser_codes(&run), [""; 0]);
+    }
+
+    #[test]
+    fn a_browser_kernel_no_faster_at_its_width_fails() {
+        let run = Timing { kernels: vec![kernel(114.0, 100.0)], ..timing(100.0, 50.0) };
+        let found = check_browser(&run);
+        assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["perf.lanes-no-gain"]);
+        assert!(found[0].message.contains("sincos at width 2 took 100 ms"), "{found:?}");
+        let nan = Timing { kernels: vec![kernel(f64::NAN, 100.0)], ..timing(100.0, 50.0) };
+        assert_eq!(browser_codes(&nan), ["perf.lanes-no-gain"]);
+    }
+
+    #[test]
+    fn a_browser_kernel_must_give_the_same_bits_at_both_widths() {
+        let differ = KernelTiming { lanes_result: 0.25, ..kernel(300.0, 100.0) };
+        let run = Timing { kernels: vec![differ], ..timing(100.0, 50.0) };
+        assert_eq!(browser_codes(&run), ["perf.lanes-differ"]);
     }
 
     fn browser_codes(timing: &Timing) -> Vec<&'static str> {
@@ -395,8 +558,21 @@ mod tests {
     #[test]
     fn a_timing_is_read_from_the_runners_json() {
         let text = r#"{"scalar_ms": 12.5, "simd128_ms": 6.25, "scalar_result": 1.5, "simd128_result": 1.5}"#;
-        let want = Timing { scalar_ms: 12.5, simd128_ms: 6.25, scalar_result: 1.5, simd128_result: 1.5 };
+        let want =
+            Timing { scalar_ms: 12.5, simd128_ms: 6.25, scalar_result: 1.5, simd128_result: 1.5, kernels: Vec::new() };
         assert_eq!(parse_timing(text), Some(want));
+        let with_kernels = r#"{"scalar_ms": 1, "simd128_ms": 1, "scalar_result": 0, "simd128_result": 0,
+            "kernels": [{"name": "atan2", "width": 2, "one_ms": 3, "lanes_ms": 2, "one_result": 1, "lanes_result": 1}]}"#;
+        let kernels = parse_timing(with_kernels).map(|timing| timing.kernels);
+        let want = KernelTiming {
+            name: "atan2".to_string(),
+            width: 2,
+            one_ms: 3.0,
+            lanes_ms: 2.0,
+            one_result: 1.0,
+            lanes_result: 1.0,
+        };
+        assert_eq!(kernels, Some(vec![want]));
         assert_eq!(parse_timing(r#"{"scalar_ms": 12.5}"#), None);
         assert_eq!(parse_timing("not json"), None);
     }

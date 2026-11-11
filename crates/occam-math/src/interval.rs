@@ -1,7 +1,7 @@
 //! Source: rump-1999
 //! [`Interval`]: a value and a certified radius around it, for decisions on computed values (S2). Rump's midpoint and
-//! radius arithmetic, made outward without rounding modes: a rounded bound is stepped to the next double, which needs
-//! only `+ - * /`, `sqrt` and [`Real::next_up`], so it gives the same bits on every target and in lanes.
+//! radius arithmetic, made outward without rounding modes: a rounded bound is moved past the next double with `+ - *`
+//! alone, so it gives the same bits on every target and vectorises in lanes.
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
@@ -10,13 +10,33 @@ use crate::real::Real;
 /// 2^-53. A rounded result that is a normal number is within this fraction of itself of the exact one.
 const HALF_ULP: f64 = 1.0 / 9_007_199_254_740_992.0;
 
+/// 2^-52. This fraction of a double is at least one unit in its last place.
+const ULP: f64 = 2.0 * HALF_ULP;
+
 /// The smallest subnormal, which bounds the error of a result too small to be normal.
 const TINY: f64 = f64::from_bits(1);
 
-/// At least `x`, for an `x` that was rounded to nearest: the next double above it.
+/// How far to move `x` to pass the next double either side of it: `|x| 2^-52` is at least a unit in its last place
+/// when `x` is normal, and the smallest subnormal covers the rest, the rounding of the product included.
 #[inline(always)]
+#[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
+fn step<R: Real>(x: R) -> R {
+    R::splat(ULP) * x.abs() + R::splat(TINY)
+}
+
+/// At least the next double above `x`, so at least any exact value that rounded to `x`. Plain arithmetic rather than
+/// [`Real::next_up`], whose branches stop lanes vectorising. NaN for minus infinity, which holds everything.
+#[inline(always)]
+#[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 fn up<R: Real>(x: R) -> R {
-    x.next_up()
+    x + step(x)
+}
+
+/// At most the next double below `x`, as [`up`] mirrored.
+#[inline(always)]
+#[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
+fn down<R: Real>(x: R) -> R {
+    x - step(x)
 }
 
 /// At least how far the exact result of one operation can be from `rounded`, its rounded value.
@@ -70,7 +90,7 @@ impl<R: Real> Interval<R> {
     #[inline(always)]
     #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
     pub fn lower(self) -> R {
-        (self.mid - self.rad).next_down()
+        down(self.mid - self.rad)
     }
 
     /// At least the highest value it holds.
@@ -88,7 +108,7 @@ impl<R: Real> Interval<R> {
         let zero = R::splat(0.0);
         let high = up(self.upper().sqrt());
         let below = self.lower();
-        let low = R::select(zero.lt(below), below.sqrt().next_down(), zero);
+        let low = R::select(zero.lt(below), down(below.sqrt()), zero);
         let mid = R::select(zero.le(self.mid), self.mid.sqrt(), R::splat(0.5) * high);
         Self { mid, rad: larger(up(high - mid), up(mid - low)) }
     }
@@ -139,7 +159,7 @@ impl<R: Real> Div for Interval<R> {
     fn div(self, rhs: Self) -> Self {
         let mid = self.mid / rhs.mid;
         let size = rhs.mid.abs();
-        let least = (size * (size - rhs.rad).next_down()).next_down();
+        let least = down(size * down(size - rhs.rad));
         let spread = up(up(up(self.rad * size) + up(self.mid.abs() * rhs.rad)) / least);
         let bounded = R::splat(0.0).lt(least);
         Self { mid, rad: R::select(bounded, up(spread + rounding(mid)), R::splat(f64::INFINITY)) }

@@ -7,6 +7,6 @@ mod model;
 
 pub use distance::{Answer, DistanceQuery, distance, distance_json};
 pub use model::Model;
-pub use occam_math::{Lanes, Real};
+pub use occam_math::{Lanes, Real, width, workloads};
 pub use occam_report::{Code, DisplayUnits, NamedValue, Outcome, Remedy, RemedyKind, Report};
 pub use occam_units::{Angle, Length, Point, Tolerance, World};
