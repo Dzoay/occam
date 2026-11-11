@@ -46,8 +46,8 @@ execution layer, `Exec`, is in this crate too: see [threads and lanes](threads-a
   five times a step.
 - [P6](../evidence/2026-11-09-p6.md): each 1% of decisions reaching the exact stage adds about 33 ns a decision on one
   thread, hence `Tally` in every outcome.
-- [S5](../evidence/2026-11-09-s5.md): the owned functions, within about 0.75 and 1.5 ulps. Their coefficients wait on
-  O15.
+- [S5](../evidence/2026-11-09-s5.md): the owned functions, within about 0.75 and 1.5 ulps. Their coefficients are
+  [occam's own fit](../decisions/2026-11-11-own-coefficients.md) (O15).
 - [P4](../evidence/2026-11-09-p4.md): a kernel is a trait, not a closure, because `run` and all it calls must be
   `#[inline(always)]` or a leaf compiles without the level's features, and a closure cannot carry that attribute on
   stable Rust (B:8). Dispatch cannot cross `dyn` (A:10). `array::from_fn` falling out of line cost a rational kernel
