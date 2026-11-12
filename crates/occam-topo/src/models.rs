@@ -208,7 +208,6 @@ fn write_faces(edit: &mut Edit, spec: &Spec, built: &Built, surfaces: &[Id<crate
         }
         let record = FaceRecord {
             shell: built.shell.unwrap(),
-            next: built.faces.get(k + 1).copied(),
             surface: surfaces[f.surface],
             sheet: Sheet::default(),
             reversed: f.reversed,
@@ -222,7 +221,7 @@ fn write_faces(edit: &mut Edit, spec: &Spec, built: &Built, surfaces: &[Id<crate
 /// Writes the body, its shell and its wires.
 fn write_body(edit: &mut Edit, spec: &Spec, built: &Built) {
     if let Some(shell) = built.shell {
-        edit.set(shell, ShellRecord { body: built.body, first_face: built.faces[0], next: None }).unwrap();
+        edit.set(shell, ShellRecord { body: built.body, face: built.faces[0], next: None }).unwrap();
     }
     let mut first_use: usize = spec.faces.iter().flat_map(|f| f.loops.iter()).map(|(uses, _)| uses.len()).sum();
     for (k, uses) in spec.wires.iter().enumerate() {

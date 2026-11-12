@@ -75,13 +75,14 @@ fn body(model: &Model, id: Id<Body>, out: &mut Vec<Report>) {
     }
 }
 
-/// A shell: its body lists it, and its first face names it. The rest of its faces are a whole-shell matter.
+/// A shell: its body lists it, and the face it begins from names it. Which faces it holds, those that name it and are
+/// joined to that one, is a whole-shell matter.
 fn shell(model: &Model, id: Id<Shell>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
     let shells = list(model, get(model, record.body).and_then(|b| b.first_shell), |s| s.next);
     listed(out, id, record.body.entity(), shells.sound(false));
-    if get(model, record.first_face).map(|f| f.shell) != Some(id) {
-        out.push(failed(Reason::ListedElsewhere, &[id.entity(), record.first_face.entity()]));
+    if get(model, record.face).map(|f| f.shell) != Some(id) {
+        out.push(failed(Reason::ListedElsewhere, &[id.entity(), record.face.entity()]));
     }
 }
 

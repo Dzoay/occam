@@ -24,10 +24,10 @@ use crate::snapshot::Snapshot;
 use crate::testing::{serial, tolerance, x_axis};
 
 /// A failure's reason and the entities it names.
-type Failure = (Reason, Vec<EntityRef>);
+pub(super) type Failure = (Reason, Vec<EntityRef>);
 
 /// The failures `reports` give, sorted.
-fn failures(reports: &[Report]) -> Vec<Failure> {
+pub(super) fn failures(reports: &[Report]) -> Vec<Failure> {
     let mut found: Vec<Failure> = reports
         .iter()
         .map(|r| {
@@ -44,8 +44,8 @@ fn all<K: Kind>(model: &Model) -> Vec<Id<K>> {
     K::table(model).records().map(|(slot, generation, _)| Id::new(slot, generation)).collect()
 }
 
-/// What the whole-model checks find: [`entity`] over every live entity, [`body`] over every body, then [`model`].
-fn whole(m: &Model) -> Vec<Report> {
+/// What the whole-model checks find: [`entity`] over every live entity, then [`body`] over every body.
+pub(super) fn whole(m: &Model) -> Vec<Report> {
     let mut out = Vec::new();
     let entities = [
         all::<Body>(m).into_iter().map(Id::entity).collect::<Vec<_>>(),
@@ -60,15 +60,15 @@ fn whole(m: &Model) -> Vec<Report> {
     for e in entities.into_iter().flatten() {
         entity(m, e, &mut out);
     }
+    let members = members(m);
     for b in all::<Body>(m) {
-        body(m, b, &mut out);
+        body(m, &members, b, &mut out);
     }
-    model(m, &mut out);
     out
 }
 
 /// `spec` built and committed.
-fn clean(spec: &Spec) -> (Snapshot, Built) {
+pub(super) fn clean(spec: &Spec) -> (Snapshot, Built) {
     let mut edit = Snapshot::empty(tolerance()).edit();
     let built = build(&mut edit, spec);
     (edit.commit(&serial()).unwrap().0, built)
@@ -76,7 +76,7 @@ fn clean(spec: &Spec) -> (Snapshot, Built) {
 
 /// `spec` built clean, then `corrupt` made in a second edit: what its commit reports, and what the whole-model checks
 /// find in the model it refused.
-fn seeded(spec: &Spec, corrupt: impl FnOnce(&mut Edit, &Built)) -> (Vec<Failure>, Vec<Failure>) {
+pub(super) fn seeded(spec: &Spec, corrupt: impl FnOnce(&mut Edit, &Built)) -> (Vec<Failure>, Vec<Failure>) {
     let (snapshot, built) = clean(spec);
     let mut edit = snapshot.edit();
     corrupt(&mut edit, &built);
@@ -85,7 +85,7 @@ fn seeded(spec: &Spec, corrupt: impl FnOnce(&mut Edit, &Built)) -> (Vec<Failure>
 }
 
 /// Changes the record of `id` in `edit`.
-fn change<R: Record>(edit: &mut Edit, id: Id<R::Kind>, how: impl FnOnce(&mut R)) {
+pub(super) fn change<R: Record>(edit: &mut Edit, id: Id<R::Kind>, how: impl FnOnce(&mut R)) {
     let mut record = edit.record(id).unwrap();
     how(&mut record);
     edit.set(id, record).unwrap();
@@ -130,18 +130,16 @@ fn star_places(edit: &Edit, vertex: Id<Vertex>) -> Vec<Around> {
     found
 }
 
-/// Moves `faces` of a body built as one shell into a second shell of the same body, in the order given.
+/// Moves `faces` of a body built as one shell into a second shell of the same body, which begins from the first of them.
 fn second_shell(edit: &mut Edit, built: &Built, faces: &[usize]) -> Id<Shell> {
     let (first, shell) = (built.shell.unwrap(), edit.reserve::<Shell>());
     let moved: Vec<Id<Face>> = faces.iter().map(|&k| built.faces[k]).collect();
     let kept: Vec<Id<Face>> = built.faces.iter().copied().filter(|f| !moved.contains(f)).collect();
-    for (list, owner) in [(&kept, first), (&moved, shell)] {
-        for (k, &f) in list.iter().enumerate() {
-            change(edit, f, |r: &mut FaceRecord| (r.shell, r.next) = (owner, list.get(k + 1).copied()));
-        }
+    for &f in &moved {
+        change(edit, f, |r: &mut FaceRecord| r.shell = shell);
     }
-    change(edit, first, |r: &mut ShellRecord| (r.first_face, r.next) = (kept[0], Some(shell)));
-    edit.set(shell, ShellRecord { body: built.body, first_face: moved[0], next: None }).unwrap();
+    change(edit, first, |r: &mut ShellRecord| (r.face, r.next) = (kept[0], Some(shell)));
+    edit.set(shell, ShellRecord { body: built.body, face: moved[0], next: None }).unwrap();
     shell
 }
 
@@ -189,29 +187,6 @@ fn a_use_given_to_another_loop_is_listed_elsewhere_and_not_listed_there() {
             (Reason::NotListed, vec![u.entity(), built.loops[1].entity()]),
         ];
         expected.sort();
-    });
-    assert_eq!(found, (expected.clone(), expected.clone()));
-}
-
-#[test]
-fn a_face_dropped_from_its_shells_list_is_not_listed() {
-    let mut expected = Vec::new();
-    let (committed, whole) = seeded(&cube(), |edit, built| {
-        let f = &built.faces;
-        change(edit, f[1], |r: &mut FaceRecord| r.next = Some(f[3]));
-        change(edit, f[2], |r: &mut FaceRecord| r.next = None);
-        expected = vec![(Reason::NotListed, vec![f[2].entity(), built.shell.unwrap().entity()])];
-    });
-    assert_eq!(committed, expected);
-    assert!(whole.contains(&expected[0]), "{whole:?}: the list's faces also count five faces round eight vertices");
-}
-
-#[test]
-fn a_face_listed_twice_breaks_its_shells_list() {
-    let mut expected = Vec::new();
-    let found = seeded(&cube(), |edit, built| {
-        change(edit, built.faces[5], |r: &mut FaceRecord| r.next = Some(built.faces[2]));
-        expected = vec![(Reason::ListBroken, vec![built.shell.unwrap().entity(), built.faces[2].entity()])];
     });
     assert_eq!(found, (expected.clone(), expected.clone()));
 }
@@ -377,6 +352,20 @@ fn an_edge_of_two_wire_bodies_is_shared_and_names_both() {
 }
 
 #[test]
+fn a_wire_body_with_a_shell_too_does_not_fit_its_kind() {
+    let mut second = None;
+    let (commit, whole) = seeded(&wire(), |edit, built| {
+        let body = second_wire_body(edit, built);
+        let shell =
+            edit.add(ShellRecord { body, face: crate::kind::Id::new(0, core::num::NonZeroU32::MIN), next: None });
+        change(edit, body, |r: &mut crate::records::BodyRecord| r.first_shell = Some(shell));
+        second = Some(body.entity());
+    });
+    let mismatch = (Reason::BodyKindMismatch, vec![second.unwrap()]);
+    assert!(commit.contains(&mismatch) && whole.contains(&mismatch), "{commit:?} {whole:?}");
+}
+
+#[test]
 fn an_edge_between_faces_of_two_shells_is_shared_and_neither_shell_closes() {
     let mut expected = Vec::new();
     let found = seeded(&cube(), |edit, built| {
@@ -441,9 +430,8 @@ fn two_cubes_meeting_at_a_corner_are_two_shells_not_one() {
     let built = build(&mut edit, &pinched());
     let next = edit.next.clone();
     let shell = built.shell.unwrap().entity();
-    let mut expected =
-        vec![(Reason::ShellNotConnected, vec![shell, built.faces[6].entity()]), (Reason::GenusNotWhole, vec![shell])];
-    expected.sort();
+    // The faces joined to the one the shell begins from are one cube, whose counts are whole: only the joining fails.
+    let expected = vec![(Reason::ShellNotConnected, vec![shell, built.faces[6].entity()])];
     assert_eq!(failures(&edit.commit(&serial()).unwrap_err()), expected);
     assert_eq!(failures(&whole(&next)), expected);
     let mut edit = Snapshot::empty(tolerance()).edit();
@@ -480,8 +468,9 @@ fn a_use_of_an_edge_that_lists_no_uses_is_not_listed() {
     assert_eq!(found, (expected.clone(), expected.clone()));
 }
 
-/// Splits the middle top square of a plate `k` squares across by its diagonal into two triangles, and commits it.
-fn split_square(snapshot: &Snapshot, built: &Built, k: usize) -> Result<(Snapshot, Changes), Vec<Report>> {
+/// Splits the middle top square of a plate `k` squares across by its diagonal into two triangles, and commits it. The new
+/// triangle joins the plate's shell by naming it and sharing the diagonal.
+pub(super) fn split_square(snapshot: &Snapshot, built: &Built, k: usize) -> Result<(Snapshot, Changes), Vec<Report>> {
     let face = built.faces[k * k + (k / 2) * k + k / 2];
     let mut edit = snapshot.edit();
     let (square, sides) = (edit.record(face).unwrap(), face_uses(&edit, face));
@@ -527,8 +516,7 @@ fn split_square(snapshot: &Snapshot, built: &Built, k: usize) -> Result<(Snapsho
     change(&mut edit, square.outer, |r: &mut LoopRecord| r.witness = UvPoint::new(1.0 / 6.0, -1.0 / 6.0));
     let witness = UvPoint::new(-1.0 / 6.0, 1.0 / 6.0);
     edit.set(other, LoopRecord { face: half, first: sides[2], next: None, witness }).unwrap();
-    edit.set(half, FaceRecord { next: square.next, outer: other, born, ..square }).unwrap();
-    change(&mut edit, face, |r: &mut FaceRecord| r.next = Some(half));
+    edit.set(half, FaceRecord { outer: other, born, ..square }).unwrap();
     edit.commit(&serial())
 }
 

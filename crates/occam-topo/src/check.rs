@@ -1,8 +1,8 @@
 //! Source: original
-//! The checker (PARITY 1.10). [`entity`] holds what one entity's record and its neighbours' must satisfy, [`body`] what a
-//! whole body must, shell by shell, and [`model`] what only the whole model shows. `Edit::commit` runs [`edit`], which
-//! checks what the edit touched and its neighbours (P1): [`entity`] over that scope, then the answers [`body`] would
-//! give, reached from what changed rather than by walking the model. Each failure is one `check.invariant-failed`
+//! The checker (PARITY 1.10). [`entity`] holds what one entity's record and its neighbours' must satisfy, and [`body`]
+//! what a whole body must, shell by shell, against the faces that name each shell, which [`members`] finds. `Edit::commit`
+//! runs [`edit`], which checks what the edit touched and its neighbours (P1): [`entity`] over that scope, then the
+//! answers [`body`] would give, reached from what changed rather than by walking the model. Each failure is one `check.invariant-failed`
 //! report naming its entities, with its reason from the closed list.
 
 mod incremental;
@@ -12,6 +12,7 @@ mod scope;
 mod shell;
 
 use occam_report::{Code, EntityRef, Fault, Reason, Report};
+pub(crate) use shell::Members;
 
 use crate::edit::Edit;
 use crate::kind::{Body, Id, Kind};
@@ -60,19 +61,19 @@ pub(crate) fn entity(model: &Model, entity: EntityRef, out: &mut Vec<Report>) {
     crate::geometric::entity(model, entity, out);
 }
 
-/// Every invariant of one body as a whole: each shell's list of faces, its faces joined through their edges, and, for a
-/// solid, a whole genus.
-pub(crate) fn body(model: &Model, body: Id<Body>, out: &mut Vec<Report>) {
-    shell::body(model, body, out);
+/// The faces that name each shell, for [`body`]: one scan of every face.
+pub(crate) fn members(model: &Model) -> Members {
+    Members::of(model)
 }
 
-/// Every invariant only the whole model shows: that each face is in its shell's list.
-pub(crate) fn model(model: &Model, out: &mut Vec<Report>) {
-    shell::unlisted(model, out);
+/// Every invariant of one body as a whole: each face that names one of its shells joined through their edges to the face
+/// the shell begins from, and, for a solid, a whole genus.
+pub(crate) fn body(model: &Model, members: &Members, body: Id<Body>, out: &mut Vec<Report>) {
+    shell::body(model, members, body, out);
 }
 
 /// Every failure of `edit`, in a fixed order: full tables, reserved ids never written, then the invariants of what it
-/// touched and its neighbours, then the lists of faces, the genus and the joining of the shells it changed.
+/// touched and its neighbours, then the genus and the joining of the shells it changed.
 pub(crate) fn edit(edit: &Edit) -> Vec<Report> {
     let mut found: Vec<Report> = edit.full.iter().map(|_| failed(Reason::TableFull, &[])).collect();
     let unwritten = edit.created.iter().filter(|&&entity| edit.next.holds(entity) == Holds::Reserved);
@@ -81,11 +82,12 @@ pub(crate) fn edit(edit: &Edit) -> Vec<Report> {
         entity(&edit.next, touched, &mut found);
     }
     let touched = incremental::Touched::of(edit);
-    incremental::face_lists(&touched, &mut found);
     incremental::genus(&touched, &mut found);
     incremental::joined(&touched, &mut found);
     found
 }
 
+#[cfg(test)]
+mod membership;
 #[cfg(test)]
 mod tests;

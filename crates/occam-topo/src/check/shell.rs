@@ -1,24 +1,53 @@
 //! Source: mantyla-1988
-//! The invariants of a whole body, shell by shell. Each shell's faces form one list that names it; its faces are joined
-//! through their edges, so that two pieces meeting only at a vertex are two shells, the one check that sees a missing
-//! pinch (S1 item 6); and a closed shell's counts satisfy the Euler–Poincaré formula `V - E + 2F - L = 2(1 - G)` for a
-//! whole genus `G` (Mäntylä 1988), where a vertex where shells meet counts once in each. These read the whole shell;
-//! a commit reaches the same answers from what it changed.
+//! The invariants of a whole body, shell by shell. A shell's faces are those that name it, and every one of them is
+//! joined through their edges to the face the shell begins from, so that two pieces meeting only at a vertex are two
+//! shells, the one check that sees a missing pinch (S1 item 6); and a closed shell's counts satisfy the Euler–Poincaré
+//! formula `V - E + 2F - L = 2(1 - G)` for a whole genus `G` (Mäntylä 1988), where a vertex where shells meet counts once
+//! in each. These read the whole shell; a commit reaches the same answers from what it changed.
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use occam_report::{NamedValue, Quantity, Reason, Report};
 
+use super::failed;
 use super::read::{Walk, get, list, loop_face, radial, uses_from};
-use super::{failed, holds};
 use crate::kind::sealed::Sealed;
 use crate::kind::{Body, Edge, Face, Id, Loop, Shell, Vertex};
 use crate::records::{BodyKind, UseOwner};
 use crate::snapshot::Model;
 
-/// The faces of a shell's list.
-pub(crate) fn faces(model: &Model, id: Id<Shell>) -> Walk<Id<Face>> {
-    list(model, get(model, id).map(|s| s.first_face), |f| f.next)
+/// The faces of shell `id`: those that name it and are joined through their edges to the face it begins from, each
+/// once, in the order a breadth-first walk from that face meets them. None if that face does not name it, which the
+/// shell's own check reports.
+pub(crate) fn faces(model: &Model, id: Id<Shell>) -> Vec<Id<Face>> {
+    let named = |f: Id<Face>| get(model, f).map(|r| r.shell) == Some(id);
+    let start = get(model, id).map(|s| s.face).filter(|&f| named(f));
+    let mut found: Vec<Id<Face>> = start.into_iter().collect();
+    let mut seen: BTreeSet<Id<Face>> = found.iter().copied().collect();
+    // No shell has more faces than the table has slots, so a walk that has listed more stops, whatever it met.
+    let (mut at, most) = (0_usize, Face::table(model).len());
+    while let Some(&face) = found.get(at).filter(|_| found.len() <= most) {
+        at = at.saturating_add(1);
+        let next = face_edges(model, face).into_iter().flat_map(|e| edge_faces(model, e));
+        let new: Vec<Id<Face>> = next.filter(|&f| named(f) && seen.insert(f)).collect();
+        found.extend(new);
+    }
+    found
+}
+
+/// The faces that name each shell, in slot order: what the whole-model check holds each shell's walk to. Only a scan
+/// of every face finds one that names a shell it is not joined to.
+pub(crate) struct Members(BTreeMap<Id<Shell>, Vec<Id<Face>>>);
+
+impl Members {
+    /// Every live face of `model`, by the shell it names.
+    pub(crate) fn of(model: &Model) -> Self {
+        let mut by: BTreeMap<Id<Shell>, Vec<Id<Face>>> = BTreeMap::new();
+        for (slot, generation, record) in Face::table(model).records() {
+            by.entry(record.shell).or_default().push(Id::new(slot, generation));
+        }
+        Self(by)
+    }
 }
 
 /// The loops of a face, from its outer.
@@ -74,28 +103,25 @@ pub(crate) fn reach(
     found
 }
 
-/// Every invariant of body `id` as a whole, shell by shell, if its list of shells is sound.
-pub(crate) fn body(model: &Model, id: Id<Body>, out: &mut Vec<Report>) {
+/// Every invariant of body `id` as a whole, shell by shell, if its list of shells is sound: each face that names a
+/// shell is joined to the face the shell begins from, and a closed shell's faces give a whole genus. A shell that
+/// begins from a face not its own is left to its own check.
+pub(crate) fn body(model: &Model, members: &Members, id: Id<Body>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
     let Some(shells) = list(model, record.first_shell, |s| s.next).sound(false).map(<[_]>::to_vec) else { return };
     for shell in shells {
-        let walk = faces(model, shell);
-        let named = |f: Id<Face>| get(model, f).map(|r| r.shell) == Some(shell);
-        let Some(listed) = holds(out, shell.entity(), &walk, false, Reason::ListBroken, named) else { continue };
-        joined(model, shell, &listed, out);
-        if record.kind == BodyKind::Solid {
-            genus(model, shell, out);
+        let joined = faces(model, shell);
+        if joined.is_empty() {
+            continue;
         }
-    }
-}
-
-/// Reports shell `id` if its `faces` are not all joined through their edges.
-fn joined(model: &Model, id: Id<Shell>, faces: &[Id<Face>], out: &mut Vec<Report>) {
-    let Some(&start) = faces.first() else { return };
-    let targets: BTreeSet<Id<Face>> = faces.iter().copied().collect();
-    let found = reach(model, start, |f| targets.contains(&f), &targets);
-    if let Some(apart) = targets.difference(&found).next() {
-        out.push(failed(Reason::ShellNotConnected, &[id.entity(), apart.entity()]));
+        let reached: BTreeSet<Id<Face>> = joined.iter().copied().collect();
+        let named = members.0.get(&shell).into_iter().flatten();
+        if let Some(apart) = named.copied().find(|f| !reached.contains(f)) {
+            out.push(failed(Reason::ShellNotConnected, &[shell.entity(), apart.entity()]));
+        }
+        if record.kind == BodyKind::Solid {
+            genus_of(model, shell, &joined, out);
+        }
     }
 }
 
@@ -106,7 +132,7 @@ pub(crate) struct Counts {
     pub vertices: usize,
     /// Edges its loops use.
     pub edges: usize,
-    /// Faces in its list.
+    /// Faces joined to the face it begins from.
     pub faces: usize,
     /// Loops of its faces.
     pub loops: usize,
@@ -141,9 +167,8 @@ pub(crate) const fn whole_genus(characteristic: i64) -> bool {
     characteristic & 1 == 0 && characteristic <= 2
 }
 
-/// The counts of shell `id`, walking all of it.
-pub(crate) fn counts(model: &Model, id: Id<Shell>) -> Counts {
-    let faces = faces(model, id).items();
+/// The counts of a shell whose faces are `faces`.
+pub(crate) fn counts(model: &Model, faces: &[Id<Face>]) -> Counts {
     let loops: Vec<Id<Loop>> = faces.iter().flat_map(|&f| loops(model, f).items()).collect();
     let uses = loops.iter().filter_map(|&l| get(model, l).map(|r| r.first));
     let edges: BTreeSet<Id<Edge>> =
@@ -153,23 +178,16 @@ pub(crate) fn counts(model: &Model, id: Id<Shell>) -> Counts {
     Counts { vertices: vertices.len(), edges: edges.len(), faces: faces.len(), loops: loops.len() }
 }
 
-/// Reports closed shell `id` if its counts give no whole genus.
+/// Reports closed shell `id` if the faces it holds give no whole genus.
 pub(crate) fn genus(model: &Model, id: Id<Shell>, out: &mut Vec<Report>) {
-    let counts = counts(model, id);
+    genus_of(model, id, &faces(model, id), out);
+}
+
+/// Reports closed shell `id`, whose faces are `faces`, if their counts give no whole genus.
+fn genus_of(model: &Model, id: Id<Shell>, faces: &[Id<Face>], out: &mut Vec<Report>) {
+    let counts = counts(model, faces);
     if !whole_genus(counts.characteristic()) {
         let report = failed(Reason::GenusNotWhole, &[id.entity()]);
         out.push(counts.values().into_iter().fold(report, Report::with_value));
-    }
-}
-
-/// Reports each face that no shell's list holds.
-pub(crate) fn unlisted(model: &Model, out: &mut Vec<Report>) {
-    let shells = Shell::table(model).records().map(|(slot, generation, _)| Id::<Shell>::new(slot, generation));
-    let listed: BTreeSet<Id<Face>> = shells.flat_map(|s| faces(model, s).items()).collect();
-    for (slot, generation, record) in Face::table(model).records() {
-        let id = Id::<Face>::new(slot, generation);
-        if !listed.contains(&id) {
-            out.push(failed(Reason::NotListed, &[id.entity(), record.shell.entity()]));
-        }
     }
 }

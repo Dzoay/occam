@@ -182,15 +182,15 @@ impl Hashed for BodyRecord {
 
 impl Hashed for ShellRecord {
     fn hash(&self, digest: &mut Digest) {
-        let Self { body, first_face, next } = self;
-        ((body, first_face), next).hash(digest);
+        let Self { body, face, next } = self;
+        ((body, face), next).hash(digest);
     }
 }
 
 impl Hashed for FaceRecord {
     fn hash(&self, digest: &mut Digest) {
-        let Self { shell, next, surface, sheet, reversed, outer, born } = self;
-        ((shell, next), (surface, sheet)).hash(digest);
+        let Self { shell, surface, sheet, reversed, outer, born } = self;
+        (shell, (surface, sheet)).hash(digest);
         ((reversed, outer), born).hash(digest);
     }
 }

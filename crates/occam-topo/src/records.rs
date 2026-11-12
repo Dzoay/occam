@@ -94,13 +94,14 @@ pub struct BodyRecord {
     pub born: Provenance,
 }
 
-/// A shell: faces joined along their edges.
+/// A shell: faces joined along their edges. Its faces are those that name it, each joined through their edges to the
+/// face it begins from, so no list of them can disagree with the faces themselves.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShellRecord {
     /// The body it belongs to.
     pub body: Id<Body>,
-    /// Its first face; the rest follow from it.
-    pub first_face: Id<Face>,
+    /// One of its faces, where a walk of it begins.
+    pub face: Id<Face>,
     /// The body's next shell.
     pub next: Option<Id<Shell>>,
 }
@@ -110,8 +111,6 @@ pub struct ShellRecord {
 pub struct FaceRecord {
     /// The shell it belongs to.
     pub shell: Id<Shell>,
-    /// The shell's next face.
-    pub next: Option<Id<Face>>,
     /// The surface it lies on.
     pub surface: Id<SurfaceGeom>,
     /// Which period of each periodic parameter its loops lie in.
@@ -237,7 +236,7 @@ impl BodyRecord {
 impl ShellRecord {
     pub(crate) fn links(&self, out: &mut Vec<EntityRef>) {
         link(out, self.body);
-        link(out, self.first_face);
+        link(out, self.face);
         link_some(out, self.next);
     }
 }
@@ -245,7 +244,6 @@ impl ShellRecord {
 impl FaceRecord {
     pub(crate) fn links(&self, out: &mut Vec<EntityRef>) {
         link(out, self.shell);
-        link_some(out, self.next);
         link(out, self.surface);
         link(out, self.outer);
     }

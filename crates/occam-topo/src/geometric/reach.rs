@@ -33,7 +33,7 @@ fn live<K: Kind>(m: &Model) -> impl Iterator<Item = EntityRef> + '_ {
     K::table(m).records().map(|(slot, generation, _)| Id::<K>::new(slot, generation).entity())
 }
 
-/// The whole-model check: every entity, every body, then the model.
+/// The whole-model check: every entity, then every body.
 fn whole(m: &Model) -> Vec<Report> {
     let mut out = Vec::new();
     let entities: Vec<EntityRef> = live::<Body>(m)
@@ -48,10 +48,10 @@ fn whole(m: &Model) -> Vec<Report> {
     for entity in entities {
         check::entity(m, entity, &mut out);
     }
+    let members = check::members(m);
     for (slot, generation, _) in Body::table(m).records() {
-        check::body(m, Id::new(slot, generation), &mut out);
+        check::body(m, &members, Id::new(slot, generation), &mut out);
     }
-    check::model(m, &mut out);
     out
 }
 

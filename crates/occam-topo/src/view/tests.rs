@@ -106,7 +106,9 @@ fn a_cube_answers_every_adjacency_query_as_counted_by_hand() {
     assert_eq!((body.kind(), body.shells(), body.wires()), (BodyKind::Solid, vec![b.shell.unwrap()], vec![]));
     assert_eq!(body.born().step, 1);
     let shell = s.view(b.shell.unwrap()).unwrap();
-    assert_eq!((shell.faces(), shell.body(), shell.next()), (fs.clone(), b.body, None));
+    // A walk from the bottom meets the four sides across its edges, in the order its loop uses them, then the top.
+    let walked = vec![fs[0], fs[4], fs[3], fs[5], fs[2], fs[1]];
+    assert_eq!((shell.face(), shell.faces(), shell.body(), shell.next()), (fs[0], walked, b.body, None));
     curves_meet_vertices(&s);
 }
 
@@ -120,7 +122,7 @@ fn a_cubes_faces_lie_on_planes_facing_out_through_their_witnesses() {
         let jet = view.surface().unwrap().first(witness);
         let out = jet.du.rate().cross(jet.dv.rate());
         assert!(out.dot(jet.point.to_vec3() - centre) > 0.49, "face {k} faces out");
-        assert!(!view.reversed() && view.sheet() == Sheet::default() && view.next() == b.faces.get(k + 1).copied());
+        assert!(!view.reversed() && view.sheet() == Sheet::default());
     }
 }
 

@@ -52,7 +52,7 @@ text_enum! {
         ListBroken = "list-broken",
         /// An entity names an owner whose list does not hold it.
         NotListed = "not-listed",
-        /// A list holds an entity that names another owner.
+        /// A list holds an entity that names another owner, or a shell begins from a face of another shell.
         ListedElsewhere = "listed-elsewhere",
         /// An edge has a number of uses its body's kind does not allow.
         WrongUseCount = "wrong-use-count",

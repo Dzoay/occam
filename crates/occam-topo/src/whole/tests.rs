@@ -35,7 +35,7 @@ fn both(snapshot: &Snapshot, per: u32) -> Vec<Report> {
 }
 
 /// The reports of the checks run one after another, with no tasks and no threads: every live entity kind by kind in the
-/// order of `EntityKind::ALL` and slot by slot, then every body, then what only the whole model shows.
+/// order of `EntityKind::ALL` and slot by slot, then every body.
 fn in_order(model: &Model) -> Vec<Report> {
     let mut out = Vec::new();
     let every = |kind| {
@@ -47,10 +47,10 @@ fn in_order(model: &Model) -> Vec<Report> {
             check::entity(model, entity, &mut out);
         }
     }
+    let members = check::members(model);
     for body in every(EntityKind::Body) {
-        check::body(model, Id::new(body.slot, NonZeroU32::new(body.generation).unwrap()), &mut out);
+        check::body(model, &members, Id::new(body.slot, NonZeroU32::new(body.generation).unwrap()), &mut out);
     }
-    check::model(model, &mut out);
     out
 }
 
@@ -93,7 +93,6 @@ fn every_failure_is_reported_once_kind_by_kind_then_slot_by_slot_at_any_thread_c
         (dead, vec![cube.edges[9].entity(), v0]),
         (dead, vec![cylinder.edges[2].entity(), lost_curve.entity()]),
         (dead, vec![frame.loops[2].entity(), face]),
-        (dead, vec![frame.faces[1].entity(), face]),
     ];
     let reference = in_order(&snapshot.model);
     let dead: Vec<_> = named(&reference).into_iter().filter(|(reason, _)| *reason == dead).collect();
@@ -116,7 +115,7 @@ fn the_tasks_follow_the_kinds_then_the_bodies_each_table_in_runs() {
         .iter()
         .filter_map(|task| match task {
             Task::Entities(kind, 0) => Some(*kind),
-            Task::Entities(..) | Task::Bodies(_) | Task::Model => None,
+            Task::Entities(..) | Task::Bodies(_) => None,
         })
         .collect();
     let held: Vec<EntityKind> =
@@ -128,11 +127,10 @@ fn the_tasks_follow_the_kinds_then_the_bodies_each_table_in_runs() {
         .iter()
         .filter_map(|task| match task {
             Task::Entities(EntityKind::Vertex, from) => Some(*from),
-            Task::Entities(..) | Task::Bodies(_) | Task::Model => None,
+            Task::Entities(..) | Task::Bodies(_) => None,
         })
         .collect();
     assert_eq!(runs, (0..vertices.div_ceil(10)).map(|run| run * 10).collect::<Vec<_>>());
-    assert_eq!(found.last(), Some(&Task::Model), "what only the whole model shows, last");
-    assert_eq!(found.get(found.len() - 2), Some(&Task::Bodies(0)), "five bodies, one run, before it");
-    assert_eq!(tasks(&Snapshot::empty(tolerance()).model, per), [Task::Model]);
+    assert_eq!(found.last(), Some(&Task::Bodies(0)), "five bodies, one run, last");
+    assert_eq!(tasks(&Snapshot::empty(tolerance()).model, per), []);
 }

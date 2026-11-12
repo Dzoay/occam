@@ -2,8 +2,8 @@
 //! The whole model against every invariant (PARITY 1.10), for loading, importing and tests: `commit` checks only what
 //! an edit touched, and this checks everything. Each task checks one chunk of one table, so the tasks follow the
 //! storage and their results come back in task order through `Exec::map`: entity by entity, kind by kind in the order
-//! [`EntityKind::ALL`] lists them, slot by slot, then body by body, then what only the whole model shows. The reports
-//! are the same at any thread count.
+//! [`EntityKind::ALL`] lists them, slot by slot, then body by body, the faces that name each shell found first by one
+//! scan. The reports are the same at any thread count.
 
 use core::num::NonZeroU32;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 use occam_math::{Exec, Grain};
 use occam_report::{EntityKind, EntityRef, Report};
 
-use crate::check;
+use crate::check::{self, Members};
 use crate::kind::{Body, Id, Kind, Visit, dispatch};
 use crate::snapshot::{Model, Snapshot};
 
@@ -28,8 +28,6 @@ enum Task {
     Entities(EntityKind, u32),
     /// Each live body as a whole, in slots `from` to `from + TASK`.
     Bodies(u32),
-    /// What only the whole model shows.
-    Model,
 }
 
 /// How many slots a kind's table has.
@@ -73,12 +71,11 @@ fn tasks(model: &Model, per: NonZeroU32) -> Vec<Task> {
         .flat_map(|(kind, len)| runs(len, per).map(move |from| Task::Entities(kind, from)))
         .collect();
     tasks.extend(runs(dispatch(EntityKind::Body, Slots(model)).unwrap_or(0), per).map(Task::Bodies));
-    tasks.push(Task::Model);
     tasks
 }
 
-/// The reports of one task.
-fn run(model: &Model, task: Task, per: NonZeroU32) -> Vec<Report> {
+/// The reports of one task, the faces that name each shell being `members`.
+fn run(model: &Model, members: &Members, task: Task, per: NonZeroU32) -> Vec<Report> {
     let mut out = Vec::new();
     match task {
         Task::Entities(kind, from) => {
@@ -91,29 +88,29 @@ fn run(model: &Model, task: Task, per: NonZeroU32) -> Vec<Report> {
             let live = Live { model, from, to: from.saturating_add(per.get()) };
             for entity in live.visit::<Body>() {
                 if let Some(generation) = NonZeroU32::new(entity.generation) {
-                    check::body(model, Id::new(entity.slot, generation), &mut out);
+                    check::body(model, members, Id::new(entity.slot, generation), &mut out);
                 }
             }
         }
-        Task::Model => check::model(model, &mut out),
     }
     out
 }
 
 /// Every report of `model`, `per` slots a task, on `exec`.
 fn checked(model: Model, exec: &Exec, per: NonZeroU32) -> Vec<Report> {
+    let members = Arc::new(check::members(&model));
     let model = Arc::new(model);
     let tasks = Arc::new(tasks(&model, per));
     let count = tasks.len();
-    let found = exec
-        .map(count, Grain::Each, move |index| tasks.get(index).map(|&task| run(&model, task, per)).unwrap_or_default());
+    let run = move |index: usize| tasks.get(index).map(|&task| run(&model, &members, task, per)).unwrap_or_default();
+    let found = exec.map(count, Grain::Each, run);
     found.into_iter().flatten().collect()
 }
 
 impl Snapshot {
     /// The whole model against every invariant: for loading, importing and tests (PARITY 1.10). One report per failure,
     /// each naming its entities, entity by entity in the order of [`EntityKind::ALL`] and then of the slots, then body
-    /// by body, then what only the whole model shows; the same list at any thread count.
+    /// by body; the same list at any thread count.
     #[must_use]
     pub fn check_all(&self, exec: &Exec) -> Vec<Report> {
         checked(self.model.clone(), exec, TASK)

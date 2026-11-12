@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 use occam_geom::{Curve, ParamCurve, Surface};
 use occam_units::{Length, Point, UvPoint, World};
 
+use crate::kind::sealed::Sealed;
 use crate::kind::{
     Body, CurveGeom, Edge, EdgeUse, Face, Id, Kind, Loop, ParamCurveGeom, Shell, SurfaceGeom, Vertex, Wire,
 };
@@ -119,11 +120,30 @@ impl View<'_, Shell> {
         self.record.next
     }
 
-    /// Its faces, in order.
+    /// The face a walk of it begins from.
+    #[must_use]
+    pub const fn face(self) -> Id<Face> {
+        self.record.face
+    }
+
+    /// Its faces: those that name it and are joined to the face it begins from through their edges, each once, in the
+    /// order a breadth-first walk from that face meets them, each face's edges in the order its loops use them and each
+    /// edge's faces in radial order. None if that face does not name it.
     #[must_use]
     pub fn faces(self) -> Vec<Id<Face>> {
-        let model = self.model;
-        walk(Some(self.record.first_face), most::<Face>(model), |f| view(model, f).and_then(|v| v.record.next))
+        let (model, shell) = (self.model, self.id);
+        let named = |f: Id<Face>| view(model, f).is_some_and(|v| v.record.shell == shell);
+        let mut found: Vec<Id<Face>> = [self.record.face].into_iter().filter(|&f| named(f)).collect();
+        let mut seen: BTreeSet<Id<Face>> = found.iter().copied().collect();
+        // No shell has more faces than the table has slots, so a walk that has listed more stops, whatever it met.
+        let (mut at, most) = (0_usize, Face::table(model).len());
+        while let Some(face) = found.get(at).filter(|_| found.len() <= most).and_then(|&f| view(model, f)) {
+            at = at.saturating_add(1);
+            let next = face.edges().into_iter().filter_map(|e| view(model, e)).flat_map(View::<Edge>::faces);
+            let new: Vec<Id<Face>> = next.filter(|&f| named(f) && seen.insert(f)).collect();
+            found.extend(new);
+        }
+        found
     }
 }
 
@@ -132,12 +152,6 @@ impl<'a> View<'a, Face> {
     #[must_use]
     pub const fn shell(self) -> Id<Shell> {
         self.record.shell
-    }
-
-    /// The shell's next face.
-    #[must_use]
-    pub const fn next(self) -> Option<Id<Face>> {
-        self.record.next
     }
 
     /// The id of the surface it lies on.

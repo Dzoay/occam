@@ -129,7 +129,7 @@ fn wire_around(model: &Model, id: Id<Wire>, out: &mut BTreeSet<EntityRef>) {
 
 /// The edges of every face of a shell, and its faces.
 fn shell_edges(model: &Model, id: Id<Shell>, out: &mut BTreeSet<EntityRef>) {
-    for face in faces(model, id).items() {
+    for face in faces(model, id) {
         out.insert(face.entity());
         out.extend(face_edges(model, face).into_iter().map(Id::entity));
     }
