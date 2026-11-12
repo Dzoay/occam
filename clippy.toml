@@ -56,6 +56,9 @@ disallowed-methods = [
     { path = "f64::algebraic_div", reason = "the optimiser may rewrite it, so its result depends on the build (L23)" },
     { path = "f64::algebraic_rem", reason = "the optimiser may rewrite it, so its result depends on the build (L23)" },
     { path = "f64::mul_add", reason = "it rounds once, so it changes results against `a * b + c` (rule 5, L23)" },
+    { path = "std::sync::Arc::ptr_eq", reason = "compare content, never addresses: identity says different where content is equal (P8, L23)" },
+    { path = "std::rc::Rc::ptr_eq", reason = "compare content, never addresses: identity says different where content is equal (P8, L23)" },
+    { path = "std::ptr::eq", reason = "compare content, never addresses: identity says different where content is equal (P8, L23)" },
 ]
 
 # `arithmetic_side_effects` passes these: IEEE floating-point arithmetic underneath, which cannot panic or overflow. A

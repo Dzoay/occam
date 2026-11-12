@@ -43,7 +43,6 @@ text_enum! {
     /// NEW codes of the milestones to come, joining the closed `Code` with wording and followed-remedy tests (L2).
     NewCode {
         InvalidParameter = "input.invalid-parameter",
-        StaleId = "topo.stale-id",
         Undecided = "decide.undecided",
         Incomplete = "intersect.incomplete",
         BelowResolution = "intersect.below-resolution",

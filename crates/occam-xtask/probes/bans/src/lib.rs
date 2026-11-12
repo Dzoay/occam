@@ -10,6 +10,7 @@ pub mod disallowed_any;
 pub mod disallowed_float_methods;
 pub mod disallowed_hash_map;
 pub mod disallowed_hash_set;
+pub mod disallowed_pointer_eq;
 pub mod expect_used;
 pub mod indexing_slicing;
 pub mod panic;

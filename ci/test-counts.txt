@@ -6,6 +6,7 @@ occam-cli::cli 4
 occam-geom 356
 occam-math 117
 occam-report 41
+occam-topo 14
 occam-units 48
 occam-verify 30
 occam-wasm 3

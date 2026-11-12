@@ -1,0 +1,15 @@
+[package]
+name = "occam-topo"
+description = "The B-rep: records in copy-on-write chunks, stable ids, the edit and its checker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+occam-geom = { path = "../occam-geom" }
+occam-report = { path = "../occam-report" }
+occam-units = { path = "../occam-units" }
+
+[lints]
+workspace = true

@@ -27,17 +27,6 @@ fields. Names and colours arrive with `exchange`, and the describer and the nati
 
 ## Steps
 
-### `topology.store`
-
-`occam-topo` with the entity kinds as types, `Id<K>` of slot and generation written as its `EntityRef` (`edge:41/1`),
-and `Table<K>`: records in copy-on-write chunks of 1,024, free slots reused lowest first, the generation changed only
-when a slot is reused. A `Snapshot` clones by sharing every chunk. `ids` lists a kind's live ids in slot order, each
-once, and `resolve` checks an `EntityRef` against the snapshot, refusing a dead or reused one with the new code
-`topo.stale-id`.
-
-*Failing test first:* an id whose slot was freed and reused is `topo.stale-id`, never the new entity; a clone shares
-every chunk and one write copies exactly one; freed slots are reused lowest first, so the same edits give the same ids.
-
 ### `topology.edit`
 
 `Edit`, the only place ids are given: `reserve`, `add`, `set`, `remove`, and `derive(new, old, how)` with split,

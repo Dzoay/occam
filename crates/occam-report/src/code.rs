@@ -74,6 +74,8 @@ text_enum! {
         JoinBelowContinuity = "geom.join-below-continuity",
         /// A measure did not reach the accuracy asked within the work it is allowed.
         NotConverged = "measure.not-converged",
+        /// An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one.
+        StaleId = "topo.stale-id",
     }
 }
 
@@ -139,7 +141,8 @@ impl Code {
             | Self::NotInPlane
             | Self::SingularPoint
             | Self::JoinBelowContinuity
-            | Self::NotConverged => Severity::Error,
+            | Self::NotConverged
+            | Self::StaleId => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -187,6 +190,9 @@ impl Code {
             }
             Self::JoinBelowContinuity => "A join is less smooth than the continuity required of it.",
             Self::NotConverged => "A measure did not reach the accuracy asked within the work it is allowed.",
+            Self::StaleId => {
+                "An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one."
+            }
         }
     }
 
@@ -240,6 +246,10 @@ impl Code {
                 "The join first fails at order {failed}, short of the order {required} required, by {gap}."
             }
             Self::NotConverged => "The measure reached an accuracy of {reached} where {asked} was asked for.",
+            Self::StaleId => {
+                "No live entity of the kind wanted has this slot and generation: the slot holds generation {live} now, \
+                 or nothing if that is 0."
+            }
         }
     }
 
@@ -269,7 +279,8 @@ impl Code {
             | Self::NotInPlane
             | Self::SingularPoint
             | Self::JoinBelowContinuity
-            | Self::NotConverged => &[],
+            | Self::NotConverged
+            | Self::StaleId => &[],
         }
     }
 }
@@ -581,6 +592,19 @@ mod tests {
         ])
     }
 
+    fn topology_codes() -> Value {
+        json!([
+            {
+                "name": "StaleId",
+                "code": "topo.stale-id",
+                "severity": "error",
+                "summary": "An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one.",
+                "template": "No live entity of the kind wanted has this slot and generation: the slot holds generation {live} now, or nothing if that is 0.",
+                "remedies": [],
+            },
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -614,6 +638,7 @@ mod tests {
             spline_and_mesh_codes(),
             edge_codes(),
             measure_codes(),
+            topology_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())
