@@ -164,7 +164,7 @@ pub struct Frozen {
 }
 
 impl Describe for Frozen {
-    fn describe(&self, entity: EntityRef) -> Option<crate::report::Description> {
+    fn describe(&self, entity: EntityRef) -> Option<occam_report::Description> {
         unimplemented!()
     }
 }

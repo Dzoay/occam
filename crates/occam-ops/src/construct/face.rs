@@ -153,7 +153,7 @@ fn open(at: &Input, start: Vec3, end: Vec3, band: f64) -> Report {
 /// # Errors
 ///
 /// [`Code::InputUnknownLabel`] for a label no earlier step has, [`Code::StaleId`] for an id that names no live entity,
-/// and [`Code::NotAWire`] for anything but a wire body or a wire.
+/// and [`Code::NotAWire`] for anything but a wire body or a wire, naming what it names so that it is described.
 fn named(model: &Snapshot, operand: &Operand, labels: &Labels, at: &Input) -> Result<Id<Wire>, Report> {
     let entity = match operand {
         Operand::Label(label) => labels.get(label).ok_or_else(|| {
@@ -167,9 +167,9 @@ fn named(model: &Snapshot, operand: &Operand, labels: &Labels, at: &Input) -> Re
         EntityKind::Body => {
             let body = model.resolve::<Body>(entity).map_err(placed)?;
             let first = model.view(body).and_then(|b| b.wires().first().copied());
-            first.ok_or_else(|| not_a_wire(at, &entity.text()))
+            first.ok_or_else(|| not_a_wire(at, &entity.text()).with_entity(entity))
         }
-        _ => Err(not_a_wire(at, &entity.text())),
+        _ => Err(not_a_wire(at, &entity.text()).with_entity(entity)),
     }
 }
 

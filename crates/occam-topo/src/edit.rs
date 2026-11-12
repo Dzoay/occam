@@ -193,11 +193,21 @@ impl Edit {
     ///
     /// One `check.invariant-failed` per failure, fault internal, its reason the invariant and its entities those
     /// involved. The snapshot the edit began from is unchanged.
-    pub fn commit(mut self, _exec: &Exec) -> Result<(Snapshot, Changes), Vec<Report>> {
+    pub fn commit(self, exec: &Exec) -> Result<(Snapshot, Changes), Vec<Report>> {
+        self.try_commit(exec).map_err(|(failures, _)| failures)
+    }
+
+    /// As [`Edit::commit`], but a refused edit comes back with the failures, so that what they name can still be read
+    /// through [`Edit::view`], as the describer reads it (O26). It never becomes a snapshot.
+    ///
+    /// # Errors
+    ///
+    /// As [`Edit::commit`], with the edit as it stood when it was checked.
+    pub fn try_commit(mut self, _exec: &Exec) -> Result<(Snapshot, Changes), (Vec<Report>, Box<Self>)> {
         let mut failures = crate::geometric::measure(&mut self);
         failures.extend(check::edit(&self));
         if !failures.is_empty() {
-            return Err(failures);
+            return Err((failures, Box::new(self)));
         }
         self.carry_provenance();
         self.next.step = self.step;

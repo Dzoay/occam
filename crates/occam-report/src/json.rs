@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::description::Shown;
 use crate::{
     Code, DisplayUnits, EntityRef, Fault, Input, NamedValue, Partial, Reason, Remedy, RemedyKind, Report, Severity,
 };
@@ -28,6 +29,8 @@ pub(crate) struct ReportWire<'a> {
     partial: Option<&'a Partial>,
     #[serde(skip_serializing_if = "Option::is_none")]
     input: Option<&'a Input>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    described: Vec<Shown<'a>>,
 }
 
 impl<'a> ReportWire<'a> {
@@ -44,6 +47,7 @@ impl<'a> ReportWire<'a> {
             remedies: &report.remedies,
             partial: report.partial.as_ref(),
             input: report.input.as_ref(),
+            described: report.described.iter().map(|description| description.shown(units)).collect(),
         }
     }
 }
@@ -162,6 +166,32 @@ mod tests {
         assert_eq!(Report::from_json(&text), Ok(report));
         let plain = Report::new(Code::Malformed, Fault::InvalidInput).to_json(DisplayUnits::default()).unwrap();
         assert!(!plain.contains(r#""input":"#), "{plain}");
+    }
+
+    #[test]
+    fn a_report_carries_what_each_entity_it_names_is_and_reads_it_back() {
+        let face = EntityRef::new(EntityKind::Face, 3, 1);
+        let described = crate::Description {
+            entity: face,
+            form: "plane".to_string(),
+            values: vec![NamedValue::point("low", [0.0, 0.0, 0.0]), NamedValue::point("high", [25.4, 50.8, 0.0])],
+            origin: None,
+            adjacent: vec![EntityRef::new(EntityKind::Shell, 0, 1)],
+        };
+        let report = Report::new(Code::StaleId, Fault::InvalidInput).with_entity(face).with_described(vec![described]);
+        let units = DisplayUnits { length: LengthUnit::Inch, angle: AngleUnit::Radian };
+        let value: Value = serde_json::from_str(&report.to_json(units).unwrap()).unwrap();
+        let want = json!([{
+            "entity": "face:3/1", "form": "plane", "adjacent": ["shell:0/1"],
+            "values": [
+                {"name": "low", "quantity": "length", "value": [0.0, 0.0, 0.0], "shown": "(0, 0, 0) in"},
+                {"name": "high", "quantity": "length", "value": [25.4, 50.8, 0.0], "shown": "(1, 2, 0) in"},
+            ],
+        }]);
+        assert_eq!(value["described"], want);
+        assert_eq!(Report::from_json(&value.to_string()), Ok(report));
+        let bare = Report::new(Code::StaleId, Fault::InvalidInput).with_entity(face).to_json(units).unwrap();
+        assert!(!bare.contains("described"), "a report described by nothing yet says nothing of it: {bare}");
     }
 
     #[test]

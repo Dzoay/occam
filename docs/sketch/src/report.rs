@@ -1,9 +1,10 @@
 //! `occam-report`: what changes after schema 2. Schema 2 itself (entity references, fault, reason, stage, named values
 //! holding a point, `Partial`'s stage) is in the crate since `geometry.schema`, and its sketch is gone with
-//! `geometry.freeze`. What is left is O26's descriptions and the codes and remedies of the milestones to come. It still
-//! depends on nothing of occam's: a description is a form name and named values, never a geometry type.
+//! `geometry.freeze`. O26's descriptions, their origin and a report's `described` list are in the crate since
+//! `construction.describer`. What is left is the codes and remedies of the milestones to come, and the trait a failed
+//! boolean's frozen outputs will answer through.
 
-use occam_report::{EntityRef, NamedValue, StepRole};
+use occam_report::{Description, EntityRef};
 use serde::{Deserialize, Serialize};
 
 /// `occam_report`'s private `text_enum!`, repeated so that the sketch can declare closed enums the same way.
@@ -53,40 +54,9 @@ text_enum! {
     }
 }
 
-/// NEW. Which step made an entity, what that step was, and the entity's part in it.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Origin {
-    /// Counted over the model's whole life, so unique across requests.
-    pub step: u64,
-    pub operation: String,
-    pub role: StepRole,
-}
-
-/// NEW, and the sketch's until `construction`'s describer gives it a home: anything that can say what an entity is, a
-/// snapshot for the model's entities and a failed operation's frozen outputs for the ones that exist only there (O26).
+/// NEW, and the sketch's until the booleans give it a second source: anything that can say what an entity is. The
+/// describer in `occam` reads a snapshot, or a refused step's edit, since `construction.describer`; a failed boolean's
+/// frozen outputs will answer for the ids that exist only there (O26).
 pub trait Describe: Sync {
     fn describe(&self, entity: EntityRef) -> Option<Description>;
-}
-
-/// NEW. What an entity is in the caller's terms (S6, O26). Filled by one resolver as the result leaves the kernel, never
-/// at a failure site.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Description {
-    pub entity: EntityRef,
-    /// A geometry family's form name (`cylinder`, `bspline`), as its `Shape` gives it, so a new family edits no enum
-    /// here. For topology, the entity kind.
-    pub form: String,
-    /// Parameters, extent and position, shown in the caller's units (L9).
-    pub values: Vec<NamedValue>,
-    pub origin: Option<Origin>,
-    /// Neighbours, in the same id form (PARITY 1.1).
-    pub adjacent: Vec<EntityRef>,
-}
-
-/// CHANGED (O26): a report gains the descriptions of the entities it names, filled as the result leaves the kernel. The
-/// rest is schema 2's, as the crate holds it.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Details {
-    pub schema_2: occam_report::Details,
-    pub described: Vec<Description>,
 }

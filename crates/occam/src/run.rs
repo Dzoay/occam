@@ -2,15 +2,20 @@
 //! The request runner (docs/architecture/operations.md). A request is read and checked whole before anything is done;
 //! then its steps run in order, each through an edit that `commit` checks, on one thread. The first step that fails
 //! stops the run, and the model is the one the last good step left, so nothing that failed changes it (L5). Each step
-//! that ran says what it created, changed and deleted, and where each new entity came from (the brief).
+//! that ran says what it created, changed and deleted, and where each new entity came from (the brief). As the result
+//! leaves, every id it names is described, in one batch (O26).
 
 mod wire;
 
 use occam_math::Exec;
 use occam_ops::{Labels, Operation, Request, Step, default_tolerance};
-use occam_report::{Code, DisplayUnits, EntityRef, Fault, Input, NamedValue, Quantity, Remedy, RemedyKind, Report};
+use occam_report::{
+    Code, Description, DisplayUnits, EntityRef, Fault, Input, NamedValue, Quantity, Remedy, RemedyKind, Report,
+};
 use occam_topo::{Changes, Edit, Snapshot};
 use occam_units::Tolerance;
+
+use crate::describe::{self, Source, Steps};
 
 pub use wire::ran_json;
 
@@ -38,6 +43,18 @@ pub struct Done {
     pub made: Option<EntityRef>,
     /// What it created, changed and deleted, and where each new entity came from.
     pub changes: Changes,
+    /// What each entity it names is: as the run left it, or as it last was if it is gone (O26).
+    pub described: Vec<Description>,
+}
+
+impl Done {
+    /// Every entity it names: what it made, created, changed and deleted, and both ends of each lineage.
+    pub(crate) fn named(&self) -> impl Iterator<Item = EntityRef> + '_ {
+        let changes = &self.changes;
+        let lineage = changes.lineage.iter().flat_map(|l| [l.new, l.old]);
+        let listed = changes.created.iter().chain(&changes.changed).chain(&changes.deleted).copied();
+        self.made.into_iter().chain(listed).chain(lineage)
+    }
 }
 
 /// Why a run stopped short.
@@ -45,7 +62,7 @@ pub struct Done {
 pub struct Failed {
     /// The step that failed, or none if the request was refused before any step ran.
     pub step: Option<u32>,
-    /// What went wrong.
+    /// What went wrong, each report with what the entities it names are.
     pub reports: Vec<Report>,
 }
 
@@ -76,9 +93,20 @@ pub fn run(model: Option<&Snapshot>, request: &str) -> Ran {
 
 /// What a request refused before any step ran did: nothing.
 fn refused(model: Option<&Snapshot>, units: DisplayUnits, reports: Vec<Report>) -> Ran {
+    let sources: Vec<Source<'_>> = model.into_iter().map(Source::Model).collect();
+    let reports = reports.into_iter().map(|r| describe::report(r, &sources, &Steps::new())).collect();
     let failed = Some(Failed { step: None, reports });
     Ran { model: model.cloned(), units, tolerance: None, done: Vec::new(), failed }
 }
+
+/// What a step that ran gives: the model it left, what it made, and what it changed.
+type Stepped = (Snapshot, Option<EntityRef>, Changes);
+
+/// What a step that failed gives: its reports, and its edit as it stood when it was refused.
+type Stopped = (Vec<Report>, Box<Edit>);
+
+/// A step that failed: its index, its reports, and its edit as it stood when it was refused.
+pub(crate) type Refused = (u32, Vec<Report>, Box<Edit>);
 
 /// Runs `request`, read and checked, with `execute` doing each step.
 pub(crate) fn run_request(
@@ -87,40 +115,50 @@ pub(crate) fn run_request(
     mut execute: impl FnMut(&mut Edit, &Step, &Labels) -> Result<Option<EntityRef>, Report>,
 ) -> Ran {
     let units = DisplayUnits { length: request.units.length, angle: request.units.angle };
-    let (mut current, tolerance) = match start(model, request) {
+    let (first, tolerance) = match start(model, request) {
         Ok(started) => started,
         Err(report) => return refused(model, units, vec![report]),
     };
-    let (mut labels, mut done) = (Labels::default(), Vec::new());
+    // Each model the run passes through, kept to describe what was gone by the end; a snapshot shares its chunks.
+    let (mut models, mut steps, mut labels, mut done) =
+        (vec![first.clone()], Steps::new(), Labels::default(), Vec::new());
+    let (mut current, mut stopped) = (first, None);
     for step in &request.steps {
+        steps.insert(current.step().saturating_add(1), (step.index, step.operation));
         match one(&current, step, &labels, &mut execute) {
             Ok((next, made, changes)) => {
                 if let (Some(label), Some(made)) = (&step.label, made) {
                     labels.insert(label, made);
                 }
                 let label = step.label.clone();
-                done.push(Done { step: step.index, label, operation: step.operation, made, changes });
+                let operation = step.operation;
+                done.push(Done { step: step.index, label, operation, made, changes, described: Vec::new() });
+                models.push(next.clone());
                 current = next;
             }
-            Err(reports) => {
-                let failed = Some(Failed { step: Some(step.index), reports });
-                return Ran { model: Some(current), units, tolerance: Some(tolerance), done, failed };
+            Err((reports, edit)) => {
+                stopped = Some((step.index, reports, edit));
+                break;
             }
         }
     }
-    Ran { model: Some(current), units, tolerance: Some(tolerance), done, failed: None }
+    let failed = describe::describe_all(&models, &steps, &mut done, stopped);
+    Ran { model: Some(current), units, tolerance: Some(tolerance), done, failed }
 }
 
-/// Does `step` on `model` and commits it.
+/// Does `step` on `model` and commits it; if it fails, gives its reports and its edit as it stood.
 fn one(
     model: &Snapshot,
     step: &Step,
     labels: &Labels,
     execute: &mut impl FnMut(&mut Edit, &Step, &Labels) -> Result<Option<EntityRef>, Report>,
-) -> Result<(Snapshot, Option<EntityRef>, Changes), Vec<Report>> {
+) -> Result<Stepped, Stopped> {
     let mut edit = model.edit();
-    let made = execute(&mut edit, step, labels).map_err(|report| vec![report])?;
-    let (next, changes) = edit.commit(&Exec::serial())?;
+    let made = match execute(&mut edit, step, labels) {
+        Ok(made) => made,
+        Err(report) => return Err((vec![report], Box::new(edit))),
+    };
+    let (next, changes) = edit.try_commit(&Exec::serial())?;
     Ok((next, made, changes))
 }
 

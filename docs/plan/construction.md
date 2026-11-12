@@ -58,15 +58,6 @@ Volume, surface area and centre of mass of a solid by the divergence theorem ove
 *Failing test first:* the closed forms of each primitive and of the extruded and revolved solids, within the
 quadrature's stated tolerance; the box of a rotated cylinder is tight, not its bounding box's box.
 
-### `construction.describer`
-
-The one resolver ([O26](../architecture/open-decisions.md#o26-how-an-agent-learns-what-an-entity-is)): `describe_all`
-in `occam` describes every id in a result as it leaves the kernel, in one batch, with form, values in the caller's
-units, extent and position, origin (the step and its part in it) and neighbours.
-
-*Failing test first:* every report and outcome that leaves the kernel has a description for each id it names; an edge
-made by an extrusion is described as a line with its ends in the request's units, made by that step as a profile.
-
 ### `construction.commands`
 
 `occam run`, `list`, `adjacent`, `describe` and `check`, each with `--json`, many ids and one result per id; `run`

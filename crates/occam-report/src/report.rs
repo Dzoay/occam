@@ -1,11 +1,12 @@
 //! Source: original
 //! The report itself (L1, L3, L5).
 
+use std::collections::BTreeSet;
 use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Code, DisplayUnits, EntityRef, Fault, NamedValue, Reason, RemedyKind, Stage};
+use crate::{Code, Description, DisplayUnits, EntityRef, Fault, NamedValue, Reason, RemedyKind, Stage};
 
 /// A fix occam suggests, with the parameters to apply it (L3).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -144,6 +145,9 @@ pub struct Details {
     /// Where in a request the input it is about is, if it is about one.
     #[serde(default)]
     pub input: Option<Input>,
+    /// What each entity it names is, filled in by the one resolver as the result leaves the kernel (O26).
+    #[serde(default)]
+    pub described: Vec<Description>,
 }
 
 /// Something occam has to say about an operation (L1). The details are on the heap, so that every `Result<T, Report>` in the
@@ -175,7 +179,8 @@ impl Report {
 
     fn with_fault(code: Code, fault: Option<Fault>) -> Self {
         let (entities, values, remedies) = (Vec::new(), Vec::new(), Vec::new());
-        Self(Box::new(Details { code, fault, reason: None, entities, values, remedies, partial: None, input: None }))
+        let (partial, input, described) = (None, None, Vec::new());
+        Self(Box::new(Details { code, fault, reason: None, entities, values, remedies, partial, input, described }))
     }
 
     /// Says why, from the closed list.
@@ -225,6 +230,22 @@ impl Report {
     pub fn with_input(mut self, input: Input) -> Self {
         self.0.input = Some(input);
         self
+    }
+
+    /// Gives it the descriptions of the entities it names, in place of any it had.
+    #[must_use]
+    pub fn with_described(mut self, described: Vec<Description>) -> Self {
+        self.0.described = described;
+        self
+    }
+
+    /// Every entity it names, once each and in id order: its own, its remedies' and those it failed on.
+    #[must_use]
+    pub fn named(&self) -> Vec<EntityRef> {
+        let remedies = self.remedies.iter().flat_map(|remedy| &remedy.entities);
+        let failing = self.partial.iter().flat_map(|partial| &partial.failing);
+        let named: BTreeSet<EntityRef> = self.entities.iter().chain(remedies).chain(failing).copied().collect();
+        named.into_iter().collect()
     }
 
     /// The number of this name.
@@ -337,6 +358,23 @@ mod tests {
     #[test]
     fn a_report_is_one_pointer_so_results_stay_small() {
         assert_eq!(std::mem::size_of::<Report>(), std::mem::size_of::<usize>());
+    }
+
+    #[test]
+    fn a_report_names_its_own_entities_its_remedies_and_those_it_failed_on_once_each_in_id_order() {
+        let at = |kind, slot| EntityRef::new(kind, slot, 1);
+        let (edge, face, vertex) = (at(EntityKind::Edge, 7), at(EntityKind::Face, 3), at(EntityKind::Vertex, 2));
+        let partial = Partial { failing: vec![face, edge], values: vec![], stage: Stage::Pairs };
+        let report = Report::new(Code::Malformed, Fault::InvalidInput)
+            .with_entity(face)
+            .with_remedy(Remedy::new(RemedyKind::UseSchema).with_entity(vertex))
+            .with_partial(partial);
+        assert_eq!(report.named(), [vertex, edge, face]);
+        assert_eq!(Report::new(Code::Malformed, Fault::InvalidInput).named(), []);
+        let described = vec![Description::none(face)];
+        let report = report.with_described(described.clone());
+        assert_eq!(report.described, described);
+        assert_eq!(report.with_described(Vec::new()).described, [], "in place of what it had");
     }
 
     #[test]

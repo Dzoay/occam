@@ -1,9 +1,10 @@
 //! Source: original
 //! A run's one JSON form (L4): whether it went through, the tolerance in force and where it came from, each step that ran
-//! with what it created, changed and deleted, why it stopped if it did, and the notes. Numbers are in millimetres and
-//! radians, as every result gives them; the reports' wording is in the request's units.
+//! with what it created, changed and deleted and what each entity it names is, why it stopped if it did, and the notes.
+//! Numbers are in millimetres and radians, as every result gives them; the reports' wording, and each value a
+//! description shows, are in the request's units.
 
-use occam_report::{Code, DisplayUnits, EntityRef, NamedValue, Quantity, Report, SCHEMA};
+use occam_report::{Code, DisplayUnits, EntityRef, NamedValue, Quantity, Report, SCHEMA, Shown};
 use occam_topo::Derivation;
 use serde::Serialize;
 use serde_json::Value;
@@ -41,6 +42,7 @@ struct DoneWire<'a> {
     changed: &'a [EntityRef],
     deleted: &'a [EntityRef],
     lineage: Vec<LineageWire>,
+    described: Vec<Shown<'a>>,
 }
 
 #[derive(Serialize)]
@@ -82,7 +84,7 @@ pub(super) const fn how(how: Derivation) -> &'static str {
     }
 }
 
-fn done(done: &Done) -> DoneWire<'_> {
+fn done(done: &Done, units: DisplayUnits) -> DoneWire<'_> {
     let changes = &done.changes;
     let lineage = changes.lineage.iter().map(|l| LineageWire { new: l.new, old: l.old, how: how(l.how) }).collect();
     DoneWire {
@@ -94,6 +96,7 @@ fn done(done: &Done) -> DoneWire<'_> {
         changed: &changes.changed,
         deleted: &changes.deleted,
         lineage,
+        described: done.described.iter().map(|description| description.shown(units)).collect(),
     }
 }
 
@@ -118,7 +121,7 @@ pub fn ran_json(ran: &Ran) -> String {
         schema: SCHEMA,
         ok: ran.failed.is_none(),
         tolerance,
-        steps: ran.done.iter().map(done).collect(),
+        steps: ran.done.iter().map(|d| done(d, ran.units)).collect(),
         failed: ran.failed.as_ref().map(|f| failed(f, ran.units)),
         diagnostics: used.iter().map(|r| report(r, ran.units)).collect(),
     };

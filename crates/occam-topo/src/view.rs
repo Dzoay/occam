@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 use occam_geom::{Curve, ParamCurve, Surface};
 use occam_units::{Length, Point, UvPoint, World};
 
+use crate::edit::Edit;
 use crate::kind::sealed::Sealed;
 use crate::kind::{
     Body, CurveGeom, Edge, EdgeUse, Face, Id, Kind, Loop, ParamCurveGeom, Shell, SurfaceGeom, Vertex, Wire,
@@ -45,6 +46,16 @@ impl Snapshot {
     #[must_use]
     pub fn view<K: Kind>(&self, id: Id<K>) -> Option<View<'_, K>> {
         view(&self.model, id)
+    }
+}
+
+impl Edit {
+    /// The entity `id` names in this edit as it stands, written but not yet checked, or `None` if it is not live here.
+    /// Reading is all it allows, and every walk from it is bounded, as on any model, so an edit `commit` refused can
+    /// still say what its reports name.
+    #[must_use]
+    pub fn view<K: Kind>(&self, id: Id<K>) -> Option<View<'_, K>> {
+        view(&self.next, id)
     }
 }
 

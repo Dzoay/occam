@@ -189,15 +189,21 @@ fn a_run_has_one_json_form_with_each_steps_changes_and_the_failure_in_the_reques
         "message": "The value given, 2 cm, is not strictly between {low} and {high}.",
         "entities": [], "remedies": [], "values": [{"name": "value", "quantity": "length", "value": 20.0}],
     });
+    // Each vertex described as the run left it, in the request's units: a vertex keeps no step.
+    let at = |slot: u32, x: f64, shown: &str| {
+        json!({"entity": format!("vertex:{slot}/1"), "form": "vertex", "adjacent": [],
+               "values": [{"name": "point", "quantity": "length", "value": [x, 0.0, 0.0], "shown": shown}]})
+    };
     let want = json!({
         "schema": 2,
         "ok": false,
         "tolerance": {"length": 1e-7, "angle": 1e-9, "from": "default"},
         "steps": [
             {"step": 0, "label": "s0", "operation": "box", "made": "vertex:0/1", "created": ["vertex:0/1"],
-             "changed": [], "deleted": [], "lineage": []},
+             "changed": [], "deleted": [], "lineage": [], "described": [at(0, 0.0, "(0, 0, 0) cm")]},
             {"step": 1, "label": "s1", "operation": "box", "made": "vertex:1/1", "created": ["vertex:1/1"],
-             "changed": [], "deleted": [], "lineage": [{"new": "vertex:1/1", "old": "vertex:0/1", "how": "copied"}]},
+             "changed": [], "deleted": [], "lineage": [{"new": "vertex:1/1", "old": "vertex:0/1", "how": "copied"}],
+             "described": [at(0, 0.0, "(0, 0, 0) cm"), at(1, 1.0, "(0.1, 0, 0) cm")]},
         ],
         "failed": {"step": 2, "reports": [boom]},
         "diagnostics": [note],

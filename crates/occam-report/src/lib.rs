@@ -38,6 +38,7 @@ macro_rules! text_enum {
 }
 
 mod code;
+mod description;
 mod display;
 mod fault;
 mod follow;
@@ -49,6 +50,7 @@ mod report;
 mod value;
 
 pub use code::{Code, Entry, RemedyKind, Severity, catalogue_json};
+pub use description::{Description, Origin, Shown};
 pub use display::{AngleUnit, DisplayUnits, LengthUnit};
 pub use fault::{Fault, Reason, Stage};
 pub use follow::follow_remedy;

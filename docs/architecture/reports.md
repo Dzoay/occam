@@ -10,15 +10,17 @@ described. The schema becomes version 2.
 ```mermaid
 flowchart LR
   site["Failure site<br/>names ids only"] --> rep["Report"]
-  snap[("Snapshot, or the<br/>frozen phase outputs")] --> res
+  snap[("The models a run passed through,<br/>a refused step's edit, or<br/>the frozen phase outputs")] --> res
   rep --> res["describe_all<br/>one resolver, one batch"]
   res --> out["Report with a<br/>'described' list"]
   out --> agent(["Agent"])
 ```
 
 - **A failure site names ids and nothing more.** No site can forget to describe.
-- **As the result leaves the kernel,** the `occam` crate's `describe_all` describes every id in it, in one batch.
-- **Each description** gives form, parameters, extent and position in the caller's units, origin, and neighbours.
+- **As the result leaves the kernel,** the `occam` crate's `describe_all` describes every id in it, in one batch: each
+  report's, and each step's outcome's. An id is described as the run left it, or as it last was if it is gone.
+- **Each description** gives form, parameters, extent and position, origin, and neighbours. Its numbers are in
+  millimetres, as every result's are, and each is shown in the caller's units too. An id that names nothing is `none`.
 - **`occam describe`** asks the same resolver later, for many ids at once.
 
 This is the answer to [O26](open-decisions.md#o26-how-an-agent-learns-what-an-entity-is).

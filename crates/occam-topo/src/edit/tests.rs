@@ -134,6 +134,22 @@ fn a_record_linking_to_an_entity_not_live_fails_commit_naming_both() {
 }
 
 #[test]
+fn a_refused_edit_comes_back_with_its_failures_and_can_still_be_read() {
+    let (base, e, [_, b]) = one_edge();
+    let mut edit = base.edit();
+    edit.remove(b).unwrap();
+    let made = edit.add(vertex(7.0));
+    assert_eq!(edit.view(made).unwrap().point(), vertex(7.0).point, "an edit reads as it stands");
+    let (reports, back) = edit.try_commit(&serial()).unwrap_err();
+    assert_eq!(failures(&reports), [(Reason::DeadLink, vec![e.entity(), b.entity()])]);
+    assert_eq!(back.view(made).unwrap().point(), vertex(7.0).point, "what it made is there");
+    assert!(back.view(b).is_none() && back.view(e).is_some(), "what it removed is gone, what it kept is not");
+    assert!(base.view(b).is_some() && base.view(made).is_none(), "the snapshot it began from is unchanged");
+    let Ok((next, changes)) = base.edit().try_commit(&serial()) else { panic!("a clean edit is refused") };
+    assert_eq!((next.step(), changes), (base.step() + 1, Changes::default()), "a clean edit commits as commit does");
+}
+
+#[test]
 fn a_record_left_linking_to_one_the_edit_removed_fails_commit() {
     let (base, e, [a, b]) = one_edge();
     let mut edit = base.edit();

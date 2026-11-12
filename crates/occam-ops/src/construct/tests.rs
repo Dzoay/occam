@@ -254,6 +254,7 @@ fn a_face_named_by_something_that_is_not_a_wire_is_refused() {
     let report = refused(steps);
     assert_eq!(report.code, Code::NotAWire);
     assert_eq!(report.input.as_ref().and_then(|i| i.given.clone()), Some("face:0/1".to_string()));
+    assert_eq!(report.entities, [EntityRef::new(EntityKind::Face, 0, 1)], "named, so that it is described");
     let unknown = refused(json!([{"op": "face", "outer": "nowhere"}]));
     assert_eq!(unknown.code, Code::InputUnknownLabel);
 }
