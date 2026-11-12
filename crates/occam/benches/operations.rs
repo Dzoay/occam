@@ -296,5 +296,25 @@ fn construct_primitives() -> bool {
     made
 }
 
-library_benchmark_group!(name = construction, benchmarks = [construct_primitives]);
+/// The plan's tests for sweeps, as one request: the plate extruded, and a rectangle turned a whole turn off its axis.
+const SWEEPS: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+    {"op": "wire", "label": "outline", "points": [[0, 0, 0], [40, 0, 0], [40, 20, 0], [0, 20, 0]], "closed": true},
+    {"op": "wire", "label": "hole", "edges": [{"circle": {"centre": [20, 10, 0], "radius": 3, "normal": [0, 0, 1]}}]},
+    {"op": "face", "label": "plate", "outer": "outline", "holes": ["hole"]},
+    {"op": "extrude", "face": "plate", "vector": [0, 0, 5]},
+    {"op": "wire", "label": "side", "points": [[50, 0, 0], [60, 0, 0], [60, 0, 5], [50, 0, 5]], "closed": true},
+    {"op": "face", "label": "rect", "outer": "side"},
+    {"op": "revolve", "profile": "rect", "origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 360}
+]}"#;
+
+// The request read and checked, and each step made and committed, which checks it; what it made is leaked, as above.
+#[library_benchmark]
+fn construct_sweeps() -> bool {
+    let ran = occam::run(None, black_box(SWEEPS));
+    let made = ran.failed.is_none() && ran.done.len() == 7;
+    core::mem::forget(ran);
+    made
+}
+
+library_benchmark_group!(name = construction, benchmarks = [construct_primitives, construct_sweeps]);
 main!(library_benchmark_groups = operations, kernels, topology, construction);

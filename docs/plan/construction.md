@@ -33,15 +33,6 @@ for the native format's binary twin. Each step moves what it makes real out of [
 
 ## Steps
 
-### `construction.sweeps`
-
-Extrude a face along a vector into a solid, and revolve a face or a wire about an axis into a solid or a sheet (rows
-1.13, 2.15), with provenance: the profile's entities and those made from them.
-
-*Failing test first:* the extruded rectangle with a hole is a solid of genus 1 that passes the checker; a full
-revolution of a rectangle off its axis is a torus-like solid of genus 1; an extrusion along a vector in the face's
-plane is refused.
-
 ### `construction.transform`
 
 Rigid and scaling transforms of a body, and a copy whose ids are new and distinct, with lineage to what it copied

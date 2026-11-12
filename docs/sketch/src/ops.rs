@@ -56,20 +56,10 @@ pub enum Measurement {
 
 /// The parameters each operation reads from its step's other fields (`occam_ops::Step::parameters`), as its step will
 /// make them real. The request, its steps and its operands are in `occam-ops` since `construction.request`, and the
-/// wire and the planar face, as `occam_ops::Args`, since `construction.wires`, and the primitives since
-/// `construction.primitives`.
+/// wire and the planar face, as `occam_ops::Args`, since `construction.wires`, the primitives since
+/// `construction.primitives`, and extrude and revolve since `construction.sweeps`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
-    Extrude {
-        face: Operand,
-        vector: [f64; 3],
-    },
-    Revolve {
-        profile: Operand,
-        origin: [f64; 3],
-        axis: [f64; 3],
-        angle: f64,
-    },
     Boolean {
         kind: BooleanKind,
         target: Operand,

@@ -81,6 +81,7 @@ pub(super) const fn how(how: Derivation) -> &'static str {
         Derivation::Trimmed => "trimmed",
         Derivation::Merged => "merged",
         Derivation::Copied => "copied",
+        Derivation::Swept => "swept",
     }
 }
 

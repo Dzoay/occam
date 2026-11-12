@@ -9,11 +9,12 @@ mod face;
 mod flat;
 pub(crate) mod given;
 mod outline;
-mod space;
+pub(crate) mod space;
 mod wire;
 
+pub(crate) use build::{refused, shown};
 pub(crate) use face::face;
-pub(crate) use wire::wire;
+pub(crate) use wire::{band, wire};
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

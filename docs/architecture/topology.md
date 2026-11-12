@@ -68,7 +68,8 @@ flowchart LR
 - `Edit` is the only place ids are given, and `commit` is the only way to make a snapshot. So no unchecked model
   exists.
 - `reserve` gives an id for a record written later, so cycles (an edge and its uses) can be built.
-- `derive(new, old, how)` records lineage: split, trimmed, merged or copied.
+- `derive(new, old, how)` records lineage: split, trimmed, merged, copied or swept. A new entity takes the provenance
+  of the first of its own kind it came from, unless it was swept from it: what a sweep makes is its own.
 - `Changes` lists what was created, changed and deleted, and each new entity's lineage.
 - `Snapshot::check_all` checks the whole model, for loading, importing and tests.
 

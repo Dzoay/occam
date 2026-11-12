@@ -221,8 +221,8 @@ fn a_run_has_one_json_form_with_each_steps_changes_and_the_failure_in_the_reques
 
 #[test]
 fn every_way_a_lineage_is_made_has_its_name() {
-    let names = [Derivation::Split, Derivation::Trimmed, Derivation::Merged, Derivation::Copied].map(wire::how);
-    assert_eq!(names, ["split", "trimmed", "merged", "copied"]);
+    let ways = [Derivation::Split, Derivation::Trimmed, Derivation::Merged, Derivation::Copied, Derivation::Swept];
+    assert_eq!(ways.map(wire::how), ["split", "trimmed", "merged", "copied", "swept"]);
     let froms = [ToleranceFrom::Request, ToleranceFrom::Default, ToleranceFrom::Model].map(wire::from);
     assert_eq!(froms, ["request", "default", "model"]);
 }

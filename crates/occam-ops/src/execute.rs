@@ -13,6 +13,7 @@ use crate::operand::Labels;
 use crate::operation::Operation;
 use crate::primitive;
 use crate::request::Step;
+use crate::sweep;
 
 /// Does `step` in `edit`, with `labels` naming what earlier steps made, and gives what it made, if it made one thing a
 /// later step can name by its label.
@@ -36,6 +37,8 @@ pub fn execute(edit: &mut Edit, step: &Step, labels: &Labels) -> Result<Option<E
             | Operation::Wedge,
             Args::Primitive(args),
         ) => primitive::make(edit, args),
+        (Operation::Extrude, Args::Extrude(args)) => sweep::extrude(edit, args, labels),
+        (Operation::Revolve, Args::Revolve(args)) => sweep::revolve(edit, args, labels),
         (operation, _) if operation.supported() => {
             Err(Report::new(Code::InputMissing, Fault::InvalidInput).with_input(place("")))
         }

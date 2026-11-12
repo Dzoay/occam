@@ -226,6 +226,19 @@ fn of_two_sources_of_its_own_kind_an_entity_takes_the_first_ones_provenance() {
 }
 
 #[test]
+fn an_entity_swept_from_one_of_its_own_kind_keeps_the_provenance_the_edit_gave_it() {
+    let (base, e, [a, b]) = one_edge();
+    let mut edit = base.edit();
+    let curve = record(&base, e).unwrap().curve;
+    let swept = edge(&mut edit, curve, (a, b), StepRole::Profile);
+    edit.derive(swept.entity(), e.entity(), Derivation::Swept).unwrap();
+    let (after, changes) = edit.commit(&serial()).unwrap();
+    assert_eq!(changes.lineage, [Lineage { new: swept.entity(), old: e.entity(), how: Derivation::Swept }]);
+    let born = record(&after, swept).map(|r| r.born);
+    assert_eq!(born, Some(Provenance { step: 2, role: StepRole::Profile }), "the sweep's, not the edge's");
+}
+
+#[test]
 fn the_step_counts_over_the_model_and_a_dropped_edit_changes_nothing() {
     let empty = Snapshot::empty(tolerance());
     let mut edit = empty.edit();

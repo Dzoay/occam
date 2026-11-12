@@ -470,6 +470,34 @@ catalogue! {
         "A frame's x axis lies along its z axis.",
         "{parameter} lies along the frame's z axis, so it gives no x direction across it.",
     }
+
+    /// An extrusion's vector lies in its face's plane within the band, so it would sweep no volume.
+    VectorInPlane = "construct.vector-in-plane" {
+        Error, [],
+        "An extrusion's vector lies in its face's plane, so it sweeps no volume.",
+        "{parameter} rises {height} from the face's plane, no more than the band of {band}.",
+    }
+
+    /// A sweep names something that is not a profile it can sweep: not the only face of a sheet, or for a revolution the only wire of a wire body, or a face that is not planar, or one with an edge that is not a line or a circle.
+    NotAProfile = "construct.not-a-profile" {
+        Error, [],
+        "A sweep names something that is not a profile it can sweep.",
+        "{parameter} names {given}, which is not a profile a sweep can be made from.",
+    }
+
+    /// A revolution's profile does not lie in one plane with its axis, within the band.
+    AxisOffPlane = "construct.axis-off-plane" {
+        Error, [],
+        "A revolution's profile does not lie in one plane with its axis.",
+        "The profile reaches {point}, {distance} from the plane through {parameter} and the profile's farthest point, more than the band of {band}.",
+    }
+
+    /// A revolution's profile lies on both sides of its axis, beyond the band.
+    ProfileCrossesAxis = "construct.profile-crosses-axis" {
+        Error, [],
+        "A revolution's profile lies on both sides of its axis.",
+        "The profile reaches {point}, {distance} beyond {parameter} from its farthest point, more than the band of {band}.",
+    }
 }
 
 text_enum! {
@@ -1119,6 +1147,43 @@ mod tests {
         ])
     }
 
+    fn sweep_codes() -> Value {
+        json!([
+            {
+                "name": "VectorInPlane",
+                "code": "construct.vector-in-plane",
+                "severity": "error",
+                "summary": "An extrusion's vector lies in its face's plane, so it sweeps no volume.",
+                "template": "{parameter} rises {height} from the face's plane, no more than the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "NotAProfile",
+                "code": "construct.not-a-profile",
+                "severity": "error",
+                "summary": "A sweep names something that is not a profile it can sweep.",
+                "template": "{parameter} names {given}, which is not a profile a sweep can be made from.",
+                "remedies": []
+            },
+            {
+                "name": "AxisOffPlane",
+                "code": "construct.axis-off-plane",
+                "severity": "error",
+                "summary": "A revolution's profile does not lie in one plane with its axis.",
+                "template": "The profile reaches {point}, {distance} from the plane through {parameter} and the profile's farthest point, more than the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "ProfileCrossesAxis",
+                "code": "construct.profile-crosses-axis",
+                "severity": "error",
+                "summary": "A revolution's profile lies on both sides of its axis.",
+                "template": "The profile reaches {point}, {distance} beyond {parameter} from its farthest point, more than the band of {band}.",
+                "remedies": []
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -1166,6 +1231,7 @@ mod tests {
             face_codes(),
             io_codes(),
             primitive_codes(),
+            sweep_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())

@@ -93,12 +93,12 @@ pub struct FaceArgs {
 }
 
 /// The value of `result`, or nothing with its report kept.
-fn gather<T>(result: Result<T, Report>, out: &mut Vec<Report>) -> Option<T> {
+pub(crate) fn gather<T>(result: Result<T, Report>, out: &mut Vec<Report>) -> Option<T> {
     result.map_err(|report| out.push(report)).ok()
 }
 
 /// The point at `at`, three numbers in the request's length unit, in millimetres.
-fn point(at: &At, value: &Value, units: Units) -> Result<Vec3, Report> {
+pub(crate) fn point(at: &At, value: &Value, units: Units) -> Result<Vec3, Report> {
     let Some([x, y, z]) = value.as_array().and_then(|items| <&[Value; 3]>::try_from(items.as_slice()).ok()) else {
         return Err(wrong_type(at, value, "point of three numbers"));
     };
@@ -111,7 +111,7 @@ fn point(at: &At, value: &Value, units: Units) -> Result<Vec3, Report> {
 }
 
 /// The direction at `at`, three numbers of no unit, not all zero.
-fn direction(at: &At, value: &Value) -> Result<Vec3, Report> {
+pub(crate) fn direction(at: &At, value: &Value) -> Result<Vec3, Report> {
     let Some([x, y, z]) = value.as_array().and_then(|items| <&[Value; 3]>::try_from(items.as_slice()).ok()) else {
         return Err(wrong_type(at, value, "direction of three numbers"));
     };

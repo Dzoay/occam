@@ -25,6 +25,9 @@ pub enum Derivation {
     Merged,
     /// A copy of it, moved or not.
     Copied,
+    /// Made by sweeping it: a face from an edge or a face, an edge from a vertex or an edge, a vertex from a vertex.
+    /// What a sweep makes is its own, so it keeps the sweep's provenance.
+    Swept,
 }
 
 /// Where a new entity came from (PARITY 1.11).
@@ -169,7 +172,8 @@ impl Edit {
     }
 
     /// Records that `new` came from `old` by `how`. On commit a new entity takes the provenance of the first entity
-    /// of its own kind it came from, over whatever the edit wrote, so a split face keeps the step that made it.
+    /// of its own kind it came from, other than by sweeping, over whatever the edit wrote, so a split face keeps the
+    /// step that made it.
     ///
     /// # Errors
     ///
@@ -220,10 +224,13 @@ impl Edit {
         Ok((Snapshot { model: self.next }, changes))
     }
 
-    /// Gives each new entity the provenance of the first entity of its own kind it came from.
+    /// Gives each new entity the provenance of the first entity of its own kind it came from, other than by sweeping.
     fn carry_provenance(&mut self) {
         let mut carried = BTreeSet::new();
         for lineage in &self.lineage {
+            if lineage.how == Derivation::Swept {
+                continue;
+            }
             let (new, old) = (lineage.new, lineage.old);
             if new.kind != old.kind || !self.created.contains(&new) || !carried.insert(new) {
                 continue;

@@ -4,12 +4,12 @@
 //! into the step's [`Args::Primitive`](crate::Args::Primitive); the step lays the solid out from them, and `commit`
 //! checks it as it checks any edit.
 
-mod parts;
+pub(crate) mod parts;
 mod polyhedron;
 mod pose;
 mod read;
 mod round;
-mod solid;
+pub(crate) mod solid;
 
 use occam_report::{EntityRef, Report};
 use occam_topo::Edit;

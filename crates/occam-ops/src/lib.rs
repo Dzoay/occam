@@ -11,6 +11,7 @@ mod operation;
 mod primitive;
 mod read;
 mod request;
+mod sweep;
 
 pub use args::Args;
 pub use construct::given::{FaceArgs, Piece, WireArgs, WireRef};
@@ -19,3 +20,4 @@ pub use operand::{Labels, Operand};
 pub use operation::{Operation, listing};
 pub use primitive::{Pose, PrimitiveArgs, Shape};
 pub use request::{Request, SCHEMA, Step, Units, default_tolerance};
+pub use sweep::{ExtrudeArgs, Named, RevolveArgs};

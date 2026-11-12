@@ -1,17 +1,21 @@
 //! Source: original
-//! A closed solid as a primitive lays it out, and its writing through the edit: its points, its edges, each a piece of
-//! a curve between two of them, and its faces, each a piece of a surface bounded by loops of uses of the edges, every
-//! use with its curve in the face's parameters. Each edge's uses form its ring, and each point's edge ends its star, in
-//! the order they are given; `commit` then checks the whole and measures how far each edge strays from its faces.
+//! A body of one shell as a primitive or a sweep lays it out, and its writing through the edit: its points, its edges,
+//! each a piece of a curve between two of them, and its faces, each a piece of a surface bounded by loops of uses of the
+//! edges, every use with its curve in the face's parameters. Each edge's uses form its ring, and each point's edge ends
+//! its star, in the order they are given; `commit` then checks the whole and measures how far each edge strays from its
+//! faces. Whether a face's outward normal is its surface's is read from the way its outer loop winds about its witness
+//! in the surface's parameters, as the checker counts it, so each loop need only run anticlockwise about the outward
+//! normal. What a primitive writes is made by its step from nothing; what a sweep writes is the profile's, each point,
+//! edge and face, and the body, derived from what of the profile it came from.
 
 use std::sync::Arc;
 
 use occam_geom::{Curve, ParamCurve, Surface};
-use occam_report::{Report, StepRole};
+use occam_report::{EntityRef, Report, StepRole};
 use occam_topo::{
-    Around, Body, BodyKind, BodyRecord, CurveRecord, Edge, EdgeRecord, EdgeRole, EdgeUse, EdgeUseRecord, Edit, End,
-    Face, FaceRecord, Id, Loop, LoopRecord, ParamCurveRecord, Sheet, Shell, ShellRecord, SurfaceRecord, UseOwner,
-    Vertex, VertexRecord,
+    Around, Body, BodyKind, BodyRecord, CurveRecord, Derivation, Edge, EdgeRecord, EdgeRole, EdgeUse, EdgeUseRecord,
+    Edit, End, Face, FaceRecord, Id, Loop, LoopRecord, ParamCurveRecord, Sheet, Shell, ShellRecord, SurfaceRecord,
+    UseOwner, Vertex, VertexRecord, winding_number,
 };
 use occam_units::{Length, Point, UvPoint, World};
 
@@ -37,7 +41,8 @@ pub(crate) struct LoopSpec {
     pub witness: UvPoint,
 }
 
-/// A face: a piece of `surface`, whose normal points out of the solid, bounded by `loops`, the outer first.
+/// A face: a piece of `surface` bounded by `loops`, the outer first, each running anticlockwise about its outward
+/// normal.
 pub(crate) struct FaceSpec {
     pub surface: Arc<dyn Surface>,
     pub loops: Vec<LoopSpec>,
@@ -48,6 +53,28 @@ pub(crate) struct Solid {
     pub points: Vec<Point<World>>,
     pub edges: Vec<EdgeSpec>,
     pub faces: Vec<FaceSpec>,
+}
+
+/// What a body's entities came from: the step's part in making them, the body's kind, and, if they came from entities
+/// of the snapshot the edit began from, which ones and how.
+pub(crate) struct Origin {
+    pub role: StepRole,
+    pub kind: BodyKind,
+    pub from: Option<Sources>,
+}
+
+impl Origin {
+    /// A solid made by the step from nothing.
+    pub(crate) const MADE: Self = Self { role: StepRole::Made, kind: BodyKind::Solid, from: None };
+}
+
+/// What the body, and each point, edge and face in the solid's order, came from, and how.
+pub(crate) struct Sources {
+    pub how: Derivation,
+    pub body: EntityRef,
+    pub points: Vec<EntityRef>,
+    pub edges: Vec<EntityRef>,
+    pub faces: Vec<EntityRef>,
 }
 
 /// The ids the writing gives, in the solid's order.
@@ -92,6 +119,16 @@ fn uses_of(solid: &Solid) -> Vec<(usize, &UseSpec)> {
 ///
 /// What the edit reports, which no solid a primitive lays out gives.
 pub(crate) fn write(edit: &mut Edit, solid: &Solid) -> Result<Id<Body>, Report> {
+    write_from(edit, solid, &Origin::MADE)
+}
+
+/// Writes `solid` in `edit` as one body of one shell, as `origin` says it came about, and gives the body.
+///
+/// # Errors
+///
+/// What the edit reports, which no solid a primitive or a sweep lays out gives, and `topo.stale-id` for a source that
+/// is not live in the snapshot the edit began from.
+pub(crate) fn write_from(edit: &mut Edit, solid: &Solid, origin: &Origin) -> Result<Id<Body>, Report> {
     let uses = uses_of(solid);
     let ids = Ids {
         body: edit.reserve(),
@@ -103,13 +140,28 @@ pub(crate) fn write(edit: &mut Edit, solid: &Solid) -> Result<Id<Body>, Report> 
         uses: uses.iter().map(|_| edit.reserve()).collect(),
     };
     write_uses(edit, solid, &ids, &uses)?;
-    write_edges(edit, solid, &ids, &uses)?;
-    write_faces(edit, solid, &ids)?;
-    let born = edit.provenance(StepRole::Made);
+    write_edges(edit, solid, &ids, (&uses, origin.role))?;
+    write_faces(edit, solid, &ids, origin.role)?;
+    let born = edit.provenance(origin.role);
     edit.set(ids.shell, ShellRecord { body: ids.body, face: first(&ids.faces)?, next: None })?;
-    let body = BodyRecord { kind: BodyKind::Solid, first_shell: Some(ids.shell), first_wire: None, born };
+    let body = BodyRecord { kind: origin.kind, first_shell: Some(ids.shell), first_wire: None, born };
     edit.set(ids.body, body)?;
+    if let Some(from) = &origin.from {
+        derive(edit, &ids, from)?;
+    }
     Ok(ids.body)
+}
+
+/// Records that the body, and each point, edge and face, came from its source in `from`.
+fn derive(edit: &mut Edit, ids: &Ids, from: &Sources) -> Result<(), Report> {
+    edit.derive(ids.body.entity(), from.body, from.how)?;
+    let points = ids.vertices.iter().map(|v| v.entity()).zip(&from.points);
+    let edges = ids.edges.iter().map(|e| e.entity()).zip(&from.edges);
+    let faces = ids.faces.iter().map(|f| f.entity()).zip(&from.faces);
+    for (new, &old) in points.chain(edges).chain(faces) {
+        edit.derive(new, old, from.how)?;
+    }
+    Ok(())
 }
 
 /// The first of `ids`, which a solid always has.
@@ -159,7 +211,12 @@ fn place(ids: &Ids, n: usize) -> Result<Around, Report> {
 
 /// Writes every edge with its curve, the next place round the star at each end, and its first use; then every vertex,
 /// with one place of its star.
-fn write_edges(edit: &mut Edit, solid: &Solid, ids: &Ids, uses: &[(usize, &UseSpec)]) -> Result<(), Report> {
+fn write_edges(
+    edit: &mut Edit,
+    solid: &Solid,
+    ids: &Ids,
+    (uses, role): (&[(usize, &UseSpec)], StepRole),
+) -> Result<(), Report> {
     let mut stars: Vec<Vec<usize>> = vec![Vec::new(); solid.points.len()];
     for (k, e) in solid.edges.iter().enumerate() {
         let n = k.saturating_mul(2);
@@ -170,7 +227,7 @@ fn write_edges(edit: &mut Edit, solid: &Solid, ids: &Ids, uses: &[(usize, &UseSp
         }
     }
     let round = rings(&stars, solid.edges.len().saturating_mul(2));
-    let born = edit.provenance(StepRole::Made);
+    let born = edit.provenance(role);
     for (k, e) in solid.edges.iter().enumerate() {
         let n = k.saturating_mul(2);
         let curve = edit.add(CurveRecord(Arc::clone(&e.curve)));
@@ -195,8 +252,8 @@ fn write_edges(edit: &mut Edit, solid: &Solid, ids: &Ids, uses: &[(usize, &UseSp
 }
 
 /// Writes every face and its loops, each loop with its first use and witness.
-fn write_faces(edit: &mut Edit, solid: &Solid, ids: &Ids) -> Result<(), Report> {
-    let born = edit.provenance(StepRole::Made);
+fn write_faces(edit: &mut Edit, solid: &Solid, ids: &Ids, role: StepRole) -> Result<(), Report> {
+    let born = edit.provenance(role);
     let (mut next_loop, mut next_use) = (0_usize, 0_usize);
     for (k, f) in solid.faces.iter().enumerate() {
         let own = next_loop;
@@ -219,11 +276,26 @@ fn write_faces(edit: &mut Edit, solid: &Solid, ids: &Ids) -> Result<(), Report> 
             shell: ids.shell,
             surface,
             sheet: Sheet::default(),
-            reversed: false,
+            reversed: f.loops.first().is_some_and(|outer| clockwise(solid, outer)),
             outer: at(&ids.loops, own)?,
             born,
         };
         edit.set(at(&ids.faces, k)?, record)?;
     }
     Ok(())
+}
+
+/// Whether `ring` winds clockwise about its witness in its face's parameters, read along each use at its ends and its
+/// middle, the way it runs.
+fn clockwise(solid: &Solid, ring: &LoopSpec) -> bool {
+    let mut points = Vec::new();
+    for used in &ring.uses {
+        let Some(edge) = solid.edges.get(used.edge) else { continue };
+        let (lo, hi) = edge.range;
+        let along = [lo, f64::midpoint(lo, hi), hi].map(|t| used.pcurve.uv(t));
+        points.extend(if used.reversed { along.into_iter().rev().collect::<Vec<_>>() } else { along.to_vec() });
+    }
+    let after = points.iter().skip(1).chain(points.first());
+    let segments: Vec<[UvPoint; 2]> = points.iter().zip(after).map(|(&a, &b)| [a, b]).collect();
+    winding_number(&segments, ring.witness).is_some_and(i32::is_negative)
 }

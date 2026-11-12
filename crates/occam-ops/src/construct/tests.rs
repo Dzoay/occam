@@ -11,11 +11,11 @@ use serde_json::{Value, json};
 use crate::{Labels, Request, default_tolerance, execute};
 
 /// What a request made: the model, and what each step made.
-type Built = (Snapshot, Vec<Option<EntityRef>>);
+pub(crate) type Built = (Snapshot, Vec<Option<EntityRef>>);
 
 /// Runs the request `value` on a new model as the runner does: the first refusal, of the request or a step, is the
 /// result.
-fn build(value: &Value) -> Result<Built, Vec<Report>> {
+pub(crate) fn build(value: &Value) -> Result<Built, Vec<Report>> {
     let request = Request::parse(&value.to_string())?;
     let mut model = Snapshot::empty(request.tolerance.unwrap_or(default_tolerance().unwrap()));
     let (mut labels, mut made) = (Labels::default(), Vec::new());
@@ -33,31 +33,31 @@ fn build(value: &Value) -> Result<Built, Vec<Report>> {
 
 /// A request of `steps` in millimetres and degrees.
 #[expect(clippy::needless_pass_by_value, reason = "the tests write their steps in place with `json!`")]
-fn request(steps: Value) -> Value {
+pub(crate) fn request(steps: Value) -> Value {
     json!({"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": steps})
 }
 
 /// The one report of the request `steps`, which must be refused.
-fn refused(steps: Value) -> Report {
+pub(crate) fn refused(steps: Value) -> Report {
     let reports = build(&request(steps)).map(|_| ()).unwrap_err();
     assert_eq!(reports.len(), 1, "{reports:#?}");
     reports.into_iter().next().unwrap()
 }
 
 /// The request `steps` built, every check passed.
-fn built(steps: Value) -> Built {
+pub(crate) fn built(steps: Value) -> Built {
     let (model, made) = build(&request(steps)).unwrap_or_else(|reports| panic!("{reports:#?}"));
     assert_eq!(model.check_all(&Exec::serial()), [], "the whole model passes the checker");
     (model, made)
 }
 
 /// The value named `name` of `report`, as millimetres or a count.
-fn number(report: &Report, name: &str) -> f64 {
+pub(crate) fn number(report: &Report, name: &str) -> f64 {
     report.value(name).and_then(occam_report::NamedValue::number).unwrap_or(f64::NAN)
 }
 
 /// The rectangle 40 by 20 with a round hole of radius 3 at its middle.
-fn plate() -> Value {
+pub(crate) fn plate() -> Value {
     json!([
         {"op": "wire", "label": "outline", "points": [[0, 0, 0], [40, 0, 0], [40, 20, 0], [0, 20, 0]], "closed": true},
         {"op": "wire", "label": "hole", "edges": [{"circle": {"centre": [20, 10, 0], "radius": 3, "normal": [0, 0, 1]}}]},

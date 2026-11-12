@@ -10,6 +10,7 @@ use crate::operation::Operation;
 use crate::primitive::{self, PrimitiveArgs};
 use crate::read::At;
 use crate::request::Units;
+use crate::sweep::{self, ExtrudeArgs, RevolveArgs};
 
 /// What a step gives for its operation, checked and converted.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -23,6 +24,10 @@ pub enum Args {
     Face(FaceArgs),
     /// A primitive's shape and frame.
     Primitive(PrimitiveArgs),
+    /// An extrusion's face and vector.
+    Extrude(ExtrudeArgs),
+    /// A revolution's profile, axis and angle.
+    Revolve(RevolveArgs),
 }
 
 /// What the step at `at`, asking for `operation`, gives in `fields`, its fields other than `op` and `label`, with every
@@ -37,15 +42,15 @@ pub(crate) fn read(
     match operation {
         Operation::Wire => given::wire_step(at, fields, units, out).map_or(Args::None, Args::Wire),
         Operation::Face => given::face_step(at, fields, units, out).map_or(Args::None, Args::Face),
+        Operation::Extrude => sweep::extrude_step(at, fields, units, out).map_or(Args::None, Args::Extrude),
+        Operation::Revolve => sweep::revolve_step(at, fields, units, out).map_or(Args::None, Args::Revolve),
         Operation::Box
         | Operation::Cylinder
         | Operation::Sphere
         | Operation::Cone
         | Operation::Torus
         | Operation::Wedge => primitive::read(at, operation, fields, units, out).map_or(Args::None, Args::Primitive),
-        Operation::Extrude
-        | Operation::Revolve
-        | Operation::Transform
+        Operation::Transform
         | Operation::Copy
         | Operation::Measure
         | Operation::Boolean

@@ -214,4 +214,12 @@ exclude_re = [
     # The scale step's (topology.scale). A tie: an operation measured at one size alone is its own smallest and largest,
     # so it never grows.
     "perf\\.rs:\\d+:\\d+: replace < with <= in check_growth$",
+    # The sweeps step's. By line. A cone's spread and rise are each more than the band from nought, so their quotient
+    # has their product's sign.
+    "around\\.rs:94:37: replace \\* with / in meridian$",
+    # By line. A torus piece's `v` turns at 1 or -1 to its parameter, so dividing by that rate is multiplying by it.
+    "around\\.rs:136:33: replace / with \\* in seams$",
+    # By line. A profile point exactly the band out of the axis's plane, or beyond the axis: the band is the least
+    # distance occam tells apart, so refusing it and taking it are both within the tolerance.
+    "revolve\\.rs:64:21: replace > with >= in axes$",
 ]
