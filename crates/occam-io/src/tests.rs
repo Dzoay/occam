@@ -1,7 +1,8 @@
 //! Source: original
 //! The native format's tests: every clean model, and a model holding every family the format writes, comes back with
 //! its digest; a file with one record wrong is refused naming it; a file of another version is refused with its version;
-//! and a family the format does not write yet is refused at save, named.
+//! and a family the format does not write yet is refused at save, named. The binary twin holds the same records, and
+//! is refused for the same faults with the same reports.
 
 use std::sync::Arc;
 
@@ -136,11 +137,16 @@ fn free_slots_come_back_so_the_next_edit_gives_the_same_ids() {
     assert_eq!(next(&back).generation().get(), 2, "the freed slot, used again");
 }
 
-/// `model` saved, with `change` made to its JSON, and loaded.
-fn changed(model: &Snapshot, change: impl FnOnce(&mut Value)) -> Vec<Report> {
+/// `model` saved, with `change` made to its JSON.
+fn changed_file(model: &Snapshot, change: impl FnOnce(&mut Value)) -> Vec<u8> {
     let mut json: Value = serde_json::from_slice(&save(model).unwrap()).unwrap();
     change(&mut json);
-    load(&serde_json::to_vec(&json).unwrap(), &serial()).unwrap_err()
+    serde_json::to_vec(&json).unwrap()
+}
+
+/// `model` saved, with `change` made to its JSON, and loaded.
+fn changed(model: &Snapshot, change: impl FnOnce(&mut Value)) -> Vec<Report> {
+    load(&changed_file(model, change), &serial()).unwrap_err()
 }
 
 #[test]
@@ -204,4 +210,100 @@ fn a_family_the_format_does_not_write_yet_is_refused_at_save_naming_it() {
     let refused = save(&model).unwrap_err();
     assert_eq!((refused.code, refused.fault), (Code::NotSaved, Some(Fault::NotImplemented)));
     assert_eq!(refused.entities, [offset.entity()]);
+    assert_eq!(save_binary(&model).unwrap_err(), refused, "the binary twin refuses it alike");
+}
+
+/// The readable file `json` as the binary twin, record for record, read but neither restored nor checked.
+fn transcoded(json: &[u8]) -> Vec<u8> {
+    binary(&serde_json::from_slice::<File>(json).unwrap()).unwrap()
+}
+
+#[test]
+fn the_binary_twin_holds_what_the_readable_file_holds_and_both_come_back_alike() {
+    let mut all = models(&serial());
+    all.push(("every family", zoo()));
+    for (name, model) in all {
+        let json = save(&model).unwrap();
+        let from_json = load(&json, &serial()).unwrap();
+        let twin = save_binary(&from_json).unwrap();
+        assert_eq!(
+            twin.get(..MAGIC.len() + 4),
+            Some([&MAGIC[..], &[1, 0, 0, 0]].concat().as_slice()),
+            "{name}: magic, version 1"
+        );
+        assert!(twin.len() < json.len(), "{name}: {} bytes, against {}", twin.len(), json.len());
+        assert_eq!(transcoded(&json), twin, "{name}: the same records");
+        let back = load(&twin, &serial()).unwrap_or_else(|r| panic!("{name}: {r:#?}"));
+        assert_eq!(back.digest(), model.digest(), "{name}");
+        assert_eq!(save(&back).unwrap(), json, "{name}: the same readable file again");
+        assert_eq!(save_binary(&back).unwrap(), twin, "{name}: the same binary file again");
+    }
+}
+
+#[test]
+fn a_binary_file_with_one_record_wrong_is_refused_as_the_readable_one_is() {
+    let (_, cube) = models(&serial()).swap_remove(0);
+    let moved = changed_file(&cube, |json| json["vertices"][0]["record"]["point"] = serde_json::json!([9.0, 9.0, 9.0]));
+    let cylinder = models(&serial()).swap_remove(2).1;
+    let slot =
+        cylinder.saved::<SurfaceGeom>().position(|s| s.record.is_some_and(|r| r.0.family().0 == "cylinder")).unwrap();
+    let thin = changed_file(&cylinder, |json| {
+        let numbers = json["surfaces"][slot]["record"]["numbers"].as_array_mut().unwrap();
+        *numbers.last_mut().unwrap() = serde_json::json!(-1.0);
+    });
+    for (json, code) in [(moved, Code::InvariantFailed), (thin, Code::SizeNotPositive)] {
+        let readable = load(&json, &serial()).unwrap_err();
+        assert_eq!(readable.first().map(|r| r.code), Some(code));
+        assert_eq!(load(&transcoded(&json), &serial()).unwrap_err(), readable);
+    }
+}
+
+/// `report`'s line and column.
+fn place(report: &Report) -> (Option<f64>, Option<f64>) {
+    let number = |name: &str| report.value(name).and_then(NamedValue::number);
+    (number("line"), number("column"))
+}
+
+/// The one report loading `bytes` gives.
+fn refusal(bytes: &[u8]) -> Report {
+    let mut reports = load(bytes, &serial()).unwrap_err();
+    assert_eq!(reports.len(), 1, "{reports:#?}");
+    reports.remove(0)
+}
+
+#[test]
+fn what_is_not_the_binary_twin_is_refused_at_the_byte_where_reading_stops() {
+    let (_, cube) = models(&serial()).swap_remove(0);
+    let twin = save_binary(&cube).unwrap();
+    let at = |bytes: &[u8], column: usize| {
+        let report = refusal(bytes);
+        assert_eq!(report.code, Code::NotReadable, "{report:#?}");
+        assert_eq!(place(&report), (Some(1.0), Some(f64::from(u32::try_from(column).unwrap()))));
+    };
+    let length = twin.len();
+    at(twin.get(..length - 1).unwrap(), length);
+    at(&[twin.as_slice(), &[0]].concat(), length + 1);
+    at(MAGIC, MAGIC.len() + 1);
+    at(twin.get(..MAGIC.len() + 3).unwrap(), MAGIC.len() + 1);
+    let mut file = file_of(&cube).unwrap();
+    file.format = "something-else".to_string();
+    at(&binary(&file).unwrap(), MAGIC.len() + 5);
+    let mut file = file_of(&cube).unwrap();
+    file.version = 2;
+    at(&binary(&file).unwrap(), MAGIC.len() + 5);
+    let mut mangled = twin.clone();
+    *mangled.get_mut(6).unwrap() = b'\n';
+    at(&mangled, 1);
+}
+
+#[test]
+fn a_binary_file_of_another_version_is_refused_with_its_version() {
+    let (_, cube) = models(&serial()).swap_remove(0);
+    let twin = save_binary(&cube).unwrap();
+    for (version, rest) in [(2_u32, twin.get(MAGIC.len() + 4..).unwrap()), (7, b"a newer layout".as_slice())] {
+        let refused = refusal(&[MAGIC.as_slice(), &version.to_le_bytes(), rest].concat());
+        assert_eq!(refused.code, Code::OtherVersion);
+        assert_eq!(refused.value("version").and_then(NamedValue::number), Some(f64::from(version)));
+        assert_eq!(refused.value("supported").and_then(NamedValue::number), Some(1.0));
+    }
 }

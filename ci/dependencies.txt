@@ -7,6 +7,7 @@ serde occam-report report-json
 serde_json occam-report report-json
 serde occam-io serde
 serde_json occam-io serde
+postcard occam-io binary-twin
 serde occam-verify serde
 serde_json occam-verify serde
 serde occam serde
@@ -61,3 +62,6 @@ crossbeam-deque transitive rayon
 crossbeam-epoch transitive rayon
 crossbeam-utils transitive rayon
 either transitive rayon
+cobs transitive binary-twin
+thiserror transitive binary-twin
+thiserror-impl transitive binary-twin

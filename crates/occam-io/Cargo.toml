@@ -12,6 +12,9 @@ occam-math = { path = "../occam-math" }
 occam-report = { path = "../occam-report" }
 occam-topo = { path = "../occam-topo" }
 occam-units = { path = "../occam-units" }
+# The binary twin's encoding (docs/decisions/2026-11-12-binary-twin.md). Pinned exactly: a binary file's bytes are
+# postcard's, so a new version is taken on purpose, with the format's tests, not by `cargo update`.
+postcard = { version = "=1.1.3", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 

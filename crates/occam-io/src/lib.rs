@@ -2,13 +2,16 @@
 //! The native format, which is also the readable dump (PARITY 2.17): a model as JSON, every record by name and every
 //! finite number exact, versioned from the first commit. It holds the tolerance, the step counter and every slot of
 //! every table, its generation and, if live, its record, so a model read back has the same ids, reuses the same free
-//! slots and has the same digest. Bytes at the seam, not text: JSON is UTF-8, so nothing changes now, and a binary
-//! encoding would need no new signature.
+//! slots and has the same digest. Bytes at the seam, not text.
 //!
-//! Reading trusts nothing. [`parse`] reads the bytes, and refuses what is not the format where it is written, with its
-//! line and column, and a curve or surface its family would not make, naming it; then `Restore::finish` measures every
-//! edge and checks the whole model, as `commit` would. [`load`] is the two in turn, which the `construction` exit times
-//! apart.
+//! The same file has a binary twin, for loading fast (docs/decisions/2026-11-12-binary-twin.md): [`save_binary`] writes
+//! [`MAGIC`], the version as four bytes, little-endian, then the same records in `postcard`'s encoding, links as their
+//! kind, slot and generation and numbers as their eight bytes. One version covers both, and [`parse`] reads either,
+//! telling them apart by the magic, which no JSON text begins with.
+//!
+//! Reading trusts nothing. [`parse`] reads the bytes, and refuses what is not the format where it is written, and a
+//! curve or surface its family would not make, naming it; then `Restore::finish` measures every edge and checks the
+//! whole model, as `commit` would. [`load`] is the two in turn, which the `construction` exit times apart.
 
 mod exact;
 mod geometry;
@@ -25,7 +28,8 @@ use occam_topo::{
     SurfaceRecord, Vertex, VertexRecord, Wire, WireRecord,
 };
 use occam_units::{Angle, Length, Tolerance};
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
 
 use exact::Exact;
 use geometry::{CurveFamily, Geometry, SurfaceFamily};
@@ -34,16 +38,34 @@ use records::{BodyFile, EdgeFile, FaceFile, LoopFile, ShellFile, UseFile, Vertex
 /// What a native file says it is.
 pub const FORMAT: &str = "occam-native";
 
-/// The version of the format this build writes and reads.
+/// The version of the format this build writes and reads, in either encoding.
 pub const VERSION: u32 = 1;
 
+/// What a binary file begins with, before its version: a byte no text begins with, the format's short name, and a line
+/// end of each kind and an end-of-file mark, so a file mangled as text in transit is told from one never written.
+pub const MAGIC: &[u8; 10] = b"\x89occam\r\n\x1a\n";
+
 /// One slot as written: the generation of its latest entity, and that entity's record if it is live.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Slot<R> {
     generation: NonZeroU32,
-    #[serde(skip_serializing_if = "Option::is_none")]
     record: Option<R>,
+}
+
+/// The readable file leaves out a free slot's record; the binary twin, whose fields have no names, writes every one.
+impl<R: Serialize> Serialize for Slot<R> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let skip = self.record.is_none() && serializer.is_human_readable();
+        let mut slot = serializer.serialize_struct("Slot", if skip { 1 } else { 2 })?;
+        slot.serialize_field("generation", &self.generation)?;
+        if skip {
+            slot.skip_field("record")?;
+        } else {
+            slot.serialize_field("record", &self.record)?;
+        }
+        slot.end()
+    }
 }
 
 /// The model's tolerance as written, in millimetres and radians.
@@ -108,12 +130,8 @@ fn geometry_slots<K: Kind, F>(
         .collect()
 }
 
-/// `model` in the native format.
-///
-/// # Errors
-///
-/// `io.not-saved`, naming every curve and surface of a family the format does not write yet.
-pub fn save(model: &Snapshot) -> Result<Vec<u8>, Report> {
+/// `model` as the format's records.
+fn file_of(model: &Snapshot) -> Result<File, Report> {
     let tolerance = model.tolerance();
     let mut refused = Vec::new();
     let surfaces = geometry_slots::<SurfaceGeom, _>(model, |r: &SurfaceRecord| geometry::surface(&*r.0), &mut refused);
@@ -124,7 +142,7 @@ pub fn save(model: &Snapshot) -> Result<Vec<u8>, Report> {
         let report = Report::new(Code::NotSaved, Fault::NotImplemented);
         return Err(refused.into_iter().fold(report, Report::with_entity));
     }
-    let file = File {
+    Ok(File {
         format: FORMAT.to_string(),
         version: VERSION,
         tolerance: ToleranceFile {
@@ -143,9 +161,38 @@ pub fn save(model: &Snapshot) -> Result<Vec<u8>, Report> {
         surfaces,
         curves,
         pcurves,
-    };
-    // Writing plain data to memory cannot fail; a failure would be a bug, reported rather than hidden.
-    serde_json::to_vec(&file).map_err(|_| Report::new(Code::NotSaved, Fault::Internal))
+    })
+}
+
+/// The report of a file that could not be written to memory, which plain data always can be: a bug, reported rather
+/// than hidden.
+fn not_written<E>(_: E) -> Report {
+    Report::new(Code::NotSaved, Fault::Internal)
+}
+
+/// `model` in the native format, as readable JSON.
+///
+/// # Errors
+///
+/// `io.not-saved`, naming every curve and surface of a family the format does not write yet.
+pub fn save(model: &Snapshot) -> Result<Vec<u8>, Report> {
+    serde_json::to_vec(&file_of(model)?).map_err(not_written)
+}
+
+/// `file` as the binary twin: [`MAGIC`], the version, then the records.
+fn binary(file: &File) -> Result<Vec<u8>, postcard::Error> {
+    let mut bytes = MAGIC.to_vec();
+    bytes.extend_from_slice(&VERSION.to_le_bytes());
+    postcard::to_extend(file, bytes)
+}
+
+/// `model` in the native format's binary twin, which holds the same records as [`save`]'s file and loads faster.
+///
+/// # Errors
+///
+/// As [`save`].
+pub fn save_binary(model: &Snapshot) -> Result<Vec<u8>, Report> {
+    binary(&file_of(model)?).map_err(not_written)
 }
 
 /// The refusal of bytes that are not the format, where reading stopped.
@@ -163,8 +210,32 @@ fn other_version(version: u32) -> Report {
         .with_value(NamedValue::new("supported", Quantity::Count, f64::from(VERSION)))
 }
 
-/// The file `bytes` hold, if they are one of this version.
+/// The binary file `rest` holds after its magic, if it is one of this version. A binary file is one line, and its
+/// columns are its bytes, counted from 1 at the first byte of the magic.
+fn binary_file(rest: &[u8]) -> Result<File, Report> {
+    let at =
+        |left: usize| not_readable(1, MAGIC.len().saturating_add(rest.len()).saturating_sub(left).saturating_add(1));
+    let Some((version, body)) = rest.split_first_chunk::<4>() else { return Err(at(rest.len())) };
+    let version = u32::from_le_bytes(*version);
+    if version != VERSION {
+        return Err(other_version(version));
+    }
+    let mut reader = postcard::Deserializer::from_bytes(body);
+    let read = File::deserialize(&mut reader);
+    let left = reader.finalize().map_or(0, <[u8]>::len);
+    match read {
+        Ok(_) if left > 0 => Err(at(left)),
+        Ok(file) if file.format != FORMAT || file.version != VERSION => Err(at(body.len())),
+        Ok(file) => Ok(file),
+        Err(_) => Err(at(left)),
+    }
+}
+
+/// The file `bytes` hold, if they are one of this version, in either encoding.
 fn file(bytes: &[u8]) -> Result<File, Report> {
+    if let Some(rest) = bytes.strip_prefix(MAGIC) {
+        return binary_file(rest);
+    }
     match serde_json::from_slice::<File>(bytes) {
         Ok(file) if file.format != FORMAT => Err(not_readable(1, 1)),
         Ok(file) if file.version != VERSION => Err(other_version(file.version)),
@@ -203,11 +274,12 @@ fn read_geometry<K: Kind, F, G>(
         .collect()
 }
 
-/// The model `bytes` hold, read but not yet measured or checked: `Restore::finish` does that.
+/// The model `bytes` hold, in either encoding, read but not yet measured or checked: `Restore::finish` does that.
 ///
 /// # Errors
 ///
-/// `io.not-readable` with the line and column where the bytes stop being the format, `io.other-version` with the
+/// `io.not-readable` with the line and column where the bytes stop being the format (in a binary file, line 1 and the
+/// byte), `io.other-version` with the
 /// version of a file this build does not read, `units.tolerance-out-of-range` for the tolerance, and each curve or
 /// surface its family refuses, with the family's code and the record named.
 pub fn parse(bytes: &[u8]) -> Result<Restore, Vec<Report>> {

@@ -28,8 +28,8 @@ JSON alone through the `occam` command. **Exit (goal):** the time to load a mode
 followed-remedy tests, command-line and wasm exposure, invariant checks (every success passes `commit`'s checker, in
 release builds too), a bench in `gates perf` and browser timing. New crates `occam-ops` and `occam-io` take their
 places in [the layers](../PLAN.md#4-layers); `serde` and `serde_json` are
-[already allowed](../decisions/2026-11-09-serde.md), and nothing else new is expected. Each step moves what it makes
-real out of [the type sketch](../sketch/src/lib.rs).
+[already allowed](../decisions/2026-11-09-serde.md), and `postcard` was [added](../decisions/2026-11-12-binary-twin.md)
+for the native format's binary twin. Each step moves what it makes real out of [the type sketch](../sketch/src/lib.rs).
 
 ## Steps
 
@@ -79,7 +79,8 @@ others answered.
 
 The exit test: a solid built from JSON alone through the `occam` command, the bracket test's plate with its cylinder
 beside it, then listed, described, measured and checked. A blind run by an agent given only the command and its
-reports is recorded as a goal, as S6's were. The time to load 10⁵ faces is measured, parsing and checking apart.
+reports is recorded as a goal, as S6's were. The time to load 10⁵ faces is measured, parsing and checking apart, from
+the binary twin and from JSON.
 
 *Failing test first:* the test drives the built binary with JSON files only, and fails until every command it uses
 exists.

@@ -1,13 +1,14 @@
 //! Source: original
 //! Times loading a model of about 10⁵ faces in the native format, parsing and checking apart, as the `construction`
-//! exit asks and the files risk watches: a binary encoding would speed up only the parsing. A goal, not a gate (L46).
+//! exit asks and the files risk watches: the binary twin speeds up only the parsing. A goal, not a gate (L46).
 //! In release:
 //!
 //! `cargo run --release -p occam-io --example load -- [squares across] [repetitions]`
 //!
 //! The model is occam-topo's plate, `2k² + 4k` faces for `k` squares across (223 gives 100,350). Parsing is timed for
-//! the file as saved, which is compact, and for the same JSON pretty-printed, as it was first written. Checking is every
-//! edge measured and the whole model checked, on one thread and on every thread the machine has. Times are medians.
+//! the readable file as saved, which is compact, for the same JSON pretty-printed, as it was first written, and for the
+//! binary twin. Checking is every edge measured and the whole model checked, on one thread and on every thread the
+//! machine has. Times are medians.
 #![allow(clippy::print_stdout, clippy::print_stderr, reason = "a command-line tool prints")]
 #![allow(clippy::arithmetic_side_effects, reason = "a timing tool's own counting, far from any bound")]
 
@@ -73,6 +74,12 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
     println!("saved in {:.2} s", start.elapsed().as_secs_f64());
+    let start = Instant::now();
+    let Ok(twin) = occam_io::save_binary(plate.snapshot()) else {
+        eprintln!("the plate did not save as the binary twin");
+        return ExitCode::FAILURE;
+    };
+    println!("saved as the binary twin in {:.2} s", start.elapsed().as_secs_f64());
     let pretty = serde_json::from_slice::<serde_json::Value>(&bytes).and_then(|v| serde_json::to_vec_pretty(&v));
     let Ok(pretty) = pretty else {
         eprintln!("the file did not read as JSON");
@@ -84,7 +91,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
     println!("{repeats} repetitions each; medians");
-    for (name, file) in [("compact", &bytes), ("pretty", &pretty)] {
+    for (name, file) in [("compact", &bytes), ("pretty", &pretty), ("binary", &twin)] {
         let Some(time) = parsing(file, repeats) else {
             eprintln!("the {name} file did not parse");
             return ExitCode::FAILURE;
