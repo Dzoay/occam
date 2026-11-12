@@ -55,7 +55,7 @@ pub enum EdgeRole {
 }
 
 /// Which end of an edge.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum End {
     /// Where its range begins.
     Start,
@@ -64,7 +64,7 @@ pub enum End {
 }
 
 /// One end of an edge, as a place in the star of the vertex there.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Around {
     /// The edge.
     pub edge: Id<Edge>,

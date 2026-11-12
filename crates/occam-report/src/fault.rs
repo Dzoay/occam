@@ -44,6 +44,29 @@ text_enum! {
         DeadLink = "dead-link",
         /// A table of the model has no slot left to give.
         TableFull = "table-full",
+        /// A loop's uses do not come back to its first.
+        LoopNotClosed = "loop-not-closed",
+        /// A use does not begin where the use before it ends.
+        UsesDoNotMeet = "uses-do-not-meet",
+        /// A list of entities runs on without ending, or comes back to an entry other than its first.
+        ListBroken = "list-broken",
+        /// An entity names an owner whose list does not hold it.
+        NotListed = "not-listed",
+        /// A list holds an entity that names another owner.
+        ListedElsewhere = "listed-elsewhere",
+        /// An edge has a number of uses its body's kind does not allow.
+        WrongUseCount = "wrong-use-count",
+        /// Two uses of an edge run the same way, so the faces on either side of it face the same way.
+        UsesNotOpposed = "uses-not-opposed",
+        /// An edge is used by faces of more than one shell, or by more than one body.
+        EdgeShared = "edge-shared",
+        /// A closed shell's counts give no whole genus: `V - E + 2F - L` is odd, or more than 2.
+        GenusNotWhole = "genus-not-whole",
+        /// A shell's faces are not all joined through their edges.
+        ShellNotConnected = "shell-not-connected",
+        /// A body holds what its kind does not: a solid or sheet without a shell or with a wire, or a wire body
+        /// without a wire or with a shell.
+        BodyKindMismatch = "body-kind-mismatch",
     }
 }
 

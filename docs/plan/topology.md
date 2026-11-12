@@ -27,19 +27,6 @@ fields. Names and colours arrive with `exchange`, and the describer and the nati
 
 ## Steps
 
-### `topology.checker`
-
-`commit` checks what was created or changed and its neighbours, and keeps the global counts (P1). Closure: each loop's
-uses come back to the first, and each use ends where the next begins. Back-links: owner, shell, face, the cycle of uses
-of one edge, a vertex's star. Use counts by body kind: two in opposite directions in a solid, one or two in a sheet,
-one in a wire. Per solid, `V - E + 2F - L` is even and at most twice its shells, so the genus is a whole number; and
-its shells are counted by connectivity, the one check that sees a missing pinch (S1 item 6). Each failure is one
-`check.invariant-failed`, naming its entities.
-
-*Failing test first:* each invariant has a seeded corruption of a clean model that it catches, naming the entities; the
-clean models pass, a genus-1 block included; changing one face of a model of 10⁴ faces checks a number of records
-that does not grow with the model.
-
 ### `topology.geometric`
 
 The checks that read geometry, on what changed. Each vertex lies on its edges' ends within its certified radius and

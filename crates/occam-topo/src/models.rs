@@ -1,10 +1,12 @@
 //! Source: original
 //! Clean models for the tests, built through `Edit` as any caller would: a cube, a block with a square hole through it
-//! (genus 1), a cylinder of two patches split at its seam, a square sheet and an open wire. Each edge's uses form its
+//! (genus 1), a cylinder of two patches split at its seam, a square sheet, an open wire, a tiled plate of any size, and
+//! two cubes that meet at one corner. Each edge's uses form its
 //! radial cycle in the order the faces list them, and each vertex's star runs in the order the edges list their ends.
 #![expect(clippy::arithmetic_side_effects, reason = "small indices in test models")]
 
 use core::f64::consts::{FRAC_PI_2, PI};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use occam_geom::{Circle, Cylinder, Line, Plane};
@@ -90,11 +92,15 @@ fn use_specs(spec: &Spec, loops: &[Id<Loop>], wires: &[Id<Wire>]) -> Vec<UseSpec
     out
 }
 
-/// For each item of `groups`, the next item of its group, round a cycle in the order given.
-fn cycles<T: Copy + PartialEq>(groups: &[Vec<T>], item: T) -> Option<T> {
-    let group = groups.iter().find(|g| g.contains(&item))?;
-    let at = group.iter().position(|&x| x == item)?;
-    group.get((at + 1) % group.len()).copied()
+/// For each of `n` items, each in one of `groups`, the next item of its group, round a cycle in the order given.
+fn successors(groups: &[Vec<usize>], n: usize) -> Vec<usize> {
+    let mut next = vec![0; n];
+    for group in groups {
+        for (k, &item) in group.iter().enumerate() {
+            next[item] = group[(k + 1) % group.len()];
+        }
+    }
+    next
 }
 
 /// Builds `spec` in `edit` and gives the ids made.
@@ -109,14 +115,17 @@ pub(crate) fn build(edit: &mut Edit, spec: &Spec) -> Built {
     let wires: Vec<Id<Wire>> = spec.wires.iter().map(|_| edit.reserve()).collect();
     let specs = use_specs(spec, &loops, &wires);
     let uses: Vec<Id<EdgeUse>> = specs.iter().map(|_| edit.reserve()).collect();
-    let radial: Vec<Vec<usize>> =
-        (0..edges.len()).map(|e| (0..specs.len()).filter(|&u| specs[u].edge == e).collect()).collect();
+    let mut radial: Vec<Vec<usize>> = vec![Vec::new(); edges.len()];
+    for (k, u) in specs.iter().enumerate() {
+        radial[u.edge].push(k);
+    }
+    let round = successors(&radial, specs.len());
     for (k, u) in specs.iter().enumerate() {
         let record = EdgeUseRecord {
             edge: edges[u.edge],
             owner: u.owner,
             next: u.next.map(|n| uses[n]),
-            radial: uses[cycles(&radial, k).unwrap()],
+            radial: uses[round[k]],
             reversed: u.reversed,
             pcurve: None,
         };
@@ -143,16 +152,19 @@ fn write_edges(
     radial: &[Vec<usize>],
     uses: &[Id<EdgeUse>],
 ) {
-    let places = |v: usize| -> Vec<Around> {
-        let ends = spec.edges.iter().zip(edges).flat_map(|(e, &id)| {
-            [(e.ends.0, Around { edge: id, end: End::Start }), (e.ends.1, Around { edge: id, end: End::Finish })]
-        });
-        ends.filter(|&(at, _)| at == v).map(|(_, place)| place).collect()
-    };
-    let stars: Vec<Vec<Around>> = (0..vertices.len()).map(places).collect();
+    // Each place is numbered twice its edge's index, plus one at the finish, and each vertex's star lists its places in
+    // the order the edges list their ends.
+    let mut stars: Vec<Vec<usize>> = vec![Vec::new(); vertices.len()];
+    for (k, e) in spec.edges.iter().enumerate() {
+        stars[e.ends.0].push(2 * k);
+        stars[e.ends.1].push(2 * k + 1);
+    }
+    let round = successors(&stars, 2 * spec.edges.len());
+    let place =
+        |n: usize| Around { edge: edges[n / 2], end: if n.is_multiple_of(2) { End::Start } else { End::Finish } };
     for (k, e) in spec.edges.iter().enumerate() {
         let curve = edit.add(e.curve.clone());
-        let next = |end| cycles(&stars, Around { edge: edges[k], end }).unwrap();
+        let next = |end| place(round[2 * k + usize::from(end == End::Finish)]);
         let record = EdgeRecord {
             curve,
             range: e.range,
@@ -166,7 +178,7 @@ fn write_edges(
         edit.set(edges[k], record).unwrap();
     }
     for (k, &v) in vertices.iter().enumerate() {
-        let star = stars[k].first().copied();
+        let star = stars[k].first().map(|&n| place(n));
         edit.set(v, VertexRecord { star, ..vertex_at(spec.points[k]) }).unwrap();
     }
 }
@@ -249,17 +261,17 @@ fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
 pub(crate) fn polyhedron(kind: BodyKind, corners: &[[f64; 3]], faces: &[&[usize]]) -> Spec {
     let points: Vec<Point<World>> = corners.iter().map(|&[x, y, z]| point(x, y, z)).collect();
     let mut edges: Vec<EdgeSpec> = Vec::new();
-    let mut pairs: Vec<(usize, usize)> = Vec::new();
+    let mut pairs: BTreeMap<(usize, usize), usize> = BTreeMap::new();
     let mut surfaces = Vec::new();
     let mut specs = Vec::new();
     for &face in faces {
         let mut uses = Vec::new();
         for (k, &a) in face.iter().enumerate() {
             let b = face[(k + 1) % face.len()];
-            if let Some(found) = pairs.iter().position(|&pair| pair == (b, a)) {
+            if let Some(&found) = pairs.get(&(b, a)) {
                 uses.push((found, true));
             } else {
-                pairs.push((a, b));
+                pairs.insert((a, b), edges.len());
                 edges.push(segment(points[a], points[b], (a, b)));
                 uses.push((edges.len() - 1, false));
             }
@@ -363,4 +375,69 @@ pub(crate) fn cylinder() -> Spec {
     ];
     let points = vec![point(1.0, 0.0, 0.0), point(-1.0, 0.0, 0.0), point(1.0, 0.0, 2.0), point(-1.0, 0.0, 2.0)];
     Spec { kind: BodyKind::Solid, points, edges, surfaces: vec![side, bottom, top], faces, wires: Vec::new() }
+}
+
+/// `n` as a coordinate.
+fn whole(n: usize) -> f64 {
+    f64::from(u32::try_from(n).unwrap())
+}
+
+/// A plate `k` by `k` by 1, its bottom and then its top each tiled by `k²` unit squares, then each side by `k`:
+/// `2k² + 4k` faces. Top square `(i, j)` is face `k² + jk + i`.
+pub(crate) fn plate(k: usize) -> Spec {
+    let n = k + 1;
+    let (bottom, top) = (|i: usize, j: usize| j * n + i, |i: usize, j: usize| n * n + j * n + i);
+    let corners: Vec<[f64; 3]> =
+        [0.0, 1.0].iter().flat_map(|&z| (0..n * n).map(move |c| [whole(c % n), whole(c / n), z])).collect();
+    let mut faces: Vec<Vec<usize>> = Vec::new();
+    let squares = || (0..k).flat_map(move |j| (0..k).map(move |i| (i, j)));
+    faces.extend(squares().map(|(i, j)| vec![bottom(i, j), bottom(i, j + 1), bottom(i + 1, j + 1), bottom(i + 1, j)]));
+    faces.extend(squares().map(|(i, j)| vec![top(i, j), top(i + 1, j), top(i + 1, j + 1), top(i, j + 1)]));
+    for a in 0..k {
+        faces.push(vec![bottom(a, 0), bottom(a + 1, 0), top(a + 1, 0), top(a, 0)]);
+        faces.push(vec![bottom(a + 1, k), bottom(a, k), top(a, k), top(a + 1, k)]);
+        faces.push(vec![bottom(0, a + 1), bottom(0, a), top(0, a), top(0, a + 1)]);
+        faces.push(vec![bottom(k, a), bottom(k, a + 1), top(k, a + 1), top(k, a)]);
+    }
+    let faces: Vec<&[usize]> = faces.iter().map(Vec::as_slice).collect();
+    polyhedron(BodyKind::Solid, &corners, &faces)
+}
+
+/// Two unit cubes that meet only at the corner `(1, 1, 1)`, as one body of one shell: the first cube's faces, then the
+/// second's.
+pub(crate) fn pinched() -> Spec {
+    let unit = [
+        [0., 0., 0.],
+        [1., 0., 0.],
+        [1., 1., 0.],
+        [0., 1., 0.],
+        [0., 0., 1.],
+        [1., 0., 1.],
+        [1., 1., 1.],
+        [0., 1., 1.],
+    ];
+    let mut corners: Vec<[f64; 3]> = unit.to_vec();
+    corners.extend(unit.iter().skip(1).map(|&[x, y, z]| [x + 1., y + 1., z + 1.]));
+    // The second cube's corners: its own 0 is the first cube's 6, and its 1 to 7 follow the first cube's eight.
+    let second = |c: usize| if c == 0 { 6 } else { 7 + c };
+    let quads: [[usize; 4]; 6] = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [0, 4, 7, 3], [1, 2, 6, 5]];
+    let faces: Vec<Vec<usize>> =
+        quads.iter().map(|q| q.to_vec()).chain(quads.iter().map(|q| q.iter().map(|&c| second(c)).collect())).collect();
+    let faces: Vec<&[usize]> = faces.iter().map(Vec::as_slice).collect();
+    polyhedron(BodyKind::Solid, &corners, &faces)
+}
+
+/// Joins `place` into the star of `vertex`, if it is live in `edit`, after the place its star names, and gives the place
+/// that comes after it.
+pub(crate) fn join_star(edit: &mut Edit, vertex: Id<Vertex>, place: Around) -> Around {
+    let Some(record) = edit.record(vertex) else { return place };
+    let Some(star) = record.star else {
+        edit.set(vertex, VertexRecord { star: Some(place), ..record }).unwrap();
+        return place;
+    };
+    let mut before = edit.record(star.edge).unwrap();
+    let link = if star.end == End::Start { &mut before.around.0 } else { &mut before.around.1 };
+    let after = core::mem::replace(link, place);
+    edit.set(star.edge, before).unwrap();
+    after
 }

@@ -6,6 +6,7 @@ use occam_units::Length;
 
 use super::*;
 use crate::kind::{CurveGeom, Edge, Face, Vertex};
+use crate::models::join_star;
 use crate::records::{Around, EdgeRecord, EdgeRole, End, VertexRecord};
 use crate::testing::{number, record, serial, tolerance, vertex, x_axis};
 
@@ -17,14 +18,18 @@ fn failures(reports: &[Report]) -> Vec<(Reason, Vec<EntityRef>)> {
     reports.iter().map(|r| (r.reason.unwrap(), r.entities.clone())).collect()
 }
 
-/// An edge from `a` to `b` along `curve`, alone in the star of each, made in `role`.
+/// An edge from `a` to `b` along `curve`, made in `role`, joined into the star of each end's vertex that is live.
 fn edge(edit: &mut Edit, curve: Id<CurveGeom>, (a, b): (Id<Vertex>, Id<Vertex>), role: StepRole) -> Id<Edge> {
     let id = edit.reserve::<Edge>();
+    let around = (
+        join_star(edit, a, Around { edge: id, end: End::Start }),
+        join_star(edit, b, Around { edge: id, end: End::Finish }),
+    );
     let record = EdgeRecord {
         curve,
         range: (0.0, 1.0),
         ends: (a, b),
-        around: (Around { edge: id, end: End::Start }, Around { edge: id, end: End::Finish }),
+        around,
         first_use: None,
         role: EdgeRole::Ordinary,
         deviation: Length::from_millimetres(0.0),
@@ -40,14 +45,19 @@ fn one_edge() -> (Snapshot, Id<Edge>, [Id<Vertex>; 2]) {
     let curve = edit.add(x_axis());
     let (a, b) = (edit.add(vertex(0.0)), edit.add(vertex(1.0)));
     let e = edge(&mut edit, curve, (a, b), StepRole::Profile);
-    for (v, end) in [(a, End::Start), (b, End::Finish)] {
-        let star = Some(Around { edge: e, end });
-        let x = if end == End::Start { 0.0 } else { 1.0 };
-        edit.set(v, VertexRecord { star, ..vertex(x) }).unwrap();
-    }
     let (snapshot, changes) = edit.commit(&serial()).unwrap();
     assert_eq!(changes.created.len(), 4);
     (snapshot, e, [a, b])
+}
+
+/// The record `id` has in `edit`.
+fn record_in<K: crate::kind::Kind>(edit: &Edit, id: Id<K>) -> K::Record {
+    edit.record(id).unwrap()
+}
+
+/// A new vertex with no edges yet.
+fn edit_vertex(edit: &mut Edit) -> Id<Vertex> {
+    edit.add(vertex(7.0))
 }
 
 #[test]
@@ -85,11 +95,12 @@ fn a_reserved_id_never_set_fails_commit_is_named_and_leaves_the_input_as_it_was(
     let before = base.clone();
     let mut edit = base.edit();
     let unset = edit.reserve::<Face>();
-    edit.set(a, vertex(5.0)).unwrap();
+    let wider = Length::from_millimetres(0.5);
+    edit.set(a, VertexRecord { radius: wider, ..record(&base, a).unwrap().clone() }).unwrap();
     let reports = edit.commit(&serial()).unwrap_err();
     assert_eq!(failures(&reports), [(Reason::ReservedNotSet, vec![unset.entity()])]);
     assert_eq!(base, before);
-    assert_eq!(record(&base, a).map(|v| v.point), Some(vertex(0.0).point));
+    assert_eq!(record(&base, a).map(|v| v.radius), Some(Length::from_millimetres(0.0)));
     assert_eq!(base.resolve::<Edge>(e.entity()), Ok(e));
 }
 
@@ -109,13 +120,14 @@ fn a_reserved_id_removed_before_it_is_set_appears_nowhere() {
 
 #[test]
 fn a_record_linking_to_an_entity_not_live_fails_commit_naming_both() {
-    let (base, e, [a, b]) = one_edge();
+    let (base, e, [_, b]) = one_edge();
     let mut edit = base.edit();
     let curve = record(&base, e).unwrap().curve;
     let lone = edit.add(vertex(3.0));
     edit.remove(lone).unwrap();
-    let dangling = edge(&mut edit, curve, (a, lone), StepRole::Made);
-    let to_edge = edit.add(VertexRecord { star: Some(Around { edge: dangling, end: End::Start }), ..vertex(9.0) });
+    let to_edge = edit.add(vertex(9.0));
+    let dangling = edge(&mut edit, curve, (to_edge, lone), StepRole::Made);
+    assert_eq!(record_in(&edit, to_edge).star, Some(Around { edge: dangling, end: End::Start }));
     let reports = edit.commit(&serial()).unwrap_err();
     assert_eq!(failures(&reports), [(Reason::DeadLink, vec![dangling.entity(), lone.entity()])]);
     assert!(base.resolve::<Vertex>(to_edge.entity()).is_err() && base.resolve::<Vertex>(b.entity()).is_ok());
@@ -150,12 +162,16 @@ fn derive_records_lineage_and_carries_the_first_source_of_its_own_kinds_provenan
     let curve = record(&base, e).unwrap().curve;
     let split = edge(&mut edit, curve, (a, b), StepRole::Made);
     let copied = edge(&mut edit, curve, (a, b), StepRole::Made);
-    let gone = edge(&mut edit, curve, (a, b), StepRole::Made);
+    let far = (edit_vertex(&mut edit), edit_vertex(&mut edit));
+    let gone = edge(&mut edit, curve, far, StepRole::Made);
+    let gone_ends = record_in(&edit, gone).ends;
     edit.derive(split.entity(), a.entity(), Derivation::Copied).unwrap();
     edit.derive(split.entity(), e.entity(), Derivation::Split).unwrap();
     edit.derive(copied.entity(), b.entity(), Derivation::Copied).unwrap();
     edit.derive(gone.entity(), e.entity(), Derivation::Split).unwrap();
     edit.remove(gone).unwrap();
+    edit.remove(gone_ends.0).unwrap();
+    edit.remove(gone_ends.1).unwrap();
     let late = edit.add(vertex(4.0));
     assert_eq!(edit.derive(split.entity(), late.entity(), Derivation::Merged).map_err(|r| r.code), Err(Code::StaleId));
     let refused = edit.derive(gone.entity(), e.entity(), Derivation::Split).unwrap_err();

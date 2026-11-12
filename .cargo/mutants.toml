@@ -180,4 +180,11 @@ exclude_re = [
     "extrusion\\.rs:123:111: replace \\+ with - in <impl Parametric for Extrusion<C>>::bounds$",
     # The splines step's. Ends in order that are equal.
     "spline_curve\\.rs:\\d+:\\d+: replace < with <= in <impl ParametricCurve for SplineCurve>::bounds$",
+    # The checker step's (topology.checker). A search that meets each face once, and only faces the model holds, has
+    # run out of faces by the time it has searched as many as the table has slots: one search more is never there to
+    # make.
+    "shell\\.rs:\\d+:\\d+: replace < with <= in reach$",
+    # By line. Reading the edges of a shell that is new, whose faces the edit touched and so already reached, or of one
+    # whose body is unchanged, which is all a check of an edge reads of its shell: more reads, the same failures.
+    "scope\\.rs:146:37: replace && with \\|\\| in further$",
 ]

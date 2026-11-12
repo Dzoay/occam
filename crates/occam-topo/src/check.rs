@@ -1,12 +1,22 @@
 //! Source: original
-//! What `commit` checks before it makes a snapshot, on what the edit touched: that each reserved id was written, that
-//! no record touched links to an entity that is not live, that no record left alone links to one the edit removed, and
-//! that no table ran out of slots. Each failure is one report naming its entities.
+//! The checker (PARITY 1.10). [`entity`] holds what one entity's record and its neighbours' must satisfy, [`body`] what a
+//! whole body must, shell by shell, and [`model`] what only the whole model shows. `Edit::commit` runs [`edit`], which
+//! checks what the edit touched and its neighbours (P1): [`entity`] over that scope, then the answers [`body`] would
+//! give, reached from what changed rather than by walking the model. Each failure is one `check.invariant-failed`
+//! report naming its entities, with its reason from the closed list.
+
+mod incremental;
+mod local;
+pub(crate) mod read;
+mod scope;
+mod shell;
 
 use occam_report::{Code, EntityRef, Fault, Reason, Report};
 
 use crate::edit::Edit;
-use crate::snapshot::Holds;
+use crate::kind::{Body, Id, Kind};
+use crate::snapshot::{Holds, Model};
+use read::Walk;
 
 /// The report of one failure.
 fn failed(reason: Reason, entities: &[EntityRef]) -> Report {
@@ -14,44 +24,68 @@ fn failed(reason: Reason, entities: &[EntityRef]) -> Report {
     entities.iter().fold(report, |report, &entity| report.with_entity(entity))
 }
 
-/// Every failure of `edit`, in a fixed order: full tables, then reserved ids, then links.
+/// The entry a walk that should have ended, or come round, went wrong at.
+fn culprit<T: Copy>(walk: &Walk<T>) -> Option<T> {
+    match walk {
+        Walk::Ring(items) | Walk::End(items) => items.last().copied(),
+        Walk::Broken(_, at) => Some(*at),
+    }
+}
+
+/// Checks a list `owner` holds: that it ends, or comes round if `ring`, failing with `broken` naming where it went wrong,
+/// and that each entry `named` it. Gives the entries if the list is sound.
+fn holds<K: Kind>(
+    out: &mut Vec<Report>,
+    owner: EntityRef,
+    walk: &Walk<Id<K>>,
+    ring: bool,
+    broken: Reason,
+    named: impl Fn(Id<K>) -> bool,
+) -> Option<Vec<Id<K>>> {
+    let Some(items) = walk.sound(ring) else {
+        let at = culprit(walk).map(Id::entity);
+        out.push(failed(broken, &[owner].into_iter().chain(at).collect::<Vec<_>>()));
+        return None;
+    };
+    for &item in items.iter().filter(|&&item| !named(item)) {
+        out.push(failed(Reason::ListedElsewhere, &[owner, item.entity()]));
+    }
+    Some(items.to_vec())
+}
+
+/// Every invariant of one entity that reads its record and its neighbours' records, in a fixed order.
+pub(crate) fn entity(model: &Model, entity: EntityRef, out: &mut Vec<Report>) {
+    local::check(model, entity, out);
+}
+
+/// Every invariant of one body as a whole: each shell's list of faces, its faces joined through their edges, and, for a
+/// solid, a whole genus.
+#[cfg_attr(not(test), expect(dead_code, reason = "`Snapshot::check_all`, which `topology.digest` adds, calls it"))]
+pub(crate) fn body(model: &Model, body: Id<Body>, out: &mut Vec<Report>) {
+    shell::body(model, body, out);
+}
+
+/// Every invariant only the whole model shows: that each face is in its shell's list.
+#[cfg_attr(not(test), expect(dead_code, reason = "`Snapshot::check_all`, which `topology.digest` adds, calls it"))]
+pub(crate) fn model(model: &Model, out: &mut Vec<Report>) {
+    shell::unlisted(model, out);
+}
+
+/// Every failure of `edit`, in a fixed order: full tables, reserved ids never written, then the invariants of what it
+/// touched and its neighbours, then the lists of faces, the genus and the joining of the shells it changed.
 pub(crate) fn edit(edit: &Edit) -> Vec<Report> {
     let mut found: Vec<Report> = edit.full.iter().map(|_| failed(Reason::TableFull, &[])).collect();
     let unwritten = edit.created.iter().filter(|&&entity| edit.next.holds(entity) == Holds::Reserved);
     found.extend(unwritten.map(|&entity| failed(Reason::ReservedNotSet, &[entity])));
-    dead_links(edit, &mut found);
-    left_linking(edit, &mut found);
+    for touched in scope::scope(edit) {
+        entity(&edit.next, touched, &mut found);
+    }
+    let touched = incremental::Touched::of(edit);
+    incremental::face_lists(&touched, &mut found);
+    incremental::genus(&touched, &mut found);
+    incremental::joined(&touched, &mut found);
     found
 }
 
-/// What `entity`'s record links to in `model`, each once, in id order.
-fn links_of(model: &crate::snapshot::Model, entity: EntityRef) -> Vec<EntityRef> {
-    let mut links = Vec::new();
-    model.links(entity, &mut links);
-    links.sort_unstable();
-    links.dedup();
-    links
-}
-
-/// Each link of a created or changed record to an entity that is not live.
-fn dead_links(edit: &Edit, found: &mut Vec<Report>) {
-    for &entity in edit.created.iter().chain(&edit.changed) {
-        for link in links_of(&edit.next, entity) {
-            if !edit.next.is_live(link) {
-                found.push(failed(Reason::DeadLink, &[entity, link]));
-            }
-        }
-    }
-}
-
-/// Each record the edit left alone that links to an entity it removed, found from the removed entity's own links.
-fn left_linking(edit: &Edit, found: &mut Vec<Report>) {
-    let touched = |entity: &EntityRef| edit.created.contains(entity) || edit.changed.contains(entity);
-    for &gone in &edit.deleted {
-        for neighbour in links_of(&edit.base.model, gone) {
-            if !touched(&neighbour) && links_of(&edit.next, neighbour).contains(&gone) {
-                found.push(failed(Reason::DeadLink, &[neighbour, gone]));
-            }
-        }
-    }
-}
+#[cfg(test)]
+mod tests;
