@@ -165,18 +165,28 @@ fn piece(model: &Model, id: Id<EdgeUse>) -> Option<Piece<'_>> {
     Some(Piece { of: id.entity(), source, from, to })
 }
 
+/// Why a loop was not traced.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum Untraced {
+    /// A record it reads is not there, or it has no uses: the checker of the links reports that.
+    Links,
+    /// No point of the surface was found near the point of the use `of` at `t`, a parameter of kind `quantity`.
+    Point { of: EntityRef, t: f64, quantity: Quantity },
+}
+
 impl<'a> Trace<'a> {
     /// The loop `l` in its face's parameters, if every record it reads is there and every point is found.
-    pub(super) fn of(model: &'a Model, l: View<'a, Loop>) -> Option<Self> {
-        let face = view(model, l.face())?;
-        let surface = face.surface()?;
-        let pieces: Vec<Piece<'a>> = l.uses().into_iter().map(|u| piece(model, u)).collect::<Option<_>>()?;
+    pub(super) fn of(model: &'a Model, l: View<'a, Loop>) -> Result<Self, Untraced> {
+        let face = view(model, l.face()).ok_or(Untraced::Links)?;
+        let surface = face.surface().ok_or(Untraced::Links)?;
+        let pieces: Option<Vec<Piece<'a>>> = l.uses().into_iter().map(|u| piece(model, u)).collect();
+        let pieces = pieces.ok_or(Untraced::Links)?;
         let (domain, sheet) = (surface.domain(), face.sheet());
         let charts = [Chart::of(domain.u, sheet.u), Chart::of(domain.v, sheet.v)];
         let mut trace = Self { surface, tol: model.tolerance, pieces, samples: Vec::new(), charts };
         trace.sample()?;
         trace.carry();
-        (!trace.samples.is_empty()).then_some(trace)
+        if trace.samples.is_empty() { Err(Untraced::Links) } else { Ok(trace) }
     }
 
     /// Whether piece `index` is given in the face's parameters.
@@ -193,19 +203,27 @@ impl<'a> Trace<'a> {
     }
 
     /// Samples every piece at `STEPS` even steps, its ends included.
-    fn sample(&mut self) -> Option<()> {
+    fn sample(&mut self) -> Result<(), Untraced> {
         let (mut scratch, mut seed) = (Scratch::default(), None);
         let mut samples = Vec::new();
         for (index, piece) in self.pieces.iter().enumerate() {
             for k in 0..=STEPS {
                 let t = along(piece.from, piece.to, k);
-                let uv = self.point(piece.source, t, seed, &mut scratch)?;
+                let quantity = match piece.source {
+                    Source::Given(pcurve) => pcurve.range().quantity(),
+                    Source::Found(curve) => curve.range().quantity(),
+                };
+                let uv = self.point(piece.source, t, seed, &mut scratch).ok_or(Untraced::Point {
+                    of: piece.of,
+                    t,
+                    quantity,
+                })?;
                 seed = Some(uv);
                 samples.push(Sample { piece: index, t, uv });
             }
         }
         self.samples = samples;
-        Some(())
+        Ok(())
     }
 
     /// The band in each parameter at `uv`: the change in it that moves the surface's point by the length band.

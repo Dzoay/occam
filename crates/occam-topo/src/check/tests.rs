@@ -75,11 +75,14 @@ pub(super) fn clean(spec: &Spec) -> (Snapshot, Built) {
 }
 
 /// `spec` built clean, then `corrupt` made in a second edit: what its commit reports, and what the whole-model checks
-/// find in the model it refused.
+/// find in the model it refused, as measured.
 pub(super) fn seeded(spec: &Spec, corrupt: impl FnOnce(&mut Edit, &Built)) -> (Vec<Failure>, Vec<Failure>) {
     let (snapshot, built) = clean(spec);
     let mut edit = snapshot.edit();
     corrupt(&mut edit, &built);
+    // Commit measures each changed edge's deviation before it checks; the whole-model checks read what is stored, so
+    // they are given the model as measured.
+    let _ = crate::geometric::measure(&mut edit);
     let next = edit.next.clone();
     (failures(&edit.commit(&serial()).unwrap_err()), failures(&whole(&next)))
 }
@@ -182,9 +185,13 @@ fn a_use_given_to_another_loop_is_listed_elsewhere_and_not_listed_there() {
     let found = seeded(&cube(), |edit, built| {
         let u = face_uses(edit, built.faces[0])[1];
         change(edit, u, |r: &mut EdgeUseRecord| r.owner = UseOwner::Loop(built.loops[1]));
+        // The bottom edge it uses now bounds the top face too, a millimetre off it.
+        let e = edit.record(u).unwrap().edge;
+        let bounded = vec![e.entity(), built.faces[1].entity(), built.faces[3].entity()];
         expected = vec![
             (Reason::ListedElsewhere, vec![built.loops[0].entity(), u.entity()]),
             (Reason::NotListed, vec![u.entity(), built.loops[1].entity()]),
+            (Reason::EdgeOffFace, bounded),
         ];
         expected.sort();
     });
@@ -416,9 +423,10 @@ fn a_closed_shell_whose_counts_give_no_whole_genus_is_found() {
         change(edit, built.loops[1], |r: &mut LoopRecord| r.next = Some(hole));
         expected = vec![(Reason::GenusNotWhole, vec![built.shell.unwrap().entity()])];
     });
-    // The seeded loop is one edge used twice, which no geometry bounds: its vertex is off the curve it borrows and its
-    // witness cannot be inside it. Only the checker's own reasons are compared.
-    let geometric = |reason: &Reason| matches!(reason, Reason::VertexOffEdge | Reason::WitnessNotInside);
+    // The seeded loop is one edge used twice, which no geometry bounds: its vertex is off the curve it borrows, which is
+    // off the face, and its witness cannot be inside it. Only the checker's own reasons are compared.
+    let geometric =
+        |reason: &Reason| matches!(reason, Reason::VertexOffEdge | Reason::WitnessNotInside | Reason::EdgeOffFace);
     let own = |found: Vec<Failure>| found.into_iter().filter(|(reason, _)| !geometric(reason)).collect::<Vec<_>>();
     assert!(found.0.iter().chain(&found.1).any(|(reason, _)| geometric(reason)), "geometry fails too: {found:?}");
     assert_eq!((own(found.0), own(found.1)), (expected.clone(), expected));

@@ -194,8 +194,8 @@ impl Edit {
     /// One `check.invariant-failed` per failure, fault internal, its reason the invariant and its entities those
     /// involved. The snapshot the edit began from is unchanged.
     pub fn commit(mut self, _exec: &Exec) -> Result<(Snapshot, Changes), Vec<Report>> {
-        crate::geometric::measure(&mut self);
-        let failures = check::edit(&self);
+        let mut failures = crate::geometric::measure(&mut self);
+        failures.extend(check::edit(&self));
         if !failures.is_empty() {
             return Err(failures);
         }

@@ -27,7 +27,7 @@ erDiagram
 | Face | Orientation; the sheet of each periodic parameter its loops lie in |
 | Loop | An interior point, as witness for which loop is outer |
 | Edge use | Direction; the next use around; the next use of the same edge, so an edge can have any number of uses |
-| Edge | Range; role (ordinary, seam, section); measured deviation from each face |
+| Edge | Range; role (ordinary, seam, section); measured deviation from each face, [refused above](../decisions/2026-11-12-edge-deviation-cap.md) the band and `sqrt(2 length band)` |
 | Vertex | Position; certified radius; one edge of its star. Merged by the band; a pinch is a vertex with many edges |
 
 - **Seams are real edges** between chart-sized patches. No face crosses its own seam.

@@ -12,6 +12,8 @@
 
 #[cfg(test)]
 mod reach;
+#[cfg(test)]
+mod refused;
 mod trace;
 mod winding;
 
@@ -28,7 +30,7 @@ use crate::kind::{Edge, EdgeUse, Face, Id, Kind, Loop, Vertex};
 use crate::records::{Around, End, UseOwner};
 use crate::snapshot::Model;
 use crate::view::{View, most, view, walk};
-use trace::{Off, Trace};
+use trace::{Off, Trace, Untraced};
 
 /// How many even steps an edge's deviation is measured at, its ends included: as many as a parameter curve is
 /// joined to its edge at.
@@ -120,9 +122,44 @@ fn edge(model: &Model, e: View<'_, Edge>, out: &mut Vec<Report>) {
         );
         return;
     }
+    off_face(model, e, curve, out);
     for u in e.uses().into_iter().filter_map(|u| view(model, u)) {
         joined(model, e, curve, u, out);
     }
+}
+
+/// The edge's measured deviation is within the band and the near-tangent shift for its length, `sqrt(2 length band)`
+/// (S2 item 4): as far as a band decision at near tangency moves a point on a curvature radius that long, and so as far
+/// as an honest section strays (S1 item 9 saw 140 bands), while a misplaced curve or surface strays further. The length
+/// is the chord's over the steps the deviation is measured at, which is never more than the arc's, so the limit errs
+/// strict.
+fn off_face(model: &Model, e: View<'_, Edge>, curve: &dyn Curve, out: &mut Vec<Report>) {
+    let band = model.tolerance.band();
+    let length = chord(curve, e.range());
+    let limit = band.millimetres() + model.tolerance.near_tangent_shift(Length::from_millimetres(length)).millimetres();
+    let deviation = e.deviation().millimetres();
+    if !within(deviation, limit) {
+        let entities: Vec<EntityRef> =
+            core::iter::once(e.id().entity()).chain(e.faces().into_iter().map(Id::entity)).collect();
+        out.push(
+            failed(Reason::EdgeOffFace, &entities)
+                .with_value(NamedValue::length("distance", deviation))
+                .with_value(NamedValue::length("limit", limit))
+                .with_value(NamedValue::length("length", length))
+                .with_tolerance_in_force(band.millimetres()),
+        );
+    }
+}
+
+/// The parameter `k` steps of [`STEPS`] along `(lo, hi)`, `hi` itself at the end.
+fn step((lo, hi): (f64, f64), k: u32) -> f64 {
+    if k >= STEPS { hi } else { lo + (hi - lo) * (f64::from(k) / f64::from(STEPS)) }
+}
+
+/// The length of the chords of `curve` between its points at the steps of `range`.
+fn chord(curve: &dyn Curve, range: (f64, f64)) -> f64 {
+    let points: Vec<_> = (0..=STEPS).map(|k| curve.point(step(range, k)).to_vec3()).collect();
+    points.windows(2).map(|pair| pair.get(1).zip(pair.first()).map_or(0.0, |(b, a)| (*b - *a).norm())).sum()
 }
 
 /// The parameter curve of `u`, if it has one, runs along `e` on its face's surface, the same way, within the band
@@ -146,9 +183,20 @@ fn bounding(model: &Model, l: View<'_, Loop>, out: &mut Vec<Report>) {
     if !uses_meet(model, l) {
         return;
     }
-    let Some(trace) = Trace::of(model, l) else { return };
     let band = model.tolerance.band().millimetres();
     let (this, face) = (l.id().entity(), l.face().entity());
+    let trace = match Trace::of(model, l) {
+        Ok(trace) => trace,
+        Err(Untraced::Links) => return,
+        Err(Untraced::Point { of, t, quantity }) => {
+            out.push(failed(Reason::LoopNotTraced, &[this, of, face]).with_value(NamedValue::new(
+                "parameter",
+                quantity,
+                t,
+            )));
+            return;
+        }
+    };
     let [u, v] = trace.charts.map(|chart| chart.quantity);
     if let Some(joint) = trace.open() {
         out.push(
@@ -200,7 +248,7 @@ fn nesting<'a>(model: &'a Model, f: View<'a, Face>, out: &mut Vec<Report>) {
     let loops: Vec<View<'a, Loop>> =
         f.loops().into_iter().filter_map(|l| view(model, l)).filter(|l| l.face() == f.id()).collect();
     let Some((outer, others)) = loops.split_first() else { return };
-    let closed = |l: View<'a, Loop>| Trace::of(model, l).filter(|t| t.open().is_none());
+    let closed = |l: View<'a, Loop>| Trace::of(model, l).ok().filter(|t| t.open().is_none());
     let Some(around) = others.first().and_then(|_| closed(*outer)) else { return };
     let band = model.tolerance.band().millimetres();
     for &other in others {
@@ -220,8 +268,9 @@ fn nesting<'a>(model: &'a Model, f: View<'a, Face>, out: &mut Vec<Report>) {
 
 /// Measures the deviation of every edge whose curve or faces' surfaces the edit may have moved, from each face that
 /// uses it, and stores it where it differs from what the record holds: every edge it created or changed, the edges of
-/// the uses and faces it created or changed, and the edges on a curve or surface it replaced in place.
-pub(crate) fn measure(edit: &mut Edit) {
+/// the uses and faces it created or changed, and the edges on a curve or surface it replaced in place. Gives one report
+/// for each edge whose distance from a face could not be measured, which commit refuses.
+pub(crate) fn measure(edit: &mut Edit) -> Vec<Report> {
     let touched: Vec<EntityRef> = edit.created.iter().chain(&edit.changed).copied().collect();
     let next = &edit.next;
     let used =
@@ -230,12 +279,17 @@ pub(crate) fn measure(edit: &mut Edit) {
         touched.iter().filter_map(|&f| id::<Face>(f)).filter_map(|f| view(next, f)).flat_map(View::<Face>::edges);
     let edges: BTreeSet<Id<Edge>> =
         touched.iter().filter_map(|&e| id::<Edge>(e)).chain(used).chain(faced).chain(on_replaced(edit)).collect();
-    let measured: Vec<(Id<Edge>, f64)> = edges
-        .into_iter()
-        .filter_map(|e| view(&edit.next, e))
-        .map(|e| (e.id(), deviation(&edit.next, e)))
-        .filter(|&(e, d)| view(&edit.next, e).is_some_and(|e| e.deviation().millimetres().to_bits() != d.to_bits()))
-        .collect();
+    let (mut measured, mut failures) = (Vec::new(), Vec::new());
+    for e in edges.into_iter().filter_map(|e| view(next, e)) {
+        match deviation(next, e) {
+            Ok(d) if e.deviation().millimetres().to_bits() != d.to_bits() => measured.push((e.id(), d)),
+            Ok(_) => {}
+            Err(miss) => failures.push(
+                failed(Reason::DeviationNotMeasured, &[e.id().entity(), miss.face.entity()])
+                    .with_value(NamedValue::new("parameter", miss.quantity, miss.t)),
+            ),
+        }
+    }
     for (e, deviation) in measured {
         if let Some(record) = Edge::table_mut(&mut edit.next).live_mut(e.slot(), e.generation()) {
             record.deviation = Length::from_millimetres(deviation);
@@ -244,6 +298,7 @@ pub(crate) fn measure(edit: &mut Edit) {
             }
         }
     }
+    failures
 }
 
 /// The edges on a curve, or of a face on a surface, that the edit replaced in place. Finding them reads every edge or
@@ -261,28 +316,35 @@ fn on_replaced(edit: &Edit) -> Vec<Id<Edge>> {
     found
 }
 
+/// Where an edge's distance from a face could not be measured: the face, and the parameter of the edge's curve.
+struct Unmeasured {
+    face: Id<Face>,
+    t: f64,
+    quantity: Quantity,
+}
+
 /// The largest distance from `e`'s curve, at even steps over its range, to the surface of each face that uses it;
-/// zero for an edge no face uses. A distance that cannot be found is left out.
-fn deviation(model: &Model, e: View<'_, Edge>) -> f64 {
-    let Some(curve) = e.curve() else { return 0.0 };
-    let (lo, hi) = e.range();
+/// zero for an edge no face uses.
+fn deviation(model: &Model, e: View<'_, Edge>) -> Result<f64, Unmeasured> {
+    let Some(curve) = e.curve() else { return Ok(0.0) };
     let (mut worst, mut scratch) = (0.0, Scratch::default());
     for u in e.uses().into_iter().filter_map(|u| view(model, u)).filter(|u| u.edge() == e.id()) {
         let UseOwner::Loop(owner) = u.owner() else { continue };
-        let surface = view(model, owner).and_then(|l| view(model, l.face())).and_then(View::<Face>::surface);
-        let Some(surface) = surface else { continue };
+        let Some(face) = view(model, owner).and_then(|l| view(model, l.face())) else { continue };
+        let Some(surface) = face.surface() else { continue };
         for k in 0..=STEPS {
-            let t = if k == STEPS { hi } else { lo + (hi - lo) * (f64::from(k) / f64::from(STEPS)) };
+            let t = step(e.range(), k);
             let seed = u.pcurve().map(|p| p.uv(t));
-            if let Ok(found) = surface.closest(curve.point(t), seed, model.tolerance, &mut scratch) {
-                let d = found.distance.millimetres();
-                if d > worst {
-                    worst = d;
-                }
+            let Ok(found) = surface.closest(curve.point(t), seed, model.tolerance, &mut scratch) else {
+                return Err(Unmeasured { face: face.id(), t, quantity: curve.range().quantity() });
+            };
+            let d = found.distance.millimetres();
+            if d > worst {
+                worst = d;
             }
         }
     }
-    worst
+    Ok(worst)
 }
 
 #[cfg(test)]

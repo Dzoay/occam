@@ -79,6 +79,15 @@ text_enum! {
         WitnessNotInside = "witness-not-inside",
         /// A face's other loops are not strictly inside its outer loop, or the outer loop's witness is inside one.
         LoopsNotNested = "loops-not-nested",
+        /// An edge strays from the surface of a face that uses it by more than the band and the near-tangent shift for
+        /// its length, `sqrt(2 length band)`.
+        EdgeOffFace = "edge-off-face",
+        /// An edge's distance from the surface of a face that uses it could not be measured: no point of the surface
+        /// was found near one of its points.
+        DeviationNotMeasured = "deviation-not-measured",
+        /// A loop could not be traced in its face's parameters: no point of the surface was found near one of its
+        /// edge's points.
+        LoopNotTraced = "loop-not-traced",
     }
 }
 

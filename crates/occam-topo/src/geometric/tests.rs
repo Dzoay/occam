@@ -4,8 +4,9 @@
 use core::f64::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
 
+use occam_geom::Plane;
 use occam_report::{Code, EntityRef, Fault, Reason, Report};
-use occam_units::{Angle, Direction, Length, Tolerance, UvPoint, Vec3};
+use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tolerance, UvPoint, Vec3, Vector, World};
 
 use crate::edit::Edit;
 use crate::kind::{Edge, EdgeUse, Face, Id, Loop, Vertex};
@@ -14,8 +15,8 @@ use crate::models::{
     sheet_holed_by_its_reversal, straight_pcurves, wire,
 };
 use crate::records::{
-    Around, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, Sheet, UseOwner,
-    VertexRecord,
+    Around, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, Sheet, SurfaceRecord,
+    UseOwner, VertexRecord,
 };
 use crate::snapshot::Snapshot;
 use crate::testing::{at, number, record, serial, tolerance, x_axis};
@@ -344,4 +345,59 @@ fn a_closed_edge_is_checked_at_both_its_ends() {
         (off[0].entities.clone(), number(off[0], "parameter")),
         (vec![b.vertices[0].entity(), arc.entity()], Some(6.0))
     );
+}
+
+/// The sheet's plane, its parameters along X and Y from (0.5, 0.5), lifted by `z`.
+fn sheet_plane_lifted(z: f64) -> SurfaceRecord {
+    let lift = Placement::<World, World>::translation(Vector::from_vec3(Vec3::new(0.5, 0.5, z)));
+    SurfaceRecord(Arc::new(Plane::placed(&Placement::<Local, World>::identity().then(&lift))))
+}
+
+#[test]
+fn a_step_and_a_chord_are_over_the_range_they_are_given() {
+    assert_eq!((super::step((1.0, 3.0), super::STEPS / 2), super::step((1.0, 3.0), super::STEPS)), (2.0, 3.0));
+    assert!((super::chord(x_axis().0.as_ref(), (1.0, 5.0)) - 4.0).abs() < 1e-12);
+}
+
+#[test]
+fn a_parameter_curve_may_stray_from_its_edge_by_the_band_and_the_edges_measured_deviation() {
+    // A square sheet with straight parameter curves, its plane then lifted 0.8 bands: each edge strays that far from the
+    // face, and each parameter curve as far from its edge, which the band less the deviation would refuse.
+    let (snapshot, built) = clean(&sheet(), straight_pcurves);
+    let mut edit = snapshot.edit();
+    let surface = edit.record(built.faces[0]).unwrap().surface;
+    let lift = 0.8 * tolerance().band().millimetres();
+    edit.set(surface, sheet_plane_lifted(lift)).unwrap();
+    let (after, _) = edit.commit(&serial()).unwrap_or_else(|reports| panic!("{:#?}", failures(&reports)));
+    for e in after.view(built.faces[0]).unwrap().edges() {
+        assert!((after.view(e).unwrap().deviation().millimetres() - lift).abs() < 1e-12, "{e:?}");
+    }
+}
+
+#[test]
+fn the_edges_of_a_face_whose_surface_is_replaced_in_place_are_measured_again() {
+    // A sheet's one face, its plane lifted 0.01: its edges, which no other face uses, stray beyond the cap.
+    let (snapshot, built) = clean(&sheet(), nothing);
+    let mut edit = snapshot.edit();
+    let surface = edit.record(built.faces[0]).unwrap().surface;
+    edit.set(surface, sheet_plane_lifted(0.01)).unwrap();
+    assert_eq!(with(&refused(edit), Reason::EdgeOffFace).len(), 4);
+}
+
+#[test]
+fn an_edge_whose_curve_is_replaced_in_place_is_measured_again() {
+    // A cube's first edge's line replaced by an arc through its ends that bulges 0.01 across it, beyond the cap.
+    let (snapshot, built) = clean(&cube(), nothing);
+    let e = built.edges[0];
+    let mut edit = snapshot.edit();
+    let record = edit.record(e).unwrap();
+    let ends = [record.ends.0, record.ends.1].map(|v| edit.record(v).unwrap().point.to_vec3());
+    let along = ends[1] - ends[0];
+    let across = if along.x.abs() > 0.5 { Vec3::new(0.0, 0.0, 1.0) } else { Vec3::new(1.0, 0.0, 0.0) };
+    let middle = (ends[0] + ends[1]) * 0.5 + across * 0.02;
+    let poles = vec![Point::from_vec3(ends[0]), Point::from_vec3(middle), Point::from_vec3(ends[1])];
+    let arc = occam_geom::SplineCurve::bezier(poles, None).unwrap();
+    edit.set(record.curve, CurveRecord(Arc::new(arc))).unwrap();
+    let off = with(&refused(edit), Reason::EdgeOffFace).into_iter().map(|r| r.entities[0]).collect::<Vec<_>>();
+    assert_eq!(off, [e.entity()]);
 }
