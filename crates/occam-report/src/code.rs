@@ -63,6 +63,10 @@ text_enum! {
         SweptAlongItself = "geom.swept-along-itself",
         /// A surface was offset whose normal is not continuous: it has no second derivative, as a mesh has none.
         NotSmooth = "geom.not-smooth",
+        /// A curve in a face's parameters does not lie along its edge's curve within the band.
+        EdgeOffSurface = "geom.edge-off-surface",
+        /// A curve given as a parameter curve leaves the plane `z = 0`, whose `x` and `y` are a face's parameters.
+        NotInPlane = "geom.not-in-plane",
     }
 }
 
@@ -123,7 +127,9 @@ impl Code {
             | Self::NoDerivative
             | Self::TriangleNotValid
             | Self::SweptAlongItself
-            | Self::NotSmooth => Severity::Error,
+            | Self::NotSmooth
+            | Self::EdgeOffSurface
+            | Self::NotInPlane => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -160,6 +166,12 @@ impl Code {
                 "A curve swept along a direction it runs along makes no surface, or one with an edge at infinity."
             }
             Self::NotSmooth => "An offset needs a surface with second derivatives, so that its normal is continuous.",
+            Self::EdgeOffSurface => {
+                "A curve in a face's parameters does not lie along its edge's curve within the band."
+            }
+            Self::NotInPlane => {
+                "A parameter curve must be drawn in the plane z = 0, whose x and y are the face's parameters."
+            }
         }
     }
 
@@ -202,6 +214,10 @@ impl Code {
             Self::NotSmooth => {
                 "The surface has derivatives to order {highest}, and an offset needs them to order {needed}."
             }
+            Self::EdgeOffSurface => {
+                "The edge's curve on the face is {gap} from its own at {point}, more than the band of {band}."
+            }
+            Self::NotInPlane => "The curve reaches {height} from the plane z = 0, in which a parameter curve is drawn.",
         }
     }
 
@@ -226,7 +242,9 @@ impl Code {
             | Self::WeightNotPositive
             | Self::NoDerivative
             | Self::TriangleNotValid
-            | Self::SweptAlongItself => &[],
+            | Self::SweptAlongItself
+            | Self::EdgeOffSurface
+            | Self::NotInPlane => &[],
         }
     }
 }
@@ -488,6 +506,27 @@ mod tests {
         ])
     }
 
+    fn edge_codes() -> Value {
+        json!([
+            {
+                "name": "EdgeOffSurface",
+                "code": "geom.edge-off-surface",
+                "severity": "error",
+                "summary": "A curve in a face's parameters does not lie along its edge's curve within the band.",
+                "template": "The edge's curve on the face is {gap} from its own at {point}, more than the band of {band}.",
+                "remedies": [],
+            },
+            {
+                "name": "NotInPlane",
+                "code": "geom.not-in-plane",
+                "severity": "error",
+                "summary": "A parameter curve must be drawn in the plane z = 0, whose x and y are the face's parameters.",
+                "template": "The curve reaches {height} from the plane z = 0, in which a parameter curve is drawn.",
+                "remedies": [],
+            },
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -514,12 +553,17 @@ mod tests {
     #[test]
     fn the_catalogue_lists_every_code_and_remedy() {
         let value: Value = serde_json::from_str(&catalogue_json().unwrap()).unwrap();
-        let codes: Vec<Value> =
-            [report_and_units_codes(), measure_command_line_and_exec_codes(), geom_codes(), spline_and_mesh_codes()]
-                .into_iter()
-                .filter_map(|rows| rows.as_array().cloned())
-                .flatten()
-                .collect();
+        let codes: Vec<Value> = [
+            report_and_units_codes(),
+            measure_command_line_and_exec_codes(),
+            geom_codes(),
+            spline_and_mesh_codes(),
+            edge_codes(),
+        ]
+        .into_iter()
+        .filter_map(|rows| rows.as_array().cloned())
+        .flatten()
+        .collect();
         assert_eq!(value, json!({"schema": 2, "codes": codes, "remedies": remedies()}));
     }
 

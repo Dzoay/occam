@@ -12,7 +12,8 @@ flowchart TB
   surf --> pres["What it can present<br/>analytic · to_bspline · triangles"]
 ```
 
-Curves repeat both layers as `ParametricCurve` and `Curve`, and parameter curves on a surface as `ParamCurve`. The
+Curves repeat both layers as `ParametricCurve` and `Curve`, and parameter curves on a surface as
+`ParametricParamCurve` and `ParamCurve`. The
 blanket impl is also where a call is checked: a parameter outside the domain, or a point that is not finite, is refused
 there, so no family repeats it. A curve answers the same questions over one parameter, `closest` included, and can be
 trimmed by parameter; where no formula gives a foot, a search shared by every family finds it. A curve's rungs run to
@@ -97,6 +98,26 @@ is for a plane, a sphere and a cylinder; elsewhere it has none. Its foot starts 
 wherever the distance is within the base's radii of curvature on that side, and over a finite domain the shared search
 from there finds it where it is not. A trimmed family's foot is the base's where that lies in the trimmed part, and
 otherwise is searched for there.
+
+## Parameter curves
+
+A curve in a face's parameters is any curve family drawn in the plane `z = 0` and read as `(u, v) = (x, y)`:
+`UvCurve<C>`. The reading is a linear map, so points, derivatives to any order, boxes, B-splines, and the family's
+window for a search (its `within`, asked about the line through the point square to the plane) carry over exactly, and
+a line, circle, conic, B-spline, offset or trimmed curve in the parameters is that family, with no second copy of its
+formulas, its shape and content the parameter curve's. A curve that leaves the plane is refused with
+`geom.not-in-plane` and how far it reaches, decided by its own box, which holds it, over its range or a stretch of a
+range without end: otherwise a tilted circle would read as an ellipse that said it was a circle. The parameters are
+plain numbers here: one millimetre of the plane is one unit of each parameter, a radian, a millimetre or a knot, and a
+distance or a fit between parameters is in their own measure. The curve suite runs over a parameter curve unchanged,
+through an exact embedding of it in the plane.
+
+`join_edge` joins a parameter curve to its edge's curve in space. They agree when the surface over the one runs along
+the other within the band the same way: starts meet, ends meet, and samples of each have a foot on the other within
+the band, found along each, so their parameterisations may differ. Otherwise it reports `geom.edge-off-surface` with
+the largest gap, where it is, and the edge's parameter there. A parameter curve may cross a seam, as an arc on a
+cylinder whose `u` runs past 2π does: a parameter that comes round is defined at every finite value, and the check
+compares points in space, where a seam is no edge.
 
 ## No cross-family store
 

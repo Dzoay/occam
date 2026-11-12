@@ -29,11 +29,12 @@ fn names(line: &str, word: &str) -> bool {
 /// The type a family `impl` line implements a family trait for.
 fn family_of(line: &str) -> Option<&str> {
     let line = line.trim_start();
-    let rest = ["impl Parametric for ", "impl ParametricCurve for "]
-        .iter()
-        .find_map(|head| line.strip_prefix(head))
-        .or_else(|| line.strip_prefix("impl<").and_then(|r| r.split_once("> Parametric for ").map(|(_, t)| t)))
-        .or_else(|| line.strip_prefix("impl<").and_then(|r| r.split_once("> ParametricCurve for ").map(|(_, t)| t)))?;
+    let traits = ["Parametric", "ParametricCurve", "ParametricParamCurve"];
+    let rest = traits.iter().find_map(|name| {
+        let (head, generic) = (format!("impl {name} for "), format!("> {name} for "));
+        line.strip_prefix(head.as_str())
+            .or_else(|| line.strip_prefix("impl<").and_then(|r| r.split_once(generic.as_str()).map(|(_, t)| t)))
+    })?;
     rest.split(|c: char| !(c.is_alphanumeric() || c == '_')).next().filter(|name| !name.is_empty())
 }
 
@@ -95,7 +96,10 @@ fn no_family_is_named_outside_its_module_and_nothing_recovers_a_type() {
     let files: Vec<(String, Vec<&str>)> =
         texts.iter().filter(|(path, _)| library(path)).map(|(path, text)| (path.clone(), library_code(text))).collect();
     let found: Vec<&str> = files.iter().flat_map(|(_, code)| code.iter().filter_map(|line| family_of(line))).collect();
-    assert!(found.contains(&"Plane") && found.contains(&"Line"), "the check finds the families: {found:?}");
+    assert!(
+        found.contains(&"Plane") && found.contains(&"Line") && found.contains(&"UvCurve"),
+        "the families: {found:?}"
+    );
     assert!(
         test_only.contains(&"conformance".to_string())
             && files.iter().all(|(path, _)| !path.starts_with("conformance"))
@@ -141,4 +145,6 @@ fn library_code_stops_at_the_tests_and_skips_comments() {
     assert_eq!(family_of("impl ParametricCurve for Line {"), Some("Line"));
     assert_eq!(family_of("impl<C: ParametricCurve> ParametricCurve for Wrong<C> {"), Some("Wrong"));
     assert_eq!(family_of("impl<S: Parametric> Surface for S {"), None);
+    assert_eq!(family_of("impl<C: ParametricCurve> ParametricParamCurve for UvCurve<C> {"), Some("UvCurve"));
+    assert_eq!(family_of("impl<P: ParametricParamCurve> ParamCurve for P {"), None);
 }

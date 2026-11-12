@@ -4,6 +4,7 @@
 //! so that a test can show a seeded fault caught by the check meant to catch it.
 
 mod curves;
+mod lifted;
 mod profiles;
 mod seeded;
 mod surfaces;
@@ -14,6 +15,7 @@ use occam_math::canonical_bits;
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tangent, Tolerance, Vec3, Vector, World};
 
 pub(crate) use curves::{curve, presented_curve};
+pub(crate) use lifted::param_curve;
 pub(crate) use profiles::{
     arc, bow, branch, differ, endless, lifted_bow, oval, ring, segment, twist, upright_oval, whole_bow, whole_branch,
 };

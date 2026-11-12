@@ -26,13 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.parameter`
-
-Curves in a face's parameter space, with the same kinds as in 3D, and their joining to 3D edges (row 2.3).
-
-*Failing test first:* the suite's curve checks over each kind in parameter space; a parameter curve on each surface
-family agrees with its 3D edge within the band, and one that does not is reported.
-
 ### `geometry.measures`
 
 Tangent, normal and curvature at a parameter (row 2.8); curve length and a uniform discretisation by distance or by

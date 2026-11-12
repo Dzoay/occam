@@ -1,10 +1,10 @@
 //! Source: original
 //! The curve seam: the surface's two layers over one parameter, [`ParametricCurve`] for a family and [`Curve`] for
-//! everyone else, and [`ParamCurve`] for a curve in a face's parameters.
+//! everyone else. A curve in a face's parameters has its own two layers, in `param_curve.rs`.
 
 use occam_math::Real;
 use occam_report::Report;
-use occam_units::{Bounds, Direction, Length, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{Bounds, Direction, Length, Point, Tangent, Tolerance, World};
 
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
@@ -251,25 +251,6 @@ impl<C: ParametricCurve> Curve for C {
     fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
         ParametricCurve::to_bspline(self, lo, hi)
     }
-}
-
-/// A curve in a face's parameters (S1 item 7: without one, the same answers took 3.45 times as long; PARITY 2.3). Its
-/// families, and the family layer beneath this one, come with `geometry.parameter`.
-pub trait ParamCurve: Send + Sync {
-    /// The point in the face's parameters.
-    fn uv(&self, t: f64) -> UvPoint;
-
-    /// Where it is defined.
-    fn range(&self) -> ParamRange;
-
-    /// The family's name.
-    fn family(&self) -> FamilyName;
-
-    /// Replaces `out` with the family's name and the numbers that define the curve.
-    fn content(&self, out: &mut Content);
-
-    /// How closely a sampled parameter curve fits, in the surface's parameters. `None` for one that is exact.
-    fn fit(&self) -> Option<f64>;
 }
 
 #[cfg(test)]
