@@ -5,18 +5,26 @@
 //! Every entity has an id of slot and generation, with its kind as a type ([`Id`]). Records sit in copy-on-write chunks,
 //! one table per kind, so a [`Snapshot`] is immutable and cloning one shares every chunk (S3-P3). A stale id is a
 //! `topo.stale-id` report, never the wrong entity.
+//!
+//! An [`Edit`] is the only place ids are given, and [`Edit::commit`], which checks what the edit touched, is the only way
+//! to make a snapshot, so no unchecked model exists. It hands back [`Changes`]: what was created, changed and deleted,
+//! and where each new entity came from.
 
+mod check;
+mod edit;
 mod kind;
 mod records;
 mod snapshot;
-#[cfg_attr(not(test), expect(dead_code, reason = "the edit, the next step, writes through these"))]
 mod table;
+#[cfg(test)]
+mod testing;
 
+pub use edit::{Changes, Derivation, Edit, Lineage};
 pub use kind::{
-    Body, CurveGeom, Edge, EdgeUse, Face, Id, Kind, Loop, ParamCurveGeom, Shell, SurfaceGeom, Vertex, Wire,
+    Body, CurveGeom, Edge, EdgeUse, Face, Id, Kind, Loop, ParamCurveGeom, Record, Shell, SurfaceGeom, Vertex, Wire,
 };
 pub use records::{
     Around, BodyKind, BodyRecord, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord,
-    ParamCurveRecord, Sheet, ShellRecord, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
+    ParamCurveRecord, Provenance, Sheet, ShellRecord, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
 };
 pub use snapshot::Snapshot;

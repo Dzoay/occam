@@ -65,6 +65,7 @@ fn place(slot: u32) -> Option<(usize, usize)> {
 
 impl<R: Clone> Table<R> {
     /// An empty table.
+    #[cfg(test)]
     pub(crate) const fn new() -> Self {
         Self::with_most(u32::MAX)
     }
@@ -150,22 +151,31 @@ impl<R: Clone> Table<R> {
         Some((slot, NonZeroU32::MIN))
     }
 
-    /// Writes `record` into `slot`, which must hold generation `generation`, reserved or live. `false` if it does not.
-    pub(crate) fn put(&mut self, slot: u32, generation: NonZeroU32, record: R) -> bool {
-        let Some(entry) = self.slot_mut(slot).filter(|s| s.generation == generation.get()) else { return false };
-        if matches!(entry.state, State::Free) {
-            return false;
-        }
-        entry.state = State::Live(record);
-        true
+    /// Whether `slot` holds generation `generation`, reserved or live.
+    fn taken(&self, slot: u32, generation: NonZeroU32) -> bool {
+        self.slot(slot).is_some_and(|s| s.generation == generation.get() && !matches!(s.state, State::Free))
     }
 
-    /// Frees `slot`, which must hold generation `generation`, reserved or live. `false` if it does not.
-    pub(crate) fn free(&mut self, slot: u32, generation: NonZeroU32) -> bool {
-        let Some(entry) = self.slot_mut(slot).filter(|s| s.generation == generation.get()) else { return false };
-        if matches!(entry.state, State::Free) {
-            return false;
+    /// The live record of `slot` at `generation`, to change: its chunk is copied first if a snapshot shares it.
+    pub(crate) fn live_mut(&mut self, slot: u32, generation: NonZeroU32) -> Option<&mut R> {
+        self.live(slot, generation)?;
+        match &mut self.slot_mut(slot)?.state {
+            State::Live(record) => Some(record),
+            State::Free | State::Reserved => None,
         }
+    }
+
+    /// Writes `record` into `slot`, which must hold generation `generation`, reserved or live. `false` if it does not,
+    /// and then nothing is copied.
+    pub(crate) fn put(&mut self, slot: u32, generation: NonZeroU32, record: R) -> bool {
+        let entry = self.taken(slot, generation).then(|| self.slot_mut(slot)).flatten();
+        entry.map(|entry| entry.state = State::Live(record)).is_some()
+    }
+
+    /// Frees `slot`, which must hold generation `generation`, reserved or live. `false` if it does not, and then
+    /// nothing is copied.
+    pub(crate) fn free(&mut self, slot: u32, generation: NonZeroU32) -> bool {
+        let Some(entry) = self.taken(slot, generation).then(|| self.slot_mut(slot)).flatten() else { return false };
         entry.state = State::Free;
         let reusable = entry.reusable();
         let Some((chunk, _)) = place(slot) else { return true };
@@ -319,5 +329,24 @@ mod tests {
         assert_eq!(copy.shared_chunks(&table), 1);
         assert_eq!(table.live(10, one()), Some(&10), "the original is unchanged");
         assert!(table.slot(u32::MAX).is_none());
+        assert!(!copy.put(2500, NonZeroU32::new(2).unwrap(), 0) && !copy.free(2600, NonZeroU32::new(2).unwrap()));
+        assert_eq!(copy.shared_chunks(&table), 1, "a refused write copies nothing");
+        assert_eq!(copy.live_mut(2900, NonZeroU32::new(2).unwrap()), None);
+        assert_eq!(copy.shared_chunks(&table), 1, "nor does a refused change");
+        *copy.live_mut(2900, one()).unwrap() = 1;
+        assert_eq!(
+            (copy.shared_chunks(&table), table.live(2900, one()), copy.live(2900, one())),
+            (0, Some(&2900), Some(&1))
+        );
+    }
+
+    #[test]
+    fn only_a_live_record_can_be_changed_in_place() {
+        let mut table = filled(2);
+        let (slot, generation) = table.reserve().unwrap();
+        assert_eq!(table.live_mut(slot, generation), None, "reserved");
+        assert!(table.free(0, one()));
+        assert_eq!(table.live_mut(0, one()), None, "free");
+        assert_eq!(table.live_mut(1, one()).map(|r| *r), Some(1));
     }
 }

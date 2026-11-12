@@ -27,18 +27,6 @@ fields. Names and colours arrive with `exchange`, and the describer and the nati
 
 ## Steps
 
-### `topology.edit`
-
-`Edit`, the only place ids are given: `reserve`, `add`, `set`, `remove`, and `derive(new, old, how)` with split,
-trimmed, merged or copied. `Changes` lists what was created, changed and deleted, and each new entity's lineage. The
-model's step counter, and `Provenance`, a step and its `StepRole` (profile, target, tool, input or made), which
-`occam-report` gains. `commit` is the only way to make a snapshot; at this step it refuses a reserved id never set and a
-record linking to a dead id, with `check.invariant-failed`, fault internal, naming both. A failed or dropped edit
-leaves its input as it was (L5).
-
-*Failing test first:* after an edit that adds, changes and removes, `Changes` names each entity once in the right list;
-a reserved id never set fails `commit` and is named; the input snapshot is unchanged after a failed commit.
-
 ### `topology.records`
 
 The records [the topic](../architecture/topology.md#entities) lists: body (solid, sheet or wire), shell, face

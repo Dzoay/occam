@@ -14,7 +14,9 @@ use occam_geom::{Curve, ParamCurve, Surface};
 use occam_math::Exec;
 use occam_report::{EntityKind, EntityRef};
 
-use crate::report::{Description, StepRole};
+use occam_report::StepRole;
+
+use crate::report::Description;
 
 mod sealed {
     pub trait Sealed {}

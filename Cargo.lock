@@ -222,6 +222,7 @@ name = "occam-topo"
 version = "0.0.0"
 dependencies = [
  "occam-geom",
+ "occam-math",
  "occam-report",
  "occam-units",
 ]

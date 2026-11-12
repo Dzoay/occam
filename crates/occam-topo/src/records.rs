@@ -5,12 +5,22 @@
 use std::sync::Arc;
 
 use occam_geom::{Content, Curve, ParamCurve, Surface};
-use occam_report::EntityRef;
+use occam_report::{EntityRef, StepRole};
 use occam_units::{Length, Point, UvPoint, World};
 
 use crate::kind::{
     Body, CurveGeom, Edge, EdgeUse, Face, Id, Kind, Loop, ParamCurveGeom, Shell, SurfaceGeom, Vertex, Wire,
 };
+
+/// Which step made an entity, and its part in it (S6: what agents asked about first). Steps count over the model's life,
+/// so a step number is unique across requests.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Provenance {
+    /// The step that made it.
+    pub step: u64,
+    /// Its part in that step.
+    pub role: StepRole,
+}
 
 /// What a body is (PARITY 1.1, 1.6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +90,8 @@ pub struct BodyRecord {
     pub first_shell: Option<Id<Shell>>,
     /// Its first wire; the rest follow from it.
     pub first_wire: Option<Id<Wire>>,
+    /// The step that made it.
+    pub born: Provenance,
 }
 
 /// A shell: faces joined along their edges.
@@ -108,6 +120,8 @@ pub struct FaceRecord {
     pub reversed: bool,
     /// Its outer loop, which the rest follow.
     pub outer: Id<Loop>,
+    /// The step that made it.
+    pub born: Provenance,
 }
 
 /// A loop of edge uses bounding a face. Which loop is outer is decided by a strict interior point, kept as a witness,
@@ -173,6 +187,8 @@ pub struct EdgeRecord {
     /// How far it strays from the surface of any face that uses it, measured and never asserted (S1 item 9: up to 140
     /// times the tolerance with every volume right).
     pub deviation: Length,
+    /// The step that made it.
+    pub born: Provenance,
 }
 
 /// A vertex, shared by identity (S1 item 1). Nothing limits how many edges meet at one, so a pinch is a vertex like any
@@ -279,6 +295,42 @@ impl VertexRecord {
         link_some(out, self.star.map(|place| place.edge));
     }
 }
+
+/// The records that keep the step that made them.
+macro_rules! born {
+    ($($record:ident)*) => {
+        $(
+            impl $record {
+                pub(crate) const fn born(&self) -> Option<Provenance> {
+                    Some(self.born)
+                }
+
+                pub(crate) const fn set_born(&mut self, born: Provenance) {
+                    self.born = born;
+                }
+            }
+        )*
+    };
+}
+
+born!(BodyRecord FaceRecord EdgeRecord);
+
+/// The records that do not.
+macro_rules! unborn {
+    ($($record:ident)*) => {
+        $(
+            impl $record {
+                pub(crate) const fn born(&self) -> Option<Provenance> {
+                    None
+                }
+
+                pub(crate) const fn set_born(&mut self, _born: Provenance) {}
+            }
+        )*
+    };
+}
+
+unborn!(ShellRecord LoopRecord WireRecord EdgeUseRecord VertexRecord SurfaceRecord CurveRecord ParamCurveRecord);
 
 /// The geometry records, which link to nothing and compare by content.
 macro_rules! geometry {

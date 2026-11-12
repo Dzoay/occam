@@ -7,12 +7,12 @@ use core::num::NonZeroU32;
 use occam_report::{Code, EntityRef, Fault, NamedValue, Quantity, Report};
 use occam_units::Tolerance;
 
-use crate::kind::{Id, Kind};
+use crate::kind::{Id, Kind, Visit, dispatch};
 use crate::records::{
-    BodyRecord, CurveRecord, EdgeRecord, EdgeUseRecord, FaceRecord, LoopRecord, ParamCurveRecord, ShellRecord,
-    SurfaceRecord, VertexRecord, WireRecord,
+    BodyRecord, CurveRecord, EdgeRecord, EdgeUseRecord, FaceRecord, LoopRecord, ParamCurveRecord, Provenance,
+    ShellRecord, SurfaceRecord, VertexRecord, WireRecord,
 };
-use crate::table::Table;
+use crate::table::{State, Table};
 
 /// The tables of a model and what is kept with them. `pub` only so that the sealed kind trait can name it.
 #[derive(Clone, Debug, PartialEq)]
@@ -33,23 +33,139 @@ pub struct Model {
     pub(crate) pcurves: Table<ParamCurveRecord>,
 }
 
+/// What a model's slot holds for an entity of any kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Holds {
+    /// Nothing of that generation.
+    Nothing,
+    /// That generation, reserved and not yet written.
+    Reserved,
+    /// That generation, live.
+    Live,
+}
+
 impl Model {
-    /// A model with nothing in it.
-    const fn empty(tolerance: Tolerance) -> Self {
+    /// A model with nothing in it, whose tables may each hold at most `most` slots.
+    pub(crate) const fn empty(tolerance: Tolerance, most: u32) -> Self {
         Self {
             tolerance,
             step: 0,
-            bodies: Table::new(),
-            shells: Table::new(),
-            faces: Table::new(),
-            loops: Table::new(),
-            wires: Table::new(),
-            uses: Table::new(),
-            edges: Table::new(),
-            vertices: Table::new(),
-            surfaces: Table::new(),
-            curves: Table::new(),
-            pcurves: Table::new(),
+            bodies: Table::with_most(most),
+            shells: Table::with_most(most),
+            faces: Table::with_most(most),
+            loops: Table::with_most(most),
+            wires: Table::with_most(most),
+            uses: Table::with_most(most),
+            edges: Table::with_most(most),
+            vertices: Table::with_most(most),
+            surfaces: Table::with_most(most),
+            curves: Table::with_most(most),
+            pcurves: Table::with_most(most),
+        }
+    }
+
+    /// What `entity`'s slot holds of its generation.
+    pub(crate) fn holds(&self, entity: EntityRef) -> Holds {
+        dispatch(entity.kind, Holding { model: self, entity }).map_or(Holds::Nothing, |(holds, _)| holds)
+    }
+
+    /// Whether `entity` is live.
+    pub(crate) fn is_live(&self, entity: EntityRef) -> bool {
+        self.holds(entity) == Holds::Live
+    }
+
+    /// The generation of the live entity of `entity`'s kind in its slot, if there is one.
+    pub(crate) fn live_generation(&self, entity: EntityRef) -> Option<u32> {
+        dispatch(entity.kind, Holding { model: self, entity }).and_then(|(_, live)| live)
+    }
+
+    /// Appends every entity that `entity`'s record links to, if it is live.
+    pub(crate) fn links(&self, entity: EntityRef, out: &mut Vec<EntityRef>) {
+        dispatch(entity.kind, Linked { model: self, entity, out });
+    }
+
+    /// The step that made `entity`, if it is live and of a kind that keeps one.
+    pub(crate) fn born(&self, entity: EntityRef) -> Option<Provenance> {
+        dispatch(entity.kind, Born { model: self, entity }).flatten()
+    }
+
+    /// Sets the step that made `entity`, if it is live and of a kind that keeps one.
+    pub(crate) fn set_born(&mut self, entity: EntityRef, born: Provenance) {
+        dispatch(entity.kind, SetBorn { model: self, entity, born });
+    }
+}
+
+/// The live record of `entity` in kind `K`'s table.
+fn live<K: Kind>(model: &Model, entity: EntityRef) -> Option<&K::Record> {
+    K::table(model).live(entity.slot, NonZeroU32::new(entity.generation)?)
+}
+
+/// Asks what an entity's slot holds, and the live generation there.
+struct Holding<'a> {
+    model: &'a Model,
+    entity: EntityRef,
+}
+
+impl Visit for Holding<'_> {
+    type Out = (Holds, Option<u32>);
+
+    fn visit<K: Kind>(self) -> Self::Out {
+        let table = K::table(self.model);
+        let found = table.slot(self.entity.slot).filter(|slot| slot.generation() == self.entity.generation);
+        let holds = found.map_or(Holds::Nothing, |slot| match slot.state() {
+            State::Free => Holds::Nothing,
+            State::Reserved => Holds::Reserved,
+            State::Live(_) => Holds::Live,
+        });
+        (holds, table.live_generation(self.entity.slot))
+    }
+}
+
+/// Lists what an entity's record links to.
+struct Linked<'a> {
+    model: &'a Model,
+    entity: EntityRef,
+    out: &'a mut Vec<EntityRef>,
+}
+
+impl Visit for Linked<'_> {
+    type Out = ();
+
+    fn visit<K: Kind>(self) {
+        if let Some(record) = live::<K>(self.model, self.entity) {
+            K::links(record, self.out);
+        }
+    }
+}
+
+/// Asks which step made an entity.
+struct Born<'a> {
+    model: &'a Model,
+    entity: EntityRef,
+}
+
+impl Visit for Born<'_> {
+    type Out = Option<Provenance>;
+
+    fn visit<K: Kind>(self) -> Option<Provenance> {
+        live::<K>(self.model, self.entity).and_then(K::born)
+    }
+}
+
+/// Sets which step made an entity.
+struct SetBorn<'a> {
+    model: &'a mut Model,
+    entity: EntityRef,
+    born: Provenance,
+}
+
+impl Visit for SetBorn<'_> {
+    type Out = ();
+
+    fn visit<K: Kind>(self) {
+        let generation = NonZeroU32::new(self.entity.generation);
+        if let Some(record) = generation.and_then(|g| K::table_mut(self.model).live_mut(self.entity.slot, g)) {
+            K::set_born(record, self.born);
         }
     }
 }
@@ -72,7 +188,7 @@ impl Snapshot {
     /// A model with nothing in it, built to `tolerance`.
     #[must_use]
     pub const fn empty(tolerance: Tolerance) -> Self {
-        Self { model: Model::empty(tolerance) }
+        Self { model: Model::empty(tolerance, u32::MAX) }
     }
 
     /// The tolerance it is built to.
@@ -112,21 +228,11 @@ impl Snapshot {
 #[cfg(test)]
 mod tests {
     use occam_report::{DisplayUnits, EntityKind};
-    use occam_units::{Angle, Length, Point};
 
     use super::*;
     use crate::kind::sealed::Sealed;
     use crate::kind::{Edge, Face, Vertex};
-    use crate::records::VertexRecord;
-
-    pub(crate) fn tolerance() -> Tolerance {
-        Tolerance::new(Length::from_millimetres(1e-7), Angle::from_radians(1e-9)).unwrap()
-    }
-
-    fn vertex(x: f64) -> VertexRecord {
-        let at = |c: f64| Length::from_millimetres(c);
-        VertexRecord { point: Point::new(at(x), at(0.0), at(0.0)), radius: at(0.0), star: None }
-    }
+    use crate::testing::{tolerance, vertex};
 
     /// Writes a vertex as an edit will, straight into the table.
     fn add(snapshot: &mut Snapshot, x: f64) -> Id<Vertex> {

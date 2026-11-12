@@ -76,6 +76,8 @@ text_enum! {
         NotConverged = "measure.not-converged",
         /// An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one.
         StaleId = "topo.stale-id",
+        /// An edit would leave the model breaking an invariant of the B-rep, so it was not committed.
+        InvariantFailed = "check.invariant-failed",
     }
 }
 
@@ -142,7 +144,8 @@ impl Code {
             | Self::SingularPoint
             | Self::JoinBelowContinuity
             | Self::NotConverged
-            | Self::StaleId => Severity::Error,
+            | Self::StaleId
+            | Self::InvariantFailed => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -192,6 +195,9 @@ impl Code {
             Self::NotConverged => "A measure did not reach the accuracy asked within the work it is allowed.",
             Self::StaleId => {
                 "An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one."
+            }
+            Self::InvariantFailed => {
+                "An edit would leave the model breaking an invariant of the B-rep, so it was not committed."
             }
         }
     }
@@ -250,6 +256,9 @@ impl Code {
                 "No live entity of the kind wanted has this slot and generation: the slot holds generation {live} now, \
                  or nothing if that is 0."
             }
+            Self::InvariantFailed => {
+                "The edit would break the invariant given as the reason, at the entities named, so the model is unchanged."
+            }
         }
     }
 
@@ -280,7 +289,8 @@ impl Code {
             | Self::SingularPoint
             | Self::JoinBelowContinuity
             | Self::NotConverged
-            | Self::StaleId => &[],
+            | Self::StaleId
+            | Self::InvariantFailed => &[],
         }
     }
 }
@@ -600,6 +610,14 @@ mod tests {
                 "severity": "error",
                 "summary": "An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one.",
                 "template": "No live entity of the kind wanted has this slot and generation: the slot holds generation {live} now, or nothing if that is 0.",
+                "remedies": [],
+            },
+            {
+                "name": "InvariantFailed",
+                "code": "check.invariant-failed",
+                "severity": "error",
+                "summary": "An edit would leave the model breaking an invariant of the B-rep, so it was not committed.",
+                "template": "The edit would break the invariant given as the reason, at the entities named, so the model is unchanged.",
                 "remedies": [],
             },
         ])

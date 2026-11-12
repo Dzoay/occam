@@ -3,7 +3,7 @@
 //! `geometry.freeze`. What is left is O26's descriptions and the codes and remedies of the milestones to come. It still
 //! depends on nothing of occam's: a description is a form name and named values, never a geometry type.
 
-use occam_report::{EntityRef, NamedValue};
+use occam_report::{EntityRef, NamedValue, StepRole};
 use serde::{Deserialize, Serialize};
 
 /// `occam_report`'s private `text_enum!`, repeated so that the sketch can declare closed enums the same way.
@@ -29,17 +29,6 @@ macro_rules! text_enum {
 }
 
 text_enum! {
-    /// NEW. An entity's part in the step that made it (S6: "the operation and operand it came from").
-    StepRole {
-        Profile = "profile",
-        Target = "target",
-        Tool = "tool",
-        Input = "input",
-        Made = "made",
-    }
-}
-
-text_enum! {
     /// NEW codes of the milestones to come, joining the closed `Code` with wording and followed-remedy tests (L2).
     NewCode {
         InvalidParameter = "input.invalid-parameter",
@@ -51,7 +40,6 @@ text_enum! {
         EmptyResult = "boolean.empty-result",
         RadiusTooLarge = "blend.radius-too-large",
         FaceFailed = "mesh.face-failed",
-        InvariantFailed = "check.invariant-failed",
         Decisions = "measure.decisions",
     }
 }

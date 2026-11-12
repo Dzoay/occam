@@ -8,8 +8,8 @@ use core::num::NonZeroU32;
 use occam_report::{EntityKind, EntityRef};
 
 use crate::records::{
-    BodyRecord, CurveRecord, EdgeRecord, EdgeUseRecord, FaceRecord, LoopRecord, ParamCurveRecord, ShellRecord,
-    SurfaceRecord, VertexRecord, WireRecord,
+    BodyRecord, CurveRecord, EdgeRecord, EdgeUseRecord, FaceRecord, LoopRecord, ParamCurveRecord, Provenance,
+    ShellRecord, SurfaceRecord, VertexRecord, WireRecord,
 };
 use crate::snapshot::Model;
 use crate::table::Table;
@@ -18,8 +18,12 @@ pub(crate) mod sealed {
     use occam_report::EntityRef;
 
     use super::Kind;
+    use crate::records::Provenance;
     use crate::snapshot::Model;
     use crate::table::Table;
+
+    /// What only this crate's records are.
+    pub trait Written {}
 
     /// What only this crate may do with a kind: reach its table, which is how the edit stays the one way to change a
     /// model, and list the ids its records link to.
@@ -38,7 +42,24 @@ pub(crate) mod sealed {
         fn links(record: &<Self as Kind>::Record, out: &mut Vec<EntityRef>)
         where
             Self: Kind;
+
+        /// The step that made the entity, for the kinds that keep one.
+        fn born(record: &<Self as Kind>::Record) -> Option<Provenance>
+        where
+            Self: Kind;
+
+        /// Sets the step that made the entity, for the kinds that keep one.
+        fn set_born(record: &mut <Self as Kind>::Record, born: Provenance)
+        where
+            Self: Kind;
     }
+}
+
+/// A record an edit writes, which names its kind, so that `add` needs no kind spelled out. Only this crate's records
+/// implement it.
+pub trait Record: sealed::Written + Clone + Debug + PartialEq + Send + Sync + 'static {
+    /// The kind of entity it is the record of.
+    type Kind: Kind<Record = Self>;
 }
 
 /// An entity kind as a type. Only this crate's kinds implement it.
@@ -47,7 +68,7 @@ pub trait Kind: sealed::Sealed + Copy + Eq + Ord + Debug + Send + Sync + 'static
     const ENTITY: EntityKind;
 
     /// What an edit writes for an entity of this kind.
-    type Record: Clone + Debug + PartialEq + Send + Sync + 'static;
+    type Record: Record<Kind = Self>;
 }
 
 /// An entity: its slot in its kind's table and the generation of that slot (S3-P3), with its kind as the type. The
@@ -111,11 +132,25 @@ macro_rules! kinds {
                 fn links(record: &$record, out: &mut Vec<EntityRef>) {
                     record.links(out);
                 }
+
+                fn born(record: &$record) -> Option<Provenance> {
+                    record.born()
+                }
+
+                fn set_born(record: &mut $record, born: Provenance) {
+                    record.set_born(born);
+                }
             }
 
             impl Kind for $marker {
                 const ENTITY: EntityKind = EntityKind::$entity;
                 type Record = $record;
+            }
+
+            impl sealed::Written for $record {}
+
+            impl Record for $record {
+                type Kind = $marker;
             }
         )*
     };
@@ -146,6 +181,33 @@ kinds! {
     ParamCurveGeom => ParamCurve, ParamCurveRecord, pcurves;
 }
 
+/// Something to do with whichever kind an [`EntityKind`] names.
+pub(crate) trait Visit {
+    /// What it gives.
+    type Out;
+
+    /// Does it with kind `K`.
+    fn visit<K: Kind>(self) -> Self::Out;
+}
+
+/// Does `visit` with the kind `kind` names, or gives `None` for a kind no table holds.
+pub(crate) fn dispatch<V: Visit>(kind: EntityKind, visit: V) -> Option<V::Out> {
+    Some(match kind {
+        EntityKind::Body => visit.visit::<Body>(),
+        EntityKind::Shell => visit.visit::<Shell>(),
+        EntityKind::Face => visit.visit::<Face>(),
+        EntityKind::Loop => visit.visit::<Loop>(),
+        EntityKind::Wire => visit.visit::<Wire>(),
+        EntityKind::EdgeUse => visit.visit::<EdgeUse>(),
+        EntityKind::Edge => visit.visit::<Edge>(),
+        EntityKind::Vertex => visit.visit::<Vertex>(),
+        EntityKind::Surface => visit.visit::<SurfaceGeom>(),
+        EntityKind::Curve => visit.visit::<CurveGeom>(),
+        EntityKind::ParamCurve => visit.visit::<ParamCurveGeom>(),
+        EntityKind::Model | EntityKind::Section | EntityKind::Region => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,6 +223,24 @@ mod tests {
         assert_eq!(id::<ParamCurveGeom>(3, 2).entity().text(), "param-curve:3/2");
         assert_eq!(format!("{:?}", id::<Face>(12, 3)), "face:12/3");
         assert_eq!((id::<Vertex>(5, 2).slot(), id::<Vertex>(5, 2).generation().get()), (5, 2));
+    }
+
+    struct Named;
+
+    impl Visit for Named {
+        type Out = EntityKind;
+
+        fn visit<K: Kind>(self) -> EntityKind {
+            K::ENTITY
+        }
+    }
+
+    #[test]
+    fn every_kind_a_table_holds_is_reached_by_its_entity_kind() {
+        for kind in EntityKind::ALL.iter().copied() {
+            let held = !matches!(kind, EntityKind::Model | EntityKind::Section | EntityKind::Region);
+            assert_eq!(dispatch(kind, Named), held.then_some(kind), "{kind:?}");
+        }
     }
 
     #[test]

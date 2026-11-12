@@ -38,6 +38,12 @@ text_enum! {
         BudgetSpent = "budget-spent",
         /// A parameter is outside where a curve or surface is defined.
         OutsideDomain = "outside-domain",
+        /// An edit reserved an id and never gave it a record.
+        ReservedNotSet = "reserved-not-set",
+        /// A record links to an entity that is not live.
+        DeadLink = "dead-link",
+        /// A table of the model has no slot left to give.
+        TableFull = "table-full",
     }
 }
 
