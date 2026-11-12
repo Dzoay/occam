@@ -28,8 +28,10 @@ exclude_globs = [
 exclude_re = [
     # Where the order is the degree, `order` and `p` are the same number, so `<=` picks the same one.
     "replace < with <= in rows_len$",
-    # The lower or higher of numbers that are equal is either: a tie gives the same number. The lower and higher of
-    # two parameters, a value already at an end of its window, and the largest coordinate of a box.
+    # The lower or higher of numbers that are equal is either: a tie gives the same number. A triangle's span, the
+    # lower and higher of two parameters, a value already at an end of its window, and the largest coordinate of a box.
+    "replace < with <= in Facet::span$",
+    "replace > with >= in Facet::span$",
     "replace < with <= in ordered$",
     "replace < with <= in inside$",
     "replace > with >= in padded$",
@@ -39,6 +41,7 @@ exclude_re = [
     # A point as near as the best found is as good a foot: taking it or keeping the best gives the same distance.
     "replace < with <= in nearer$",
     "foot\\.rs:\\d+:\\d+: replace < with <= in foot$",
+    "replace < with <= in <impl Parametric for MeshSurface>::invert$",
     # A lane beyond a value's lanes is never read: evaluating it or not changes only the speed.
     "replace match guard k < R::LANES with true in",
     "replace < with <= in [A-Za-z]+::rungs$",

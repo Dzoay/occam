@@ -23,6 +23,7 @@ trimmed by parameter; where no formula gives a foot, a search shared by every fa
 |---|---|
 | `eval_point`, `eval_first`, `eval_second` | The hot paths. Nothing beyond the order asked for is computed; an undefined parameter gives NaN |
 | `derivatives(uv, order)` | Every partial derivative to any order, exact where the family can be (PARITY 2.1, 2.2, O21) |
+| `highest_derivative` | `None` for every order; a mesh's is 1. An order above it is refused, and its rungs are NaN |
 | `eval_batch(uv, order, out, scratch, level)` | One surface at many points. The caller owns outputs and scratch, so nothing allocates once they have grown. A bit per point in `out`: defined or not |
 | `invert`, `closest` | A foot's parameters; the full closest-point solve, by default the point at `invert`'s parameters. Both report where the solver stopped |
 | `domain`, `bounds(patch)`, `degeneracies` | Each parameter's kind; a conservative box; poles and apexes, declared at construction |
@@ -44,6 +45,14 @@ span's knots and poles are read once for every lane. Where a chunk of points cro
 alone, so every lane keeps the bits of a single call. On baseline x86-64 this takes 49% of width 1's instructions,
 where S4, gathering a span per lane, found no gain. The basis's arrays are on the stack, sized by the degree that
 needs them, up to degree 25.
+
+## Mesh-backed surfaces
+
+Each vertex has a point and a place in the parameters, as in S4. A parameter in a triangle gives that triangle's
+point, so the surface is continuous and has its first derivatives alone, and the suite stops there for it. A parameter
+in no triangle is a hole, undefined, and a batch says which. A grid over the parameters finds the triangle, and two
+triangles on an edge decide its side with one computation, so no point falls between them. The foot is the nearest
+point of any triangle, by a scan, as S4's was. Lanes run one at a time, as S4 measured no gain.
 
 ## No cross-family store
 

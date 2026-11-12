@@ -13,7 +13,7 @@ use occam_math::canonical_bits;
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tangent, Tolerance, Vec3, Vector, World};
 
 pub(crate) use curves::{curve, presented_curve};
-pub(crate) use seeded::{WrongSecondCurve, wrong_form, wrong_second};
+pub(crate) use seeded::{WrongSecondCurve, wrong_first, wrong_form, wrong_second};
 pub(crate) use surfaces::{presented_surface, surface};
 
 /// What the suite checks.

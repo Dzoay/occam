@@ -1,6 +1,6 @@
 //! Source: original
 //! Families with a seeded fault, which the suite must catch: each passes everything through to a real family except a
-//! second derivative wrong by a thousandth, or, for a surface, the form it presents.
+//! second derivative wrong by a thousandth, or, for a surface, a first derivative wrong as much or the form it presents.
 
 use occam_math::Real;
 use occam_report::Report;
@@ -18,6 +18,8 @@ const SEED: Vec3 = Vec3::new(1e-3, 0.0, 0.0);
 /// What is wrong with a [`Seeded`] surface.
 #[derive(Clone, Copy)]
 enum Fault {
+    /// Its first derivative in `u`, from `eval_first` and `eval_second` alone, is wrong by [`SEED`].
+    First,
     /// Its second derivative in `u`, from `eval_second` alone, is wrong by [`SEED`].
     Second,
     /// It presents this form rather than its own.
@@ -28,6 +30,11 @@ enum Fault {
 pub(crate) struct Seeded<S> {
     surface: S,
     fault: Fault,
+}
+
+/// `surface` with a first derivative in `u`, from `eval_first` and `eval_second` alone, that is wrong.
+pub(crate) const fn wrong_first<S>(surface: S) -> Seeded<S> {
+    Seeded { surface, fault: Fault::First }
 }
 
 /// `surface` with a second derivative in `u`, from `eval_second` alone, that is wrong.
@@ -46,12 +53,19 @@ impl<S: Parametric> Parametric for Seeded<S> {
     }
 
     fn eval_first<R: Real>(&self, uv: UvPoint<R>) -> Jet1<R> {
-        self.surface.eval_first(uv)
+        let jet = self.surface.eval_first(uv);
+        match self.fault {
+            Fault::First => Jet1 { du: Tangent::new(jet.du.rate() + splat(SEED)), ..jet },
+            Fault::Second | Fault::Form(_) => jet,
+        }
     }
 
     fn eval_second<R: Real>(&self, uv: UvPoint<R>) -> Jet2<R> {
         let jet = self.surface.eval_second(uv);
         match self.fault {
+            Fault::First => {
+                Jet2 { first: Jet1 { du: Tangent::new(jet.first.du.rate() + splat(SEED)), ..jet.first }, ..jet }
+            }
             Fault::Second => Jet2 { duu: Tangent::new(jet.duu.rate() + splat(SEED)), ..jet },
             Fault::Form(_) => jet,
         }
@@ -69,6 +83,10 @@ impl<S: Parametric> Parametric for Seeded<S> {
 
     fn domain(&self) -> Domain {
         Parametric::domain(&self.surface)
+    }
+
+    fn highest_derivative(&self) -> Option<u8> {
+        Parametric::highest_derivative(&self.surface)
     }
 
     fn bounds(&self, patch: UvBox) -> Bounds {
@@ -114,7 +132,7 @@ impl<S: Parametric> Parametric for Seeded<S> {
     fn analytic(&self, tol: Tolerance) -> Option<Analytic> {
         match self.fault {
             Fault::Form(form) => Some(form),
-            Fault::Second => Parametric::analytic(&self.surface, tol),
+            Fault::First | Fault::Second => Parametric::analytic(&self.surface, tol),
         }
     }
 }

@@ -3,7 +3,7 @@
 //! which everything else calls. One blanket impl joins them, and checks each call on the way.
 
 use occam_math::{Level, Real};
-use occam_report::Report;
+use occam_report::{Code, Fault, NamedValue, Quantity, Report};
 use occam_units::{Bounds, Length, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
@@ -50,7 +50,8 @@ pub trait Parametric: Sized + Send + Sync + 'static {
 
     /// Appends every partial derivative of total degree 1 to `order` at `uv`, which is inside the domain: by degree,
     /// and within a degree from all `u` to all `v`, so `du, dv, duu, duv, dvv, duuu` and on. Exact where the family can
-    /// be. PARITY 2.1 and 2.2 ask for any order (O21); the hot paths use the `eval_*` rungs.
+    /// be. PARITY 2.1 and 2.2 ask for any order (O21); the hot paths use the `eval_*` rungs. `order` is no higher than
+    /// [`Parametric::highest_derivative`], which [`Surface::derivatives`] checks.
     ///
     /// # Errors
     ///
@@ -72,6 +73,13 @@ pub trait Parametric: Sized + Send + Sync + 'static {
 
     /// Where it is defined.
     fn domain(&self) -> Domain;
+
+    /// The highest order of partial derivative it has, or `None` where it has every order, as an analytic or spline
+    /// family does. A mesh has the first alone, its triangle's (S4): `derivatives` refuses an order above this, and
+    /// `eval_second` gives NaN for every derivative above it, so a batch to that order is undefined.
+    fn highest_derivative(&self) -> Option<u8> {
+        None
+    }
 
     /// A box holding the surface over `patch`, rounding included.
     fn bounds(&self, patch: UvBox) -> Bounds;
@@ -162,7 +170,8 @@ pub trait Surface: Send + Sync {
     ///
     /// # Errors
     ///
-    /// `geom.undefined-parameter` outside the domain, and what [`Parametric::derivatives`] reports.
+    /// `geom.undefined-parameter` outside the domain, `geom.no-derivative` for an order above
+    /// [`Surface::highest_derivative`], and what [`Parametric::derivatives`] reports.
     fn derivatives(
         &self,
         uv: UvPoint,
@@ -202,6 +211,9 @@ pub trait Surface: Send + Sync {
 
     /// As [`Parametric::domain`].
     fn domain(&self) -> Domain;
+
+    /// As [`Parametric::highest_derivative`].
+    fn highest_derivative(&self) -> Option<u8>;
 
     /// As [`Parametric::bounds`].
     fn bounds(&self, patch: UvBox) -> Bounds;
@@ -254,6 +266,11 @@ impl<S: Parametric> Surface for S {
     ) -> Result<(), Report> {
         out.clear();
         Parametric::domain(self).check(uv)?;
+        if let Some(highest) = Parametric::highest_derivative(self).filter(|highest| order > *highest) {
+            return Err(Report::new(Code::NoDerivative, Fault::InvalidInput)
+                .with_value(NamedValue::new("order", Quantity::Count, f64::from(order)))
+                .with_value(NamedValue::new("highest", Quantity::Count, f64::from(highest))));
+        }
         Parametric::derivatives(self, uv, order, out, scratch)
     }
 
@@ -285,6 +302,10 @@ impl<S: Parametric> Surface for S {
 
     fn domain(&self) -> Domain {
         Parametric::domain(self)
+    }
+
+    fn highest_derivative(&self) -> Option<u8> {
+        Parametric::highest_derivative(self)
     }
 
     fn bounds(&self, patch: UvBox) -> Bounds {

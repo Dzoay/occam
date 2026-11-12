@@ -53,6 +53,11 @@ text_enum! {
         KnotsNotValid = "geom.knots-not-valid",
         /// A rational curve or surface was given a weight that is not a finite number greater than zero.
         WeightNotPositive = "geom.weight-not-positive",
+        /// A surface was asked for a derivative of an order it does not have, as a mesh has none above the first.
+        NoDerivative = "geom.no-derivative",
+        /// A mesh's triangle names a vertex it does not have, does not run anticlockwise with some area in the surface's
+        /// parameters, or overlaps another there.
+        TriangleNotValid = "geom.triangle-not-valid",
     }
 }
 
@@ -109,7 +114,9 @@ impl Code {
             | Self::OutOfRange
             | Self::WrongCount
             | Self::KnotsNotValid
-            | Self::WeightNotPositive => Severity::Error,
+            | Self::WeightNotPositive
+            | Self::NoDerivative
+            | Self::TriangleNotValid => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -137,6 +144,10 @@ impl Code {
             }
             Self::WeightNotPositive => {
                 "A rational curve or surface was given a weight that is not a finite number greater than zero."
+            }
+            Self::NoDerivative => "A surface was asked for a derivative of an order it does not have.",
+            Self::TriangleNotValid => {
+                "A mesh's triangle must name three of its vertices, run anticlockwise with some area in the parameters, and overlap no other there."
             }
         }
     }
@@ -168,6 +179,12 @@ impl Code {
                 "Knot {index}, {knot}, is out of order or repeated more often than the degree allows."
             }
             Self::WeightNotPositive => "Weight {index} is {weight}, which is not a finite number greater than zero.",
+            Self::NoDerivative => {
+                "A derivative of order {order} was asked for, and this surface has them to order {highest}."
+            }
+            Self::TriangleNotValid => {
+                "Triangle {index} names a vertex there is not, does not run anticlockwise with some area in the parameters, or overlaps another there."
+            }
         }
     }
 
@@ -188,7 +205,9 @@ impl Code {
             | Self::OutOfRange
             | Self::WrongCount
             | Self::KnotsNotValid
-            | Self::WeightNotPositive => &[],
+            | Self::WeightNotPositive
+            | Self::NoDerivative
+            | Self::TriangleNotValid => &[],
         }
     }
 }
@@ -386,6 +405,11 @@ mod tests {
                 "template": "The value given, {value}, is not strictly between {low} and {high}.",
                 "remedies": [],
             },
+        ])
+    }
+
+    fn spline_and_mesh_codes() -> Value {
+        json!([
             {
                 "name": "WrongCount",
                 "code": "geom.wrong-count",
@@ -408,6 +432,22 @@ mod tests {
                 "severity": "error",
                 "summary": "A rational curve or surface was given a weight that is not a finite number greater than zero.",
                 "template": "Weight {index} is {weight}, which is not a finite number greater than zero.",
+                "remedies": [],
+            },
+            {
+                "name": "NoDerivative",
+                "code": "geom.no-derivative",
+                "severity": "error",
+                "summary": "A surface was asked for a derivative of an order it does not have.",
+                "template": "A derivative of order {order} was asked for, and this surface has them to order {highest}.",
+                "remedies": [],
+            },
+            {
+                "name": "TriangleNotValid",
+                "code": "geom.triangle-not-valid",
+                "severity": "error",
+                "summary": "A mesh's triangle must name three of its vertices, run anticlockwise with some area in the parameters, and overlap no other there.",
+                "template": "Triangle {index} names a vertex there is not, does not run anticlockwise with some area in the parameters, or overlaps another there.",
                 "remedies": [],
             },
         ])
@@ -439,11 +479,12 @@ mod tests {
     #[test]
     fn the_catalogue_lists_every_code_and_remedy() {
         let value: Value = serde_json::from_str(&catalogue_json().unwrap()).unwrap();
-        let codes: Vec<Value> = [report_and_units_codes(), measure_command_line_and_exec_codes(), geom_codes()]
-            .into_iter()
-            .filter_map(|rows| rows.as_array().cloned())
-            .flatten()
-            .collect();
+        let codes: Vec<Value> =
+            [report_and_units_codes(), measure_command_line_and_exec_codes(), geom_codes(), spline_and_mesh_codes()]
+                .into_iter()
+                .filter_map(|rows| rows.as_array().cloned())
+                .flatten()
+                .collect();
         assert_eq!(value, json!({"schema": 2, "codes": codes, "remedies": remedies()}));
     }
 

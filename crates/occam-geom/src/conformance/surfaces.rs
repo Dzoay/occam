@@ -41,9 +41,22 @@ fn samples(window: UvBox, n: u32) -> Vec<UvPoint> {
     fractions(n).flat_map(|fu| fractions(n).map(move |fv| across(window, fu, fv))).collect()
 }
 
+/// The highest order of derivative the suite checks of `s`: the third, or below it the highest `s` has.
+fn top_order(s: &dyn Surface) -> u8 {
+    s.highest_derivative().map_or(3, |highest| highest.min(3))
+}
+
+/// How many partial derivatives there are of total degree 1 to `order`.
+fn partials(order: u8) -> usize {
+    let n = usize::from(order);
+    (n.saturating_add(1).saturating_mul(n.saturating_add(2)) >> 1).saturating_sub(1)
+}
+
+/// The rungs agree, `derivatives` agrees with them to the highest order checked, and every rung above the surface's
+/// highest derivative is NaN, as an order it does not have is refused.
 fn orders(s: &dyn Surface, window: UvBox, found: &mut Findings) {
-    let mut scratch = Scratch::default();
-    let (mut two, mut three) = (vec![junk()], vec![junk()]);
+    let (top, mut scratch) = (top_order(s), Scratch::default());
+    let (mut lower, mut upper) = (vec![junk()], vec![junk()]);
     for uv in samples(window, 5) {
         let (p, j1, j2) = (s.point(uv), s.first(uv), s.second(uv));
         let points = [p, j1.point, j2.first.point].map(|q| bits(q.to_vec3()));
@@ -51,15 +64,27 @@ fn orders(s: &dyn Surface, window: UvBox, found: &mut Findings) {
             && points[0] == points[2]
             && rates(&[j1.du, j1.dv]) == rates(&[j2.first.du, j2.first.dv]);
         found.expect(Check::Orders, rungs, || format!("the rungs disagree at {uv:?}"));
-        let asked =
-            s.derivatives(uv, 2, &mut two, &mut scratch).and_then(|()| s.derivatives(uv, 3, &mut three, &mut scratch));
+        let asked = s
+            .derivatives(uv, top.min(2), &mut lower, &mut scratch)
+            .and_then(|()| s.derivatives(uv, top, &mut upper, &mut scratch));
         found.expect(Check::Orders, asked.is_ok(), || format!("no derivatives at {uv:?}: {asked:?}"));
-        let want = rates(&[j2.first.du, j2.first.dv, j2.duu, j2.duv, j2.dvv]);
-        let agree = rates(&two) == want && three.len() == 9 && three.get(..5).map(rates) == Some(want);
+        let all = [j2.first.du, j2.first.dv, j2.duu, j2.duv, j2.dvv];
+        let (want, above) = all.split_at(partials(top.min(2)));
+        let want = rates(want);
+        let agree =
+            rates(&lower) == want && upper.len() == partials(top) && upper.get(..want.len()).map(rates) == Some(want);
         found.expect(Check::Orders, agree, || format!("derivatives disagree with the rungs at {uv:?}"));
+        let missing = above.iter().all(|t| [t.rate().x, t.rate().y, t.rate().z].iter().all(|x| x.is_nan()));
+        found.expect(Check::Orders, missing, || format!("a rung above order {top} is a number at {uv:?}"));
     }
-    let outside = s.derivatives(UvPoint::new(f64::NAN, window.lo.v()), 1, &mut two, &mut scratch);
-    let refused = outside.is_err_and(|report| report.code == Code::UndefinedParameter) && two.is_empty();
+    if top < 3 {
+        let next = top.saturating_add(1);
+        let beyond = s.derivatives(samples(window, 1)[0], next, &mut upper, &mut scratch);
+        let refused = beyond.is_err_and(|report| report.code == Code::NoDerivative) && upper.is_empty();
+        found.expect(Check::Orders, refused, || format!("order {next} was not refused"));
+    }
+    let outside = s.derivatives(UvPoint::new(f64::NAN, window.lo.v()), 1, &mut lower, &mut scratch);
+    let refused = outside.is_err_and(|report| report.code == Code::UndefinedParameter) && lower.is_empty();
     found.expect(Check::Orders, refused, || "a parameter that is not finite was not refused".to_string());
 }
 
@@ -125,7 +150,10 @@ fn nth(s: &dyn Surface, at: UvPoint, order: u8, index: usize) -> Vec3 {
     }
 }
 
+/// Each derivative, to the highest order checked, against central differences of the order below. A surface with only
+/// the first, as a mesh is continuous and no more, stops there (S4).
 fn differences(s: &dyn Surface, window: UvBox, found: &mut Findings) {
+    let top = top_order(s);
     let (hu, hv) = (1e-5 * (window.hi.u() - window.lo.u()), 1e-5 * (window.hi.v() - window.lo.v()));
     for uv in samples(window, 4) {
         let step = |du: f64, dv: f64| UvPoint::new(uv.u() + du, uv.v() + dv);
@@ -137,18 +165,18 @@ fn differences(s: &dyn Surface, window: UvBox, found: &mut Findings) {
         let jet = s.second(uv);
         let third: Vec<Vec3> = (5..9).map(|k| nth(s, uv, 3, k)).collect();
         let pairs = [
-            ("du", jet.first.du.rate(), central(&|at| s.point(at).to_vec3(), true)),
-            ("dv", jet.first.dv.rate(), central(&|at| s.point(at).to_vec3(), false)),
-            ("duu", jet.duu.rate(), central(&|at| s.first(at).du.rate(), true)),
-            ("duv", jet.duv.rate(), central(&|at| s.first(at).du.rate(), false)),
-            ("dvu", jet.duv.rate(), central(&|at| s.first(at).dv.rate(), true)),
-            ("dvv", jet.dvv.rate(), central(&|at| s.first(at).dv.rate(), false)),
-            ("duuu", third[0], central(&|at| nth(s, at, 2, 2), true)),
-            ("duuv", third[1], central(&|at| nth(s, at, 2, 2), false)),
-            ("duvv", third[2], central(&|at| nth(s, at, 2, 4), true)),
-            ("dvvv", third[3], central(&|at| nth(s, at, 2, 4), false)),
+            ("du", 1, jet.first.du.rate(), central(&|at| s.point(at).to_vec3(), true)),
+            ("dv", 1, jet.first.dv.rate(), central(&|at| s.point(at).to_vec3(), false)),
+            ("duu", 2, jet.duu.rate(), central(&|at| s.first(at).du.rate(), true)),
+            ("duv", 2, jet.duv.rate(), central(&|at| s.first(at).du.rate(), false)),
+            ("dvu", 2, jet.duv.rate(), central(&|at| s.first(at).dv.rate(), true)),
+            ("dvv", 2, jet.dvv.rate(), central(&|at| s.first(at).dv.rate(), false)),
+            ("duuu", 3, third[0], central(&|at| nth(s, at, 2, 2), true)),
+            ("duuv", 3, third[1], central(&|at| nth(s, at, 2, 2), false)),
+            ("duvv", 3, third[2], central(&|at| nth(s, at, 2, 4), true)),
+            ("dvvv", 3, third[3], central(&|at| nth(s, at, 2, 4), false)),
         ];
-        for (name, got, want) in pairs {
+        for (name, _, got, want) in pairs.into_iter().filter(|pair| pair.1 <= top) {
             found.expect(Check::Differences, close(got, want), || format!("{name} at {uv:?} is {got:?}, not {want:?}"));
         }
     }

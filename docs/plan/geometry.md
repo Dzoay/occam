@@ -26,13 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.mesh`
-
-Mesh-backed surfaces: a triangle set that answers the same questions, its derivatives only where they exist, and
-`triangles` as its presentation.
-
-*Failing test first:* the suite over a mesh-backed surface, finite differences stopping at the first derivative (S4).
-
 ### `geometry.swept`
 
 Surfaces of revolution and of linear extrusion, of any curve (row 2.2).

@@ -204,6 +204,11 @@ pub trait Parametric: Sized + Send + Sync + 'static {
 
     fn domain(&self) -> Domain;
 
+    /// `None` where every order exists; a mesh's is 1, and `derivatives` refuses an order above it.
+    fn highest_derivative(&self) -> Option<u8> {
+        None
+    }
+
     /// Conservative, rounding included.
     fn bounds(&self, patch: UvBox) -> Bounds;
 
@@ -273,6 +278,7 @@ pub trait Surface: Send + Sync {
 
     fn eval_batch(&self, uv: &[UvPoint], order: Order, out: &mut Jets, scratch: &mut Scratch, level: Level) -> Defined;
     fn domain(&self) -> Domain;
+    fn highest_derivative(&self) -> Option<u8>;
     fn bounds(&self, patch: UvBox) -> Bounds;
 
     /// # Errors
@@ -337,6 +343,10 @@ impl<S: Parametric> Surface for S {
 
     fn domain(&self) -> Domain {
         Parametric::domain(self)
+    }
+
+    fn highest_derivative(&self) -> Option<u8> {
+        Parametric::highest_derivative(self)
     }
 
     fn bounds(&self, patch: UvBox) -> Bounds {
