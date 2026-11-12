@@ -7,13 +7,12 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+occam-geom = { path = "../occam-geom" }
+occam-math = { path = "../occam-math" }
 occam-report = { path = "../occam-report" }
 occam-topo = { path = "../occam-topo" }
 occam-units = { path = "../occam-units" }
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
-
-[dev-dependencies]
-occam-math = { path = "../occam-math" }
 
 [lints]
 workspace = true

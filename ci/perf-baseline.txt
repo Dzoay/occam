@@ -3,6 +3,7 @@
 # static x86_64-unknown-linux-musl build, so that no machine's libc or CPU features change them. rustc 1.99.1, gungraun 0.20.0.
 angles_w1 657175
 angles_w4 480901
+construct_wire_face 10179446
 filter_w1 971612
 filter_w4 468829
 masks_w1 123749
@@ -11,14 +12,14 @@ maths_lanes2 106528544
 maths_lanes4 87330348
 maths_lanes8 81902677
 maths_scalar 108976059
-measure_distance 3031
+measure_distance 3136
 offset_curves 978195
 offset_surfaces 3796686
 sines_w1 775021
 sines_w4 556907
 splines_w1 12732590
 splines_w4 6097930
-topo_commit_n100350 2016282
-topo_commit_n1056 1853154
-topo_edit 1966334
+topo_commit_n100350 2015485
+topo_commit_n1056 1852357
+topo_edit 1965540
 topo_snapshot 3530

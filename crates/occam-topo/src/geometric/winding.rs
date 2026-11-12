@@ -23,7 +23,8 @@ impl Predicate<6> for Orientation {
 
 /// The winding number of the closed chain `segments` about `q`, or `None` where `q` lies on a segment that crosses
 /// its line, or a side cannot be decided exactly.
-pub(super) fn number(segments: &[[UvPoint; 2]], q: UvPoint) -> Option<i32> {
+#[must_use]
+pub fn number(segments: &[[UvPoint; 2]], q: UvPoint) -> Option<i32> {
     let (mut crossing, mut upward) = (Vec::new(), Vec::new());
     for [a, b] in segments {
         let up = a.v() <= q.v() && q.v() < b.v();

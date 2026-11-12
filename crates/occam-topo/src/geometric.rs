@@ -17,6 +17,10 @@ mod refused;
 mod trace;
 mod winding;
 
+/// The winding number the checks use to decide that a loop's witness is strictly inside it, so that what builds a face
+/// finds witnesses by the same count. See [`winding::number`].
+pub use winding::number as winding_number;
+
 use core::num::NonZeroU32;
 use std::collections::BTreeSet;
 

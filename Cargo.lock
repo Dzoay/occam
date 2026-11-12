@@ -217,6 +217,7 @@ dependencies = [
 name = "occam-ops"
 version = "0.0.0"
 dependencies = [
+ "occam-geom",
  "occam-math",
  "occam-report",
  "occam-topo",

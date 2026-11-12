@@ -47,6 +47,7 @@ mod whole;
 pub mod workloads;
 
 pub use edit::{Changes, Derivation, Edit, Lineage};
+pub use geometric::winding_number;
 pub use kind::{
     Body, CurveGeom, Edge, EdgeUse, Face, Id, Kind, Loop, ParamCurveGeom, Record, Shell, SurfaceGeom, Vertex, Wire,
 };

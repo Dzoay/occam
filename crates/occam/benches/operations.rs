@@ -34,6 +34,23 @@ fn measure_distance() -> f64 {
     distance(black_box(model()), black_box(from), black_box(to), black_box(mm(0.01))).unwrap().value.millimetres()
 }
 
+/// The plan's test face for wires and faces: a rectangle 40 by 20 with a round hole of radius 3, as a request.
+const WIRE_FACE: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+    {"op": "wire", "label": "outline", "points": [[0, 0, 0], [40, 0, 0], [40, 20, 0], [0, 20, 0]], "closed": true},
+    {"op": "wire", "label": "hole", "edges": [{"circle": {"centre": [20, 10, 0], "radius": 3, "normal": [0, 0, 1]}}]},
+    {"op": "face", "outer": "outline", "holes": ["hole"]}
+]}"#;
+
+// The request read and checked, its two wires and its face made, and each step committed, which checks it. What it made
+// is leaked, so that the count is the operation's and not the freeing of the model.
+#[library_benchmark]
+fn construct_wire_face() -> bool {
+    let ran = occam::run(None, black_box(WIRE_FACE));
+    let built = ran.failed.is_none();
+    core::mem::forget(ran);
+    built
+}
+
 /// One thread, because the operation class is the arithmetic and threads add scheduling noise. The baseline level, so
 /// that the counts do not depend on the machine.
 fn maths<R: Real>() -> stream::Hashes {
@@ -94,8 +111,16 @@ fn offset_surfaces((surface, uv): (OffsetSurface<SplineSurface>, Vec<UvPoint>)) 
 
 library_benchmark_group!(
     name = operations,
-    benchmarks =
-        [measure_distance, maths_scalar, maths_lanes2, maths_lanes4, maths_lanes8, offset_curves, offset_surfaces]
+    benchmarks = [
+        measure_distance,
+        construct_wire_face,
+        maths_scalar,
+        maths_lanes2,
+        maths_lanes4,
+        maths_lanes8,
+        offset_curves,
+        offset_surfaces
+    ]
 );
 
 // The benchmarks' names carry each kernel's width, so they must change with it.

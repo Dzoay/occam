@@ -4,7 +4,7 @@
 //! operation is refused when a request is read until its step lands, so these drive the runner with steps that add
 //! vertices.
 
-use occam_ops::{Operation, Request, Step, Units};
+use occam_ops::{Args, Operation, Request, Step, Units};
 use occam_report::{AngleUnit, EntityKind, Input, LengthUnit, Reason, followed_remedy};
 use occam_topo::{Derivation, Lineage, Vertex, VertexRecord};
 use occam_units::{Angle, Length, Point};
@@ -14,8 +14,13 @@ use super::*;
 
 /// `n` steps, each labelled `s<index>`.
 fn steps(n: u32) -> Vec<Step> {
-    let step =
-        |index| Step { index, label: Some(format!("s{index}")), operation: Operation::Box, parameters: Map::new() };
+    let step = |index| Step {
+        index,
+        label: Some(format!("s{index}")),
+        operation: Operation::Box,
+        parameters: Map::new(),
+        args: Args::None,
+    };
     (0..n).map(step).collect()
 }
 

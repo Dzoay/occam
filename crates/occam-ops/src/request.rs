@@ -10,6 +10,7 @@ use occam_report::{AngleUnit, Code, EntityRef, Fault, LengthUnit, NamedValue, Re
 use occam_units::{Angle, Length, Tolerance};
 use serde_json::{Map, Value};
 
+use crate::args::{self, Args};
 use crate::operation::Operation;
 use crate::read::{At, count, name, needed, number, object, text, whole, wrong_type};
 
@@ -36,6 +37,8 @@ pub struct Step {
     pub operation: Operation,
     /// Its other fields, which its operation reads.
     pub parameters: Map<String, Value>,
+    /// What its operation reads of them, checked and converted.
+    pub args: Args,
 }
 
 /// A request, checked and converted.
@@ -84,7 +87,8 @@ impl Request {
             (Some(units), Some(given)) => tolerance(&root.field("tolerance"), given, units, &mut out),
             (None | Some(_), _) => None,
         };
-        let steps = steps(&root, fields, &mut out);
+        let read_in = units.unwrap_or(Units { length: LengthUnit::Millimetre, angle: AngleUnit::Radian });
+        let steps = steps(&root, fields, read_in, &mut out);
         match (out.is_empty(), units, steps) {
             (true, Some(units), Some(steps)) => Ok(Self { units, tolerance, steps }),
             _ => Err(out),
@@ -143,7 +147,7 @@ fn tolerance(at: &At, given: &Value, units: Units, out: &mut Vec<Report>) -> Opt
 }
 
 /// The request's steps, each checked, with every bad input in `out`.
-fn steps(root: &At, fields: &Map<String, Value>, out: &mut Vec<Report>) -> Option<Vec<Step>> {
+fn steps(root: &At, fields: &Map<String, Value>, units: Units, out: &mut Vec<Report>) -> Option<Vec<Step>> {
     let at = root.field("steps");
     let given = gather(needed(root, fields, "steps"), out)?;
     let Value::Array(items) = given else {
@@ -154,13 +158,19 @@ fn steps(root: &At, fields: &Map<String, Value>, out: &mut Vec<Report>) -> Optio
     let mut steps = Vec::new();
     for (place, item) in items.iter().enumerate() {
         let index = u32::try_from(place).unwrap_or(u32::MAX);
-        steps.extend(step(&at.item(place), index, item, &mut labels, out));
+        steps.extend(step(&at.item(place), (index, units), item, &mut labels, out));
     }
     Some(steps)
 }
 
 /// The step at `at`, the request's `index`th, whose label must not be one an earlier step in `labels` has.
-fn step(at: &At, index: u32, item: &Value, labels: &mut BTreeMap<String, u32>, out: &mut Vec<Report>) -> Option<Step> {
+fn step(
+    at: &At,
+    (index, units): (u32, Units),
+    item: &Value,
+    labels: &mut BTreeMap<String, u32>,
+    out: &mut Vec<Report>,
+) -> Option<Step> {
     let Value::Object(fields) = item else {
         out.push(wrong_type(&at.clone().in_step(index, None), item, "object"));
         return None;
@@ -172,7 +182,8 @@ fn step(at: &At, index: u32, item: &Value, labels: &mut BTreeMap<String, u32>, o
     let mut parameters = fields.clone();
     parameters.remove("op");
     parameters.remove("label");
-    Some(Step { index, label, operation, parameters })
+    let args = args::read(&at, operation, &parameters, units, out);
+    Some(Step { index, label, operation, parameters, args })
 }
 
 /// The label at `at`, of the `index`th step, which no earlier step in `labels` may have; it is added there.

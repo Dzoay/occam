@@ -99,14 +99,13 @@ impl Operation {
     #[must_use]
     pub const fn supported(self) -> bool {
         match self {
+            Self::Wire | Self::Face => true,
             Self::Box
             | Self::Cylinder
             | Self::Sphere
             | Self::Cone
             | Self::Torus
             | Self::Wedge
-            | Self::Wire
-            | Self::Face
             | Self::Extrude
             | Self::Revolve
             | Self::Transform

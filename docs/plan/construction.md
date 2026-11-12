@@ -33,15 +33,6 @@ real out of [the type sketch](../sketch/src/lib.rs).
 
 ## Steps
 
-### `construction.wires`
-
-Edges from points, lines and arcs; a wire from edges, a gap reported by where it is; a planar face from a closed wire,
-with holes (row 1.6). Vertices are shared by identity and merged by the band as they are made (S1 item 1); each face
-gets its parameter curves and a witness for each loop.
-
-*Failing test first:* a rectangle with a round hole becomes one face that passes the checker; a wire with a gap is
-refused naming the two ends and the gap; a hole outside its face, and a wire that crosses itself, are refused.
-
 ### `construction.primitives`
 
 Box, cylinder, sphere, cone, torus and wedge at a given frame (rows 1.12, 2.13), each a closed solid whose periodic

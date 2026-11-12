@@ -337,6 +337,90 @@ catalogue! {
         "An operand names a label no earlier step has.",
         "{parameter} names {given}, which no earlier step is labelled.",
     }
+
+    /// A request gives none, or more than one, of the fields that are alternatives at one place.
+    InputOneOf = "input.one-of" {
+        Error, [],
+        "A request gives none, or more than one, of the fields that are alternatives there.",
+        "{parameter} gives {given}, where exactly one of {expected} is wanted.",
+    }
+
+    /// An edge would have no length: its ends, or its circle's radius, are within the band.
+    NoLength = "construct.no-length" {
+        Error, [],
+        "An edge would have no length: its ends, or its circle's radius, are within the band.",
+        "{parameter} gives an edge {length} long, no longer than the band of {band}.",
+    }
+
+    /// An arc's three points lie on one line within the band, so no circle passes through them.
+    PointsInLine = "construct.points-in-line" {
+        Error, [],
+        "An arc's three points lie on one line, so no circle passes through them.",
+        "{parameter} gives an arc whose middle point is {offset} from the line through its ends, no more than the band of {band}.",
+    }
+
+    /// An edge of a wire begins further than the band from where the edge before it ends.
+    WireGap = "construct.wire-gap" {
+        Error, [MeetAt],
+        "An edge of a wire does not begin where the one before it ends.",
+        "{parameter} begins {gap} from where the edge before it ends, at {end}, more than the band of {band}.",
+    }
+
+    /// A face needs a wire that comes back to where it begins, and this one does not.
+    WireOpen = "construct.wire-open" {
+        Error, [MeetAt],
+        "A face needs a closed wire, and this one does not come back to where it begins.",
+        "{parameter} ends {gap} from where it begins, at {start}, more than the band of {band}.",
+    }
+
+    /// A wire touches or crosses itself other than where consecutive edges meet.
+    WireCrossesItself = "construct.wire-crosses-itself" {
+        Error, [],
+        "A wire touches or crosses itself.",
+        "{parameter} touches or crosses itself at {point}, where its edges {first} and {second}, counted from 0, come within the band of {band}.",
+    }
+
+    /// Two wires of a face touch or cross.
+    WiresCross = "construct.wires-cross" {
+        Error, [],
+        "Two wires of a face touch or cross.",
+        "{parameter} touches or crosses the face's wire {other}, counted from 0 with the outer one first, at {point}, within the band of {band}.",
+    }
+
+    /// A hole of a face does not lie inside its outer wire.
+    HoleOutside = "construct.hole-outside" {
+        Error, [],
+        "A hole of a face is not inside its outer wire.",
+        "{parameter} is a hole that does not lie inside the face's outer wire: it begins at {point}.",
+    }
+
+    /// A hole of a face lies inside another of its holes.
+    HolesNested = "construct.holes-nested" {
+        Error, [],
+        "A hole of a face lies inside another of its holes.",
+        "{parameter} lies inside the face's wire {other}, another hole.",
+    }
+
+    /// A face's wires do not lie in one plane within the band.
+    NotPlanar = "construct.not-planar" {
+        Error, [],
+        "A face's wires do not lie in one plane.",
+        "{parameter} reaches {point}, {distance} from the plane of the face's outer wire, more than the band of {band}.",
+    }
+
+    /// A face's wire bounds no point clear of its edges, so it is too thin to be a face.
+    NoInterior = "construct.no-interior" {
+        Error, [],
+        "A face's wire bounds no point clear of its edges.",
+        "{parameter} bounds no point further than {clearance} from the face's wires.",
+    }
+
+    /// A face names something that is not a wire it can be made from: not a wire or a wire body, or a wire of edges that are not lines or circles.
+    NotAWire = "construct.not-a-wire" {
+        Error, [],
+        "A face names something that is not a wire it can be made from.",
+        "{parameter} names {given}, which is not a wire a face can be made from.",
+    }
 }
 
 text_enum! {
@@ -348,6 +432,8 @@ text_enum! {
         UseModelTolerance = "use-model-tolerance",
         /// Run on the number of threads in the `threads` parameter.
         UseThreads = "use-threads",
+        /// Move the end the report names to the point in the `point` parameter, so that two ends meet.
+        MeetAt = "meet-at",
     }
 }
 
@@ -387,6 +473,7 @@ impl RemedyKind {
             Self::UseThreads => {
                 "Run on the number of threads given. One thread needs none started, so it always works."
             }
+            Self::MeetAt => "Move the end the report names to the point given, so that the two ends meet.",
         }
     }
 
@@ -397,6 +484,7 @@ impl RemedyKind {
             Self::UseSchema => &["version"],
             Self::UseModelTolerance => &["tolerance"],
             Self::UseThreads => &["threads"],
+            Self::MeetAt => &["point"],
         }
     }
 }
@@ -810,6 +898,112 @@ mod tests {
         ])
     }
 
+    fn construct_codes() -> Value {
+        json!([
+            {
+                "name": "InputOneOf",
+                "code": "input.one-of",
+                "severity": "error",
+                "summary": "A request gives none, or more than one, of the fields that are alternatives there.",
+                "template": "{parameter} gives {given}, where exactly one of {expected} is wanted.",
+                "remedies": []
+            },
+            {
+                "name": "NoLength",
+                "code": "construct.no-length",
+                "severity": "error",
+                "summary": "An edge would have no length: its ends, or its circle's radius, are within the band.",
+                "template": "{parameter} gives an edge {length} long, no longer than the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "PointsInLine",
+                "code": "construct.points-in-line",
+                "severity": "error",
+                "summary": "An arc's three points lie on one line, so no circle passes through them.",
+                "template": "{parameter} gives an arc whose middle point is {offset} from the line through its ends, no more than the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "WireGap",
+                "code": "construct.wire-gap",
+                "severity": "error",
+                "summary": "An edge of a wire does not begin where the one before it ends.",
+                "template": "{parameter} begins {gap} from where the edge before it ends, at {end}, more than the band of {band}.",
+                "remedies": ["meet-at"]
+            },
+            {
+                "name": "WireOpen",
+                "code": "construct.wire-open",
+                "severity": "error",
+                "summary": "A face needs a closed wire, and this one does not come back to where it begins.",
+                "template": "{parameter} ends {gap} from where it begins, at {start}, more than the band of {band}.",
+                "remedies": ["meet-at"]
+            },
+            {
+                "name": "WireCrossesItself",
+                "code": "construct.wire-crosses-itself",
+                "severity": "error",
+                "summary": "A wire touches or crosses itself.",
+                "template": "{parameter} touches or crosses itself at {point}, where its edges {first} and {second}, counted from 0, come within the band of {band}.",
+                "remedies": []
+            },
+        ])
+    }
+
+    fn face_codes() -> Value {
+        json!([
+            {
+                "name": "WiresCross",
+                "code": "construct.wires-cross",
+                "severity": "error",
+                "summary": "Two wires of a face touch or cross.",
+                "template": "{parameter} touches or crosses the face's wire {other}, counted from 0 with the outer one first, at {point}, within the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "HoleOutside",
+                "code": "construct.hole-outside",
+                "severity": "error",
+                "summary": "A hole of a face is not inside its outer wire.",
+                "template": "{parameter} is a hole that does not lie inside the face's outer wire: it begins at {point}.",
+                "remedies": []
+            },
+            {
+                "name": "HolesNested",
+                "code": "construct.holes-nested",
+                "severity": "error",
+                "summary": "A hole of a face lies inside another of its holes.",
+                "template": "{parameter} lies inside the face's wire {other}, another hole.",
+                "remedies": []
+            },
+            {
+                "name": "NotPlanar",
+                "code": "construct.not-planar",
+                "severity": "error",
+                "summary": "A face's wires do not lie in one plane.",
+                "template": "{parameter} reaches {point}, {distance} from the plane of the face's outer wire, more than the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "NoInterior",
+                "code": "construct.no-interior",
+                "severity": "error",
+                "summary": "A face's wire bounds no point clear of its edges.",
+                "template": "{parameter} bounds no point further than {clearance} from the face's wires.",
+                "remedies": []
+            },
+            {
+                "name": "NotAWire",
+                "code": "construct.not-a-wire",
+                "severity": "error",
+                "summary": "A face names something that is not a wire it can be made from.",
+                "template": "{parameter} names {given}, which is not a wire a face can be made from.",
+                "remedies": []
+            },
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -830,6 +1024,12 @@ mod tests {
                 "summary": "Run on the number of threads given. One thread needs none started, so it always works.",
                 "parameters": ["threads"],
             },
+            {
+                "name": "MeetAt",
+                "kind": "meet-at",
+                "summary": "Move the end the report names to the point given, so that the two ends meet.",
+                "parameters": ["point"],
+            },
         ])
     }
 
@@ -847,6 +1047,8 @@ mod tests {
             request_codes(),
             input_codes(),
             label_codes(),
+            construct_codes(),
+            face_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())

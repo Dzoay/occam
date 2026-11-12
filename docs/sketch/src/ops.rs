@@ -55,7 +55,8 @@ pub enum Measurement {
 }
 
 /// The parameters each operation reads from its step's other fields (`occam_ops::Step::parameters`), as its step will
-/// make them real. The request, its steps and its operands are in `occam-ops` since `construction.request`.
+/// make them real. The request, its steps and its operands are in `occam-ops` since `construction.request`, and the
+/// wire and the planar face, as `occam_ops::Args`, since `construction.wires`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
     Block {
@@ -66,15 +67,6 @@ pub enum Op {
         frame: Frame3,
         radius: f64,
         height: f64,
-    },
-    /// Edges through points, lines and arcs, joined into a wire; a gap is reported by location (PARITY 1.6).
-    Wire {
-        points: Vec<[f64; 3]>,
-        closed: bool,
-    },
-    PlanarFace {
-        outer: Operand,
-        holes: Vec<Operand>,
     },
     Extrude {
         face: Operand,
