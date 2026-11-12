@@ -47,6 +47,12 @@ text_enum! {
         SizeNotPositive = "geom.size-not-positive",
         /// A curve or surface was given a size or an angle outside the range its form allows.
         OutOfRange = "geom.out-of-range",
+        /// A curve or surface was given the wrong number of knots, poles or weights.
+        WrongCount = "geom.wrong-count",
+        /// A B-spline's knots decrease, or repeat more often than its degree allows.
+        KnotsNotValid = "geom.knots-not-valid",
+        /// A rational curve or surface was given a weight that is not a finite number greater than zero.
+        WeightNotPositive = "geom.weight-not-positive",
     }
 }
 
@@ -100,7 +106,10 @@ impl Code {
             | Self::DegenerateDirection
             | Self::UndefinedParameter
             | Self::SizeNotPositive
-            | Self::OutOfRange => Severity::Error,
+            | Self::OutOfRange
+            | Self::WrongCount
+            | Self::KnotsNotValid
+            | Self::WeightNotPositive => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -122,6 +131,13 @@ impl Code {
                 "A curve or surface was given a size that is not a finite number greater than zero."
             }
             Self::OutOfRange => "A curve or surface was given a size or an angle outside the range its form allows.",
+            Self::WrongCount => "A curve or surface was given the wrong number of knots, poles or weights.",
+            Self::KnotsNotValid => {
+                "A B-spline's knots must not decrease, and may repeat at most its degree times inside and once more at an end."
+            }
+            Self::WeightNotPositive => {
+                "A rational curve or surface was given a weight that is not a finite number greater than zero."
+            }
         }
     }
 
@@ -147,6 +163,11 @@ impl Code {
             Self::UndefinedParameter => "The parameter {parameter} is outside the domain from {low} to {high}.",
             Self::SizeNotPositive => "The size given, {size}, is not a finite number greater than zero.",
             Self::OutOfRange => "The value given, {value}, is not strictly between {low} and {high}.",
+            Self::WrongCount => "{found} were given where {needed} are needed.",
+            Self::KnotsNotValid => {
+                "Knot {index}, {knot}, is out of order or repeated more often than the degree allows."
+            }
+            Self::WeightNotPositive => "Weight {index} is {weight}, which is not a finite number greater than zero.",
         }
     }
 
@@ -164,7 +185,10 @@ impl Code {
             | Self::DegenerateDirection
             | Self::UndefinedParameter
             | Self::SizeNotPositive
-            | Self::OutOfRange => &[],
+            | Self::OutOfRange
+            | Self::WrongCount
+            | Self::KnotsNotValid
+            | Self::WeightNotPositive => &[],
         }
     }
 }
@@ -360,6 +384,30 @@ mod tests {
                 "severity": "error",
                 "summary": "A curve or surface was given a size or an angle outside the range its form allows.",
                 "template": "The value given, {value}, is not strictly between {low} and {high}.",
+                "remedies": [],
+            },
+            {
+                "name": "WrongCount",
+                "code": "geom.wrong-count",
+                "severity": "error",
+                "summary": "A curve or surface was given the wrong number of knots, poles or weights.",
+                "template": "{found} were given where {needed} are needed.",
+                "remedies": [],
+            },
+            {
+                "name": "KnotsNotValid",
+                "code": "geom.knots-not-valid",
+                "severity": "error",
+                "summary": "A B-spline's knots must not decrease, and may repeat at most its degree times inside and once more at an end.",
+                "template": "Knot {index}, {knot}, is out of order or repeated more often than the degree allows.",
+                "remedies": [],
+            },
+            {
+                "name": "WeightNotPositive",
+                "code": "geom.weight-not-positive",
+                "severity": "error",
+                "summary": "A rational curve or surface was given a weight that is not a finite number greater than zero.",
+                "template": "Weight {index} is {weight}, which is not a finite number greater than zero.",
                 "remedies": [],
             },
         ])

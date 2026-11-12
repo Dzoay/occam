@@ -7,6 +7,7 @@ use occam_report::Report;
 use occam_units::{Bounds, Length, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::batch::Scratch;
+use crate::bspline::BsplineCurve;
 use crate::domain::ParamRange;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::nearest::nearest;
@@ -87,6 +88,12 @@ pub trait ParametricCurve: Sized + Send + Sync + 'static {
     fn fit(&self) -> Option<Length> {
         None
     }
+
+    /// The rational B-spline it is exactly from `lo` to `hi`, if it has one there: never where the part is unbounded,
+    /// leaves the range, is empty, or is longer than a period (`docs/decisions/2026-11-11-to-bspline-over-a-range.md`).
+    fn to_bspline(&self, _lo: f64, _hi: f64) -> Option<BsplineCurve> {
+        None
+    }
 }
 
 /// The second layer for curves: dyn-compatible, and checking each call as [`crate::Surface`] does.
@@ -147,6 +154,9 @@ pub trait Curve: Send + Sync {
 
     /// As [`ParametricCurve::fit`].
     fn fit(&self) -> Option<Length>;
+
+    /// As [`ParametricCurve::to_bspline`].
+    fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve>;
 }
 
 impl<C: ParametricCurve> Curve for C {
@@ -209,6 +219,10 @@ impl<C: ParametricCurve> Curve for C {
 
     fn fit(&self) -> Option<Length> {
         ParametricCurve::fit(self)
+    }
+
+    fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
+        ParametricCurve::to_bspline(self, lo, hi)
     }
 }
 

@@ -8,8 +8,10 @@ use occam_units::{Bounds, Length, Local, Placement, Point, Tangent, Tolerance, W
 
 use crate::axes::Axes;
 use crate::batch::Scratch;
+use crate::bspline::BsplineCurve;
 use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
+use crate::exact::{self, Conic};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::support::{foot_at, positive};
 use crate::surface::Closest;
@@ -119,6 +121,10 @@ impl ParametricCurve for Circle {
             form: "circle",
             values: self.axes.curve_values("centre", &[NamedValue::length("radius", self.radius)], self.range),
         }
+    }
+
+    fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
+        exact::conic_curve(Conic::Elliptic, (&self.axes, (self.radius, self.radius)), self.range, (lo, hi))
     }
 }
 

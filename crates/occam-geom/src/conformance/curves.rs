@@ -6,7 +6,7 @@ use occam_report::Code;
 use occam_units::{Point, Vec3, World};
 
 use super::{Check, Failure, Findings, bits, close, distance, fractions, junk, lerp, rates, tolerance, unit};
-use crate::{Content, Curve, Scratch, Wrap};
+use crate::{Content, Curve, Scratch, SplineCurve, Wrap};
 
 /// Every check of `c` from `lo` to `hi`, which must lie in its range. What failed, or nothing.
 pub(crate) fn curve(c: &dyn Curve, lo: f64, hi: f64) -> Vec<Failure> {
@@ -17,7 +17,15 @@ pub(crate) fn curve(c: &dyn Curve, lo: f64, hi: f64) -> Vec<Failure> {
     closest(c, lo, hi, &mut found);
     bounds(c, lo, hi, &mut found);
     seams(c, &mut found);
+    presents(c, lo, hi, &mut found);
     identity(c, &mut found);
+    found.0
+}
+
+/// The [`Check::Presents`] check of `c` from `lo` to `hi` alone: what failed, or nothing.
+pub(crate) fn presented_curve(c: &dyn Curve, lo: f64, hi: f64) -> Vec<Failure> {
+    let mut found = Findings::default();
+    presents(c, lo, hi, &mut found);
     found.0
 }
 
@@ -152,6 +160,36 @@ fn seams(c: &dyn Curve, found: &mut Findings) {
         let t = lerp(range.lo, range.hi, 0.3);
         let (once, again) = (c.point(t), c.point(t + (range.hi - range.lo)));
         found.expect(Check::Seams, distance(once, again) <= band, || format!("it does not come round at {t}"));
+    }
+}
+
+fn presents(c: &dyn Curve, lo: f64, hi: f64, found: &mut Findings) {
+    let Some(form) = c.to_bspline(lo, hi) else { return };
+    let spline = match SplineCurve::new(&form) {
+        Ok(spline) => spline,
+        Err(report) => return found.expect(Check::Presents, false, || format!("{form:?} is not valid: {report:?}")),
+    };
+    let (tol, mut scratch) = (tolerance(), Scratch::default());
+    let band = tol.band().millimetres();
+    let range = spline.range();
+    let runs = [range.lo, range.hi].map(f64::to_bits) == [lo, hi].map(f64::to_bits);
+    found.expect(Check::Presents, runs, || format!("the B-spline runs over {range:?}, not {lo} to {hi}"));
+    for end in [lo, hi] {
+        let (got, want) = (spline.point(end), c.point(end));
+        found.expect(Check::Presents, distance(got, want) <= band, || format!("at {end}, {got:?} is not {want:?}"));
+    }
+    for t in fractions(9).map(|f| lerp(lo, hi, f)) {
+        let on = c.closest(spline.point(t), None, tol, &mut scratch);
+        let lies = on.as_ref().is_ok_and(|a| a.distance.millimetres() <= band);
+        found.expect(Check::Presents, lies, || format!("the B-spline at {t} is off the curve: {on:?}"));
+        let back = spline.closest(c.point(t), None, tol, &mut scratch);
+        let covers = back.as_ref().is_ok_and(|a| a.distance.millimetres() <= band);
+        found.expect(Check::Presents, covers, || format!("the curve at {t} is off the B-spline: {back:?}"));
+        let Ok(on) = on else { continue };
+        let (got, want) = (unit(spline.first(t).1.rate()), unit(c.first(on.at).1.rate()));
+        found.expect(Check::Presents, (got - want).norm() <= 1e-6, || {
+            format!("at {t} the B-spline runs along {got:?}, not {want:?}")
+        });
     }
 }
 

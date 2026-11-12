@@ -178,6 +178,7 @@ name = "occam"
 version = "0.0.0"
 dependencies = [
  "gungraun",
+ "occam-geom",
  "occam-math",
  "occam-report",
  "occam-units",

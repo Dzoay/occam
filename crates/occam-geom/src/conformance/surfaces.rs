@@ -6,7 +6,7 @@ use occam_report::Code;
 use occam_units::{Point, Tangent, UvPoint, Vec3, World};
 
 use super::{Check, Failure, Findings, bits, close, distance, finite, fractions, junk, lerp, rates, tolerance, unit};
-use crate::{Analytic, Content, Degeneracy, Jets, Order, Param, Scratch, Surface, UvBox, Wrap};
+use crate::{Analytic, Content, Degeneracy, Jets, Order, Param, Scratch, SplineSurface, Surface, UvBox, Wrap};
 
 /// Every check of `s` over `window`, which must lie in its domain. What failed, or nothing.
 pub(crate) fn surface(s: &dyn Surface, window: UvBox) -> Vec<Failure> {
@@ -19,7 +19,15 @@ pub(crate) fn surface(s: &dyn Surface, window: UvBox) -> Vec<Failure> {
     seams(s, window, &mut found);
     degeneracies(s, window, &mut found);
     normals(s, window, &mut found);
+    presents(s, window, &mut found);
     identity(s, &mut found);
+    found.0
+}
+
+/// The [`Check::Presents`] check of `s` over `window` alone: what failed, or nothing.
+pub(crate) fn presented_surface(s: &dyn Surface, window: UvBox) -> Vec<Failure> {
+    let mut found = Findings::default();
+    presents(s, window, &mut found);
     found.0
 }
 
@@ -316,6 +324,42 @@ fn normals(s: &dyn Surface, window: UvBox, found: &mut Findings) {
         found.expect(Check::Normals, on, || {
             format!("at {uv:?}, {off} off {form:?}, normal {of_derivatives:?}, not {normal:?}")
         });
+    }
+}
+
+/// The unit normal of a jet's first derivatives.
+fn normal_of(jet: crate::Jet1) -> Vec3 {
+    unit(jet.du.rate().cross(jet.dv.rate()))
+}
+
+fn presents(s: &dyn Surface, window: UvBox, found: &mut Findings) {
+    let Some(form) = s.to_bspline(window) else { return };
+    let spline = match SplineSurface::new(&form) {
+        Ok(spline) => spline,
+        Err(report) => return found.expect(Check::Presents, false, || format!("{form:?} is not valid: {report:?}")),
+    };
+    let (tol, mut scratch) = (tolerance(), Scratch::default());
+    let band = tol.band().millimetres();
+    let d = spline.domain();
+    let ends = [d.u.lo, d.v.lo, d.u.hi, d.v.hi].map(f64::to_bits);
+    let want = [window.lo.u(), window.lo.v(), window.hi.u(), window.hi.v()].map(f64::to_bits);
+    found.expect(Check::Presents, ends == want, || format!("the B-spline runs over {d:?}, not {window:?}"));
+    for corner in window.corners() {
+        let (got, want) = (spline.point(corner), s.point(corner));
+        found
+            .expect(Check::Presents, distance(got, want) <= band, || format!("at {corner:?}, {got:?} is not {want:?}"));
+    }
+    for uv in samples(window, 4) {
+        let on = s.closest(spline.point(uv), None, tol, &mut scratch);
+        let lies = on.as_ref().is_ok_and(|c| c.distance.millimetres() <= band);
+        found.expect(Check::Presents, lies, || format!("the B-spline at {uv:?} is off the family: {on:?}"));
+        let back = spline.closest(s.point(uv), None, tol, &mut scratch);
+        let covers = back.as_ref().is_ok_and(|c| c.distance.millimetres() <= band);
+        found.expect(Check::Presents, covers, || format!("the family at {uv:?} is off the B-spline: {back:?}"));
+        let Ok(on) = on else { continue };
+        let (got, want) = (normal_of(spline.first(uv)), normal_of(s.first(on.at)));
+        let faces = !(finite(got) && finite(want)) || (got - want).norm() <= 1e-6;
+        found.expect(Check::Presents, faces, || format!("at {uv:?} the B-spline faces {got:?}, not {want:?}"));
     }
 }
 

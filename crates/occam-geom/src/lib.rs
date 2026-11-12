@@ -17,7 +17,9 @@
 
 mod analytic;
 mod axes;
+mod basis;
 mod batch;
+mod bspline;
 mod circle;
 mod cone;
 #[cfg(test)]
@@ -26,8 +28,12 @@ mod curve;
 mod cylinder;
 mod domain;
 mod ellipse;
+mod exact;
+mod foot;
 mod hyperbola;
 mod identity;
+mod knots;
+mod lanewise;
 mod line;
 mod meridian;
 mod nearest;
@@ -36,13 +42,18 @@ mod plane;
 #[cfg(test)]
 mod source_check;
 mod sphere;
+mod spline;
+mod spline_curve;
+mod spline_surface;
 mod support;
 mod surface;
 mod torus;
 mod turn;
+pub mod workloads;
 
 pub use analytic::Analytic;
 pub use batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
+pub use bspline::{BsplineCurve, BsplineSurface};
 pub use circle::Circle;
 pub use cone::Cone;
 pub use curve::{Curve, ParamCurve, ParametricCurve};
@@ -55,5 +66,7 @@ pub use line::Line;
 pub use parabola::Parabola;
 pub use plane::Plane;
 pub use sphere::Sphere;
-pub use surface::{BsplineSurface, Closest, Parametric, Surface, TriangleView};
+pub use spline_curve::SplineCurve;
+pub use spline_surface::SplineSurface;
+pub use surface::{Closest, Parametric, Surface, TriangleView};
 pub use torus::Torus;

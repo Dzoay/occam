@@ -12,9 +12,9 @@ use std::collections::BTreeSet;
 use occam_math::canonical_bits;
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tangent, Tolerance, Vec3, Vector, World};
 
-pub(crate) use curves::curve;
+pub(crate) use curves::{curve, presented_curve};
 pub(crate) use seeded::{WrongSecondCurve, wrong_form, wrong_second};
-pub(crate) use surfaces::surface;
+pub(crate) use surfaces::{presented_surface, surface};
 
 /// What the suite checks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -35,6 +35,9 @@ pub(crate) enum Check {
     Degeneracies,
     /// The normal of the derivatives is the presented form's, orientation included, and every point is on the form.
     Normals,
+    /// A B-spline presented over the window is valid, runs over its parameters, meets the family at its corners, lies on
+    /// it, covers it and faces as it does, within the band.
+    Presents,
     /// The content leads with the family's name and is the same each time, and so is the batch key's family.
     Identity,
 }

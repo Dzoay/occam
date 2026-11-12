@@ -7,7 +7,8 @@
 use std::hint::black_box;
 
 use gungraun::{library_benchmark, library_benchmark_group, main};
-use occam::{Angle, Lanes, Length, Model, Point, Real, Tolerance, World, distance};
+use occam::spline_workloads as splines;
+use occam::{Angle, Jets, Lanes, Length, Model, Point, Real, SplineSurface, Tolerance, UvPoint, World, distance};
 use occam_math::{Exec, Level, stream, width, workloads};
 
 fn mm(value: f64) -> Length {
@@ -60,7 +61,7 @@ library_benchmark_group!(
 );
 
 // The benchmarks' names carry each kernel's width, so they must change with it.
-const _: () = assert!(width::MASK == 8 && width::FILTER == 4 && width::ANALYTIC == 4);
+const _: () = assert!(width::MASK == 8 && width::FILTER == 4 && width::ANALYTIC == 4 && width::SPLINE == 4);
 
 fn mask_items() -> Vec<f64> {
     workloads::inputs(3, 4.0, 1)
@@ -126,8 +127,30 @@ fn angles_w4(items: Vec<f64>) -> Vec<f64> {
     black_box(workloads::angles::<Lanes<{ width::ANALYTIC }>>(black_box(&items)))
 }
 
+/// A bicubic B-spline and a tessellator's grid of 64 by 64 points on it.
+fn spline_items() -> (SplineSurface, Vec<UvPoint>) {
+    (SplineSurface::new(&splines::spline()).unwrap(), splines::grid(64))
+}
+
+#[library_benchmark]
+#[bench::items(spline_items())]
+fn splines_w1((surface, uv): (SplineSurface, Vec<UvPoint>)) -> Jets {
+    let mut out = Jets::default();
+    splines::splines::<1, _>(black_box(&surface), black_box(&uv), &mut out);
+    black_box(out)
+}
+
+#[library_benchmark]
+#[bench::items(spline_items())]
+fn splines_w4((surface, uv): (SplineSurface, Vec<UvPoint>)) -> Jets {
+    let mut out = Jets::default();
+    splines::splines::<{ width::SPLINE }, _>(black_box(&surface), black_box(&uv), &mut out);
+    black_box(out)
+}
+
 library_benchmark_group!(
     name = kernels,
-    benchmarks = [masks_w1, masks_w8, filter_w1, filter_w4, sines_w1, sines_w4, angles_w1, angles_w4]
+    benchmarks =
+        [masks_w1, masks_w8, filter_w1, filter_w4, sines_w1, sines_w4, angles_w1, angles_w4, splines_w1, splines_w4]
 );
 main!(library_benchmark_groups = operations, kernels);

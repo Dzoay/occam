@@ -7,8 +7,10 @@ use occam_units::{Bounds, Direction, ParamKind, Point, Tangent, Tolerance, Vec3,
 
 use crate::axes::direction;
 use crate::batch::Scratch;
+use crate::bspline::BsplineCurve;
 use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
+use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::support::{enclose, exact, foot_at, splat};
 use crate::surface::Closest;
@@ -113,6 +115,12 @@ impl ParametricCurve for Line {
         let direction = direction("direction", d);
         let (from, to) = (NamedValue::length("from", self.range.lo), NamedValue::length("to", self.range.hi));
         Shape { form: "line", values: vec![NamedValue::point("origin", [o.x, o.y, o.z]), direction, from, to] }
+    }
+
+    fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
+        let part = self.range.trimmed(lo, hi).ok()?;
+        let at = |t: f64| self.origin + self.direction * t;
+        Some(exact::curve(1, exact::span(1, (part.lo, part.hi), vec![at(part.lo), at(part.hi)]), false))
     }
 }
 

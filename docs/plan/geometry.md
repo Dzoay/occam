@@ -26,14 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.splines`
-
-B-spline and Bézier curves and surfaces, rational or not: evaluation and derivatives to any order, `eval_batch` in lanes
-at a measured width, and `to_bspline` for the analytic families (rows 2.1, 2.2).
-
-*Failing test first:* the suite over each family; the analytic families converted to B-spline agree with themselves
-within the band; the spline kernel beats width 1 in `gates perf`.
-
 ### `geometry.mesh`
 
 Mesh-backed surfaces: a triangle set that answers the same questions, its derivatives only where they exist, and

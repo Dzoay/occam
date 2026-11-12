@@ -8,7 +8,9 @@ use occam_units::{Bounds, Local, ParamKind, Placement, Point, Tangent, Tolerance
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
+use crate::bspline::BsplineSurface;
 use crate::domain::{Domain, ParamRange, UvBox};
+use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::support::{enclose, exact, splat};
 use crate::surface::Parametric;
@@ -98,6 +100,14 @@ impl Parametric for Plane {
 
     fn analytic(&self, _tol: Tolerance) -> Option<Analytic> {
         Some(Analytic::Plane { origin: Point::from_vec3(self.axes.origin), normal: self.axes.normal })
+    }
+
+    fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
+        let (u, v) = exact::part(Parametric::domain(self), patch)?;
+        let corner = |a: f64, b: f64| self.axes.at(a, b);
+        let poles = vec![corner(u.lo, v.lo), corner(u.hi, v.lo), corner(u.lo, v.hi), corner(u.hi, v.hi)];
+        let (knots_u, knots_v) = (vec![u.lo, u.lo, u.hi, u.hi], vec![v.lo, v.lo, v.hi, v.hi]);
+        Some(BsplineSurface { degree: (1, 1), count: (2, 2), knots_u, knots_v, poles, weights: None })
     }
 }
 
@@ -227,7 +237,8 @@ mod tests {
         assert_ne!(content, other);
         assert_eq!(Surface::batch_key(&s), crate::BatchKey { family: FamilyName("plane"), degree: (0, 0) });
         assert_eq!(Surface::degeneracies(&s), &[]);
-        assert!(Surface::to_bspline(&s).is_none() && Surface::triangles(&s).is_none());
+        let unbounded = UvBox::new(UvPoint::new(f64::NEG_INFINITY, 0.0), UvPoint::new(0.0, 1.0));
+        assert!(Surface::to_bspline(&s, unbounded).is_none() && Surface::triangles(&s).is_none());
         let mut jets = crate::Jets::default();
         Surface::eval_batch(
             &s,

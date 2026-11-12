@@ -12,7 +12,9 @@ use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, T
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
+use crate::bspline::BsplineSurface;
 use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
+use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
 use crate::support::positive;
@@ -116,6 +118,10 @@ impl Parametric for Sphere {
     fn analytic(&self, _tol: Tolerance) -> Option<Analytic> {
         let (centre, radius) = (Point::from_vec3(self.axes.origin), Length::from_millimetres(self.radius));
         Some(Analytic::Sphere { centre, radius })
+    }
+
+    fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
+        exact::turned(&self.axes, Meridian::Round { centre: 0.0, radius: self.radius }, Parametric::domain(self), patch)
     }
 }
 

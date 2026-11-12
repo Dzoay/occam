@@ -28,7 +28,7 @@ trimmed by parameter; where no formula gives a foot, a search shared by every fa
 | `domain`, `bounds(patch)`, `degeneracies` | Each parameter's kind; a conservative box; poles and apexes, declared at construction |
 | `family`, `batch_key`, `content` | For sorting calls and ordering pairs. `content` is the canonical bits, never a pointer |
 | `shape` | The form name and parameters a [description](reports.md) shows |
-| `analytic`, `to_bspline`, `triangles` | What it can present. Each defaults to nothing, so a new family edits no list |
+| `analytic`, `to_bspline(patch)`, `triangles` | What it can present. Each defaults to nothing, so a new family edits no list. A B-spline is [over a patch](../decisions/2026-11-11-to-bspline-over-a-range.md), never an unbounded one |
 
 ## The families
 
@@ -36,6 +36,14 @@ The ones [PARITY](../PARITY.md) places in `geometry`. Curves: lines, circles, co
 trimmed. Surfaces: plane, cylinder, cone, sphere, torus, B-spline and Bézier, revolution, linear extrusion, offset and
 trimmed. Parameter curves of the same kinds. Plus **mesh-backed surfaces**, because the `geometry` exit proves its seam
 on three families before it freezes (L21).
+
+## Splines in lanes
+
+A B-spline family evaluates a batch in lanes where its points share a knot span, as a tessellator's grid does: the
+span's knots and poles are read once for every lane. Where a chunk of points crosses a span, each lane is evaluated
+alone, so every lane keeps the bits of a single call. On baseline x86-64 this takes 49% of width 1's instructions,
+where S4, gathering a span per lane, found no gain. The basis's arrays are on the stack, sized by the degree that
+needs them, up to degree 25.
 
 ## No cross-family store
 

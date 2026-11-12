@@ -8,8 +8,10 @@ use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, W
 
 use crate::axes::Axes;
 use crate::batch::Scratch;
+use crate::bspline::BsplineCurve;
 use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
+use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::support::{enclose, exact, positive, span};
 
@@ -117,6 +119,15 @@ impl ParametricCurve for Parabola {
             form: "parabola",
             values: self.axes.curve_values("vertex", &[NamedValue::length("focal-length", self.focal)], self.range),
         }
+    }
+
+    /// One quadratic span, its middle pole where the tangents at its ends meet, which keeps the parameter.
+    fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
+        let part = self.range.trimmed(lo, hi).ok()?;
+        let ((start, rate), end) = (self.eval_first(part.lo), self.eval_point(part.hi));
+        let middle = start.to_vec3() + rate.rate() * (0.5 * (part.hi - part.lo));
+        let poles = vec![start.to_vec3(), middle, end.to_vec3()];
+        Some(exact::curve(2, exact::span(2, (part.lo, part.hi), poles), false))
     }
 }
 

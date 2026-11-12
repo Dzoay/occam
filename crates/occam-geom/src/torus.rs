@@ -10,7 +10,9 @@ use occam_units::{Bounds, Length, Local, Placement, Point, Tangent, Tolerance, U
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
+use crate::bspline::BsplineSurface;
 use crate::domain::{Domain, UvBox};
+use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
 use crate::support::{between, positive};
@@ -106,6 +108,15 @@ impl Parametric for Torus {
     fn analytic(&self, _tol: Tolerance) -> Option<Analytic> {
         let (major, minor) = (Length::from_millimetres(self.major), Length::from_millimetres(self.minor));
         Some(Analytic::Torus { centre: Point::from_vec3(self.axes.origin), axis: self.axes.normal, major, minor })
+    }
+
+    fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
+        exact::turned(
+            &self.axes,
+            Meridian::Round { centre: self.major, radius: self.minor },
+            Parametric::domain(self),
+            patch,
+        )
     }
 }
 

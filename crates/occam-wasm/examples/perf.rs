@@ -1,13 +1,14 @@
 //! Source: original
 //! The workloads for browser timing. Bicubic Bézier surface points by de Casteljau's algorithm, two lanes at a time:
 //! `gates perf` builds it with and without simd128 and compares the two in one run (L30). And each lane kernel of
-//! `occam_math::workloads`, at width 1 and at its width, which the simd128 build must show clearly faster (L29).
+//! `occam_math::workloads`, and the spline kernel, at width 1 and at its width, which the simd128 build must show clearly
+//! faster (L29).
 #![allow(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 #![allow(missing_docs, reason = "an example")]
 
 use std::hint::black_box;
 
-use occam::{Lanes, Real, width, workloads};
+use occam::{Jets, Lanes, Real, SplineSurface, spline_workloads, width, workloads};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A point on the cubic with these control points, at `at`.
@@ -78,9 +79,28 @@ pub fn kernel_width(name: &str) -> u32 {
         "masks" => width::MASK,
         "filter" => width::FILTER,
         "sines" | "angles" => width::ANALYTIC,
+        "splines" => width::SPLINE,
         _ => 0,
     };
     u32::try_from(found).unwrap_or(0)
+}
+
+/// The spline kernel `repeats` times over a grid of 64 by 64 points, at its width or at width 1: the sum of every number
+/// it wrote.
+fn splines(lanes: bool, repeats: u32) -> f64 {
+    let Ok(surface) = SplineSurface::new(&spline_workloads::spline()) else { return f64::NAN };
+    let uv = spline_workloads::grid(64);
+    let mut out = Jets::default();
+    let mut total = 0.0;
+    for _ in 0..repeats {
+        if lanes {
+            spline_workloads::splines::<{ width::SPLINE }, _>(black_box(&surface), black_box(&uv), &mut out);
+        } else {
+            spline_workloads::splines::<1, _>(black_box(&surface), black_box(&uv), &mut out);
+        }
+        total += spline_workloads::total(&out);
+    }
+    total
 }
 
 /// Runs a lane kernel `repeats` times over its inputs, at its width or at width 1, and gives the sum of every result.
@@ -88,6 +108,9 @@ pub fn kernel_width(name: &str) -> u32 {
 #[wasm_bindgen]
 #[must_use]
 pub fn kernel(name: &str, lanes: bool, repeats: u32) -> f64 {
+    if name == "splines" {
+        return splines(lanes, repeats);
+    }
     let items = items(name);
     let run = |items: &[f64]| -> Vec<f64> {
         match (name, lanes) {

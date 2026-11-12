@@ -93,6 +93,7 @@ impl Jets {
 #[derive(Clone, Debug, Default)]
 pub struct Scratch {
     reals: Vec<f64>,
+    vectors: Vec<Vec3>,
 }
 
 impl Scratch {
@@ -101,6 +102,15 @@ impl Scratch {
         self.reals.clear();
         self.reals.resize(len, 0.0);
         &mut self.reals
+    }
+
+    /// `reals` numbers and `vectors` vectors to work in, all zero, as [`Scratch::reals`].
+    pub fn reals_and_vectors(&mut self, reals: usize, vectors: usize) -> (&mut [f64], &mut [Vec3]) {
+        self.reals.clear();
+        self.reals.resize(reals, 0.0);
+        self.vectors.clear();
+        self.vectors.resize(vectors, Vec3::new(0.0, 0.0, 0.0));
+        (&mut self.reals, &mut self.vectors)
     }
 }
 
@@ -278,5 +288,10 @@ mod tests {
         scratch.reals(3).copy_from_slice(&[1.0, 2.0, 3.0]);
         assert_eq!(scratch.reals(2), [0.0, 0.0]);
         assert_eq!(scratch.reals(4).len(), 4);
+        let (reals, vectors) = scratch.reals_and_vectors(2, 3);
+        vectors[1] = Vec3::new(1.0, 2.0, 3.0);
+        assert_eq!((reals.len(), vectors.len()), (2, 3));
+        let (_, again) = scratch.reals_and_vectors(1, 2);
+        assert_eq!(again, [Vec3::new(0.0, 0.0, 0.0); 2]);
     }
 }

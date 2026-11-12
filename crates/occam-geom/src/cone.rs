@@ -13,7 +13,9 @@ use occam_units::{Angle, Bounds, Length, Local, ParamKind, Placement, Point, Tan
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
+use crate::bspline::BsplineSurface;
 use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox};
+use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
 use crate::support::{between, not_negative};
@@ -132,6 +134,15 @@ impl Parametric for Cone {
         let [apex] = self.apex;
         let half_angle = Angle::from_radians(self.half_angle);
         Some(Analytic::Cone { apex: apex.point, axis: self.axes.normal, half_angle })
+    }
+
+    fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
+        exact::turned(
+            &self.axes,
+            Meridian::Straight { start: self.radius, slope: self.slope },
+            Parametric::domain(self),
+            patch,
+        )
     }
 }
 

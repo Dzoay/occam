@@ -8,6 +8,7 @@ use occam_units::{Bounds, Length, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
 use crate::batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
+use crate::bspline::BsplineSurface;
 use crate::domain::{Degeneracy, Domain, UvBox};
 use crate::identity::{BatchKey, Content, FamilyName, Shape};
 use crate::support::finite;
@@ -22,21 +23,6 @@ pub struct Closest<P = UvPoint> {
     pub point: Point<World>,
     /// How far it is.
     pub distance: Length,
-}
-
-/// A rational B-spline surface, as a family presents itself where it has one exactly (PARITY 2.2).
-#[derive(Clone, Debug, PartialEq)]
-pub struct BsplineSurface {
-    /// The degree in each parameter.
-    pub degree: (u16, u16),
-    /// How many poles in each parameter.
-    pub count: (u32, u32),
-    /// The knots in `u`.
-    pub knots_u: Vec<f64>,
-    /// The knots in `v`.
-    pub knots_v: Vec<f64>,
-    /// The weighted poles, `count.0 * count.1` of them, a row of constant `v` at a time.
-    pub poles: Vec<[f64; 4]>,
 }
 
 /// What a mesh-backed surface presents (S4, L21).
@@ -147,8 +133,10 @@ pub trait Parametric: Sized + Send + Sync + 'static {
         None
     }
 
-    /// The rational B-spline it is exactly, if it has one.
-    fn to_bspline(&self) -> Option<BsplineSurface> {
+    /// The rational B-spline it is exactly over `patch`, if it has one there: never where the patch is unbounded,
+    /// leaves the domain, is empty, or spans more than a period of a parameter that comes round
+    /// (`docs/decisions/2026-11-11-to-bspline-over-a-range.md`).
+    fn to_bspline(&self, _patch: UvBox) -> Option<BsplineSurface> {
         None
     }
 
@@ -237,7 +225,7 @@ pub trait Surface: Send + Sync {
     fn analytic(&self, tol: Tolerance) -> Option<Analytic>;
 
     /// As [`Parametric::to_bspline`].
-    fn to_bspline(&self) -> Option<BsplineSurface>;
+    fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface>;
 
     /// As [`Parametric::triangles`].
     fn triangles(&self) -> Option<&dyn TriangleView>;
@@ -328,8 +316,8 @@ impl<S: Parametric> Surface for S {
         Parametric::analytic(self, tol)
     }
 
-    fn to_bspline(&self) -> Option<BsplineSurface> {
-        Parametric::to_bspline(self)
+    fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
+        Parametric::to_bspline(self, patch)
     }
 
     fn triangles(&self) -> Option<&dyn TriangleView> {
@@ -359,13 +347,14 @@ mod tests {
     }
 
     fn bspline() -> BsplineSurface {
-        let poles = vec![[0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0], [1.0, 1.0, 0.0, 1.0]];
+        let corner = |x, y| Point::from_vec3(Vec3::new(x, y, 0.0));
         BsplineSurface {
             degree: (1, 1),
             count: (2, 2),
             knots_u: vec![0.0, 0.0, 1.0, 1.0],
             knots_v: vec![0.0, 0.0, 1.0, 1.0],
-            poles,
+            poles: vec![corner(0.0, 0.0), corner(1.0, 0.0), corner(0.0, 1.0), corner(1.0, 1.0)],
+            weights: None,
         }
     }
 
@@ -451,7 +440,7 @@ mod tests {
             &self.lines
         }
 
-        fn to_bspline(&self) -> Option<BsplineSurface> {
+        fn to_bspline(&self, _patch: UvBox) -> Option<BsplineSurface> {
             Some(bspline())
         }
 
@@ -465,7 +454,7 @@ mod tests {
         let family = presenting();
         let s: &dyn Surface = &family;
         assert_eq!(s.degeneracies(), family.lines);
-        assert_eq!(s.to_bspline(), Some(bspline()));
+        assert_eq!(s.to_bspline(UvBox::new(UvPoint::new(0.0, 0.0), UvPoint::new(1.0, 1.0))), Some(bspline()));
         let view = s.triangles().unwrap();
         assert_eq!((view.triangle_count(), view.triangle(1)), (1, None));
         assert_eq!(view.triangle(0).map(|t| t[1]), Some(family.plane.eval_point(UvPoint::new(1.0, 0.0))));

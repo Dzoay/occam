@@ -41,6 +41,17 @@ pub(crate) fn everything() -> Bounds {
     Bounds::around(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0)), Length::from_millimetres(f64::INFINITY))
 }
 
+/// `hull` padded for rounding: 64 machine epsilons of its largest coordinate for each of `terms` sums that computed a
+/// point it is meant to hold.
+pub(crate) fn padded(hull: Bounds, terms: f64) -> Bounds {
+    let (low, high) = (hull.low().to_vec3(), hull.high().to_vec3());
+    let size = [low.x, low.y, low.z, high.x, high.y, high.z]
+        .into_iter()
+        .fold(0.0, |a, x| if x.abs() > a { x.abs() } else { a });
+    let margin = Length::from_millimetres(64.0 * terms * f64::EPSILON * size);
+    Bounds::around(hull.low(), margin).union(&Bounds::around(hull.high(), margin))
+}
+
 /// What a curve's [`Closest`] is when its foot is at `t`.
 pub(crate) fn foot_at<C: ParametricCurve>(curve: &C, p: Point<World>, t: f64) -> Closest<f64> {
     let point = curve.eval_point(t);
@@ -176,6 +187,16 @@ mod tests {
                 (named("low"), named("high")),
                 (Some((Some(0), Quantity::Angle)), Some((Some(1f64.to_bits()), Quantity::Angle)))
             );
+        }
+    }
+
+    #[test]
+    fn a_padded_box_grows_by_epsilons_of_its_largest_coordinate() {
+        // Its lowest x and z are 0, where the margin can be read to a part in a thousand; its largest coordinate is 4.
+        let grown = padded(Bounds::of([point(0.0, 1.0, 2.0), point(4.0, 3.0, 0.0)]).unwrap(), 2.0);
+        let margin = 128.0 * f64::EPSILON * 4.0;
+        for got in [-grown.low().x().millimetres(), -grown.low().z().millimetres()] {
+            assert!((got - margin).abs() <= 1e-3 * margin, "{got} against {margin}");
         }
     }
 

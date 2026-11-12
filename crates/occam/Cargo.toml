@@ -7,6 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+occam-geom = { path = "../occam-geom" }
 occam-math = { path = "../occam-math" }
 occam-report = { path = "../occam-report" }
 occam-units = { path = "../occam-units" }

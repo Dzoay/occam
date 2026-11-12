@@ -130,8 +130,9 @@ pub struct BsplineSurface {
     pub count: (u32, u32),
     pub knots_u: Vec<f64>,
     pub knots_v: Vec<f64>,
-    /// Weighted poles, `count.0 * count.1` of them, row by row.
-    pub poles: Vec<[f64; 4]>,
+    /// `count.0 * count.1` poles, row by row, and a weight for each where it is rational.
+    pub poles: Vec<Point<World>>,
+    pub weights: Option<Vec<f64>>,
 }
 
 /// What a mesh-backed surface presents (S4, L21).
@@ -243,7 +244,8 @@ pub trait Parametric: Sized + Send + Sync + 'static {
         None
     }
 
-    fn to_bspline(&self) -> Option<BsplineSurface> {
+    /// Over a patch, never an unbounded one (docs/decisions/2026-11-11-to-bspline-over-a-range.md).
+    fn to_bspline(&self, _patch: UvBox) -> Option<BsplineSurface> {
         None
     }
 
@@ -301,7 +303,7 @@ pub trait Surface: Send + Sync {
     fn shape(&self) -> Shape;
     fn degeneracies(&self) -> &[Degeneracy];
     fn analytic(&self, tol: Tolerance) -> Option<Analytic>;
-    fn to_bspline(&self) -> Option<BsplineSurface>;
+    fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface>;
     fn triangles(&self) -> Option<&dyn TriangleView>;
 }
 
@@ -385,8 +387,8 @@ impl<S: Parametric> Surface for S {
         Parametric::analytic(self, tol)
     }
 
-    fn to_bspline(&self) -> Option<BsplineSurface> {
-        Parametric::to_bspline(self)
+    fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
+        Parametric::to_bspline(self, patch)
     }
 
     fn triangles(&self) -> Option<&dyn TriangleView> {

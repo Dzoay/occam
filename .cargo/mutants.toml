@@ -26,6 +26,36 @@ exclude_globs = [
 # it applies are in the module's pure functions, which are mutated. The same goes for `gates::main` and `usage`, and for
 # `gates determinism`'s `levels`, which runs the probe and hands its output to `parsed_levels`.
 exclude_re = [
+    # Where the order is the degree, `order` and `p` are the same number, so `<=` picks the same one.
+    "replace < with <= in rows_len$",
+    # The lower or higher of numbers that are equal is either: a tie gives the same number. The lower and higher of
+    # two parameters, a value already at an end of its window, and the largest coordinate of a box.
+    "replace < with <= in ordered$",
+    "replace < with <= in inside$",
+    "replace > with >= in padded$",
+    "foot\\.rs:\\d+:\\d+: replace > with >= in within$",
+    "foot\\.rs:\\d+:\\d+: replace < with <= in within$",
+    "replace > with >= in inside$",
+    # A point as near as the best found is as good a foot: taking it or keeping the best gives the same distance.
+    "replace < with <= in nearer$",
+    "foot\\.rs:\\d+:\\d+: replace < with <= in foot$",
+    # A lane beyond a value's lanes is never read: evaluating it or not changes only the speed.
+    "replace match guard k < R::LANES with true in",
+    "replace < with <= in [A-Za-z]+::rungs$",
+    # Every lane evaluated alone gives the bits the lanes give together, by design: only the speed differs.
+    "replace == with != in SplineCurve::rungs$",
+    # A curve's rungs need 4p + 6 numbers to order 1, which six rows of room for 4 hold at degree 4 and of room for 8 at
+    # degree 8 too: moving either edge by one changes only how much the stack zeroes.
+    "replace < with (==|<=) in SplineCurve::at$",
+    # Refining a sample nearer than its neighbours a second time, as this mutant does, finds what the first time found.
+    "foot\\.rs:\\d+:\\d+: replace && with \\|\\| in foot$",
+    # A sample is its own neighbour only in this mutant, and equal to itself, so it holds as before.
+    "replace > with >= in lowest$",
+    # A slope of exactly zero at an end: frozen or free, the parameter's step there is held at the end by the window.
+    "replace > with >= in free$",
+    "replace < with <= in free$",
+    # Where `a` is 0, `det` is `-b * b`, never above 0, so the pivot test `a > 0` already fails on `det`.
+    "foot\\.rs:57:16: replace > with >= in newton$",
     # The default is the empty slice, and so is this mutant: the same function, which no test can tell apart.
     "replace Parametric::degeneracies -> &\\[Degeneracy\\] with Vec::leak\\(Vec::new\\(\\)\\)",
     # occam-math's exp.rs, by line: an edit there moves them, and the gate then names the mutant again. Below 2^-54 in
