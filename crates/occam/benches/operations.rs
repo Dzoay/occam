@@ -276,4 +276,25 @@ library_benchmark_group!(
     name = topology,
     benchmarks = [topo_snapshot, topo_edit, topo_commit_n1056, topo_commit_n100350]
 );
-main!(library_benchmark_groups = operations, kernels, topology);
+/// A request making each primitive once, in millimetres.
+const PRIMITIVES: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+    {"op": "box", "size": [10, 20, 30]},
+    {"op": "wedge", "size": [10, 5, 4], "top": {"start": 2, "width": 3}},
+    {"op": "cylinder", "radius": 5, "height": 10},
+    {"op": "cone", "radius1": 5, "radius2": 2, "height": 10},
+    {"op": "sphere", "radius": 5},
+    {"op": "torus", "major": 10, "minor": 2}
+]}"#;
+
+// Reading a request and making each primitive once, each step committed and so checked. What it made is leaked, so
+// that the count is the making and not the freeing.
+#[library_benchmark]
+fn construct_primitives() -> bool {
+    let ran = occam::run(None, black_box(PRIMITIVES));
+    let made = ran.failed.is_none() && ran.done.len() == 6;
+    core::mem::forget(ran);
+    made
+}
+
+library_benchmark_group!(name = construction, benchmarks = [construct_primitives]);
+main!(library_benchmark_groups = operations, kernels, topology, construction);

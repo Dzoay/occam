@@ -7,6 +7,7 @@ use serde_json::{Map, Value};
 
 use crate::construct::given::{self, FaceArgs, WireArgs};
 use crate::operation::Operation;
+use crate::primitive::{self, PrimitiveArgs};
 use crate::read::At;
 use crate::request::Units;
 
@@ -20,6 +21,8 @@ pub enum Args {
     Wire(WireArgs),
     /// A face's wires.
     Face(FaceArgs),
+    /// A primitive's shape and frame.
+    Primitive(PrimitiveArgs),
 }
 
 /// What the step at `at`, asking for `operation`, gives in `fields`, its fields other than `op` and `label`, with every
@@ -39,8 +42,8 @@ pub(crate) fn read(
         | Operation::Sphere
         | Operation::Cone
         | Operation::Torus
-        | Operation::Wedge
-        | Operation::Extrude
+        | Operation::Wedge => primitive::read(at, operation, fields, units, out).map_or(Args::None, Args::Primitive),
+        Operation::Extrude
         | Operation::Revolve
         | Operation::Transform
         | Operation::Copy

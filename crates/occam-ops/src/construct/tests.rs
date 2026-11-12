@@ -257,10 +257,3 @@ fn a_face_named_by_something_that_is_not_a_wire_is_refused() {
     let unknown = refused(json!([{"op": "face", "outer": "nowhere"}]));
     assert_eq!(unknown.code, Code::InputUnknownLabel);
 }
-
-#[test]
-fn the_listing_says_wires_and_faces_are_supported() {
-    let listing = crate::listing();
-    let supported: Vec<&str> = listing["supported"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
-    assert_eq!(supported, ["wire", "face"]);
-}

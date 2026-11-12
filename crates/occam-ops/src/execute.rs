@@ -11,6 +11,7 @@ use crate::args::Args;
 use crate::construct;
 use crate::operand::Labels;
 use crate::operation::Operation;
+use crate::primitive;
 use crate::request::Step;
 
 /// Does `step` in `edit`, with `labels` naming what earlier steps made, and gives what it made, if it made one thing a
@@ -26,6 +27,15 @@ pub fn execute(edit: &mut Edit, step: &Step, labels: &Labels) -> Result<Option<E
     match (step.operation, &step.args) {
         (Operation::Wire, Args::Wire(args)) => construct::wire(edit, args),
         (Operation::Face, Args::Face(args)) => construct::face(edit, args, labels),
+        (
+            Operation::Box
+            | Operation::Cylinder
+            | Operation::Sphere
+            | Operation::Cone
+            | Operation::Torus
+            | Operation::Wedge,
+            Args::Primitive(args),
+        ) => primitive::make(edit, args),
         (operation, _) if operation.supported() => {
             Err(Report::new(Code::InputMissing, Fault::InvalidInput).with_input(place("")))
         }
@@ -44,7 +54,7 @@ mod tests {
     #[test]
     fn a_step_built_by_hand_without_what_its_operation_reads_is_refused_as_missing_it() {
         let snapshot = Snapshot::empty(default_tolerance().unwrap());
-        for operation in [Operation::Wire, Operation::Face] {
+        for operation in Operation::ALL.into_iter().filter(|op| op.supported()) {
             let step = Step { index: 2, label: None, operation, parameters: Map::new(), args: Args::None };
             let report = execute(&mut snapshot.edit(), &step, &Labels::default()).unwrap_err();
             assert_eq!((report.code, report.fault), (Code::InputMissing, Some(Fault::InvalidInput)));

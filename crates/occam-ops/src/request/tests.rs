@@ -111,7 +111,7 @@ fn each_kind_of_bad_input_in_a_step_gets_its_code_its_place_and_its_step() {
             vec![bad(Code::InputWrongType, in_step("steps[0].op", None).given("number").expected("text"))],
         ),
         (r#"[{"op": "loft"}]"#, vec![bad(Code::UnknownOperation, in_step("steps[0].op", Some("loft")).given("loft"))]),
-        (r#"[{"op": "box"}]"#, vec![not_done("steps[0].op", "box")]),
+        (r#"[{"op": "fillet"}]"#, vec![not_done("steps[0].op", "fillet")]),
         (
             r#"[{"op": "fillet", "label": ""}]"#,
             vec![
@@ -120,17 +120,17 @@ fn each_kind_of_bad_input_in_a_step_gets_its_code_its_place_and_its_step() {
             ],
         ),
         (
-            r#"[{"op": "box", "label": "edge:1/1"}]"#,
+            r#"[{"op": "fillet", "label": "edge:1/1"}]"#,
             vec![
-                bad(Code::InputLabelNotValid, in_step("steps[0].label", Some("box")).given("edge:1/1")),
-                not_done("steps[0].op", "box"),
+                bad(Code::InputLabelNotValid, in_step("steps[0].label", Some("fillet")).given("edge:1/1")),
+                not_done("steps[0].op", "fillet"),
             ],
         ),
         (
-            r#"[{"op": "box", "label": 7}]"#,
+            r#"[{"op": "fillet", "label": 7}]"#,
             vec![
-                bad(Code::InputWrongType, in_step("steps[0].label", Some("box")).given("number").expected("text")),
-                not_done("steps[0].op", "box"),
+                bad(Code::InputWrongType, in_step("steps[0].label", Some("fillet")).given("number").expected("text")),
+                not_done("steps[0].op", "fillet"),
             ],
         ),
     ];
@@ -157,7 +157,7 @@ fn a_label_an_earlier_step_has_is_refused_naming_that_step() {
 #[test]
 fn every_bad_input_is_reported_at_once_field_by_field() {
     let units = r#""units": {"length": "furlong", "angle": "deg", "extra": 1}"#;
-    let text = format!(r#"{{"schema": 1, "colour": 2, {units}, "steps": [{{"op": "loft"}}, {{"op": "box"}}]}}"#);
+    let text = format!(r#"{{"schema": 1, "colour": 2, {units}, "steps": [{{"op": "loft"}}, {{"op": "fillet"}}]}}"#);
     let codes: Vec<Code> = Request::parse(&text).unwrap_err().iter().map(|r| r.code).collect();
     let want = [
         Code::InputUnknownField,

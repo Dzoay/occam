@@ -33,14 +33,6 @@ real out of [the type sketch](../sketch/src/lib.rs).
 
 ## Steps
 
-### `construction.primitives`
-
-Box, cylinder, sphere, cone, torus and wedge at a given frame (rows 1.12, 2.13), each a closed solid whose periodic
-surfaces are split into chart-sized patches with seams as real edges, and whose poles and apex are vertices.
-
-*Failing test first:* each primitive passes the checker with its expected counts of faces, edges and vertices and a
-genus of 0 (1 for the torus); a size that is not positive is refused with its parameter.
-
 ### `construction.sweeps`
 
 Extrude a face along a vector into a solid, and revolve a face or a wire about an axis into a solid or a sheet (rows

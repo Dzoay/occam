@@ -99,14 +99,15 @@ impl Operation {
     #[must_use]
     pub const fn supported(self) -> bool {
         match self {
-            Self::Wire | Self::Face => true,
-            Self::Box
+            Self::Wire
+            | Self::Face
+            | Self::Box
             | Self::Cylinder
             | Self::Sphere
             | Self::Cone
             | Self::Torus
-            | Self::Wedge
-            | Self::Extrude
+            | Self::Wedge => true,
+            Self::Extrude
             | Self::Revolve
             | Self::Transform
             | Self::Copy
@@ -190,7 +191,8 @@ mod tests {
             let listed = if operation.supported() { &supported } else { &refused };
             assert!(listed.contains(&operation.name().to_string()), "{operation:?}");
         }
-        assert_eq!(refused.first().map(String::as_str), Some("box"));
+        assert_eq!(supported, ["box", "cylinder", "sphere", "cone", "torus", "wedge", "wire", "face"]);
+        assert_eq!(refused.first().map(String::as_str), Some("extrude"));
         assert_eq!(refused.last().map(String::as_str), Some("chamfer"));
     }
 }

@@ -442,6 +442,34 @@ catalogue! {
         "A model holds a curve or surface of a family the native format does not write yet, so it was not saved.",
         "The geometry named is of a family the native format does not write yet, so nothing was saved.",
     }
+
+    /// A size that may be zero but not negative, as a cone's radius or a wedge's top width, is negative.
+    InputNegative = "input.negative" {
+        Error, [],
+        "A request gives a negative value where none may be.",
+        "{parameter} is {value}, which is less than zero.",
+    }
+
+    /// A cone's two radii are equal, which would make it a cylinder, or nothing if both are zero.
+    InputConeRadiiEqual = "input.cone-radii-equal" {
+        Error, [],
+        "A cone's two radii must differ.",
+        "{parameter} is {value}, as is the cone's other radius: a cone's radii differ, and equal ones make a cylinder.",
+    }
+
+    /// A direction a request gives is zero or not finite, so it points nowhere.
+    InputNoDirection = "input.no-direction" {
+        Error, [],
+        "A request gives a direction that is zero or not finite.",
+        "{parameter} is zero or not finite, so it has no direction.",
+    }
+
+    /// A frame's x axis lies along its z axis, so it gives no direction across it.
+    InputAxesParallel = "input.axes-parallel" {
+        Error, [],
+        "A frame's x axis lies along its z axis.",
+        "{parameter} lies along the frame's z axis, so it gives no x direction across it.",
+    }
 }
 
 text_enum! {
@@ -1054,6 +1082,43 @@ mod tests {
         ])
     }
 
+    fn primitive_codes() -> Value {
+        json!([
+            {
+                "name": "InputNegative",
+                "code": "input.negative",
+                "severity": "error",
+                "summary": "A request gives a negative value where none may be.",
+                "template": "{parameter} is {value}, which is less than zero.",
+                "remedies": []
+            },
+            {
+                "name": "InputConeRadiiEqual",
+                "code": "input.cone-radii-equal",
+                "severity": "error",
+                "summary": "A cone's two radii must differ.",
+                "template": "{parameter} is {value}, as is the cone's other radius: a cone's radii differ, and equal ones make a cylinder.",
+                "remedies": []
+            },
+            {
+                "name": "InputNoDirection",
+                "code": "input.no-direction",
+                "severity": "error",
+                "summary": "A request gives a direction that is zero or not finite.",
+                "template": "{parameter} is zero or not finite, so it has no direction.",
+                "remedies": []
+            },
+            {
+                "name": "InputAxesParallel",
+                "code": "input.axes-parallel",
+                "severity": "error",
+                "summary": "A frame's x axis lies along its z axis.",
+                "template": "{parameter} lies along the frame's z axis, so it gives no x direction across it.",
+                "remedies": []
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -1100,6 +1165,7 @@ mod tests {
             construct_codes(),
             face_codes(),
             io_codes(),
+            primitive_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())
