@@ -2,9 +2,9 @@
 //! The hyperbola: `centre + a cosh t x + b sinh t y`, the branch that opens along `x`, with the usual parameter, which
 //! has no unit (PARITY 2.1; `docs/decisions/2026-11-11-exp-from-arm.md`). Its foot is searched for.
 
-use occam_math::{Interval, Real, sinh_cosh};
+use occam_math::{Interval, Real, exp, sinh_cosh};
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, World};
+use occam_units::{Bounds, Direction, Length, Local, ParamKind, Placement, Point, Tangent, World};
 
 use crate::axes::Axes;
 use crate::batch::Scratch;
@@ -13,7 +13,7 @@ use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
 use crate::exact::{self, Conic};
 use crate::identity::{Content, FamilyName, Shape};
-use crate::support::{enclose, exact, positive, span};
+use crate::support::{enclose, exact, positive, seen, span};
 
 /// One branch of a hyperbola, unbounded or trimmed.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -67,6 +67,15 @@ impl ParametricCurve for Hyperbola {
         (self.axes.at(a * cosh, b * sinh), Tangent::new(self.axes.along(a * sinh, b * cosh)))
     }
 
+    #[inline(always)]
+    #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
+    fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
+        let (sinh, cosh) = sinh_cosh(t);
+        let (a, b) = (R::splat(self.radii.0), R::splat(self.radii.1));
+        let (point, along) = (self.axes.at(a * cosh, b * sinh), self.axes.along(a * sinh, b * cosh));
+        (point, Tangent::new(along), Tangent::new(self.axes.along(a * cosh, b * sinh)))
+    }
+
     fn derivatives(
         &self,
         t: f64,
@@ -94,20 +103,34 @@ impl ParametricCurve for Hyperbola {
         enclose([self.axes.reach(exact(self.radii.0) * cosh, exact(self.radii.1) * sinh)])
     }
 
-    /// Where the foot of `p` can be: no further than the point at the parameter nearest 0, so `a cosh t` is at most
-    /// `|u|` and that distance, which bounds `|t|`.
-    fn search(&self, p: Point<World>) -> (f64, f64) {
-        let start = self.range.clamp(0.0);
-        let reach = (self.eval_point(start).to_vec3() - p.to_vec3()).norm() + self.axes.coordinates(p).0.abs();
-        // Doubled up to ten times, to 1024, where `a cosh t` is infinite.
-        let mut limit = 1.0;
-        for _ in 0..10 {
-            if self.radii.0 * sinh_cosh(limit).1 >= reach {
-                break;
-            }
-            limit *= 2.0;
+    /// The point less the centre, seen along `along`, is `off + e^t P / 2 + e^-t M / 2`, for `P = a x + b y` and
+    /// `M = a x - b y`. Where `t` is not below 0 it is at least `e^t |P| / 2 - |M| / 2 - |off|` long, and where it is
+    /// not above 0 at least `e^-t |M| / 2 - |P| / 2 - |off|`: each bounds `t` on its side, by doubling up to ten times,
+    /// to 1024, past where `a cosh t` is infinite. `None` where `along` is an asymptote, `P` or `M` seen as nothing
+    /// within rounding, and the range runs without end that way: there the curve stays near a line along `along`
+    /// however far it runs, and its points, which grow as `e^|t|`, are rounding there before the parameter is anywhere
+    /// near a bound.
+    fn within(&self, centre: Point<World>, along: Option<Direction<World>>, radius: f64) -> Option<(f64, f64)> {
+        let ((a, b), (x, y)) = (self.radii, (self.axes.x, self.axes.y));
+        let (whole, rising) = ((x * a + y * b).norm() * 0.5, seen(x * a + y * b, along).norm() * 0.5);
+        let falling = seen(x * a - y * b, along).norm() * 0.5;
+        let level = |grow: f64, end: f64| grow <= 16.0 * f64::EPSILON * whole && end.is_infinite();
+        if level(rising, self.range.hi) || level(falling, self.range.lo) {
+            return None;
         }
-        (self.range.clamp(-limit), self.range.clamp(limit))
+        let off = seen(self.axes.origin - centre.to_vec3(), along).norm();
+        let past = |grow: f64, bound: f64| {
+            let mut limit = 1.0;
+            for _ in 0..10 {
+                if grow * exp(limit) > bound {
+                    break;
+                }
+                limit *= 2.0;
+            }
+            limit
+        };
+        let (below, above) = (past(falling, radius + off + rising), past(rising, radius + off + falling));
+        Some((self.range.clamp(-below), self.range.clamp(above)))
     }
 
     fn family(&self) -> FamilyName {
@@ -298,5 +321,49 @@ mod tests {
     fn the_suite_catches_a_hyperbola_with_a_wrong_second_derivative() {
         let failed = conformance::checks(&conformance::curve(&conformance::WrongSecondCurve(hyperbola()), -2.0, 2.5));
         assert_eq!(failed, [Check::Differences]);
+    }
+
+    /// The branch about (3, 0, 0), its axes the world's, with radii 1 and 3: `P = (1, 3, 0)`, `M = (1, -3, 0)`.
+    fn steep() -> Hyperbola {
+        let shift = Placement::<World, World>::translation(occam_units::Vector::from_vec3(Vec3::new(3.0, 0.0, 0.0)));
+        let placement = Placement::<Local, World>::identity().then(&shift);
+        Hyperbola::placed(&placement, Length::from_millimetres(1.0), Length::from_millimetres(3.0)).unwrap()
+    }
+
+    #[test]
+    fn a_window_ends_at_the_first_doubling_past_the_bound() {
+        // From (1, 0, 0), 2 off the centre, |P| / 2 = |M| / 2 = rising: e^2 rising is 11.68, just past the bound of 11.6
+        // that this radius gives, and e^1 rising is short of it, so each side ends at 2.
+        let rising = 10f64.sqrt() / 2.0;
+        let radius = 11.6 - 2.0 - rising;
+        let window = ParametricCurve::within(&steep(), Point::from_vec3(Vec3::new(1.0, 0.0, 0.0)), None, radius);
+        assert_eq!(window, Some((-2.0, 2.0)));
+    }
+
+    #[test]
+    fn a_direction_just_off_an_asymptote_still_has_a_window() {
+        // 7e-15 off `P`'s direction: twice the sixteen epsilons of `|P| / 2` that count as along it, and no more.
+        let p = Vec3::new(1.0, 3.0, 0.0) * (1.0 / 10f64.sqrt());
+        let across = Vec3::new(3.0, -1.0, 0.0) * (1.0 / 10f64.sqrt());
+        let along = Direction::normalised(p + across * 7e-15);
+        let window = ParametricCurve::within(&steep(), Point::from_vec3(Vec3::new(1.0, 0.0, 0.0)), Some(along), 1.0);
+        assert!(window.is_some());
+        let on = Direction::normalised(p);
+        assert_eq!(ParametricCurve::within(&steep(), Point::from_vec3(Vec3::new(1.0, 0.0, 0.0)), Some(on), 1.0), None);
+        // 2e-15 off: `P` seen along it is some 3.2e-15 / 2, within the sixteen epsilons of `|P| / 2`, 5.6e-15, though
+        // not within as many over it, 2.2e-15. Along it, as along `P` itself, there is no window.
+        let close = Direction::normalised(p + across * 2e-15);
+        assert_eq!(
+            ParametricCurve::within(&steep(), Point::from_vec3(Vec3::new(1.0, 0.0, 0.0)), Some(close), 1.0),
+            None
+        );
+    }
+
+    #[test]
+    fn a_window_s_bound_is_the_radius_the_offset_and_the_other_side_s_growth_added() {
+        // From (1, 0, 0) with radius 8.3, each side's bound is 8.3 + 2 + 1.581 = 11.88, beyond e^2 times 1.581, 11.68, so
+        // each side doubles on to 4. A product where the sum is, 8.3 + 2 * 1.581 = 11.46, would stop at 2.
+        let window = ParametricCurve::within(&steep(), Point::from_vec3(Vec3::new(1.0, 0.0, 0.0)), None, 8.3);
+        assert_eq!(window, Some((-4.0, 4.0)));
     }
 }

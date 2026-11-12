@@ -36,6 +36,14 @@ pub(crate) fn span(lo: f64, hi: f64) -> Interval {
     Interval::new(mid, (if below > above { below } else { above }).next_up())
 }
 
+/// `v` seen along `along`: with its part along it taken away, or `v` itself where there is none.
+pub(crate) fn seen(v: Vec3, along: Option<occam_units::Direction<World>>) -> Vec3 {
+    along.map_or(v, |d| {
+        let d = d.get();
+        v - d * v.dot(d)
+    })
+}
+
 /// The box holding all of space.
 pub(crate) fn everything() -> Bounds {
     Bounds::around(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0)), Length::from_millimetres(f64::INFINITY))

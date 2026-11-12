@@ -108,36 +108,67 @@ pub(crate) fn part(domain: Domain, patch: UvBox) -> Option<(ParamRange, ParamRan
     Some((domain.u.trimmed(patch.lo.u(), patch.hi.u()).ok()?, domain.v.trimmed(patch.lo.v(), patch.hi.v()).ok()?))
 }
 
-/// The surface with `domain` turned from `meridian` about `axes`, over `patch`, if it could be trimmed to it: for each
-/// pole `(rho, zeta)` of the meridian and `e` of the unit circle, the pole `origin + rho e + zeta z`, weighted by the
-/// product of theirs.
+/// The surface with `domain` turned from `meridian` about `axes`, over `patch`, if it could be trimmed to it: the
+/// meridian's B-spline in the axes' coordinates, turned by [`revolved`].
 pub(crate) fn turned(axes: &Axes, meridian: Meridian, domain: Domain, patch: UvBox) -> Option<BsplineSurface> {
     let (u, v) = part(domain, patch)?;
-    let (u, v, zero) = ((u.lo, u.hi), (v.lo, v.hi), Vec3::new(0.0, 0.0, 0.0));
-    let (knots_u, circle, round) = conic(Conic::Elliptic, (zero, axes.x, axes.y), u)?;
-    let (degree_v, (knots_v, line, along)) = match meridian {
+    let v = (v.lo, v.hi);
+    let profile = match meridian {
         Meridian::Straight { start, slope } => {
-            let at = |t: f64| Vec3::new(start + t * slope.0, t * slope.1, 0.0);
+            let at = |t: f64| Vec3::new(start + t * slope.0, 0.0, t * slope.1);
             (1, span(1, v, vec![at(v.0), at(v.1)]))
         }
         Meridian::Round { centre, radius } => {
-            let (x, y) = (Vec3::new(radius, 0.0, 0.0), Vec3::new(0.0, radius, 0.0));
-            (2, conic(Conic::Elliptic, (Vec3::new(centre, 0.0, 0.0), x, y), v)?)
+            let (x, z) = (Vec3::new(radius, 0.0, 0.0), Vec3::new(0.0, 0.0, radius));
+            (2, conic(Conic::Elliptic, (Vec3::new(centre, 0.0, 0.0), x, z), v)?)
         }
     };
-    let (origin, up) = (axes.origin, axes.normal.get());
-    let poles =
-        line.iter().flat_map(|m| circle.iter().map(move |e| Point::from_vec3(origin + *e * m.x + up * m.y))).collect();
+    revolved(axes, (u.lo, u.hi), profile)
+}
+
+/// A curve's B-spline as a profile to turn about `axes`: its degree and parts, each pole `(a, b, h)` its coordinates
+/// along `axes`' first, second and third axes from the origin.
+pub(crate) fn profile(axes: &Axes, form: BsplineCurve) -> (u16, Parts) {
+    let weights = form.weights.unwrap_or_else(|| vec![1.0; form.poles.len()]);
+    let poles = form.poles.into_iter().map(|p| axes.local(p)).collect();
+    (form.degree, (form.knots, poles, weights))
+}
+
+/// The surface turning `profile`, its degree and parts with each pole `(a, b, h)` in `axes`' coordinates, about
+/// `axes`' normal `z` from angle `u.0` to `u.1`. Each pole of the profile and `e` of the unit circle's arcs give the
+/// pole `origin + h z + a e + b (z × e)`, the profile's pole turned as `e` is, weighted by the product of their
+/// weights (A8.1): turning is linear in a pole, so the rational circle carries every point of the profile round.
+pub(crate) fn revolved(
+    axes: &Axes,
+    u: (f64, f64),
+    (degree_v, (knots_v, line, along)): (u16, Parts),
+) -> Option<BsplineSurface> {
+    let (knots_u, circle, round) = conic(Conic::Elliptic, (Vec3::new(0.0, 0.0, 0.0), axes.x, axes.y), u)?;
+    let (origin, up, circle) = (axes.origin, axes.normal.get(), &circle);
+    let turn =
+        |m: Vec3| circle.iter().map(move |e| Point::from_vec3(origin + up * m.z + *e * m.x + up.cross(*e) * m.y));
+    let poles = line.iter().copied().flat_map(turn).collect();
     let weights = along.iter().flat_map(|wv| round.iter().map(move |wu| wu * wv)).collect();
     let size = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     Some(BsplineSurface {
         degree: (2, degree_v),
-        count: (size(circle.len()), size(line.len())),
+        count: (size(knots_u.len().saturating_sub(3)), size(line.len())),
         knots_u,
         knots_v,
         poles,
         weights: Some(weights),
     })
+}
+
+/// The surface `form` swept along `direction` from `v.0` to `v.1`: the curve's poles moved to each end, the curve's
+/// knots in `u` and one linear span in `v`, each row with the curve's weights.
+pub(crate) fn extruded(form: BsplineCurve, direction: Vec3, v: (f64, f64)) -> BsplineSurface {
+    let moved = |by: f64| form.poles.iter().map(move |p| Point::from_vec3(p.to_vec3() + direction * by));
+    let poles = moved(v.0).chain(moved(v.1)).collect();
+    let weights = form.weights.as_ref().map(|w| w.iter().chain(w).copied().collect());
+    let count = (u32::try_from(form.poles.len()).unwrap_or(u32::MAX), 2);
+    let knots_v = vec![v.0, v.0, v.1, v.1];
+    BsplineSurface { degree: (form.degree, 1), count, knots_u: form.knots, knots_v, poles, weights }
 }
 
 #[cfg(test)]

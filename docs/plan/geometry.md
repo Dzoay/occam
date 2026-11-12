@@ -26,13 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.swept`
-
-Surfaces of revolution and of linear extrusion, of any curve (row 2.2).
-
-*Failing test first:* the suite over each, swept from every curve family; a revolved line is a cylinder or a cone and an
-extruded circle a cylinder, within the band.
-
 ### `geometry.offset`
 
 Offset and trimmed curves and surfaces, of any family; the offset's normal derivative from do Carmo (rows 2.1, 2.2).

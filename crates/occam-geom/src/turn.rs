@@ -45,6 +45,21 @@ pub(crate) fn on_turn_first<R: Real>(axes: &Axes, (a, b): (f64, f64), t: R) -> (
     (axes.at(a * cos, b * sin), Tangent::new(axes.along(-(a * sin), b * cos)))
 }
 
+/// [`on_turn`] and its first and second derivatives, the second `-(a cos t x + b sin t y)`, as
+/// [`turn_derivatives`] gives it.
+#[inline(always)]
+#[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
+pub(crate) fn on_turn_second<R: Real>(
+    axes: &Axes,
+    radii: (f64, f64),
+    t: R,
+) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
+    let (point, rate) = on_turn_first(axes, radii, t);
+    let (sin, cos) = sin_cos(t);
+    let (a, b) = (R::splat(radii.0), R::splat(radii.1));
+    (point, rate, Tangent::new(axes.along(a * -cos, b * -sin)))
+}
+
 /// Appends [`on_turn`]'s derivatives of order 1 to `order`.
 pub(crate) fn turn_derivatives(axes: &Axes, (a, b): (f64, f64), t: f64, order: u8, out: &mut Vec<Tangent<World>>) {
     let (sin, cos) = sin_cos(t);

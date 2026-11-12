@@ -48,8 +48,12 @@ fn orders(c: &dyn Curve, params: &[f64], found: &mut Findings) {
         });
         let asked =
             c.derivatives(t, 3, &mut three, &mut scratch).and_then(|()| c.derivatives(t, 4, &mut four, &mut scratch));
+        let (p2, d1, d2) = c.second(t);
+        let second = bits(p2.to_vec3()) == bits(p.to_vec3()) && d1 == d && three.get(1) == Some(&d2);
         let agree = three.len() == 3 && four.get(..3).map(rates) == Some(rates(&three)) && three.first() == Some(&d);
-        found.expect(Check::Orders, asked.is_ok() && agree, || format!("derivatives disagree with the rungs at {t}"));
+        found.expect(Check::Orders, asked.is_ok() && agree && second, || {
+            format!("derivatives disagree with the rungs at {t}")
+        });
     }
     let outside = c.derivatives(f64::NAN, 1, &mut three, &mut scratch);
     let refused = outside.is_err_and(|report| report.code == Code::UndefinedParameter) && three.is_empty();

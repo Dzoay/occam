@@ -15,7 +15,8 @@ flowchart TB
 Curves repeat both layers as `ParametricCurve` and `Curve`, and parameter curves on a surface as `ParamCurve`. The
 blanket impl is also where a call is checked: a parameter outside the domain, or a point that is not finite, is refused
 there, so no family repeats it. A curve answers the same questions over one parameter, `closest` included, and can be
-trimmed by parameter; where no formula gives a foot, a search shared by every family finds it.
+trimmed by parameter; where no formula gives a foot, a search shared by every family finds it. A curve's rungs run to
+the second, `eval_second`, which a surface swept from it reads in lanes.
 
 ## What a surface answers
 
@@ -53,6 +54,26 @@ point, so the surface is continuous and has its first derivatives alone, and the
 in no triangle is a hole, undefined, and a batch says which. A grid over the parameters finds the triangle, and two
 triangles on an edge decide its side with one computation, so no point falls between them. The foot is the nearest
 point of any triangle, by a scan, as S4's was. Lanes run one at a time, as S4 measured no gain.
+
+## Swept surfaces
+
+A surface of revolution or of linear extrusion holds its curve by type, `Revolution<C>` and `Extrusion<C>`, so the
+curve's rungs run in lanes inside the surface's, and every curve family can be swept. A revolution's partial derivative
+`i` times in the angle and `j` in the curve's parameter turns the curve's `j`-th derivative across the axis by `i`
+quarter turns, as the analytic surfaces turned about an axis do. Each foot reduces exactly to one parameter, a
+revolution's to its meridian's and an extrusion's to its curve seen along the direction, and the curves' shared search
+finds every valley of one parameter, even where a revolution passes through itself, which a grid over two parameters
+can miss. A revolution declares a degenerate line only where an end of the curve lies on the axis, and never guesses at
+a crossing.
+
+A swept curve may run without end, [as the user decided](../decisions/2026-11-12-unbounded-sweeps.md), and the
+surface's parameter then does too. The search still runs over a finite window: a curve family says, through `within`,
+which of its parameters come within a distance of a point, or of a line along a direction, and the curve's own foot of
+the point bounds that distance. Turning about an axis keeps distance from it, so a revolution asks about a ball about
+the axis; an extrusion asks about the line through the point along its direction. A curve that runs along the
+direction without end has no such window, and is refused (`geom.swept-along-itself`): a line along its own direction,
+which sweeps no surface, and a hyperbola along an asymptote, which sweeps a half-plane whose edge is at infinity, where
+the curve's points are rounding long before the search could near it.
 
 ## No cross-family store
 

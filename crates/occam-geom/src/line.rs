@@ -12,7 +12,7 @@ use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
-use crate::support::{enclose, exact, foot_at, splat};
+use crate::support::{enclose, exact, foot_at, seen, splat};
 use crate::surface::Closest;
 
 /// A line, unbounded or trimmed to a segment.
@@ -58,6 +58,12 @@ impl ParametricCurve for Line {
         (self.eval_point(t), Tangent::new(splat(self.direction)))
     }
 
+    #[inline(always)]
+    fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
+        let (point, rate) = self.eval_first(t);
+        (point, rate, Tangent::new(splat(Vec3::new(0.0, 0.0, 0.0))))
+    }
+
     fn derivatives(
         &self,
         _t: f64,
@@ -97,6 +103,19 @@ impl ParametricCurve for Line {
         scratch: &mut Scratch,
     ) -> Result<Closest<f64>, Report> {
         Ok(foot_at(self, p, ParametricCurve::invert(self, p, seed, tol, scratch)?))
+    }
+
+    /// Exactly: the point at `t`, seen along `along`, is no nearer the centre than `|t - t0|` times the direction's
+    /// length seen that way, for `t0` the parameter nearest it. `None` where that length is within the rounding of
+    /// nothing, so that the line runs along `along`.
+    fn within(&self, centre: Point<World>, along: Option<Direction<World>>, radius: f64) -> Option<(f64, f64)> {
+        let (rate, off) = (seen(self.direction, along), seen(centre.to_vec3() - self.origin, along));
+        let length = rate.norm();
+        if length <= 16.0 * f64::EPSILON {
+            return None;
+        }
+        let (nearest, reach) = (off.dot(rate) / (length * length), radius / length);
+        Some((self.range.clamp(nearest - reach), self.range.clamp(nearest + reach)))
     }
 
     fn family(&self) -> FamilyName {

@@ -35,6 +35,20 @@ impl Axes {
         }
     }
 
+    /// Axes about `normal` through `origin`: `x` the world axis least along `normal` with its part along `normal` taken
+    /// away, and `y` the normal across it, so that the three are right-handed. The same axes for the same numbers.
+    pub(crate) fn about(origin: Vec3, normal: Direction<World>) -> Self {
+        let n = normal.get();
+        let world = [Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 1.0)];
+        let least = world.into_iter().fold((Vec3::new(1.0, 0.0, 0.0), f64::INFINITY), |best, axis| {
+            let along = axis.dot(n).abs();
+            if along < best.1 { (axis, along) } else { best }
+        });
+        let across = least.0 - n * least.0.dot(n);
+        let x = across * (1.0 / across.norm());
+        Self { origin, x, y: n.cross(x), normal }
+    }
+
     /// `a x + b y`.
     #[inline(always)]
     pub(crate) fn along<R: Real>(&self, a: R, b: R) -> Vec3<R> {
@@ -109,4 +123,22 @@ impl Axes {
 /// A direction's three coordinates in a named value: they are ratios.
 pub(crate) fn direction(name: &str, d: Vec3) -> NamedValue {
     NamedValue { name: name.to_string(), quantity: Quantity::Ratio, value: Value::Point([d.x, d.y, d.z]) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn axes_about_a_normal_start_from_the_first_world_axis_least_along_it() {
+        // Along X, the Y and Z axes are both square to it: the first, Y, is taken.
+        let x_axis = Axes::about(Vec3::new(1.0, 2.0, 3.0), Direction::normalised(Vec3::new(1.0, 0.0, 0.0)));
+        assert_eq!((x_axis.x, x_axis.y), (Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 1.0)));
+        // Along the diagonal, every axis is as far along it: X, the first, with its part along the normal taken away.
+        let n = Vec3::new(1.0, 1.0, 1.0) * (1.0 / 3f64.sqrt());
+        let diagonal = Axes::about(Vec3::new(0.0, 0.0, 0.0), Direction::normalised(n));
+        let want = Vec3::new(2.0, -1.0, -1.0) * (1.0 / 6f64.sqrt());
+        assert!((diagonal.x - want).norm() < 1e-15 && diagonal.x.dot(n).abs() < 1e-15, "{:?}", diagonal.x);
+        assert!((diagonal.y - n.cross(want)).norm() < 1e-15);
+    }
 }

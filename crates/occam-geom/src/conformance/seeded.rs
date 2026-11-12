@@ -149,6 +149,11 @@ impl<C: ParametricCurve> ParametricCurve for WrongSecondCurve<C> {
         self.0.eval_first(t)
     }
 
+    fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
+        let (point, rate, change) = self.0.eval_second(t);
+        (point, rate, Tangent::new(change.rate() + splat(SEED)))
+    }
+
     fn derivatives(
         &self,
         t: f64,

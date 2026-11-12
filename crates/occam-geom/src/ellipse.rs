@@ -14,7 +14,7 @@ use crate::domain::ParamRange;
 use crate::exact::{self, Conic};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::support::positive;
-use crate::turn::{arc_box, on_turn, on_turn_first, turn, turn_derivatives};
+use crate::turn::{arc_box, on_turn, on_turn_first, on_turn_second, turn, turn_derivatives};
 
 /// An ellipse, or an arc of one.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -54,6 +54,11 @@ impl ParametricCurve for Ellipse {
     #[inline(always)]
     fn eval_first<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>) {
         on_turn_first(&self.axes, self.radii, t)
+    }
+
+    #[inline(always)]
+    fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
+        on_turn_second(&self.axes, self.radii, t)
     }
 
     fn derivatives(

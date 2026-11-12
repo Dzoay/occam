@@ -16,7 +16,9 @@ pub enum Wrap {
     Periodic,
 }
 
-/// One parameter's range.
+/// One parameter's range: finite at both ends, or at neither, as [`ParamRange::trimmed`] and [`ParamRange::unbounded`]
+/// make them. Nothing finds a window on a range with one end finite (`ParametricCurve::within` gives none), so no
+/// family has one.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ParamRange {
     /// The lowest value, or minus infinity.

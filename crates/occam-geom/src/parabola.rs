@@ -4,16 +4,16 @@
 
 use occam_math::Real;
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, World};
+use occam_units::{Bounds, Direction, Length, Local, ParamKind, Placement, Point, Tangent, Vec3, World};
 
 use crate::axes::Axes;
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
-use crate::curve::ParametricCurve;
+use crate::curve::{ParametricCurve, holding};
 use crate::domain::ParamRange;
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
-use crate::support::{enclose, exact, positive, span};
+use crate::support::{enclose, exact, positive, seen, span};
 
 /// A parabola, unbounded or trimmed.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,6 +48,11 @@ impl Parabola {
     }
 }
 
+/// The part of `window` that `other` also holds: its low end above its high where they share nothing.
+fn narrowed(window: (f64, f64), other: (f64, f64)) -> (f64, f64) {
+    (if other.0 > window.0 { other.0 } else { window.0 }, if other.1 < window.1 { other.1 } else { window.1 })
+}
+
 impl ParametricCurve for Parabola {
     #[inline(always)]
     #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
@@ -59,6 +64,12 @@ impl ParametricCurve for Parabola {
     #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
     fn eval_first<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>) {
         (self.eval_point(t), Tangent::new(self.axes.along(t * R::splat(self.half), R::splat(1.0))))
+    }
+
+    #[inline(always)]
+    fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
+        let (point, rate) = self.eval_first(t);
+        (point, rate, Tangent::new(self.axes.along(R::splat(self.half), R::splat(0.0))))
     }
 
     fn derivatives(
@@ -97,13 +108,35 @@ impl ParametricCurve for Parabola {
         enclose([self.axes.reach(span(least, most) * exact(self.quarter), span(lo, hi))])
     }
 
-    /// Where the foot of `p` can be: within the distance to the point at `p`'s own `y` of that `y`, since the curve's
-    /// `y` is its parameter.
+    /// Where the foot of `p` can be: [within](ParametricCurve::within) the distance from `p` of the point at `p`'s
+    /// own `y`, the curve's parameter, and that parameter.
     fn search(&self, p: Point<World>) -> (f64, f64) {
-        let along = self.axes.coordinates(p).1;
-        let start = self.range.clamp(along);
+        let start = self.range.clamp(self.axes.coordinates(p).1);
         let reach = (self.eval_point(start).to_vec3() - p.to_vec3()).norm();
-        (self.range.clamp(along - reach), self.range.clamp(along + reach))
+        holding(self.within(p, None, reach), start)
+    }
+
+    /// The point less the centre, seen along `along`, is `off + t² bend + t rate`. Its part along `bend` is a quadratic
+    /// in `t` that rises without end, and its part across `bend` a line in `t`; neither may exceed the radius, and each
+    /// bounds `t` where it is not nothing. A parabola has no direction along which both are nothing.
+    fn within(&self, centre: Point<World>, along: Option<Direction<World>>, radius: f64) -> Option<(f64, f64)> {
+        let bend = seen(self.axes.x * self.quarter, along);
+        let (rate, off) = (seen(self.axes.y, along), seen(self.axes.origin - centre.to_vec3(), along));
+        let (curved, mut window) = (bend.norm(), (f64::NEG_INFINITY, f64::INFINITY));
+        let unit = if curved > 0.0 { bend * (1.0 / curved) } else { Vec3::new(0.0, 0.0, 0.0) };
+        if curved > 0.0 {
+            let (b, c) = (unit.dot(rate), unit.dot(off) - radius);
+            let root = (b * b - 4.0 * curved * c).sqrt();
+            window = narrowed(window, ((-b - root) / (2.0 * curved), (-b + root) / (2.0 * curved)));
+        }
+        let straight = rate - unit * unit.dot(rate);
+        let slope = straight.norm();
+        if slope > 0.0 {
+            let at = straight.dot(off) / slope;
+            window = narrowed(window, ((-radius - at) / slope, (radius - at) / slope));
+        }
+        let (lo, hi) = window;
+        (lo.is_finite() && hi.is_finite()).then(|| (self.range.clamp(lo), self.range.clamp(hi)))
     }
 
     fn family(&self) -> FamilyName {
@@ -223,5 +256,19 @@ mod tests {
     fn the_suite_catches_a_parabola_with_a_wrong_second_derivative() {
         let failed = conformance::checks(&conformance::curve(&conformance::WrongSecondCurve(parabola()), -20.0, 30.0));
         assert_eq!(failed, [Check::Differences]);
+    }
+
+    fn flat() -> Parabola {
+        Parabola::placed(&Placement::identity(), Length::from_millimetres(1.0)).unwrap()
+    }
+
+    #[test]
+    fn a_window_far_out_is_bounded_by_the_bend_and_close_in_by_the_line_across_it() {
+        // From the vertex, the part along the bend, t^2 / 4, reaches 100 at 20, and the part across, t, at 100.
+        let at = |x: f64, y: f64| Point::from_vec3(Vec3::new(x, y, 0.0));
+        assert_eq!(ParametricCurve::within(&flat(), at(0.0, 0.0), None, 100.0), Some((-20.0, 20.0)));
+        // Seen along the bend's own axis it is a line across: from (0, 5) the parameters within 2 run from 3 to 7.
+        let along = Some(Direction::normalised(Vec3::new(1.0, 0.0, 0.0)));
+        assert_eq!(ParametricCurve::within(&flat(), at(0.0, 5.0), along, 2.0), Some((3.0, 7.0)));
     }
 }

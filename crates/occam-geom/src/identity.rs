@@ -32,6 +32,13 @@ impl Content {
         self.0.extend(family.0.bytes().map(u64::from));
     }
 
+    /// Adds `family`'s name as [`Content::start`] writes it, for a family that holds another, as a swept surface holds
+    /// its curve.
+    pub fn push_family(&mut self, family: FamilyName) {
+        self.0.push(u64::try_from(family.0.len()).unwrap_or(u64::MAX));
+        self.0.extend(family.0.bytes().map(u64::from));
+    }
+
     /// Adds a defining number.
     pub fn push(&mut self, x: f64) {
         self.0.push(canonical_bits(x));
@@ -88,5 +95,9 @@ mod tests {
         let (short, long) = (started("plane"), started("planes"));
         assert_ne!(short, long);
         assert!(short < long, "the length comes first");
+        let mut held = Content::default();
+        held.start(FamilyName("ab"));
+        held.push_family(FamilyName("c"));
+        assert_eq!(held.words(), [2, 97, 98, 1, 99]);
     }
 }

@@ -110,7 +110,7 @@ impl SplineCurve {
     #[inline(always)]
     fn within<R: Real, const N: usize, const M: usize>(&self, s: usize, t: R, order: usize) -> [Vec3<R>; N] {
         let zero = R::splat(0.0);
-        let mut work = [[zero; M]; 6];
+        let mut work = [[zero; M]; 7];
         let mut out = [Vec3::new(zero, zero, zero); N];
         self.jets(s, t, order, work.as_flattened_mut(), &mut out);
         out
@@ -159,6 +159,12 @@ impl ParametricCurve for SplineCurve {
     fn eval_first<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>) {
         let [point, rate] = self.rungs::<R, 2>(t, 1);
         (Point::from_vec3(point), Tangent::new(rate))
+    }
+
+    #[inline(always)]
+    fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
+        let [point, rate, change] = self.rungs::<R, 3>(t, 2);
+        (Point::from_vec3(point), Tangent::new(rate), Tangent::new(change))
     }
 
     fn derivatives(

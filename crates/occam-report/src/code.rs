@@ -58,6 +58,9 @@ text_enum! {
         /// A mesh's triangle names a vertex it does not have, does not run anticlockwise with some area in the surface's
         /// parameters, or overlaps another there.
         TriangleNotValid = "geom.triangle-not-valid",
+        /// A curve was swept along a direction it runs along: a line along its own direction, which makes no surface,
+        /// or a hyperbola along an asymptote without end, which makes one whose edge is at infinity.
+        SweptAlongItself = "geom.swept-along-itself",
     }
 }
 
@@ -116,7 +119,8 @@ impl Code {
             | Self::KnotsNotValid
             | Self::WeightNotPositive
             | Self::NoDerivative
-            | Self::TriangleNotValid => Severity::Error,
+            | Self::TriangleNotValid
+            | Self::SweptAlongItself => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -148,6 +152,9 @@ impl Code {
             Self::NoDerivative => "A surface was asked for a derivative of an order it does not have.",
             Self::TriangleNotValid => {
                 "A mesh's triangle must name three of its vertices, run anticlockwise with some area in the parameters, and overlap no other there."
+            }
+            Self::SweptAlongItself => {
+                "A curve swept along a direction it runs along makes no surface, or one with an edge at infinity."
             }
         }
     }
@@ -185,6 +192,9 @@ impl Code {
             Self::TriangleNotValid => {
                 "Triangle {index} names a vertex there is not, does not run anticlockwise with some area in the parameters, or overlaps another there."
             }
+            Self::SweptAlongItself => {
+                "The curve runs along {direction}, the direction it is swept along: trim it, or sweep it another way."
+            }
         }
     }
 
@@ -207,7 +217,8 @@ impl Code {
             | Self::KnotsNotValid
             | Self::WeightNotPositive
             | Self::NoDerivative
-            | Self::TriangleNotValid => &[],
+            | Self::TriangleNotValid
+            | Self::SweptAlongItself => &[],
         }
     }
 }
@@ -448,6 +459,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A mesh's triangle must name three of its vertices, run anticlockwise with some area in the parameters, and overlap no other there.",
                 "template": "Triangle {index} names a vertex there is not, does not run anticlockwise with some area in the parameters, or overlaps another there.",
+                "remedies": [],
+            },
+            {
+                "name": "SweptAlongItself",
+                "code": "geom.swept-along-itself",
+                "severity": "error",
+                "summary": "A curve swept along a direction it runs along makes no surface, or one with an edge at infinity.",
+                "template": "The curve runs along {direction}, the direction it is swept along: trim it, or sweep it another way.",
                 "remedies": [],
             },
         ])

@@ -106,4 +106,28 @@ exclude_re = [
     "in (measure|browser|built|counts|summaries|levels)$",
     "replace (main|usage) -> ExitCode",
     "in (main|usage)$",
+    # The swept step's (geometry.swept). Ties, which give the same value either way: the window that holds an anchor, the
+    # part two windows share, the doubling that first passes a bound, and the box of a turned curve's part.
+    "curve\\.rs:\\d+:\\d+: replace < with <= in holding$",
+    "curve\\.rs:\\d+:\\d+: replace > with >= in holding$",
+    "parabola\\.rs:\\d+:\\d+: replace > with >= in narrowed$",
+    "parabola\\.rs:\\d+:\\d+: replace < with <= in narrowed$",
+    "hyperbola\\.rs:\\d+:\\d+: replace > with >= in <impl ParametricCurve for Hyperbola>::within$",
+    "replace > with >= in <impl Parametric for Revolution<C>>::bounds$",
+    "replace < with <= in <impl Parametric for Revolution<C>>::bounds$",
+    # `|a x + b y|` is `|a x - b y|`, for the perpendicular unit axes `x` and `y`.
+    "hyperbola\\.rs:115:39: replace \\+ with - in <impl ParametricCurve for Hyperbola>::within$",
+    # Exactly no bend, or no slope across it: that branch's bounds are NaN, which narrowing a window ignores.
+    "parabola\\.rs:127:19: replace > with >= in <impl ParametricCurve for Parabola>::within$",
+    "parabola\\.rs:134:18: replace > with >= in <impl ParametricCurve for Parabola>::within$",
+    # No window or range has exactly one end finite: ranges are whole, trimmed at both ends, or without end both ways,
+    # and a parabola's window narrows from both ends at once.
+    "parabola\\.rs:139:25: replace && with \\|\\| in <impl ParametricCurve for Parabola>::within$",
+    "swept\\.rs:\\d+:\\d+: replace && with \\|\\| in window$",
+    # `side` is -1 or 1, never 0.
+    "revolution\\.rs:\\d+:\\d+: replace < with <= in collapse$",
+    # Refining more pieces, or one whose slope is exactly zero at a sample, which the piece before already refines to,
+    # finds no point nearer than the minimum the search finds without them.
+    "nearest\\.rs:69:21: replace < with <= in nearest_by$",
+    "nearest\\.rs:69:27: replace && with \\|\\| in nearest_by$",
 ]

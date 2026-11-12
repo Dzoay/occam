@@ -410,6 +410,8 @@ impl<S: Parametric> Surface for S {
 pub trait ParametricCurve: Sized + Send + Sync + 'static {
     fn eval_point<R: Real>(&self, t: R) -> Point<World, R>;
     fn eval_first<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>);
+    /// The second rung, which a swept surface reads in lanes.
+    fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>);
 
     /// # Errors
     ///
@@ -417,6 +419,9 @@ pub trait ParametricCurve: Sized + Send + Sync + 'static {
     fn derivatives(&self, t: f64, order: u8, out: &mut Vec<Tangent<World>>) -> Result<(), Report>;
     fn range(&self) -> ParamRange;
     fn bounds(&self, lo: f64, hi: f64) -> Bounds;
+    /// A finite window of parameters holding every one within `radius` of `centre`, or of the line through it along
+    /// `along`: how a foot on a curve without end, or on a surface swept from one, is searched for.
+    fn within(&self, centre: Point<World>, along: Option<Direction<World>>, radius: f64) -> Option<(f64, f64)>;
 
     /// # Errors
     ///
