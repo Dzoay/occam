@@ -27,18 +27,6 @@ fields. Names and colours arrive with `exchange`, and the describer and the nati
 
 ## Steps
 
-### `topology.records`
-
-The records [the topic](../architecture/topology.md#entities) lists: body (solid, sheet or wire), shell, face
-(orientation, sheet), loop (witness), wire, edge use (direction, next around, next use of the same edge, parameter
-curve), edge (range, role, deviation), vertex (position, certified radius, one edge of its star), and the tables of
-surfaces, curves and parameter curves. Per-kind views read them field by field, so the layout stays this module's
-alone (O22). Adjacency: the faces around an edge in radial order, the loops and edges of a face, the edges at a vertex
-(row 1.1).
-
-*Failing test first:* a cube, a cylinder of two patches split at its seam, a sheet and a wire body, built through
-`Edit`, list each entity once and answer every adjacency query as counted by hand.
-
 ### `topology.checker`
 
 `commit` checks what was created or changed and its neighbours, and keeps the global counts (P1). Closure: each loop's

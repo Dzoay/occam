@@ -13,11 +13,14 @@
 mod check;
 mod edit;
 mod kind;
+#[cfg(test)]
+mod models;
 mod records;
 mod snapshot;
 mod table;
 #[cfg(test)]
 mod testing;
+mod view;
 
 pub use edit::{Changes, Derivation, Edit, Lineage};
 pub use kind::{
@@ -28,3 +31,4 @@ pub use records::{
     ParamCurveRecord, Provenance, Sheet, ShellRecord, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
 };
 pub use snapshot::Snapshot;
+pub use view::View;

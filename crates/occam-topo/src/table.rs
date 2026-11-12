@@ -75,6 +75,12 @@ impl<R: Clone> Table<R> {
         Self { chunks: Vec::new(), free: Vec::new(), lowest: 0, most }
     }
 
+    /// How many slots it has, live or not.
+    pub(crate) fn len(&self) -> usize {
+        let full = self.chunks.len().saturating_sub(1).saturating_mul(CHUNK);
+        full.saturating_add(self.chunks.last().map_or(0, |chunk| chunk.len()))
+    }
+
     /// The slot numbered `slot`, if the table has one.
     pub(crate) fn slot(&self, slot: u32) -> Option<&Slot<R>> {
         let (chunk, at) = place(slot)?;
@@ -140,9 +146,7 @@ impl<R: Clone> Table<R> {
 
     /// Reserves a new slot at the end, at generation 1.
     fn append(&mut self) -> Option<(u32, NonZeroU32)> {
-        let count = self.chunks.len().saturating_sub(1).saturating_mul(CHUNK);
-        let count = count.saturating_add(self.chunks.last().map_or(0, |chunk| chunk.len()));
-        let slot = u32::try_from(count).ok().filter(|&n| n < self.most)?;
+        let slot = u32::try_from(self.len()).ok().filter(|&n| n < self.most)?;
         if self.chunks.last().is_none_or(|chunk| chunk.len() >= CHUNK) {
             self.chunks.push(Arc::new(Vec::with_capacity(CHUNK)));
             self.free.push(0);
@@ -229,7 +233,7 @@ mod tests {
     #[test]
     fn slots_are_given_in_order_across_chunk_boundaries() {
         let table = filled(2050);
-        assert_eq!(table.chunk_count(), 3);
+        assert_eq!((table.chunk_count(), table.len(), Table::<u32>::new().len()), (3, 2050, 0));
         for slot in [0, 1023, 1024, 1025, 2047, 2048, 2049] {
             assert_eq!(table.live(slot, one()), Some(&slot), "slot {slot}");
         }
