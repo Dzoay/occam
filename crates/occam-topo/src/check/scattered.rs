@@ -8,13 +8,13 @@ use occam_report::{EntityKind, EntityRef, Reason};
 
 use super::incremental::whole_searches;
 use super::read::reads;
-use super::tests::{Failure, clean, failures, second_shell, split, split_square, whole};
+use super::tests::{Failure, clean, failures, second_shell, split_square, whole};
 use crate::edit::{Changes, Edit};
 use crate::kind::sealed::Sealed;
 use crate::kind::{
     Body, CurveGeom, Edge, EdgeUse, Face, Id, Kind, Loop, ParamCurveGeom, Shell, SurfaceGeom, Vertex, Wire,
 };
-use crate::models::{Built, Spec, build, plate, ring, straight_pcurves};
+use crate::models::{Built, Spec, build, plate, ring, split, straight_pcurves};
 use crate::snapshot::Snapshot;
 use crate::testing::{serial, tolerance};
 

@@ -1,7 +1,8 @@
 //! Source: original
 //! Instruction counts per operation class, scalar and lanes (L31). `gates perf` compares them with `ci/perf-baseline.txt`.
 //! They run as a static musl build, so that no machine's libc or CPU features change the counts. Each lane kernel runs at
-//! width 1, `<kernel>_w1`, and at its width, `<kernel>_w<width>`, which `gates perf` holds to a clear gain (L29).
+//! width 1, `<kernel>_w1`, and at its width, `<kernel>_w<width>`, which `gates perf` holds to a clear gain (L29). An
+//! operation measured on models of several sizes, `<operation>_n<faces>`, is held to about the same count on each (P1).
 #![allow(clippy::unwrap_used, missing_docs, reason = "a benchmark, where a failed setup should stop the run")]
 
 use std::hint::black_box;
@@ -10,6 +11,8 @@ use gungraun::{library_benchmark, library_benchmark_group, main};
 use occam::spline_workloads as splines;
 use occam::{Angle, Jets, Lanes, Length, Model, Point, Real, SplineSurface, Tolerance, UvPoint, World, distance};
 use occam_math::{Exec, Level, stream, width, workloads};
+use occam_topo::Edit;
+use occam_topo::workloads::Plate;
 
 fn mm(value: f64) -> Length {
     Length::from_millimetres(value)
@@ -153,4 +156,64 @@ library_benchmark_group!(
     benchmarks =
         [masks_w1, masks_w8, filter_w1, filter_w4, sines_w1, sines_w4, angles_w1, angles_w4, splines_w1, splines_w4]
 );
-main!(library_benchmark_groups = operations, kernels);
+/// The plates of the topology's classes, by squares across: 22 gives 1,056 faces and 223 gives 100,350.
+const SMALL: usize = 22;
+const LARGE: usize = 223;
+
+/// A plate built and committed: setup, which the counts leave out.
+fn plate(across: usize) -> Plate {
+    Plate::new(across, &Exec::serial()).unwrap()
+}
+
+/// A plate and an edit of it splitting its middle top square, not yet committed.
+fn split_middle(across: usize) -> (Plate, Edit) {
+    let plate = plate(across);
+    let edit = plate.split(plate.snapshot(), &[(across / 2, across / 2)]);
+    (plate, edit)
+}
+
+/// Commits `edit` and leaks what it made and the plate, so that the count is the commit's and not the freeing of a
+/// whole model.
+fn commit(plate: Plate, edit: Edit) -> bool {
+    let committed = edit.commit(&Exec::serial()).map(core::mem::forget).is_ok();
+    core::mem::forget(plate);
+    committed
+}
+
+// Taking a snapshot of a plate of 1,056 faces: a pointer copied for each chunk of each table. The smaller plate, as
+// building the larger under Valgrind costs the gate a quarter of an hour.
+#[library_benchmark]
+#[bench::plate(plate(SMALL))]
+fn topo_snapshot(plate: Plate) -> usize {
+    let taken = black_box(plate.snapshot().clone());
+    core::mem::forget((taken, plate));
+    SMALL
+}
+
+// An edit splitting one top square of a plate of 30 faces, and its commit, which checks it.
+#[library_benchmark]
+#[bench::plate(plate(3))]
+fn topo_edit(plate: Plate) -> bool {
+    let edit = plate.split(plate.snapshot(), black_box(&[(1, 1)]));
+    commit(plate, edit)
+}
+
+// The commit of an edit splitting one face, of 1,056 faces.
+#[library_benchmark]
+#[bench::split(split_middle(SMALL))]
+fn topo_commit_n1056((plate, edit): (Plate, Edit)) -> bool {
+    commit(plate, black_box(edit))
+}
+
+// The same commit, of 100,350 faces.
+#[library_benchmark]
+#[bench::split(split_middle(LARGE))]
+fn topo_commit_n100350((plate, edit): (Plate, Edit)) -> bool {
+    commit(plate, black_box(edit))
+}
+
+library_benchmark_group!(
+    name = topology,
+    benchmarks = [topo_snapshot, topo_edit, topo_commit_n1056, topo_commit_n100350]
+);
+main!(library_benchmark_groups = operations, kernels, topology);

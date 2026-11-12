@@ -181,6 +181,7 @@ dependencies = [
  "occam-geom",
  "occam-math",
  "occam-report",
+ "occam-topo",
  "occam-units",
 ]
 

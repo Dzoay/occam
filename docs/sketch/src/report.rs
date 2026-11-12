@@ -62,6 +62,12 @@ pub struct Origin {
     pub role: StepRole,
 }
 
+/// NEW, and the sketch's until `construction`'s describer gives it a home: anything that can say what an entity is, a
+/// snapshot for the model's entities and a failed operation's frozen outputs for the ones that exist only there (O26).
+pub trait Describe: Sync {
+    fn describe(&self, entity: EntityRef) -> Option<Description>;
+}
+
 /// NEW. What an entity is in the caller's terms (S6, O26). Filled by one resolver as the result leaves the kernel, never
 /// at a failure site.
 #[derive(Clone, Debug, PartialEq)]

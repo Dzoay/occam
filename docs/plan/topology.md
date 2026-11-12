@@ -27,11 +27,4 @@ fields. Names and colours arrive with `exchange`, and the describer and the nati
 
 ## Steps
 
-### `topology.scale`
-
-S3-P3's snapshot and edit benchmarks at 10⁶ faces on the real records, beside the spike's numbers (goal), and the
-checker's speed-up at six cores, which [the records risk](../architecture/risks.md) watches. Taking a snapshot, an
-edit and its commit join `gates perf`. The type sketch's `topo.rs` is deleted, and the sketch uses the real crate.
-
-*Failing test first:* `gates perf` fails until the new benchmarks are in its record; a commit changing one face counts
-about the same instructions on 10³ faces as on 10⁵.
+Every step is done; the exit gate above is checked on the milestone's PR.

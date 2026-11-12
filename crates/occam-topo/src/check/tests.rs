@@ -2,23 +2,18 @@
 //! The checker's tests: every clean model commits and passes the whole-model checks; each invariant has a seeded
 //! corruption of a clean model that a commit and the whole-model checks both catch, naming the entities; and what a
 //! commit reads follows the edit, not the model.
-#![expect(clippy::arithmetic_side_effects, reason = "small indices in tests")]
 
-use core::f64::consts::SQRT_2;
-use std::sync::Arc;
-
-use occam_geom::Line;
 use occam_report::StepRole;
-use occam_units::{Direction, Length, UvPoint};
+use occam_units::{Length, UvPoint};
 
 use super::read::reads;
 use super::*;
 use crate::edit::Changes;
 use crate::kind::{CurveGeom, Edge, EdgeUse, Face, Loop, Record, Shell, Vertex};
-use crate::models::{Built, Spec, build, cube, cylinder, frame, join_star, pinched, plate, point, sheet, wire};
+use crate::models::{Built, Spec, build, cube, cylinder, frame, pinched, plate, point, sheet, split, top_square, wire};
 use crate::records::{
-    Around, BodyKind, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, ShellRecord,
-    UseOwner, VertexRecord,
+    Around, BodyKind, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, ShellRecord, UseOwner,
+    VertexRecord,
 };
 use crate::snapshot::Snapshot;
 use crate::testing::{serial, tolerance, x_axis};
@@ -476,59 +471,11 @@ fn a_use_of_an_edge_that_lists_no_uses_is_not_listed() {
     assert_eq!(found, (expected.clone(), expected.clone()));
 }
 
-/// Splits the square `face` of a plate's top by its diagonal into two triangles, in `edit`. The new triangle joins the
-/// plate's shell by naming it and sharing the diagonal.
-pub(super) fn split(edit: &mut Edit, face: Id<Face>) {
-    let (square, sides) = (edit.record(face).unwrap(), face_uses(edit, face));
-    let ends = |edit: &Edit, x: Id<EdgeUse>| {
-        let (side, edge) = (edit.record(x).unwrap(), edit.record(edit.record(x).unwrap().edge).unwrap());
-        if side.reversed { (edge.ends.1, edge.ends.0) } else { edge.ends }
-    };
-    let (from, to) = (ends(edit, sides[0]).0, ends(edit, sides[1]).1);
-    let at = edit.record(from).unwrap().point;
-    let towards = edit.record(to).unwrap().point.to_vec3() - at.to_vec3();
-    let curve = edit.add(CurveRecord(Arc::new(Line::new(at, Direction::normalised(towards)))));
-    let (diagonal, da, db, other, half) =
-        (edit.reserve::<Edge>(), edit.reserve(), edit.reserve(), edit.reserve::<Loop>(), edit.reserve::<Face>());
-    let around = (
-        join_star(edit, from, Around { edge: diagonal, end: End::Start }),
-        join_star(edit, to, Around { edge: diagonal, end: End::Finish }),
-    );
-    let (born, deviation, role) = (edit.provenance(StepRole::Made), Length::from_millimetres(0.0), EdgeRole::Ordinary);
-    let record = EdgeRecord {
-        curve,
-        range: (0.0, SQRT_2),
-        ends: (from, to),
-        around,
-        first_use: Some(da),
-        role,
-        deviation,
-        born,
-    };
-    edit.set(diagonal, record).unwrap();
-    let a_use = |owner, next, radial, reversed| EdgeUseRecord {
-        edge: diagonal,
-        owner,
-        next: Some(next),
-        radial,
-        reversed,
-        pcurve: None,
-    };
-    edit.set(da, a_use(UseOwner::Loop(square.outer), sides[0], db, true)).unwrap();
-    edit.set(db, a_use(UseOwner::Loop(other), sides[2], da, false)).unwrap();
-    change(edit, sides[1], |r: &mut EdgeUseRecord| r.next = Some(da));
-    change(edit, sides[2], |r: &mut EdgeUseRecord| r.owner = UseOwner::Loop(other));
-    change(edit, sides[3], |r: &mut EdgeUseRecord| (r.owner, r.next) = (UseOwner::Loop(other), Some(db)));
-    change(edit, square.outer, |r: &mut LoopRecord| r.witness = UvPoint::new(1.0 / 6.0, -1.0 / 6.0));
-    let witness = UvPoint::new(-1.0 / 6.0, 1.0 / 6.0);
-    edit.set(other, LoopRecord { face: half, first: sides[2], next: None, witness }).unwrap();
-    edit.set(half, FaceRecord { outer: other, born, ..square }).unwrap();
-}
-
-/// Splits the middle top square of a plate `k` squares across by its diagonal into two triangles, and commits it.
+/// Splits the middle top square of a plate `k` squares across by its diagonal into two triangles, and commits it. The new
+/// triangle joins the plate's shell by naming it and sharing the diagonal.
 pub(super) fn split_square(snapshot: &Snapshot, built: &Built, k: usize) -> Result<(Snapshot, Changes), Vec<Report>> {
     let mut edit = snapshot.edit();
-    split(&mut edit, built.faces[k * k + (k / 2) * k + k / 2]);
+    split(&mut edit, top_square(built, k, (k / 2, k / 2)));
     edit.commit(&serial())
 }
 

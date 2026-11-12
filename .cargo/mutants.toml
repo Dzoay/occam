@@ -20,6 +20,15 @@ exclude_globs = [
     # Measured by `gates perf`, whose record catches a change in what they compute. No test can.
     "crates/occam/benches/*.rs",
     "crates/occam-wasm/examples/*.rs",
+    # The topology's test models and helpers, which the tests build from: a mutant changes what a test builds, not the
+    # kernel. They are compiled outside the tests only for the hidden probe and bench features, which nothing ships.
+    "crates/occam-topo/src/models.rs",
+    "crates/occam-topo/src/models/*.rs",
+    "crates/occam-topo/src/testing.rs",
+    # What `gates determinism` hashes and `gates perf` times: their records catch a change in what these compute.
+    "crates/occam-topo/src/probe.rs",
+    "crates/occam-topo/src/workloads.rs",
+    "crates/occam-topo/examples/*.rs",
 ]
 
 # Each gate's `run` gathers its input through `repo` and is exercised by running the gate, not by unit tests; the rules
@@ -202,4 +211,7 @@ exclude_re = [
     # from its chord by about 2^-48 of what the first does, below a double's resolution of the distance to it, so it is
     # still unsure there only where the band and that distance agree to the last bit. Not a tie; no test can reach it.
     "trace\\.rs:386:55: replace < with <= in Trace<'_>::refine$",
+    # The scale step's (topology.scale). A tie: an operation measured at one size alone is its own smallest and largest,
+    # so it never grows.
+    "perf\\.rs:\\d+:\\d+: replace < with <= in check_growth$",
 ]

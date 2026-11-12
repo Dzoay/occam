@@ -16,10 +16,17 @@ occam-units = { path = "../occam-units" }
 # The determinism probe and the models it builds, for `gates determinism` (examples/determinism.rs). Nothing that ships
 # turns it on.
 determinism = []
+# The plates and edits `gates perf` counts and examples/scale.rs times, built from the tests' models. Nothing that ships
+# turns it on.
+workloads = []
 
 [[example]]
 name = "determinism"
 required-features = ["determinism"]
+
+[[example]]
+name = "scale"
+required-features = ["workloads"]
 
 [lints]
 workspace = true

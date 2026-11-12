@@ -21,10 +21,12 @@ use crate::records::{
 };
 
 mod geometric;
+mod split;
 
 pub(crate) use geometric::{
     cylinder_from, cylinder_pcurves, disc, holed_sheet, sheet_holed_by_its_reversal, straight_pcurves,
 };
+pub(crate) use split::{split, top_square};
 
 /// An edge: its curve, the part of it, the indices of its start and finish vertices, and its role.
 pub(crate) struct EdgeSpec {

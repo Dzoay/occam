@@ -7,8 +7,9 @@ use occam_math::Exec;
 use crate::ops::{Ran, Request};
 use occam_report::EntityRef;
 
-use crate::report::Details;
-use crate::topo::{Describe, Snapshot};
+use occam_topo::Snapshot;
+
+use crate::report::{Describe, Description, Details};
 
 /// Runs a request against a model, or against a new one.
 #[must_use]
@@ -55,6 +56,12 @@ impl Session {
     /// The request's results as JSON, with the new model's native bytes when it changed.
     #[must_use]
     pub fn run(&mut self, request: &str) -> (String, Option<Vec<u8>>) {
+        unimplemented!()
+    }
+}
+
+impl Describe for Snapshot {
+    fn describe(&self, entity: EntityRef) -> Option<Description> {
         unimplemented!()
     }
 }

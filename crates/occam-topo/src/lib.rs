@@ -17,8 +17,9 @@ mod geometric;
 mod kind;
 #[cfg(test)]
 mod models;
-/// The tests' models, built outside the tests only for the determinism probe, which nothing that ships turns on.
-#[cfg(all(feature = "determinism", not(test)))]
+/// The tests' models, built outside the tests only for the determinism probe and the workloads, which nothing that ships
+/// turns on.
+#[cfg(all(any(feature = "determinism", feature = "workloads"), not(test)))]
 #[allow(
     dead_code,
     unused_imports,
@@ -35,12 +36,15 @@ mod snapshot;
 mod table;
 #[cfg(test)]
 mod testing;
-/// What the tests share, which the models use, so it comes with them for the determinism probe.
-#[cfg(all(feature = "determinism", not(test)))]
+/// What the tests share, which the models use, so it comes with them for the determinism probe and the workloads.
+#[cfg(all(any(feature = "determinism", feature = "workloads"), not(test)))]
 #[allow(dead_code, clippy::unwrap_used, reason = "what the tests share, as they are written")]
 mod testing;
 mod view;
 mod whole;
+#[cfg(any(test, feature = "workloads"))]
+#[doc(hidden)]
+pub mod workloads;
 
 pub use edit::{Changes, Derivation, Edit, Lineage};
 pub use kind::{

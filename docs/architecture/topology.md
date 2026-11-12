@@ -1,6 +1,6 @@
 # Topology
 
-[Architecture](../ARCHITECTURE.md) › Topology · crate `occam-topo` · sketch [`topo.rs`](../sketch/src/topo.rs)
+[Architecture](../ARCHITECTURE.md) › Topology · crate [`occam-topo`](../../crates/occam-topo/src/lib.rs)
 
 The B-rep: what the entities hold, how they are named, how they are stored, and the one way to change them.
 
