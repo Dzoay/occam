@@ -75,6 +75,29 @@ direction without end has no such window, and is refused (`geom.swept-along-itse
 which sweeps no surface, and a hyperbola along an asymptote, which sweeps a half-plane whose edge is at infinity, where
 the curve's points are rounding long before the search could near it.
 
+## Offset and trimmed
+
+An offset `S + d N` and a trimmed surface or curve hold what they wrap by type, `OffsetSurface<S>`, `OffsetCurve<C>`,
+`TrimmedSurface<S>` and `TrimmedCurve<C>`, so the base's rungs run in lanes inside theirs and any family can be
+wrapped, offsets and trims included.
+
+The offset's partials to an order need the base's to the order above, through the unit normal's. Those come exactly, to
+any order, from do Carmo's Gauss map written as products: `M = Su x Sv` by Leibniz's rule, its length `r` from
+`r r = M . M`, and `N = M / r` divided as a rational spline is by its weight. So an offset has one order fewer than its
+base, and a base without second derivatives, a mesh, has no continuous normal and is refused (`geom.not-smooth`). Its
+second rung needs the base's third derivatives, which no rung gives, so it runs a lane at a time through
+`derivatives`. Where `Su x Sv` vanishes the offset is undefined; a degenerate line that declares its normal, as a
+sphere's pole, moves along it and stays declared. A curve's offset is `C + d (C' x V) / |C' x V|` for a reference
+direction `V`: in a plane square to `V`, to its right as it runs where `d` is above zero.
+
+An offset presents its base's form where that stays a form: a plane moved, and a cylinder, a sphere and a torus's tube
+grown while above zero and facing as before. A cone's two nappes move to two cones, and a form shrunk through its axis
+faces inward, which no form says, so neither is presented. Its B-spline is the base's under the affine map the offset
+is for a plane, a sphere and a cylinder; elsewhere it has none. Its foot starts from the base's, which is the offset's
+wherever the distance is within the base's radii of curvature on that side, and over a finite domain the shared search
+from there finds it where it is not. A trimmed family's foot is the base's where that lies in the trimmed part, and
+otherwise is searched for there.
+
 ## No cross-family store
 
 Calls are **sorted** by family and degree; geometry is **stored** one item a slot, in the snapshot's tables. Grouping

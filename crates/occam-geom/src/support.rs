@@ -72,6 +72,16 @@ pub(crate) fn positive(size: Length) -> Result<f64, Report> {
     if millimetres > 0.0 && millimetres.is_finite() { Ok(millimetres) } else { Err(not_positive(millimetres)) }
 }
 
+/// `size` in millimetres, which must be a finite number of either sign, as an offset's distance is.
+pub(crate) fn finite_size(size: Length) -> Result<f64, Report> {
+    let millimetres = size.millimetres();
+    if millimetres.is_finite() {
+        Ok(millimetres)
+    } else {
+        Err(Report::new(Code::NotFinite, Fault::InvalidInput).with_value(NamedValue::length("value", millimetres)))
+    }
+}
+
 /// `size` in millimetres, which must be a finite number not below zero, as a cone's radius where it is placed is. Zero
 /// of either sign is +0, so that equal sizes have equal bits.
 pub(crate) fn not_negative(size: Length) -> Result<f64, Report> {

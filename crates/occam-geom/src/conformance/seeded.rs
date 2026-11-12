@@ -1,11 +1,14 @@
 //! Source: original
 //! Families with a seeded fault, which the suite must catch: each passes everything through to a real family except a
 //! second derivative wrong by a thousandth, or, for a surface, a first derivative wrong as much or the form it presents.
+//! One more passes everything through but its fit: a line that says it was sampled, to show a fit is passed on. A
+//! surface may also say it has derivatives to some order alone, to show the limit is passed on.
 
 use occam_math::Real;
 use occam_report::Report;
-use occam_units::{Bounds, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Bounds, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
+use crate::line::Line;
 use crate::support::splat;
 use crate::{
     Analytic, Closest, Content, Degeneracy, Domain, FamilyName, Jet1, Jet2, ParamRange, Parametric, ParametricCurve,
@@ -24,6 +27,8 @@ enum Fault {
     Second,
     /// It presents this form rather than its own.
     Form(Analytic),
+    /// It says it has derivatives to this order alone.
+    Capped(u8),
 }
 
 /// A surface with a seeded fault.
@@ -42,6 +47,11 @@ pub(crate) const fn wrong_second<S>(surface: S) -> Seeded<S> {
     Seeded { surface, fault: Fault::Second }
 }
 
+/// `surface` saying it has derivatives to `order` alone.
+pub(crate) const fn capped<S>(surface: S, order: u8) -> Seeded<S> {
+    Seeded { surface, fault: Fault::Capped(order) }
+}
+
 /// `surface` presenting `form` rather than its own.
 pub(crate) const fn wrong_form<S>(surface: S, form: Analytic) -> Seeded<S> {
     Seeded { surface, fault: Fault::Form(form) }
@@ -56,7 +66,7 @@ impl<S: Parametric> Parametric for Seeded<S> {
         let jet = self.surface.eval_first(uv);
         match self.fault {
             Fault::First => Jet1 { du: Tangent::new(jet.du.rate() + splat(SEED)), ..jet },
-            Fault::Second | Fault::Form(_) => jet,
+            Fault::Second | Fault::Form(_) | Fault::Capped(_) => jet,
         }
     }
 
@@ -67,7 +77,7 @@ impl<S: Parametric> Parametric for Seeded<S> {
                 Jet2 { first: Jet1 { du: Tangent::new(jet.first.du.rate() + splat(SEED)), ..jet.first }, ..jet }
             }
             Fault::Second => Jet2 { duu: Tangent::new(jet.duu.rate() + splat(SEED)), ..jet },
-            Fault::Form(_) => jet,
+            Fault::Form(_) | Fault::Capped(_) => jet,
         }
     }
 
@@ -86,7 +96,10 @@ impl<S: Parametric> Parametric for Seeded<S> {
     }
 
     fn highest_derivative(&self) -> Option<u8> {
-        Parametric::highest_derivative(&self.surface)
+        match self.fault {
+            Fault::Capped(order) => Some(order),
+            Fault::First | Fault::Second | Fault::Form(_) => Parametric::highest_derivative(&self.surface),
+        }
     }
 
     fn bounds(&self, patch: UvBox) -> Bounds {
@@ -132,7 +145,7 @@ impl<S: Parametric> Parametric for Seeded<S> {
     fn analytic(&self, tol: Tolerance) -> Option<Analytic> {
         match self.fault {
             Fault::Form(form) => Some(form),
-            Fault::First | Fault::Second => Parametric::analytic(&self.surface, tol),
+            Fault::First | Fault::Second | Fault::Capped(_) => Parametric::analytic(&self.surface, tol),
         }
     }
 }
@@ -201,5 +214,56 @@ impl<C: ParametricCurve> ParametricCurve for WrongSecondCurve<C> {
 
     fn shape(&self) -> Shape {
         ParametricCurve::shape(&self.0)
+    }
+}
+
+/// A line that says it was sampled, to show that the object layer passes its fit on.
+pub(crate) struct Fitted(pub(crate) Line);
+
+impl ParametricCurve for Fitted {
+    fn eval_point<R: Real>(&self, t: R) -> Point<World, R> {
+        self.0.eval_point(t)
+    }
+
+    fn eval_first<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>) {
+        self.0.eval_first(t)
+    }
+
+    fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
+        self.0.eval_second(t)
+    }
+
+    fn derivatives(
+        &self,
+        t: f64,
+        order: u8,
+        out: &mut Vec<Tangent<World>>,
+        scratch: &mut Scratch,
+    ) -> Result<(), Report> {
+        ParametricCurve::derivatives(&self.0, t, order, out, scratch)
+    }
+
+    fn range(&self) -> ParamRange {
+        ParametricCurve::range(&self.0)
+    }
+
+    fn bounds(&self, lo: f64, hi: f64) -> Bounds {
+        ParametricCurve::bounds(&self.0, lo, hi)
+    }
+
+    fn family(&self) -> FamilyName {
+        FamilyName("fitted")
+    }
+
+    fn content(&self, out: &mut Content) {
+        ParametricCurve::content(&self.0, out);
+    }
+
+    fn shape(&self) -> Shape {
+        ParametricCurve::shape(&self.0)
+    }
+
+    fn fit(&self) -> Option<Length> {
+        Some(Length::from_millimetres(0.25))
     }
 }

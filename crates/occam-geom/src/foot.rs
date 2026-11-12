@@ -143,6 +143,12 @@ fn lowest(gaps: &[f64], columns: usize, index: usize) -> bool {
     holds
 }
 
+/// The point of `surface` nearest `p` that Newton's method reaches from `start` without leaving `window`, which may be
+/// unbounded: for a family that knows where its foot is, or nearly, as an offset knows its base's.
+pub(crate) fn polish<S: Parametric>(surface: &S, p: Point<World>, start: UvPoint, window: UvBox) -> UvPoint {
+    refine(surface, p.to_vec3(), (start, STEPS), (window, (f64::INFINITY, f64::INFINITY))).0
+}
+
 /// The parameters in `window` of the point of `surface` nearest `p`: from a grid of `steps.0 + 1` by `steps.1 + 1`
 /// samples, edges included, the nearest of what Newton's method reaches from `seed`, where there is one, from each sample
 /// nearer than its neighbours, and then from every sample that could lie within a cell of a nearer point. The foot lies

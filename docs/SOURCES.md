@@ -19,3 +19,4 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | `payne-hanek-1983` | paper | n/a | Payne, Hanek. *Radian Reduction for Trigonometric Functions*. ACM SIGNUM Newsletter 18(1), 1983 |
 | `ericson-2005` | book | n/a | Ericson. *Real-Time Collision Detection*. Morgan Kaufmann, 2005 |
 | `piegl-tiller-1997` | book | n/a | Piegl, Tiller. *The NURBS Book*, 2nd edition. Springer, 1997 |
+| `do-carmo-1976` | book | n/a | do Carmo. *Differential Geometry of Curves and Surfaces*. Prentice-Hall, 1976 |

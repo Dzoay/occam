@@ -61,6 +61,8 @@ text_enum! {
         /// A curve was swept along a direction it runs along: a line along its own direction, which makes no surface,
         /// or a hyperbola along an asymptote without end, which makes one whose edge is at infinity.
         SweptAlongItself = "geom.swept-along-itself",
+        /// A surface was offset whose normal is not continuous: it has no second derivative, as a mesh has none.
+        NotSmooth = "geom.not-smooth",
     }
 }
 
@@ -120,7 +122,8 @@ impl Code {
             | Self::WeightNotPositive
             | Self::NoDerivative
             | Self::TriangleNotValid
-            | Self::SweptAlongItself => Severity::Error,
+            | Self::SweptAlongItself
+            | Self::NotSmooth => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -156,6 +159,7 @@ impl Code {
             Self::SweptAlongItself => {
                 "A curve swept along a direction it runs along makes no surface, or one with an edge at infinity."
             }
+            Self::NotSmooth => "An offset needs a surface with second derivatives, so that its normal is continuous.",
         }
     }
 
@@ -195,6 +199,9 @@ impl Code {
             Self::SweptAlongItself => {
                 "The curve runs along {direction}, the direction it is swept along: trim it, or sweep it another way."
             }
+            Self::NotSmooth => {
+                "The surface has derivatives to order {highest}, and an offset needs them to order {needed}."
+            }
         }
     }
 
@@ -213,6 +220,7 @@ impl Code {
             | Self::UndefinedParameter
             | Self::SizeNotPositive
             | Self::OutOfRange
+            | Self::NotSmooth
             | Self::WrongCount
             | Self::KnotsNotValid
             | Self::WeightNotPositive
@@ -467,6 +475,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A curve swept along a direction it runs along makes no surface, or one with an edge at infinity.",
                 "template": "The curve runs along {direction}, the direction it is swept along: trim it, or sweep it another way.",
+                "remedies": [],
+            },
+            {
+                "name": "NotSmooth",
+                "code": "geom.not-smooth",
+                "severity": "error",
+                "summary": "An offset needs a surface with second derivatives, so that its normal is continuous.",
+                "template": "The surface has derivatives to order {highest}, and an offset needs them to order {needed}.",
                 "remedies": [],
             },
         ])

@@ -26,13 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.offset`
-
-Offset and trimmed curves and surfaces, of any family; the offset's normal derivative from do Carmo (rows 2.1, 2.2).
-
-*Failing test first:* the suite over each; the offset of a plane, a cylinder and a sphere is the expected analytic
-surface within the band.
-
 ### `geometry.parameter`
 
 Curves in a face's parameter space, with the same kinds as in 3D, and their joining to 3D edges (row 2.3).

@@ -277,7 +277,7 @@ mod tests {
     use occam_units::Vec3;
 
     use super::*;
-    use crate::conformance::{bow, branch, endless, local, placement, ring, segment, whole_bow, whole_branch};
+    use crate::conformance::{Fitted, bow, branch, endless, local, placement, ring, segment, whole_bow, whole_branch};
     use crate::line::Line;
     use crate::support::seen;
 
@@ -355,77 +355,6 @@ mod tests {
         assert_eq!(whole_branch().within(centre, Some(asymptote()), 5.0), None);
         let rising = whole_branch().trimmed(-300.0, 2.0).unwrap();
         assert!(rising.within(centre, Some(asymptote()), 5.0).is_some(), "it does not run off that way");
-    }
-
-    /// A line that says it was sampled, to show that the object layer passes its fit on.
-    struct Fitted(Line);
-
-    impl ParametricCurve for Fitted {
-        fn eval_point<R: Real>(&self, t: R) -> Point<World, R> {
-            self.0.eval_point(t)
-        }
-
-        fn eval_first<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>) {
-            self.0.eval_first(t)
-        }
-
-        fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
-            self.0.eval_second(t)
-        }
-
-        fn derivatives(
-            &self,
-            t: f64,
-            order: u8,
-            out: &mut Vec<Tangent<World>>,
-            scratch: &mut Scratch,
-        ) -> Result<(), Report> {
-            ParametricCurve::derivatives(&self.0, t, order, out, scratch)
-        }
-
-        fn range(&self) -> ParamRange {
-            ParametricCurve::range(&self.0)
-        }
-
-        fn bounds(&self, lo: f64, hi: f64) -> Bounds {
-            ParametricCurve::bounds(&self.0, lo, hi)
-        }
-
-        fn invert(
-            &self,
-            p: Point<World>,
-            seed: Option<f64>,
-            tol: Tolerance,
-            scratch: &mut Scratch,
-        ) -> Result<f64, Report> {
-            ParametricCurve::invert(&self.0, p, seed, tol, scratch)
-        }
-
-        fn closest(
-            &self,
-            p: Point<World>,
-            seed: Option<f64>,
-            tol: Tolerance,
-            scratch: &mut Scratch,
-        ) -> Result<Closest<f64>, Report> {
-            ParametricCurve::closest(&self.0, p, seed, tol, scratch)
-        }
-
-        fn family(&self) -> FamilyName {
-            FamilyName("fitted")
-        }
-
-        fn content(&self, out: &mut Content) {
-            ParametricCurve::content(&self.0, out);
-        }
-
-        fn shape(&self) -> Shape {
-            ParametricCurve::shape(&self.0)
-        }
-
-        fn fit(&self) -> Option<Length> {
-            Some(Length::from_millimetres(0.25))
-        }
     }
 
     #[test]

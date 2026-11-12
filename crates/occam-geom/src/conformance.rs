@@ -17,7 +17,7 @@ pub(crate) use curves::{curve, presented_curve};
 pub(crate) use profiles::{
     arc, bow, branch, differ, endless, lifted_bow, oval, ring, segment, twist, upright_oval, whole_bow, whole_branch,
 };
-pub(crate) use seeded::{WrongSecondCurve, wrong_first, wrong_form, wrong_second};
+pub(crate) use seeded::{Fitted, WrongSecondCurve, capped, wrong_first, wrong_form, wrong_second};
 pub(crate) use surfaces::{presented_surface, surface};
 
 /// What the suite checks.
