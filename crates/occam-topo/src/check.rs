@@ -62,13 +62,11 @@ pub(crate) fn entity(model: &Model, entity: EntityRef, out: &mut Vec<Report>) {
 
 /// Every invariant of one body as a whole: each shell's list of faces, its faces joined through their edges, and, for a
 /// solid, a whole genus.
-#[cfg_attr(not(test), expect(dead_code, reason = "`Snapshot::check_all`, which `topology.digest` adds, calls it"))]
 pub(crate) fn body(model: &Model, body: Id<Body>, out: &mut Vec<Report>) {
     shell::body(model, body, out);
 }
 
 /// Every invariant only the whole model shows: that each face is in its shell's list.
-#[cfg_attr(not(test), expect(dead_code, reason = "`Snapshot::check_all`, which `topology.digest` adds, calls it"))]
 pub(crate) fn model(model: &Model, out: &mut Vec<Report>) {
     shell::unlisted(model, out);
 }

@@ -1,0 +1,13 @@
+# `gates determinism` and occam-topo's probe test: what the topology's probe must hash to, `<operation> <hash>`, in the
+# order of `OPERATIONS` in crates/occam-topo/src/probe.rs. Unlike ci/determinism-hashes.txt, these do not come from a
+# separate implementation, as there is no second topology: they are what the x86-64 build printed on one thread
+# (`just determinism-topology`). Every other build and thread count is held to them. See docs/DETERMINISM.md before
+# changing one.
+topo-cube 0d285663c93836e5
+topo-frame 969bdc7598e8d87f
+topo-cylinder ad36fd0b440e88ee
+topo-sheet a65d526a7cb5bfc5
+topo-wire 98725445f8fb98c0
+topo-steps ae22f88faecab325
+topo-check-few 678bfdc59d19fab6
+topo-check-many 495e70dcbb80856a

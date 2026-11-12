@@ -11,17 +11,36 @@
 //! and where each new entity came from.
 
 mod check;
+mod digest;
 mod edit;
 mod geometric;
 mod kind;
 #[cfg(test)]
 mod models;
+/// The tests' models, built outside the tests only for the determinism probe, which nothing that ships turns on.
+#[cfg(all(feature = "determinism", not(test)))]
+#[allow(
+    dead_code,
+    unused_imports,
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "the tests' models, as they are written"
+)]
+mod models;
+#[cfg(any(test, feature = "determinism"))]
+#[doc(hidden)]
+pub mod probe;
 mod records;
 mod snapshot;
 mod table;
 #[cfg(test)]
 mod testing;
+/// What the tests share, which the models use, so it comes with them for the determinism probe.
+#[cfg(all(feature = "determinism", not(test)))]
+#[allow(dead_code, clippy::unwrap_used, reason = "what the tests share, as they are written")]
+mod testing;
 mod view;
+mod whole;
 
 pub use edit::{Changes, Derivation, Edit, Lineage};
 pub use kind::{

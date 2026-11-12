@@ -24,7 +24,8 @@ exclude_globs = [
 
 # Each gate's `run` gathers its input through `repo` and is exercised by running the gate, not by unit tests; the rules
 # it applies are in the module's pure functions, which are mutated. The same goes for `gates::main` and `usage`, and for
-# `gates determinism`'s `levels`, which runs the probe and hands its output to `parsed_levels`.
+# `gates determinism`'s `levels` and `runs_of`, which run the probes and hand their output to `parsed_levels` and
+# `check`; `check` refuses a probe no build ran.
 exclude_re = [
     # Where the order is the degree, `order` and `p` are the same number, so `<=` picks the same one.
     "replace < with <= in rows_len$",
@@ -102,8 +103,8 @@ exclude_re = [
     "nearest\\.rs:81:27: replace && with \\|\\| in nearest$",
     "replace run -> Verdict",
     "in run$",
-    "replace (measure|browser|built|counts|summaries|levels) ",
-    "in (measure|browser|built|counts|summaries|levels)$",
+    "replace (measure|browser|built|counts|summaries|levels|runs_of) ",
+    "in (measure|browser|built|counts|summaries|levels|runs_of)$",
     "replace (main|usage) -> ExitCode",
     "in (main|usage)$",
     # The swept step's (geometry.swept). Ties, which give the same value either way: the window that holds an anchor, the

@@ -73,6 +73,14 @@ stream as scalar and as two, four and eight lanes. Every hash must agree, and mu
 The same stream is a test, so the suite checks it in debug builds on x86-64 and on wasm32 baseline and simd128 (`just
 test-all` and `just wasm`).
 
+The topology has a probe of its own, `crates/occam-topo/src/probe.rs`, built for the gate by
+`crates/occam-topo/examples/determinism.rs` under occam-topo's `determinism` feature, which nothing that ships turns on.
+It hashes the digests of models built through `Edit`, and the reports `Snapshot::check_all` gives on models corrupted
+as no edit could, each report as its JSON. The gate runs it on x86-64 on one thread and on many, and on wasm32-wasip2
+baseline and simd128, but not at the narrower instruction levels, because the topology passes no level to anything.
+Every hash must agree, and must equal the record in `ci/determinism-topology.txt`. Its test checks the same in debug
+builds, on one thread and on four.
+
 ## The recorded hashes
 
 `ci/determinism-hashes.txt` comes from a separate implementation in another language, which shares no code with
@@ -83,10 +91,16 @@ the record is what it computes, and `just determinism-record` prints it.
 Changing a recorded hash changes the contract. Do it only when the stream's definition changes on purpose: change the
 separate implementation first, take the new values from it, and say so in the PR.
 
+`ci/determinism-topology.txt` has no separate implementation to come from, because there is no second topology: it is
+what the x86-64 build prints on one thread (`just determinism-topology`). It holds every other build and thread count
+to that one, and holds the topology to its answers, so a change to a model, a check or the digest shows as a changed
+hash, to be explained in the PR. Unlike the maths record, it cannot catch an answer that every build gets wrong alike.
+
 ## What it does not cover yet
 
 - wasmtime on x86-64 runs the same floating-point instructions as native code, so comparing these builds cannot show a
   difference in NaN bits that only another CPU would produce. Rule 3 and the record are what guard against that.
+- The topology's record comes from one of the builds it judges, not from a separate implementation (above).
 - Windows is compile-checked only (`just wasm`), and aarch64 is not built.
 - One browser engine is run: `gates perf` times Chromium and requires the simd128 and scalar builds to compute the same bits. Other
   engines are not run.

@@ -1,6 +1,6 @@
 //! `gates determinism`: the same inputs give identical bits on every build the contract covers (L23,
-//! `docs/DETERMINISM.md`). The stream's probe is built and run as each of them, natively at every instruction level the
-//! machine has, and every hash is compared.
+//! `docs/DETERMINISM.md`). Each probe is built and run as each of them, the maths natively at every instruction level
+//! the machine has, and every hash is compared with the other builds' and with the probe's record.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::thread;
@@ -12,14 +12,59 @@ use crate::verdict::{Finding, Verdict, verdict};
 const STREAM: &str = "crates/occam-math/src/stream.rs";
 const RECORDED: &str = "ci/determinism-hashes.txt";
 const FIX: &str = "see docs/DETERMINISM.md; run `just gate determinism` to reproduce";
-const RECORD_FIX: &str = "a result changed, which docs/DETERMINISM.md does not allow; if the stream's definition changed on purpose, re-derive the hashes separately and say so in the PR";
+const RECORD_FIX: &str = "a result changed, which docs/DETERMINISM.md does not allow; if the probe's definition changed on purpose, re-derive the hashes as its record's header says and say so in the PR";
 const WASM: &str = "wasm32-wasip2";
 const SIMD128: &str = r#"target.wasm32-wasip2.rustflags=["-Ctarget-feature=+simd128"]"#;
 
-/// Every way one operation is run in one build.
+/// Every way one operation of the maths stream is run in one build.
 const EXECUTORS: [&str; 4] = ["scalar", "lanes2", "lanes4", "lanes8"];
 
-/// One way the probe is built and run.
+/// A program the gate builds and runs as every build, the `determinism` example of a package, and what holds it.
+struct Probe {
+    /// What the summary calls it.
+    name: &'static str,
+    /// The package whose example it is.
+    package: &'static str,
+    /// The cargo features the example needs.
+    features: Option<&'static str>,
+    /// The file its findings point at.
+    source: &'static str,
+    /// The record it must equal.
+    record: &'static str,
+    /// Every executor each of its operations is run as in one build.
+    executors: &'static [&'static str],
+    /// Whether it runs at each narrower instruction level too: only code that dispatches on one can differ there.
+    levels: bool,
+}
+
+/// The maths stream, recorded from a separate implementation (`tools/determinism/stream.py`).
+const MATHS: Probe = Probe {
+    name: "maths",
+    package: "occam-math",
+    features: None,
+    source: STREAM,
+    record: RECORDED,
+    executors: &EXECUTORS,
+    levels: true,
+};
+
+/// The topology's digests and whole-model checks, recorded from the x86-64 build on one thread. Topology passes no
+/// instruction level to anything, so it is not run at the narrower ones.
+const TOPOLOGY: Probe = Probe {
+    name: "topology",
+    package: "occam-topo",
+    features: Some("determinism"),
+    source: "crates/occam-topo/src/probe.rs",
+    record: "ci/determinism-topology.txt",
+    executors: &["scalar"],
+    levels: false,
+};
+
+/// Every probe, in the order the summary gives them.
+const PROBES: [&Probe; 2] = [&MATHS, &TOPOLOGY];
+
+/// One way a probe is built and run.
+#[derive(Clone)]
 struct Build {
     name: String,
     /// The target triple, or the host's when `None`.
@@ -29,19 +74,22 @@ struct Build {
     threads: usize,
     /// The instruction level it runs at. A native build is told it; a wasm build has one, fixed when it is built.
     level: String,
+    /// A native build at a level narrower than the widest, which only a probe that dispatches is run as.
+    narrower: bool,
 }
 
 /// Every build the contract covers: natively at the widest level on one thread and on many, on wasm32 with and without
 /// simd128, then natively at each narrower level the machine has. They are release builds, as what ships is; the test
 /// suite covers the debug ones. `levels` is the machine's, widest first.
 fn builds(threads: usize, levels: &[String]) -> Vec<Build> {
-    let native = |threads: usize, level: &str| Build {
+    let native = |threads: usize, level: &str, narrower: bool| Build {
         name: format!("x86-64, {threads} thread(s), {level}"),
         triple: None,
         arch: "x86_64",
         simd128: false,
         threads,
         level: level.to_string(),
+        narrower,
     };
     let wasm = |name: &str, simd128: bool, level: &str| Build {
         name: name.to_string(),
@@ -50,24 +98,31 @@ fn builds(threads: usize, levels: &[String]) -> Vec<Build> {
         simd128,
         threads: 1,
         level: level.to_string(),
+        narrower: false,
     };
     let widest = levels.first().map_or("sse2", String::as_str);
     let mut found = vec![
-        native(1, widest),
-        native(threads, widest),
+        native(1, widest, false),
+        native(threads, widest, false),
         wasm("wasm32, baseline", false, "fallback"),
         wasm("wasm32, simd128", true, "simd128"),
     ];
-    found.extend(levels.iter().skip(1).map(|level| native(1, level)));
+    found.extend(levels.iter().skip(1).map(|level| native(1, level, true)));
     found
 }
 
-/// The probe's arguments before its own, for the native build.
-const NATIVE: [&str; 7] = ["run", "--quiet", "--release", "-p", "occam-math", "--example", "determinism"];
+/// The builds `probe` is run as.
+fn builds_of<'a>(probe: &Probe, builds: &'a [Build]) -> Vec<&'a Build> {
+    builds.iter().filter(|build| probe.levels || !build.narrower).collect()
+}
 
-/// Cargo's arguments for `build`. The simd128 build has a target directory of its own, because its flags differ.
-fn cargo_args<'a>(build: &'a Build, simd_dir: &'a str, threads: &'a str) -> Vec<&'a str> {
-    let mut args = NATIVE.to_vec();
+/// Cargo's arguments for running `probe` as `build`. The simd128 build has a target directory of its own, because its
+/// flags differ.
+fn cargo_args<'a>(build: &'a Build, probe: &'a Probe, simd_dir: &'a str, threads: &'a str) -> Vec<&'a str> {
+    let mut args = vec!["run", "--quiet", "--release", "-p", probe.package, "--example", "determinism"];
+    if let Some(features) = probe.features {
+        args.extend(["--features", features]);
+    }
     if let Some(triple) = build.triple {
         args.extend(["--target", triple]);
     }
@@ -75,92 +130,112 @@ fn cargo_args<'a>(build: &'a Build, simd_dir: &'a str, threads: &'a str) -> Vec<
         args.extend(["--target-dir", simd_dir, "--config", SIMD128]);
     }
     args.extend(["--", "--threads", threads]);
-    if build.triple.is_none() {
+    if build.triple.is_none() && probe.levels {
         args.extend(["--level", &build.level]);
     }
     args
 }
 
 /// A finding for a probe that did not run.
-fn run_failed(what: &str, errors: &str) -> Vec<Finding> {
+fn run_failed(source: &str, what: &str, errors: &str) -> Vec<Finding> {
     let message = format!("{what} did not run: {errors}");
-    vec![Finding::new("determinism.run-failed", STREAM, message, "run `just toolchain`, then fix what it reports")]
+    vec![Finding::new("determinism.run-failed", source, message, "run `just toolchain`, then fix what it reports")]
 }
 
 /// The levels the probe printed, one a line, or why there are none.
 fn parsed_levels(ok: bool, output: &str, errors: &str) -> Result<Vec<String>, Vec<Finding>> {
     let levels: Vec<String> = output.lines().filter(|line| !line.is_empty()).map(str::to_string).collect();
     if !ok || levels.is_empty() {
-        return Err(run_failed("the level query", errors));
+        return Err(run_failed(STREAM, "the level query", errors));
     }
     Ok(levels)
 }
 
-/// The instruction levels this machine has, widest first, as the native probe names them.
+/// The instruction levels this machine has, widest first, as the maths probe names them.
 fn levels(repo: &Repo) -> Result<Vec<String>, Vec<Finding>> {
-    let args: Vec<&str> = NATIVE.iter().copied().chain(["--", "--levels"]).collect();
+    let args = ["run", "--quiet", "--release", "-p", MATHS.package, "--example", "determinism", "--", "--levels"];
     let (ok, output, errors) = repo.capture(env!("CARGO"), &args).map_err(|e| vec![e])?;
     parsed_levels(ok, &output, &errors)
+}
+
+/// Every run of `probe`, each build and what it printed, or why one did not run.
+fn runs_of(repo: &Repo, probe: &Probe, builds: &[Build]) -> Result<Vec<(Build, String)>, Vec<Finding>> {
+    let simd_dir = repo.nested_target("simd");
+    let mut runs = Vec::new();
+    for build in builds_of(probe, builds) {
+        let count = build.threads.to_string();
+        let args = cargo_args(build, probe, &simd_dir, &count);
+        let (ok, output, errors) = repo.capture(env!("CARGO"), &args).map_err(|e| vec![e])?;
+        if !ok {
+            return Err(run_failed(probe.source, &format!("{} as {}", probe.name, build.name), &errors));
+        }
+        runs.push((build.clone(), output));
+    }
+    Ok(runs)
 }
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     no_args(args)?;
     let threads = thread::available_parallelism().map_or(2, |count| count.get().max(2));
-    let simd_dir = repo.nested_target("simd");
-    let mut runs = Vec::new();
-    for build in builds(threads, &levels(repo)?) {
-        let count = build.threads.to_string();
-        let (ok, output, errors) =
-            repo.capture(env!("CARGO"), &cargo_args(&build, &simd_dir, &count)).map_err(|e| vec![e])?;
-        if !ok {
-            return Err(run_failed(&build.name, &errors));
+    let builds = builds(threads, &levels(repo)?);
+    let mut summaries = Vec::new();
+    let mut findings = Vec::new();
+    for probe in PROBES {
+        let runs = runs_of(repo, probe, &builds)?;
+        match check(probe, &runs, &repo.read(probe.record).map_err(|e| vec![e])?) {
+            Ok(summary) => summaries.push(format!("{}: {summary}", probe.name)),
+            Err(found) => findings.extend(found),
         }
-        runs.push((build, output));
     }
-    check(&runs, &repo.read(RECORDED).map_err(|e| vec![e])?)
+    if findings.is_empty() { Ok(summaries.join("; ")) } else { Err(findings) }
 }
 
 /// What one run printed: a hash for each (operation, executor).
 type Rows<'a> = BTreeMap<(&'a str, &'a str), &'a str>;
 
-fn malformed(build: &Build, line: &str) -> Finding {
-    Finding::new("determinism.malformed", STREAM, format!("{}: cannot read `{line}`", build.name), FIX)
+fn malformed(probe: &Probe, build: &Build, line: &str) -> Finding {
+    Finding::new("determinism.malformed", probe.source, format!("{}: cannot read `{line}`", build.name), FIX)
+}
+
+/// The line a run of `probe` as `build` must begin with: the level only for a probe that dispatches.
+fn header(probe: &Probe, build: &Build) -> String {
+    let base = format!("build {} simd128={} threads={}", build.arch, build.simd128, build.threads);
+    if probe.levels { format!("{base} level={}", build.level) } else { base }
 }
 
 /// The hashes one run printed, after checking that it really was the build it was meant to be.
-fn parse<'a>(build: &Build, output: &'a str, findings: &mut Vec<Finding>) -> Rows<'a> {
+fn parse<'a>(probe: &Probe, build: &Build, output: &'a str, findings: &mut Vec<Finding>) -> Rows<'a> {
     let mut lines = output.lines();
-    let want =
-        format!("build {} simd128={} threads={} level={}", build.arch, build.simd128, build.threads, build.level);
+    let want = header(probe, build);
     match lines.next() {
         Some(line) if line == want => {}
         Some(line) if line.starts_with("build ") => {
             let message = format!("{}: the probe says `{line}`, not `{want}`", build.name);
-            findings.push(Finding::new("determinism.wrong-build", STREAM, message, FIX));
+            findings.push(Finding::new("determinism.wrong-build", probe.source, message, FIX));
         }
-        line => findings.push(malformed(build, line.unwrap_or("(nothing)"))),
+        line => findings.push(malformed(probe, build, line.unwrap_or("(nothing)"))),
     }
     let mut rows = Rows::new();
     for line in lines {
         let words: Vec<&str> = line.split_whitespace().collect();
         match words.as_slice() {
-            [operation, executor, hash] if EXECUTORS.contains(executor) => {
+            [operation, executor, hash] if probe.executors.contains(executor) => {
                 rows.insert((*operation, *executor), *hash);
             }
-            _ => findings.push(malformed(build, line)),
+            _ => findings.push(malformed(probe, build, line)),
         }
     }
     rows
 }
 
 /// A finding for every hash a build should have printed and did not.
-fn missing(parsed: &[(&Build, Rows)], operations: &BTreeSet<&str>) -> Vec<Finding> {
+fn missing(probe: &Probe, parsed: &[(&Build, Rows)], operations: &BTreeSet<&str>) -> Vec<Finding> {
     let mut findings = Vec::new();
     for (build, rows) in parsed {
         for operation in operations {
-            for executor in EXECUTORS.iter().filter(|executor| !rows.contains_key(&(*operation, **executor))) {
+            for executor in probe.executors.iter().filter(|executor| !rows.contains_key(&(*operation, **executor))) {
                 let message = format!("{} printed no hash for {operation} {executor}", build.name);
-                findings.push(Finding::new("determinism.missing", STREAM, message, FIX));
+                findings.push(Finding::new("determinism.missing", probe.source, message, FIX));
             }
         }
     }
@@ -176,11 +251,11 @@ fn describe(hash: &str, sources: &[String]) -> String {
 }
 
 /// Each hash printed for `operation`, with who printed it.
-fn hashes_of<'a>(parsed: &[(&Build, Rows<'a>)], operation: &str) -> BTreeMap<&'a str, Vec<String>> {
+fn hashes_of<'a>(probe: &Probe, parsed: &[(&Build, Rows<'a>)], operation: &str) -> BTreeMap<&'a str, Vec<String>> {
     let mut hashes: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for (build, rows) in parsed {
-        for executor in EXECUTORS {
-            if let Some(hash) = rows.get(&(operation, executor)) {
+        for executor in probe.executors {
+            if let Some(hash) = rows.get(&(operation, *executor)) {
                 hashes.entry(*hash).or_default().push(format!("{} {executor}", build.name));
             }
         }
@@ -188,66 +263,72 @@ fn hashes_of<'a>(parsed: &[(&Build, Rows<'a>)], operation: &str) -> BTreeMap<&'a
     hashes
 }
 
-/// The recorded hash of each operation, from [`RECORDED`].
-fn recorded<'a>(text: &'a str, findings: &mut Vec<Finding>) -> BTreeMap<&'a str, &'a str> {
+/// The recorded hash of each operation, from `probe`'s record.
+fn recorded<'a>(probe: &Probe, text: &'a str, findings: &mut Vec<Finding>) -> BTreeMap<&'a str, &'a str> {
     let mut hashes = BTreeMap::new();
     for line in text.lines().filter(|line| !line.trim().is_empty() && !line.starts_with('#')) {
         if let [operation, hash] = line.split_whitespace().collect::<Vec<_>>().as_slice() {
             hashes.insert(*operation, *hash);
         } else {
             let message = format!("cannot read `{line}`");
-            findings.push(Finding::new("determinism.malformed", RECORDED, message, "write `<operation> <hash>`"));
+            findings.push(Finding::new("determinism.malformed", probe.record, message, "write `<operation> <hash>`"));
         }
     }
     hashes
 }
 
 /// What is wrong with `operation`: more than one hash, or one that is not the recorded one.
-fn judge(parsed: &[(&Build, Rows)], operation: &str, recorded: &BTreeMap<&str, &str>) -> Option<Finding> {
-    let hashes = hashes_of(parsed, operation);
+fn judge(
+    probe: &Probe,
+    parsed: &[(&Build, Rows)],
+    operation: &str,
+    recorded: &BTreeMap<&str, &str>,
+) -> Option<Finding> {
+    let hashes = hashes_of(probe, parsed, operation);
     if hashes.len() > 1 {
         let groups: Vec<String> = hashes.iter().map(|(hash, sources)| describe(hash, sources)).collect();
         let message = format!("{operation} differs: {}", groups.join("; "));
-        return Some(Finding::new("determinism.mismatch", STREAM, message, FIX));
+        return Some(Finding::new("determinism.mismatch", probe.source, message, FIX));
     }
     let hash = hashes.into_keys().next()?;
     match recorded.get(operation) {
         Some(want) if *want == hash => None,
         Some(want) => {
             let message = format!("every build gives {operation} {hash}, but {want} is recorded");
-            Some(Finding::new("determinism.not-recorded", RECORDED, message, RECORD_FIX))
+            Some(Finding::new("determinism.not-recorded", probe.record, message, RECORD_FIX))
         }
         None => {
             let message = format!("{operation} has no recorded hash");
-            Some(Finding::new("determinism.unrecorded", RECORDED, message, RECORD_FIX))
+            Some(Finding::new("determinism.unrecorded", probe.record, message, RECORD_FIX))
         }
     }
 }
 
-fn check(runs: &[(Build, String)], recorded_text: &str) -> Verdict {
+fn check(probe: &Probe, runs: &[(Build, String)], recorded_text: &str) -> Verdict {
     if runs.is_empty() {
-        return Err(vec![Finding::new("determinism.no-builds", STREAM, "no build was compared", FIX)]);
+        return Err(vec![Finding::new("determinism.no-builds", probe.source, "no build was compared", FIX)]);
     }
     let mut findings = Vec::new();
-    let recorded = recorded(recorded_text, &mut findings);
+    let recorded = recorded(probe, recorded_text, &mut findings);
     let parsed: Vec<(&Build, Rows)> =
-        runs.iter().map(|(build, output)| (build, parse(build, output, &mut findings))).collect();
+        runs.iter().map(|(build, output)| (build, parse(probe, build, output, &mut findings))).collect();
     let operations: BTreeSet<&str> =
         parsed.iter().flat_map(|(_, rows)| rows.keys().map(|(operation, _)| *operation)).collect();
     if operations.is_empty() {
-        findings.push(Finding::new("determinism.no-hashes", STREAM, "no build printed a hash", FIX));
+        findings.push(Finding::new("determinism.no-hashes", probe.source, "no build printed a hash", FIX));
     }
-    findings.extend(missing(&parsed, &operations));
-    findings.extend(operations.iter().filter_map(|operation| judge(&parsed, operation, &recorded)));
+    findings.extend(missing(probe, &parsed, &operations));
+    findings.extend(operations.iter().filter_map(|operation| judge(probe, &parsed, operation, &recorded)));
     for operation in recorded.keys().filter(|operation| !operations.contains(*operation)) {
         let message = format!("{operation} is recorded but no build printed it");
-        findings.push(Finding::new("determinism.missing", RECORDED, message, FIX));
+        findings.push(Finding::new("determinism.missing", probe.record, message, FIX));
     }
+    let executors = probe.executors.len();
     let summary = format!(
-        "{} builds agree with the record on {} operations, {} executors each",
+        "{} builds agree with the record on {} operations, {executors} {} each",
         runs.len(),
         operations.len(),
-        EXECUTORS.len()
+        if executors == 1 { "executor" } else { "executors" }
     );
     verdict(summary, findings)
 }
@@ -260,12 +341,8 @@ mod tests {
     const OPERATIONS: [&str; 2] = ["add", "sqrt"];
     const GOOD: &str = "# what the stream must hash to\n\nadd 00000000000000aa\nsqrt 00000000000000aa\n";
 
-    fn header(build: &Build) -> String {
-        format!("build {} simd128={} threads={} level={}", build.arch, build.simd128, build.threads, build.level)
-    }
-
     fn output(build: &Build, hash: &str) -> String {
-        let header = header(build);
+        let header = header(&MATHS, build);
         let rows = OPERATIONS
             .iter()
             .flat_map(|operation| EXECUTORS.iter().map(move |executor| format!("{operation} {executor} {hash}")));
@@ -294,7 +371,7 @@ mod tests {
     #[test]
     fn hashes_that_agree_pass() {
         assert_eq!(
-            check(&agreeing(), GOOD),
+            check(&MATHS, &agreeing(), GOOD),
             Ok("4 builds agree with the record on 2 operations, 4 executors each".to_string())
         );
     }
@@ -303,7 +380,7 @@ mod tests {
     fn one_flipped_hash_fails_naming_the_operation_and_the_builds() {
         let mut runs = agreeing();
         runs[2].1 = runs[2].1.replace("sqrt lanes4 00000000000000aa", "sqrt lanes4 00000000000000bb");
-        let found = check(&runs, GOOD).unwrap_err();
+        let found = check(&MATHS, &runs, GOOD).unwrap_err();
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].code, "determinism.mismatch");
         assert_eq!(found[0].file, STREAM);
@@ -323,21 +400,21 @@ mod tests {
         for (_, text) in &mut runs {
             *text = text.replace("add lanes2 00000000000000aa", "add lanes2 00000000000000cc");
         }
-        assert_eq!(codes(&check(&runs, GOOD)), ["determinism.mismatch"]);
+        assert_eq!(codes(&check(&MATHS, &runs, GOOD)), ["determinism.mismatch"]);
     }
 
     #[test]
     fn thread_counts_must_agree() {
         let mut runs = agreeing();
         runs[1].1 = runs[1].1.replace("add scalar 00000000000000aa", "add scalar 00000000000000dd");
-        let found = check(&runs, GOOD).unwrap_err();
+        let found = check(&MATHS, &runs, GOOD).unwrap_err();
         assert_eq!(found[0].code, "determinism.mismatch");
         assert!(found[0].message.contains("00000000000000dd from x86-64, 4 thread(s), avx2 scalar"), "{found:?}");
     }
 
     #[test]
     fn every_build_agreeing_on_a_hash_that_is_not_recorded_fails() {
-        let found = check(&agreeing(), "add 00000000000000ff\nsqrt 00000000000000aa\n").unwrap_err();
+        let found = check(&MATHS, &agreeing(), "add 00000000000000ff\nsqrt 00000000000000aa\n").unwrap_err();
         assert_eq!(codes(&Err(found.clone())), ["determinism.not-recorded"]);
         assert_eq!(found[0].file, RECORDED);
         assert_eq!(found[0].message, "every build gives add 00000000000000aa, but 00000000000000ff is recorded");
@@ -345,15 +422,15 @@ mod tests {
 
     #[test]
     fn an_operation_with_no_recorded_hash_fails() {
-        let found = check(&agreeing(), "add 00000000000000aa\n").unwrap_err();
+        let found = check(&MATHS, &agreeing(), "add 00000000000000aa\n").unwrap_err();
         assert_eq!(codes(&Err(found.clone())), ["determinism.unrecorded"]);
         assert_eq!(found[0].message, "sqrt has no recorded hash");
     }
 
     #[test]
     fn a_recorded_operation_no_build_printed_fails() {
-        let found =
-            check(&agreeing(), "add 00000000000000aa\nsqrt 00000000000000aa\ncos 00000000000000aa\n").unwrap_err();
+        let found = check(&MATHS, &agreeing(), "add 00000000000000aa\nsqrt 00000000000000aa\ncos 00000000000000aa\n")
+            .unwrap_err();
         assert_eq!(codes(&Err(found.clone())), ["determinism.missing"]);
         assert_eq!(found[0].file, RECORDED);
         assert!(found[0].message.starts_with("cos "), "{found:?}");
@@ -361,30 +438,30 @@ mod tests {
 
     #[test]
     fn a_recorded_line_that_is_not_two_words_is_malformed() {
-        let found = check(&agreeing(), "add 00000000000000aa\nsqrt\n").unwrap_err();
+        let found = check(&MATHS, &agreeing(), "add 00000000000000aa\nsqrt\n").unwrap_err();
         let which: Vec<(&str, &str)> = found.iter().map(|f| (f.code, f.file.as_str())).collect();
         assert!(which.contains(&("determinism.malformed", RECORDED)), "{found:?}");
     }
 
     #[test]
     fn no_builds_is_a_failure() {
-        assert_eq!(codes(&check(&[], GOOD)), ["determinism.no-builds"]);
+        assert_eq!(codes(&check(&MATHS, &[], GOOD)), ["determinism.no-builds"]);
     }
 
     #[test]
     fn a_build_with_no_hashes_is_a_failure() {
         let mut runs = agreeing();
         for (build, text) in &mut runs {
-            *text = format!("{}\n", header(build));
+            *text = format!("{}\n", header(&MATHS, build));
         }
-        assert!(codes(&check(&runs, GOOD)).contains(&"determinism.no-hashes"));
+        assert!(codes(&check(&MATHS, &runs, GOOD)).contains(&"determinism.no-hashes"));
     }
 
     #[test]
     fn a_missing_hash_is_a_failure_even_when_the_rest_agree() {
         let mut runs = agreeing();
         runs[3].1 = runs[3].1.replace("add lanes8 00000000000000aa\n", "");
-        let found = check(&runs, GOOD).unwrap_err();
+        let found = check(&MATHS, &runs, GOOD).unwrap_err();
         assert_eq!(codes(&Err(found.clone())), ["determinism.missing"]);
         assert!(found[0].message.contains("wasm32, simd128") && found[0].message.contains("add lanes8"), "{found:?}");
     }
@@ -395,7 +472,7 @@ mod tests {
         for (_, text) in &mut runs {
             *text = text.lines().filter(|line| !line.contains("lanes4")).collect::<Vec<_>>().join("\n");
         }
-        let found = codes(&check(&runs, GOOD));
+        let found = codes(&check(&MATHS, &runs, GOOD));
         assert!(!found.is_empty() && found.iter().all(|code| *code == "determinism.missing"), "{found:?}");
     }
 
@@ -403,14 +480,14 @@ mod tests {
     fn a_build_reporting_the_wrong_arch_is_a_failure() {
         let mut runs = agreeing();
         runs[2].1 = runs[2].1.replace("build wasm32", "build aarch64");
-        assert_eq!(codes(&check(&runs, GOOD)), ["determinism.wrong-build"]);
+        assert_eq!(codes(&check(&MATHS, &runs, GOOD)), ["determinism.wrong-build"]);
     }
 
     #[test]
     fn a_simd128_build_without_simd128_is_a_failure() {
         let mut runs = agreeing();
         runs[3].1 = runs[3].1.replace("simd128=true", "simd128=false");
-        let found = check(&runs, GOOD).unwrap_err();
+        let found = check(&MATHS, &runs, GOOD).unwrap_err();
         assert_eq!(found[0].code, "determinism.wrong-build");
         assert!(found[0].message.contains("wasm32, simd128"), "{found:?}");
     }
@@ -419,28 +496,28 @@ mod tests {
     fn a_build_on_the_wrong_thread_count_is_a_failure() {
         let mut runs = agreeing();
         runs[1].1 = runs[1].1.replace("threads=4", "threads=1");
-        assert_eq!(codes(&check(&runs, GOOD)), ["determinism.wrong-build"]);
+        assert_eq!(codes(&check(&MATHS, &runs, GOOD)), ["determinism.wrong-build"]);
     }
 
     #[test]
     fn output_without_a_build_line_is_malformed() {
         let mut runs = agreeing();
         runs[0].1 = "add scalar 00000000000000aa\n".to_string();
-        assert!(codes(&check(&runs, GOOD)).contains(&"determinism.malformed"));
+        assert!(codes(&check(&MATHS, &runs, GOOD)).contains(&"determinism.malformed"));
     }
 
     #[test]
     fn a_line_that_is_not_three_words_is_malformed() {
         let mut runs = agreeing();
         runs[0].1.push_str("sqrt scalar\n");
-        assert!(codes(&check(&runs, GOOD)).contains(&"determinism.malformed"));
+        assert!(codes(&check(&MATHS, &runs, GOOD)).contains(&"determinism.malformed"));
     }
 
     #[test]
     fn an_unknown_executor_is_malformed() {
         let mut runs = agreeing();
         runs[0].1.push_str("sqrt lanes16 00000000000000aa\n");
-        assert!(codes(&check(&runs, GOOD)).contains(&"determinism.malformed"));
+        assert!(codes(&check(&MATHS, &runs, GOOD)).contains(&"determinism.malformed"));
     }
 
     #[test]
@@ -448,7 +525,7 @@ mod tests {
         let mut runs = agreeing_at(&["avx2", "sse4.2", "sse2"]);
         assert_eq!(runs.len(), 6);
         runs[5].1 = runs[5].1.replace("add lanes4 00000000000000aa", "add lanes4 00000000000000ee");
-        let found = check(&runs, GOOD).unwrap_err();
+        let found = check(&MATHS, &runs, GOOD).unwrap_err();
         assert_eq!(codes(&Err(found.clone())), ["determinism.mismatch"]);
         assert!(found[0].message.ends_with("00000000000000ee from x86-64, 1 thread(s), sse2 lanes4"), "{found:?}");
     }
@@ -457,7 +534,7 @@ mod tests {
     fn a_native_build_at_the_wrong_level_is_a_failure() {
         let mut runs = agreeing_at(&["avx2", "sse2"]);
         runs[4].1 = runs[4].1.replace("level=sse2", "level=avx2");
-        let found = check(&runs, GOOD).unwrap_err();
+        let found = check(&MATHS, &runs, GOOD).unwrap_err();
         assert_eq!(codes(&Err(found.clone())), ["determinism.wrong-build"]);
         assert!(found[0].message.contains("x86-64, 1 thread(s), sse2"), "{found:?}");
     }
@@ -504,7 +581,7 @@ mod tests {
     fn only_the_simd128_build_has_its_own_target_directory_and_flag() {
         let found = builds(2, &levels(&["avx2"]));
         let [native, _, baseline, simd] = found.as_slice() else { panic!("{} builds", found.len()) };
-        let joined = |build: &Build| cargo_args(build, "SIMD-DIR", "3").join(" ");
+        let joined = |build: &Build| cargo_args(build, &MATHS, "SIMD-DIR", "3").join(" ");
         assert_eq!(
             joined(native),
             "run --quiet --release -p occam-math --example determinism -- --threads 3 --level avx2"
@@ -517,5 +594,69 @@ mod tests {
             "run --quiet --release -p occam-math --example determinism --target wasm32-wasip2 --target-dir SIMD-DIR --config {SIMD128} -- --threads 3"
         );
         assert_eq!(joined(simd), want);
+    }
+
+    /// The topology probe's output as `build`, every operation hashed to `hash`.
+    fn topology_output(build: &Build, hash: &str) -> String {
+        let rows = OPERATIONS.iter().map(|operation| format!("{operation} scalar {hash}"));
+        let lines: Vec<String> = std::iter::once(header(&TOPOLOGY, build)).chain(rows).collect();
+        lines.join("\n") + "\n"
+    }
+
+    fn topology_agreeing() -> Vec<(Build, String)> {
+        let all = builds(4, &levels(&["avx2", "sse2"]));
+        builds_of(&TOPOLOGY, &all)
+            .into_iter()
+            .map(|build| (build.clone(), topology_output(build, "00000000000000aa")))
+            .collect()
+    }
+
+    #[test]
+    fn the_topology_runs_once_a_thread_count_and_a_target_with_no_level_and_one_executor() {
+        let all = builds(4, &levels(&["avx2", "sse2"]));
+        let names: Vec<&str> = builds_of(&TOPOLOGY, &all).iter().map(|build| build.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["x86-64, 1 thread(s), avx2", "x86-64, 4 thread(s), avx2", "wasm32, baseline", "wasm32, simd128"]
+        );
+        assert_eq!(builds_of(&MATHS, &all).len(), 5, "the maths at sse2 too");
+        assert_eq!(
+            check(&TOPOLOGY, &topology_agreeing(), GOOD),
+            Ok("4 builds agree with the record on 2 operations, 1 executor each".to_string())
+        );
+        let [native, many, _, simd] = builds_of(&TOPOLOGY, &all)[..] else { panic!() };
+        assert_eq!(header(&TOPOLOGY, native), "build x86_64 simd128=false threads=1");
+        assert_eq!(
+            cargo_args(many, &TOPOLOGY, "SIMD-DIR", "4").join(" "),
+            "run --quiet --release -p occam-topo --example determinism --features determinism -- --threads 4"
+        );
+        let want = format!(
+            "run --quiet --release -p occam-topo --example determinism --features determinism --target wasm32-wasip2 --target-dir SIMD-DIR --config {SIMD128} -- --threads 1"
+        );
+        assert_eq!(cargo_args(simd, &TOPOLOGY, "SIMD-DIR", "1").join(" "), want);
+    }
+
+    #[test]
+    fn a_topology_run_that_differs_or_names_a_level_or_a_lane_fails_against_its_own_files() {
+        let mut runs = topology_agreeing();
+        runs[1].1 = runs[1].1.replace("sqrt scalar 00000000000000aa", "sqrt scalar 00000000000000bb");
+        let found = check(&TOPOLOGY, &runs, GOOD).unwrap_err();
+        assert_eq!((found[0].code, found[0].file.as_str()), ("determinism.mismatch", TOPOLOGY.source));
+        let mut levelled = topology_agreeing();
+        levelled[0].1 = levelled[0].1.replacen("threads=1", "threads=1 level=avx2", 1);
+        assert_eq!(codes(&check(&TOPOLOGY, &levelled, GOOD)), ["determinism.wrong-build"]);
+        let mut laned = topology_agreeing();
+        laned[2].1.push_str("add lanes4 00000000000000aa\n");
+        assert_eq!(codes(&check(&TOPOLOGY, &laned, GOOD)), ["determinism.malformed"]);
+        let unrecorded = check(&TOPOLOGY, &topology_agreeing(), "add 00000000000000aa\n").unwrap_err();
+        assert_eq!((unrecorded[0].code, unrecorded[0].file.as_str()), ("determinism.unrecorded", TOPOLOGY.record));
+    }
+
+    #[test]
+    fn every_probe_has_its_own_package_record_and_source() {
+        assert_eq!(PROBES.map(|probe| probe.name), ["maths", "topology"]);
+        assert_eq!(PROBES.map(|probe| probe.record), ["ci/determinism-hashes.txt", "ci/determinism-topology.txt"]);
+        assert_eq!(PROBES.map(|probe| (probe.levels, probe.executors.len())), [(true, 4), (false, 1)]);
+        assert_eq!(MATHS.features, None);
     }
 }

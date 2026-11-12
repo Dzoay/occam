@@ -27,15 +27,6 @@ fields. Names and colours arrive with `exchange`, and the describer and the nati
 
 ## Steps
 
-### `topology.digest`
-
-`Snapshot::digest`, over every live record in slot order, every geometry's content and the tolerance, NaNs
-canonicalised (L23). `Snapshot::check_all`, the whole model against every invariant through `Exec`, for loading,
-importing and tests, one report per failure in slot order. Both join `gates determinism`.
-
-*Failing test first:* the digest changes with any one field and not with a clone or a dropped edit; `check_all` on a
-corrupted model gives the same reports at 1 and 4 threads, and the same digest on wasm32.
-
 ### `topology.scale`
 
 S3-P3's snapshot and edit benchmarks at 10⁶ faces on the real records, beside the spike's numbers (goal), and the
