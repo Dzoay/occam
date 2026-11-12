@@ -17,7 +17,7 @@ hold.
 |---|---|---|---|
 | `maths` | [Detailed in its own file](maths.md) | 1.2, in part | [Detailed in its own file](maths.md) |
 | `geometry` | [Detailed in its own file](geometry.md) | 1.2 to 1.5, 2.1 to 2.4, 2.8 | [Detailed in its own file](geometry.md) |
-| `topology` | Records in copy-on-write chunks read through views; ids; `Edit`, whose commit runs the checker; `Changes`; provenance | 1.1, 1.10 | Euler and closure checks; seeded corruptions are caught; S3-P3's snapshot and edit benchmarks at 10^6 faces on the real records (goal) |
+| `topology` | [Detailed in its own file](topology.md) | 1.1, 1.10 | [Detailed in its own file](topology.md) |
 | `construction` | Requests validated before any geometry; primitives, wires, planar faces, extrude, revolve and transform; mass properties and bounds; the native format, which is its own dump; the describer; `occam run`, `list`, `adjacent`, `describe` and `check`; a listing of what is supported and what is refused | 1.6, 1.8, 1.12, 1.13, 2.7, 2.11, 2.13, 2.15, 2.17 | An agent builds a solid from JSON alone; the time to load a model of 10^5 faces, parsing and checking timed apart (goal) |
 | `view` | P9's mesher, with its limits and the watertight check on every output; P10's worker pool; P12's renderer contract | 1.7 | Mesh buffers asserted; watertight; timed in the browser |
 | `intersection` | The method list, closed forms then the hybrid; failures in the result; `BelowResolution`; coincidence detected; edge box tests checked by digest | none | Oracle and closed-form agreement across the corpus (goal) |
