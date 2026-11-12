@@ -2,8 +2,10 @@
 //! What a commit checks (P1): everything the edit created, changed or removed that is live after it, and every live
 //! neighbour whose own checks read one of those, found both in the snapshot the edit began from and in the new model.
 //! Neighbours are what a record links to and the short lists and rings it sits in: its owner's list, the uses round an
-//! edge, the edges round a vertex. Four edits reach further, to everything they could affect: moving a shell to another
-//! body, changing a body's kind, removing a shell, and removing a curve or surface something may still lie on.
+//! edge, the edges round a vertex; and the face of every loop reached, whose loops' nesting the loop's edges decide.
+//! Four edits reach further, to everything they could affect: moving a shell to another body, changing a body's kind,
+//! removing a shell, and removing or replacing in place a curve or surface, which reaches what lies on it and its
+//! neighbours.
 
 use std::collections::BTreeSet;
 
@@ -27,6 +29,9 @@ pub(crate) fn scope(edit: &Edit) -> BTreeSet<EntityRef> {
         around(next, entity, &mut found);
         further(base, next, entity, &mut found);
     }
+    let faces: Vec<EntityRef> =
+        found.iter().filter_map(|&l| typed::<Loop>(l)).filter_map(|l| get(next, l)).map(|l| l.face.entity()).collect();
+    found.extend(faces);
     found.retain(|&entity| next.is_live(entity));
     found
 }
@@ -156,19 +161,25 @@ fn further(base: &Model, next: &Model, entity: EntityRef, out: &mut BTreeSet<Ent
                 }
             }
         }
-        EntityKind::Surface | EntityKind::Curve | EntityKind::ParamCurve if !next.is_live(entity) => {
-            lying_on(next, entity, out);
+        EntityKind::Surface | EntityKind::Curve | EntityKind::ParamCurve if base.is_live(entity) => {
+            let mut users = BTreeSet::new();
+            lying_on(next, entity, &mut users);
+            for &user in &users {
+                around(next, user, out);
+            }
+            out.extend(users);
         }
         _ => {}
     }
 }
 
-/// Adds everything in `model` that names the geometry `entity`.
+/// Adds everything in `model` that names the geometry `entity`, reading, and counting, every face, edge and use.
 fn lying_on(model: &Model, entity: EntityRef, out: &mut BTreeSet<EntityRef>) {
-    let faces = Face::table(model).records().filter(|(_, _, r)| r.surface.entity() == entity);
+    let faces = Face::table(model).records().inspect(|_| note()).filter(|(_, _, r)| r.surface.entity() == entity);
     out.extend(faces.map(|(slot, generation, _)| Id::<Face>::new(slot, generation).entity()));
-    let edges = Edge::table(model).records().filter(|(_, _, r)| r.curve.entity() == entity);
+    let edges = Edge::table(model).records().inspect(|_| note()).filter(|(_, _, r)| r.curve.entity() == entity);
     out.extend(edges.map(|(slot, generation, _)| Id::<Edge>::new(slot, generation).entity()));
-    let uses = EdgeUse::table(model).records().filter(|(_, _, r)| r.pcurve.map(Id::entity) == Some(entity));
+    let uses = EdgeUse::table(model).records().inspect(|_| note());
+    let uses = uses.filter(|(_, _, r)| r.pcurve.map(Id::entity) == Some(entity));
     out.extend(uses.map(|(slot, generation, _)| Id::<EdgeUse>::new(slot, generation).entity()));
 }

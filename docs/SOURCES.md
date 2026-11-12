@@ -22,3 +22,4 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | `do-carmo-1976` | book | n/a | do Carmo. *Differential Geometry of Curves and Surfaces*. Prentice-Hall, 1976 |
 | `davis-rabinowitz-1984` | book | n/a | Davis, Rabinowitz. *Methods of Numerical Integration*, 2nd edition. Academic Press, 1984 |
 | `mantyla-1988` | book | n/a | Mäntylä. *An Introduction to Solid Modeling*. Computer Science Press, 1988 |
+| `hormann-agathos-2001` | paper | n/a | Hormann, Agathos. *The Point in Polygon Problem for Arbitrary Polygons*. Computational Geometry 20(3), 2001 |

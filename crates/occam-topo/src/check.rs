@@ -53,9 +53,11 @@ fn holds<K: Kind>(
     Some(items.to_vec())
 }
 
-/// Every invariant of one entity that reads its record and its neighbours' records, in a fixed order.
+/// Every invariant of one entity that reads its record and its neighbours' records, then those that read their
+/// geometry, in a fixed order.
 pub(crate) fn entity(model: &Model, entity: EntityRef, out: &mut Vec<Report>) {
     local::check(model, entity, out);
+    crate::geometric::entity(model, entity, out);
 }
 
 /// Every invariant of one body as a whole: each shell's list of faces, its faces joined through their edges, and, for a

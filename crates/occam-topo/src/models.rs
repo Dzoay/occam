@@ -9,7 +9,7 @@ use core::f64::consts::{FRAC_PI_2, PI};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use occam_geom::{Circle, Cylinder, Line, Plane};
+use occam_geom::{Line, Plane};
 use occam_report::StepRole;
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, UvPoint, Vec3, Vector, World};
 
@@ -18,6 +18,12 @@ use crate::kind::{Body, Edge, EdgeUse, Face, Id, Loop, Shell, Vertex, Wire};
 use crate::records::{
     Around, BodyKind, BodyRecord, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, Sheet,
     ShellRecord, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
+};
+
+mod geometric;
+
+pub(crate) use geometric::{
+    cylinder_from, cylinder_pcurves, disc, holed_sheet, sheet_holed_by_its_reversal, straight_pcurves,
 };
 
 /// An edge: its curve, the part of it, the indices of its start and finish vertices, and its role.
@@ -341,40 +347,7 @@ pub(crate) fn wire() -> Spec {
 
 /// A cylinder of radius 1 and height 2 about +Z, its side two patches split at `u = 0` and `u = π`, with flat ends.
 pub(crate) fn cylinder() -> Spec {
-    let lift = |z: f64| {
-        Placement::<Local, World>::identity().then(&Placement::translation(Vector::from_vec3(Vec3::new(0.0, 0.0, z))))
-    };
-    let radius = Length::from_millimetres(1.0);
-    let circle = |z: f64, lo: f64, hi: f64| {
-        CurveRecord(Arc::new(Circle::placed(&lift(z), radius).unwrap().trimmed(lo, hi).unwrap()))
-    };
-    let up =
-        |x: f64| CurveRecord(Arc::new(Line::new(point(x, 0.0, 0.0), Direction::normalised(Vec3::new(0.0, 0.0, 1.0)))));
-    let edge = |curve, range, ends, role| EdgeSpec { curve, range, ends, role };
-    let edges = vec![
-        edge(up(1.0), (0.0, 2.0), (0, 2), EdgeRole::Seam),
-        edge(up(-1.0), (0.0, 2.0), (1, 3), EdgeRole::Ordinary),
-        edge(circle(0.0, 0.0, PI), (0.0, PI), (0, 1), EdgeRole::Ordinary),
-        edge(circle(0.0, PI, 2.0 * PI), (PI, 2.0 * PI), (1, 0), EdgeRole::Ordinary),
-        edge(circle(2.0, 0.0, PI), (0.0, PI), (2, 3), EdgeRole::Ordinary),
-        edge(circle(2.0, PI, 2.0 * PI), (PI, 2.0 * PI), (3, 2), EdgeRole::Ordinary),
-    ];
-    let side = SurfaceRecord(Arc::new(Cylinder::placed(&Placement::identity(), radius).unwrap()));
-    let bottom = SurfaceRecord(Arc::new(Plane::placed(&facing(Vec3::new(0.0, 0.0, -1.0), Vec3::new(0.0, 0.0, 0.0)))));
-    let top = SurfaceRecord(Arc::new(Plane::placed(&lift(2.0))));
-    let face = |surface, uses: Vec<(usize, bool)>, u: f64, v: f64| FaceSpec {
-        surface,
-        reversed: false,
-        loops: vec![(uses, UvPoint::new(u, v))],
-    };
-    let faces = vec![
-        face(0, vec![(2, false), (1, false), (4, true), (0, true)], FRAC_PI_2, 1.0),
-        face(0, vec![(3, false), (0, false), (5, true), (1, true)], 3.0 * FRAC_PI_2, 1.0),
-        face(1, vec![(3, true), (2, true)], 0.0, 0.0),
-        face(2, vec![(4, false), (5, false)], 0.0, 0.0),
-    ];
-    let points = vec![point(1.0, 0.0, 0.0), point(-1.0, 0.0, 0.0), point(1.0, 0.0, 2.0), point(-1.0, 0.0, 2.0)];
-    Spec { kind: BodyKind::Solid, points, edges, surfaces: vec![side, bottom, top], faces, wires: Vec::new() }
+    cylinder_from(0.0)
 }
 
 /// `n` as a coordinate.

@@ -27,18 +27,6 @@ fields. Names and colours arrive with `exchange`, and the describer and the nati
 
 ## Steps
 
-### `topology.geometric`
-
-The checks that read geometry, on what changed. Each vertex lies on its edges' ends within its certified radius and
-the band; an edge's range lies in its curve's domain; each parameter curve agrees with its edge through `join_edge`;
-each loop's witness is strictly inside it in the face's parameters, which decides the outer loop (S1 item 3); and a
-face's loops lie in its sheet, so no face crosses its own seam. `commit` measures each new or changed edge's deviation
-from every face that uses it and stores it, so no caller asserts it (S1 item 9).
-
-*Failing test first:* a vertex moved off its edge, a parameter curve on the wrong surface, a witness outside its loop,
-a hole attached to its own reversal (S1's 52-case bug) and a face across its seam are each caught; a deviation the
-caller wrote is replaced by the measured one.
-
 ### `topology.digest`
 
 `Snapshot::digest`, over every live record in slot order, every geometry's content and the tolerance, NaNs

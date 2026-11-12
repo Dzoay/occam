@@ -12,6 +12,7 @@
 
 mod check;
 mod edit;
+mod geometric;
 mod kind;
 #[cfg(test)]
 mod models;

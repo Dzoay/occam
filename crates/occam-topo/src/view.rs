@@ -48,13 +48,13 @@ impl Snapshot {
 }
 
 /// The entity `id` names in `model`, if it is live there.
-fn view<K: Kind>(model: &Model, id: Id<K>) -> Option<View<'_, K>> {
+pub(crate) fn view<K: Kind>(model: &Model, id: Id<K>) -> Option<View<'_, K>> {
     let record = K::table(model).live(id.slot(), id.generation())?;
     Some(View { model, id, record })
 }
 
 /// The chain from `first` by `next`, stopping where it ends, comes back to `first`, or reaches `most` items.
-fn walk<T: Copy + Eq>(first: Option<T>, most: usize, mut next: impl FnMut(T) -> Option<T>) -> Vec<T> {
+pub(crate) fn walk<T: Copy + Eq>(first: Option<T>, most: usize, mut next: impl FnMut(T) -> Option<T>) -> Vec<T> {
     let mut found = Vec::new();
     let mut at = first;
     while let Some(item) = at {
@@ -74,7 +74,7 @@ fn once<T: Copy + Ord>(items: impl IntoIterator<Item = T>) -> Vec<T> {
 }
 
 /// The most steps a walk over kind `K` can take in `model`.
-fn most<K: Kind>(model: &Model) -> usize {
+pub(crate) fn most<K: Kind>(model: &Model) -> usize {
     K::table(model).len()
 }
 

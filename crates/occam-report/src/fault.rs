@@ -67,6 +67,18 @@ text_enum! {
         /// A body holds what its kind does not: a solid or sheet without a shell or with a wire, or a wire body
         /// without a wire or with a shell.
         BodyKindMismatch = "body-kind-mismatch",
+        /// An end of an edge is further from its vertex than the vertex's certified radius and the band.
+        VertexOffEdge = "vertex-off-edge",
+        /// A curve in a face's parameters does not run along its edge on the face's surface.
+        ParamCurveOffEdge = "param-curve-off-edge",
+        /// A loop does not close in its face's parameters, as one that goes round a seam does not.
+        LoopOpenInParameters = "loop-open-in-parameters",
+        /// A face's loops leave the period of the surface's parameters that the face's sheet names.
+        OutsideSheet = "outside-sheet",
+        /// A loop's witness is not strictly inside it.
+        WitnessNotInside = "witness-not-inside",
+        /// A face's other loops are not strictly inside its outer loop, or the outer loop's witness is inside one.
+        LoopsNotNested = "loops-not-nested",
     }
 }
 

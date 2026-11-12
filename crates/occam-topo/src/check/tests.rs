@@ -427,7 +427,12 @@ fn a_closed_shell_whose_counts_give_no_whole_genus_is_found() {
         change(edit, built.loops[1], |r: &mut LoopRecord| r.next = Some(hole));
         expected = vec![(Reason::GenusNotWhole, vec![built.shell.unwrap().entity()])];
     });
-    assert_eq!(found, (expected.clone(), expected.clone()));
+    // The seeded loop is one edge used twice, which no geometry bounds: its vertex is off the curve it borrows and its
+    // witness cannot be inside it. Only the checker's own reasons are compared.
+    let geometric = |reason: &Reason| matches!(reason, Reason::VertexOffEdge | Reason::WitnessNotInside);
+    let own = |found: Vec<Failure>| found.into_iter().filter(|(reason, _)| !geometric(reason)).collect::<Vec<_>>();
+    assert!(found.0.iter().chain(&found.1).any(|(reason, _)| geometric(reason)), "geometry fails too: {found:?}");
+    assert_eq!((own(found.0), own(found.1)), (expected.clone(), expected));
 }
 
 #[test]

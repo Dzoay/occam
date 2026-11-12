@@ -125,7 +125,7 @@ fn a_record_linking_to_an_entity_not_live_fails_commit_naming_both() {
     let curve = record(&base, e).unwrap().curve;
     let lone = edit.add(vertex(3.0));
     edit.remove(lone).unwrap();
-    let to_edge = edit.add(vertex(9.0));
+    let to_edge = edit.add(vertex(0.0));
     let dangling = edge(&mut edit, curve, (to_edge, lone), StepRole::Made);
     assert_eq!(record_in(&edit, to_edge).star, Some(Around { edge: dangling, end: End::Start }));
     let reports = edit.commit(&serial()).unwrap_err();
@@ -149,7 +149,7 @@ fn a_record_left_linking_to_one_the_edit_removed_fails_commit() {
     assert_eq!((empty.ids::<Edge>(), changes.deleted.len()), (Vec::new(), 3), "removing all three is clean");
     let mut relinked = base.edit();
     relinked.remove(b).unwrap();
-    let c = relinked.add(VertexRecord { star: Some(Around { edge: e, end: End::Finish }), ..vertex(2.0) });
+    let c = relinked.add(VertexRecord { star: Some(Around { edge: e, end: End::Finish }), ..vertex(1.0) });
     let moved = EdgeRecord { ends: (a, c), ..record(&base, e).unwrap().clone() };
     relinked.set(e, moved).unwrap();
     assert_eq!(relinked.commit(&serial()).map(|(_, c)| c.changed), Ok(vec![e.entity()]), "relinked first");

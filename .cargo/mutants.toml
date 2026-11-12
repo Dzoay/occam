@@ -187,4 +187,18 @@ exclude_re = [
     # By line. Reading the edges of a shell that is new, whose faces the edit touched and so already reached, or of one
     # whose body is unchanged, which is all a check of an edge reads of its shell: more reads, the same failures.
     "scope\\.rs:146:37: replace && with \\|\\| in further$",
+    # The geometric step's (topology.geometric). Ties, which give the same value either way: the farther of a
+    # parameter's distances below and above its chart, the least of two clearances, and the largest deviation found so
+    # far.
+    "trace\\.rs:\\d+:\\d+: replace > with >= in Chart::beyond$",
+    "trace\\.rs:\\d+:\\d+: replace < with <= in least$",
+    "geometric\\.rs:\\d+:\\d+: replace > with >= in deviation$",
+    # By line. A step whose arc comes exactly to the band at the far end of its bound is within it for certain; halved
+    # again, the half holding the arc's nearest point still bounds it from below by no more than the band, so the least
+    # clearance stays within it and a point there stays unsettled either way.
+    "trace\\.rs:385:54: replace < with <= in Trace<'_>::refine$",
+    # By line. One halving more than 24, which changes only how much a search refines: a step 2^-24 of the first strays
+    # from its chord by about 2^-48 of what the first does, below a double's resolution of the distance to it, so it is
+    # still unsure there only where the band and that distance agree to the last bit. Not a tie; no test can reach it.
+    "trace\\.rs:386:55: replace < with <= in Trace<'_>::refine$",
 ]

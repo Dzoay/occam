@@ -164,7 +164,8 @@ pub struct EdgeUseRecord {
     pub radial: Id<EdgeUse>,
     /// Whether it runs against the edge's curve.
     pub reversed: bool,
-    /// The edge's image in the face's parameters (S1 item 7: without it, the same answers 3.45 times slower).
+    /// The edge's image in the face's parameters, over the edge's range and in the edge's direction, whichever way the
+    /// use runs (S1 item 7: without it, the same answers 3.45 times slower).
     pub pcurve: Option<Id<ParamCurveGeom>>,
 }
 
