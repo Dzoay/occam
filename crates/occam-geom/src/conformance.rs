@@ -4,6 +4,7 @@
 //! so that a test can show a seeded fault caught by the check meant to catch it.
 
 mod curves;
+pub(crate) mod forms;
 mod lifted;
 mod profiles;
 mod seeded;

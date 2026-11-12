@@ -67,6 +67,13 @@ text_enum! {
         EdgeOffSurface = "geom.edge-off-surface",
         /// A curve given as a parameter curve leaves the plane `z = 0`, whose `x` and `y` are a face's parameters.
         NotInPlane = "geom.not-in-plane",
+        /// A curve has no tangent, or a surface no normal, at the parameter asked: its derivatives there span no
+        /// direction.
+        SingularPoint = "geom.singular-point",
+        /// A join between two curves or two surfaces is less smooth than the continuity required of it.
+        JoinBelowContinuity = "geom.join-below-continuity",
+        /// A measure did not reach the accuracy asked within the work it is allowed.
+        NotConverged = "measure.not-converged",
     }
 }
 
@@ -129,7 +136,10 @@ impl Code {
             | Self::SweptAlongItself
             | Self::NotSmooth
             | Self::EdgeOffSurface
-            | Self::NotInPlane => Severity::Error,
+            | Self::NotInPlane
+            | Self::SingularPoint
+            | Self::JoinBelowContinuity
+            | Self::NotConverged => Severity::Error,
             Self::ToleranceUsed => Severity::Note,
         }
     }
@@ -172,6 +182,11 @@ impl Code {
             Self::NotInPlane => {
                 "A parameter curve must be drawn in the plane z = 0, whose x and y are the face's parameters."
             }
+            Self::SingularPoint => {
+                "A curve has no tangent, or a surface no normal, where its derivatives span no direction."
+            }
+            Self::JoinBelowContinuity => "A join is less smooth than the continuity required of it.",
+            Self::NotConverged => "A measure did not reach the accuracy asked within the work it is allowed.",
         }
     }
 
@@ -218,6 +233,13 @@ impl Code {
                 "The edge's curve on the face is {gap} from its own at {point}, more than the band of {band}."
             }
             Self::NotInPlane => "The curve reaches {height} from the plane z = 0, in which a parameter curve is drawn.",
+            Self::SingularPoint => {
+                "The derivatives at the parameter asked span {span}, too little to give a direction there."
+            }
+            Self::JoinBelowContinuity => {
+                "The join first fails at order {failed}, short of the order {required} required, by {gap}."
+            }
+            Self::NotConverged => "The measure reached an accuracy of {reached} where {asked} was asked for.",
         }
     }
 
@@ -244,7 +266,10 @@ impl Code {
             | Self::TriangleNotValid
             | Self::SweptAlongItself
             | Self::EdgeOffSurface
-            | Self::NotInPlane => &[],
+            | Self::NotInPlane
+            | Self::SingularPoint
+            | Self::JoinBelowContinuity
+            | Self::NotConverged => &[],
         }
     }
 }
@@ -527,6 +552,35 @@ mod tests {
         ])
     }
 
+    fn measure_codes() -> Value {
+        json!([
+            {
+                "name": "SingularPoint",
+                "code": "geom.singular-point",
+                "severity": "error",
+                "summary": "A curve has no tangent, or a surface no normal, where its derivatives span no direction.",
+                "template": "The derivatives at the parameter asked span {span}, too little to give a direction there.",
+                "remedies": [],
+            },
+            {
+                "name": "JoinBelowContinuity",
+                "code": "geom.join-below-continuity",
+                "severity": "error",
+                "summary": "A join is less smooth than the continuity required of it.",
+                "template": "The join first fails at order {failed}, short of the order {required} required, by {gap}.",
+                "remedies": [],
+            },
+            {
+                "name": "NotConverged",
+                "code": "measure.not-converged",
+                "severity": "error",
+                "summary": "A measure did not reach the accuracy asked within the work it is allowed.",
+                "template": "The measure reached an accuracy of {reached} where {asked} was asked for.",
+                "remedies": [],
+            },
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -559,6 +613,7 @@ mod tests {
             geom_codes(),
             spline_and_mesh_codes(),
             edge_codes(),
+            measure_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())

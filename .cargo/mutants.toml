@@ -130,4 +130,24 @@ exclude_re = [
     # finds no point nearer than the minimum the search finds without them.
     "nearest\\.rs:69:21: replace < with <= in nearest_by$",
     "nearest\\.rs:69:27: replace && with \\|\\| in nearest_by$",
+    # The measures step's (geometry.measures). Ties, which give the same value either way: a length's ends in order.
+    "arc\\.rs:\\d+:\\d+: replace < with <= in length$",
+    # By line where the operator is not alone in its function. Derivatives of equal length in order, and a spread of
+    # exactly +0, whose root is +0: a tie, the same value either way. The larger of curvatures as large as each other.
+    "local\\.rs:\\d+:\\d+: replace < with <= in no_plane$",
+    "local\\.rs:158:26: replace > with >= in surface_local$",
+    "local\\.rs:160:41: replace > with >= in surface_local$",
+    # Ties, which give the same value either way: the larger of two lengths in `same` and `same_number`, and in a
+    # surface join the farther of two feet and the running largest gap, angle and difference of curvatures.
+    "continuity\\.rs:\\d+:\\d+: replace > with >= in same$",
+    "continuity\\.rs:\\d+:\\d+: replace > with >= in same_number$",
+    "continuity\\.rs:249:34: replace > with >= in measure_surfaces$",
+    "continuity\\.rs:250:38: replace > with >= in measure_surfaces$",
+    "continuity\\.rs:255:25: replace > with >= in measure_surfaces$",
+    "continuity\\.rs:259:31: replace > with >= in measure_surfaces$",
+    # Normals exactly square to each other are a quarter turn apart either way round, and such a join is G0 at best
+    # whatever its curvatures. `flip` is exactly 1 or -1, so dividing by it is multiplying by it.
+    "continuity\\.rs:\\d+:\\d+: replace < with <= in measure_surfaces$",
+    "continuity\\.rs:257:57: replace \\* with / in measure_surfaces$",
+    "continuity\\.rs:258:36: replace \\* with / in measure_surfaces$",
 ]

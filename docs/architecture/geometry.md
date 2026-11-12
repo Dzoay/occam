@@ -119,6 +119,32 @@ the largest gap, where it is, and the edge's parameter there. A parameter curve 
 cylinder whose `u` runs past 2π does: a parameter that comes round is defined at every finite value, and the check
 compares points in space, where a seam is no edge.
 
+## Measures
+
+Every measure reads `dyn Curve` or `dyn Surface`, so each family, present or to come, is measured alike.
+
+- **At a parameter** (row 2.8): a curve's unit tangent, curvature, principal normal and torsion; a surface's unit
+  normal, principal curvatures and directions, and mean and Gaussian curvature, from its fundamental forms (do Carmo).
+  A curvature is positive where the curve or surface bends towards its normal, `Su x Sv` for a surface. A tangent or
+  normal that does not exist is `geom.singular-point`: a curve that stops, or derivatives that are parallel within the
+  angular tolerance or one rounding away to nothing against the other, as at a pole or an apex. A principal normal on
+  a straight stretch and principal directions at an umbilic are `None`, an ordinary answer. A mesh has no second
+  derivative to measure curvature with, which `derivatives` already refuses.
+- **Length** (row 2.1): adaptive Gauss-Legendre, ten points an interval, its nodes computed by Newton's method, each
+  interval halved until its halves agree with it to its share of the tolerance; `measure.not-converged` where the
+  budget runs out first.
+- **Discretisation** (row 2.1): by count or spacing, each point aimed at its own length from the start so that errors
+  do not add up; and by deflection, each piece's distance from its chord measured, at sixteen samples with each local
+  largest refined by golden-section search, and the piece cut where it exceeds the deflection.
+- **Continuity** (row 2.4): a curve join's parametric class `C(n)`, the derivatives equal to order `n`, and geometric
+  class, `G1` the unit tangents and `G2` the curvature vectors equal. Points compare within the band; everything else
+  relative to the longer vector, within the angular tolerance, so it means the same whatever the parameters measure.
+  A surface join is measured along a shared edge, sampled: the points meet, the tangent planes as lines, so either
+  orientation, and the normal curvature across the edge, which with the tangent planes equal along it makes every
+  curvature equal. A surface's parametric class depends on how a shell parameterises its faces, so it is not measured,
+  and a mesh is shown `G1` at most. A join below what was required is `geom.join-below-continuity`, naming the first
+  order that fails, the order required and the measure that fails it.
+
 ## No cross-family store
 
 Calls are **sorted** by family and degree; geometry is **stored** one item a slot, in the snapshot's tables. Grouping

@@ -20,3 +20,4 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | `ericson-2005` | book | n/a | Ericson. *Real-Time Collision Detection*. Morgan Kaufmann, 2005 |
 | `piegl-tiller-1997` | book | n/a | Piegl, Tiller. *The NURBS Book*, 2nd edition. Springer, 1997 |
 | `do-carmo-1976` | book | n/a | do Carmo. *Differential Geometry of Curves and Surfaces*. Prentice-Hall, 1976 |
+| `davis-rabinowitz-1984` | book | n/a | Davis, Rabinowitz. *Methods of Numerical Integration*, 2nd edition. Academic Press, 1984 |

@@ -16,6 +16,7 @@
 )]
 
 mod analytic;
+mod arc;
 mod axes;
 mod basis;
 mod batch;
@@ -25,6 +26,7 @@ mod circle;
 mod cone;
 #[cfg(test)]
 mod conformance;
+mod continuity;
 mod curve;
 mod cylinder;
 mod domain;
@@ -40,6 +42,7 @@ mod join;
 mod knots;
 mod lanewise;
 mod line;
+mod local;
 mod meridian;
 mod mesh;
 mod nearest;
@@ -52,6 +55,7 @@ mod plane;
 mod revolution;
 #[cfg(test)]
 mod source_check;
+mod spacing;
 mod sphere;
 mod spline;
 mod spline_curve;
@@ -67,10 +71,12 @@ mod uv_curve;
 pub mod workloads;
 
 pub use analytic::Analytic;
+pub use arc::length;
 pub use batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
 pub use bspline::{BsplineCurve, BsplineSurface};
 pub use circle::Circle;
 pub use cone::Cone;
+pub use continuity::{Continuity, Smoothness, curve_join, require_curve_join, require_surface_join, surface_join};
 pub use curve::{Curve, ParametricCurve};
 pub use cylinder::Cylinder;
 pub use domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
@@ -80,6 +86,7 @@ pub use hyperbola::Hyperbola;
 pub use identity::{BatchKey, Content, FamilyName, Shape};
 pub use join::join_edge;
 pub use line::Line;
+pub use local::{CurveLocal, SurfaceLocal, curve_local, surface_local};
 pub use mesh::MeshSurface;
 pub use offset_curve::OffsetCurve;
 pub use offset_surface::OffsetSurface;
@@ -87,6 +94,7 @@ pub use parabola::Parabola;
 pub use param_curve::{ParamCurve, ParametricParamCurve, UvClosest};
 pub use plane::Plane;
 pub use revolution::Revolution;
+pub use spacing::{by_count, by_deflection, by_spacing};
 pub use sphere::Sphere;
 pub use spline_curve::SplineCurve;
 pub use spline_surface::SplineSurface;

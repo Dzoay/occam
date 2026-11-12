@@ -26,14 +26,6 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.measures`
-
-Tangent, normal and curvature at a parameter (row 2.8); curve length and a uniform discretisation by distance or by
-deflection (row 2.1); continuity classes C0 to CN, G1 and G2, reported and required at joins (row 2.4).
-
-*Failing test first:* known lengths and curvatures for every analytic family; a discretisation never further from the
-curve than asked; continuity at known joins, and a join below what was required reported.
-
 ### `geometry.freeze`
 
 The suite runs over every family in one table, the seam is frozen (L21), and the type sketch's `geom.rs`, `units.rs`
