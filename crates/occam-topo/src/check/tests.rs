@@ -104,7 +104,7 @@ fn uses(edit: &Edit, first: Id<EdgeUse>) -> Vec<Id<EdgeUse>> {
 }
 
 /// The uses of the outer loop of `face`, in `edit`.
-fn face_uses(edit: &Edit, face: Id<Face>) -> Vec<Id<EdgeUse>> {
+pub(super) fn face_uses(edit: &Edit, face: Id<Face>) -> Vec<Id<EdgeUse>> {
     let outer = edit.record(face).unwrap().outer;
     uses(edit, edit.record(outer).unwrap().first)
 }
@@ -134,7 +134,7 @@ fn star_places(edit: &Edit, vertex: Id<Vertex>) -> Vec<Around> {
 }
 
 /// Moves `faces` of a body built as one shell into a second shell of the same body, which begins from the first of them.
-fn second_shell(edit: &mut Edit, built: &Built, faces: &[usize]) -> Id<Shell> {
+pub(super) fn second_shell(edit: &mut Edit, built: &Built, faces: &[usize]) -> Id<Shell> {
     let (first, shell) = (built.shell.unwrap(), edit.reserve::<Shell>());
     let moved: Vec<Id<Face>> = faces.iter().map(|&k| built.faces[k]).collect();
     let kept: Vec<Id<Face>> = built.faces.iter().copied().filter(|f| !moved.contains(f)).collect();
@@ -476,25 +476,23 @@ fn a_use_of_an_edge_that_lists_no_uses_is_not_listed() {
     assert_eq!(found, (expected.clone(), expected.clone()));
 }
 
-/// Splits the middle top square of a plate `k` squares across by its diagonal into two triangles, and commits it. The new
-/// triangle joins the plate's shell by naming it and sharing the diagonal.
-pub(super) fn split_square(snapshot: &Snapshot, built: &Built, k: usize) -> Result<(Snapshot, Changes), Vec<Report>> {
-    let face = built.faces[k * k + (k / 2) * k + k / 2];
-    let mut edit = snapshot.edit();
-    let (square, sides) = (edit.record(face).unwrap(), face_uses(&edit, face));
+/// Splits the square `face` of a plate's top by its diagonal into two triangles, in `edit`. The new triangle joins the
+/// plate's shell by naming it and sharing the diagonal.
+pub(super) fn split(edit: &mut Edit, face: Id<Face>) {
+    let (square, sides) = (edit.record(face).unwrap(), face_uses(edit, face));
     let ends = |edit: &Edit, x: Id<EdgeUse>| {
         let (side, edge) = (edit.record(x).unwrap(), edit.record(edit.record(x).unwrap().edge).unwrap());
         if side.reversed { (edge.ends.1, edge.ends.0) } else { edge.ends }
     };
-    let (from, to) = (ends(&edit, sides[0]).0, ends(&edit, sides[1]).1);
+    let (from, to) = (ends(edit, sides[0]).0, ends(edit, sides[1]).1);
     let at = edit.record(from).unwrap().point;
     let towards = edit.record(to).unwrap().point.to_vec3() - at.to_vec3();
     let curve = edit.add(CurveRecord(Arc::new(Line::new(at, Direction::normalised(towards)))));
     let (diagonal, da, db, other, half) =
         (edit.reserve::<Edge>(), edit.reserve(), edit.reserve(), edit.reserve::<Loop>(), edit.reserve::<Face>());
     let around = (
-        join_star(&mut edit, from, Around { edge: diagonal, end: End::Start }),
-        join_star(&mut edit, to, Around { edge: diagonal, end: End::Finish }),
+        join_star(edit, from, Around { edge: diagonal, end: End::Start }),
+        join_star(edit, to, Around { edge: diagonal, end: End::Finish }),
     );
     let (born, deviation, role) = (edit.provenance(StepRole::Made), Length::from_millimetres(0.0), EdgeRole::Ordinary);
     let record = EdgeRecord {
@@ -518,13 +516,19 @@ pub(super) fn split_square(snapshot: &Snapshot, built: &Built, k: usize) -> Resu
     };
     edit.set(da, a_use(UseOwner::Loop(square.outer), sides[0], db, true)).unwrap();
     edit.set(db, a_use(UseOwner::Loop(other), sides[2], da, false)).unwrap();
-    change(&mut edit, sides[1], |r: &mut EdgeUseRecord| r.next = Some(da));
-    change(&mut edit, sides[2], |r: &mut EdgeUseRecord| r.owner = UseOwner::Loop(other));
-    change(&mut edit, sides[3], |r: &mut EdgeUseRecord| (r.owner, r.next) = (UseOwner::Loop(other), Some(db)));
-    change(&mut edit, square.outer, |r: &mut LoopRecord| r.witness = UvPoint::new(1.0 / 6.0, -1.0 / 6.0));
+    change(edit, sides[1], |r: &mut EdgeUseRecord| r.next = Some(da));
+    change(edit, sides[2], |r: &mut EdgeUseRecord| r.owner = UseOwner::Loop(other));
+    change(edit, sides[3], |r: &mut EdgeUseRecord| (r.owner, r.next) = (UseOwner::Loop(other), Some(db)));
+    change(edit, square.outer, |r: &mut LoopRecord| r.witness = UvPoint::new(1.0 / 6.0, -1.0 / 6.0));
     let witness = UvPoint::new(-1.0 / 6.0, 1.0 / 6.0);
     edit.set(other, LoopRecord { face: half, first: sides[2], next: None, witness }).unwrap();
     edit.set(half, FaceRecord { outer: other, born, ..square }).unwrap();
+}
+
+/// Splits the middle top square of a plate `k` squares across by its diagonal into two triangles, and commits it.
+pub(super) fn split_square(snapshot: &Snapshot, built: &Built, k: usize) -> Result<(Snapshot, Changes), Vec<Report>> {
+    let mut edit = snapshot.edit();
+    split(&mut edit, built.faces[k * k + (k / 2) * k + k / 2]);
     edit.commit(&serial())
 }
 

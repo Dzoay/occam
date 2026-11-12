@@ -82,12 +82,21 @@ pub(crate) fn edit(edit: &Edit) -> Vec<Report> {
         entity(&edit.next, touched, &mut found);
     }
     let touched = incremental::Touched::of(edit);
-    incremental::genus(&touched, &mut found);
-    incremental::joined(&touched, &mut found);
+    let (mut counted, mut apart) = (Vec::new(), Vec::new());
+    incremental::genus(&touched, &mut counted);
+    incremental::joined(&touched, &mut apart);
+    // A shell in pieces has no genus, so it reports only that it is not joined, as the whole-model check does.
+    let cut: Vec<EntityRef> = apart.iter().filter_map(|report| report.entities.first().copied()).collect();
+    found.extend(counted.into_iter().filter(|report| report.entities.first().is_none_or(|shell| !cut.contains(shell))));
+    found.extend(apart);
     found
 }
 
 #[cfg(test)]
 mod membership;
+#[cfg(test)]
+mod scattered;
+#[cfg(test)]
+mod sweep;
 #[cfg(test)]
 mod tests;

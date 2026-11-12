@@ -104,7 +104,8 @@ pub(crate) fn reach(
 }
 
 /// Every invariant of body `id` as a whole, shell by shell, if its list of shells is sound: each face that names a
-/// shell is joined to the face the shell begins from, and a closed shell's faces give a whole genus. A shell that
+/// shell is joined to the face the shell begins from, and a closed shell's faces give a whole genus. A shell in pieces
+/// has no genus, so it reports only that it is not joined. A shell that
 /// begins from a face not its own is left to its own check.
 pub(crate) fn body(model: &Model, members: &Members, id: Id<Body>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
@@ -118,8 +119,7 @@ pub(crate) fn body(model: &Model, members: &Members, id: Id<Body>, out: &mut Vec
         let named = members.0.get(&shell).into_iter().flatten();
         if let Some(apart) = named.copied().find(|f| !reached.contains(f)) {
             out.push(failed(Reason::ShellNotConnected, &[shell.entity(), apart.entity()]));
-        }
-        if record.kind == BodyKind::Solid {
+        } else if record.kind == BodyKind::Solid {
             genus_of(model, shell, &joined, out);
         }
     }

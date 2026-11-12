@@ -375,6 +375,42 @@ pub(crate) fn plate(k: usize) -> Spec {
     polyhedron(BodyKind::Solid, &corners, &faces)
 }
 
+/// A ring one unit square wide round an `m` by `m` square, 1 high, `m` at least 3: its top squares, then its bottom
+/// squares, each row `j = 0` first (`i` from 0), then the two squares of each middle row, then row `m - 1`; then its
+/// outer walls, four for each `a` in `0..m` (`y = 0`, `y = m`, `x = 0`, `x = m`); then its inner walls, four for each
+/// `a` in `1..m - 1` (`y = 1`, `y = m - 1`, `x = 1`, `x = m - 1`). Of genus 1. With `A = 4(m - 1)` squares a side, top
+/// square `(c, 0)` is face `c`, the bottom one `A + c`, the outer wall below it `2A + 4c`, and the inner wall above it
+/// `2A + 4m + 4(c - 1)`.
+pub(crate) fn ring(m: usize) -> Spec {
+    let on = |x: usize, y: usize| x <= 1 || y <= 1 || x + 1 >= m || y + 1 >= m;
+    let grid: Vec<(usize, usize)> =
+        (0..=m).flat_map(|y| (0..=m).map(move |x| (x, y))).filter(|&(x, y)| on(x, y)).collect();
+    let index: BTreeMap<(usize, usize), usize> = grid.iter().enumerate().map(|(n, &c)| (c, n)).collect();
+    let (b, t) = (|x: usize, y: usize| index[&(x, y)], |x: usize, y: usize| grid.len() + index[&(x, y)]);
+    let corners: Vec<[f64; 3]> =
+        [0.0, 1.0].iter().flat_map(|&z| grid.iter().map(move |&(x, y)| [whole(x), whole(y), z])).collect();
+    let rows = (0..m).flat_map(|j| (0..m).map(move |i| (i, j)));
+    let squares: Vec<(usize, usize)> = rows.filter(|&(i, j)| i == 0 || j == 0 || i + 1 == m || j + 1 == m).collect();
+    let mut faces: Vec<Vec<usize>> = Vec::new();
+    faces.extend(squares.iter().map(|&(i, j)| vec![t(i, j), t(i + 1, j), t(i + 1, j + 1), t(i, j + 1)]));
+    faces.extend(squares.iter().map(|&(i, j)| vec![b(i, j), b(i, j + 1), b(i + 1, j + 1), b(i + 1, j)]));
+    for a in 0..m {
+        faces.push(vec![b(a, 0), b(a + 1, 0), t(a + 1, 0), t(a, 0)]);
+        faces.push(vec![b(a + 1, m), b(a, m), t(a, m), t(a + 1, m)]);
+        faces.push(vec![b(0, a + 1), b(0, a), t(0, a), t(0, a + 1)]);
+        faces.push(vec![b(m, a), b(m, a + 1), t(m, a + 1), t(m, a)]);
+    }
+    let n = m - 1;
+    for a in 1..n {
+        faces.push(vec![b(a + 1, 1), b(a, 1), t(a, 1), t(a + 1, 1)]);
+        faces.push(vec![b(a, n), b(a + 1, n), t(a + 1, n), t(a, n)]);
+        faces.push(vec![b(1, a), b(1, a + 1), t(1, a + 1), t(1, a)]);
+        faces.push(vec![b(n, a + 1), b(n, a), t(n, a), t(n, a + 1)]);
+    }
+    let faces: Vec<&[usize]> = faces.iter().map(Vec::as_slice).collect();
+    polyhedron(BodyKind::Solid, &corners, &faces)
+}
+
 /// Two unit cubes that meet only at the corner `(1, 1, 1)`, as one body of one shell: the first cube's faces, then the
 /// second's.
 pub(crate) fn pinched() -> Spec {

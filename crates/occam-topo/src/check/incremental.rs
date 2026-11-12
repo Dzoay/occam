@@ -5,10 +5,17 @@
 //! - Genus: the change in `V - E + 2F - L` of each closed shell, from the entities whose shells changed. A shell whose
 //!   characteristic did not rise, by an even step, keeps a whole genus, and a new shell's characteristic is the change;
 //!   any other shell, and every shell of a body whose kind changed, is counted whole.
-//! - Joining: the faces whose neighbours through edges changed must still be joined to each other within their shell,
-//!   which, with every other face joined to one of them as before, joins the shell. A shell that was there before must
-//!   find among them a face that was already its own; where none is, as for a face given to it without joining it, the
-//!   face it begins from joins them. The search stops once it has met them all.
+//! - Joining, region by region: the faces whose neighbours through edges changed, and the faces that left the shell,
+//!   fall into regions, each joined through faces adjacent before or after the edit. A region's border is the faces of
+//!   the shell next to it that the edit did not touch, whose neighbours are as they were. The shell is still joined if,
+//!   in each region, its faces in the shell and its border are joined to each other through them alone: before the edit
+//!   the shell was joined, and a path between two of its untouched faces leaves and re-enters each region it crosses at
+//!   two faces of that region's border, which the region joins again. A region with no border is the whole of what
+//!   was the shell, or new to it: it is enough only in a new shell, or where it holds a face that was the shell's own,
+//!   and as the only region. Where a region falls short, as a band cut from a ring or a shell cut in two does, the
+//!   shell is searched whole, as before: its touched faces must be joined to each other, and a shell that was there
+//!   before must find among them a face that was already its own, or else the face it begins from joins them. So an
+//!   edit's cost follows what it touched, however scattered.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -174,6 +181,32 @@ fn neighbours(model: &Model, entity: EntityRef, faces: &mut BTreeSet<Id<Face>>, 
     }
 }
 
+/// The faces of one shell an edit touched: those in it in the model it would commit, and those that left it.
+#[derive(Default)]
+struct Sides {
+    /// Faces in the shell after the edit whose neighbours through edges may have changed.
+    live: BTreeSet<Id<Face>>,
+    /// Faces in the shell before the edit that are gone from it.
+    gone: BTreeSet<Id<Face>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    static WHOLE: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+}
+
+/// Counts one search of a whole shell, in tests.
+fn searched_whole() {
+    #[cfg(test)]
+    WHOLE.with(|whole| whole.set(whole.get().saturating_add(1)));
+}
+
+/// How many times a commit has searched a whole shell on this thread.
+#[cfg(test)]
+pub(crate) fn whole_searches() -> usize {
+    WHOLE.with(core::cell::Cell::get)
+}
+
 /// Reports each shell the edit changed whose faces are no longer all joined through their edges.
 pub(crate) fn joined(touched: &Touched<'_>, out: &mut Vec<Report>) {
     let (mut faces, mut edges) = (BTreeSet::new(), BTreeSet::new());
@@ -183,19 +216,85 @@ pub(crate) fn joined(touched: &Touched<'_>, out: &mut Vec<Report>) {
     for edge in edges {
         touched.models().into_iter().for_each(|m| faces.extend(edge_faces(m, edge)));
     }
-    let mut shells: BTreeMap<Id<Shell>, BTreeSet<Id<Face>>> = BTreeMap::new();
+    let mut shells: BTreeMap<Id<Shell>, Sides> = BTreeMap::new();
     for face in faces {
-        if let Some(record) = get(touched.next, face) {
-            shells.entry(record.shell).or_default().insert(face);
+        let (was, is) = (get(touched.base, face).map(|r| r.shell), get(touched.next, face).map(|r| r.shell));
+        if let Some(shell) = is {
+            shells.entry(shell).or_default().live.insert(face);
+        }
+        if let Some(shell) = was.filter(|&shell| is != Some(shell)) {
+            shells.entry(shell).or_default().gone.insert(face);
         }
     }
-    for (shell, mut targets) in shells {
+    for (shell, sides) in shells {
+        if sides.live.is_empty() || regions_join(touched, shell, &sides) {
+            continue;
+        }
+        searched_whole();
+        let mut targets = sides.live;
         let Some(start) = start(touched, shell, &mut targets) else { continue };
         let found = reach(touched.next, start, |f| get(touched.next, f).map(|r| r.shell) == Some(shell), &targets);
         if let Some(apart) = targets.difference(&found).next() {
             out.push(failed(Reason::ShellNotConnected, &[shell.entity(), apart.entity()]));
         }
     }
+}
+
+/// The faces next to `face` through its edges in `model`, itself left out.
+fn adjacent(model: &Model, face: Id<Face>) -> impl Iterator<Item = Id<Face>> {
+    face_edges(model, face).into_iter().flat_map(move |e| edge_faces(model, e)).filter(move |&f| f != face)
+}
+
+/// The regions of what an edit touched of `shell`: its touched faces joined through faces adjacent in either model,
+/// each region in the order of its least face.
+fn regions(touched: &Touched<'_>, shell: Id<Shell>, sides: &Sides) -> Vec<BTreeSet<Id<Face>>> {
+    let nodes: BTreeSet<Id<Face>> = sides.live.union(&sides.gone).copied().collect();
+    let mut left = nodes.clone();
+    let mut found = Vec::new();
+    while let Some(first) = left.pop_first() {
+        let (mut region, mut frontier) = (BTreeSet::from([first]), vec![first]);
+        while let Some(face) = frontier.pop() {
+            for model in touched.models() {
+                if get(model, face).map(|r| r.shell) != Some(shell) {
+                    continue;
+                }
+                for next in adjacent(model, face).filter(|f| nodes.contains(f)).collect::<Vec<_>>() {
+                    if left.remove(&next) {
+                        region.insert(next);
+                        frontier.push(next);
+                    }
+                }
+            }
+        }
+        found.push(region);
+    }
+    found
+}
+
+/// Whether every region of what the edit touched of `shell` joins its faces in the shell and its border through them
+/// alone, which joins the shell (the module's account); `false` where one falls short and the shell must be searched
+/// whole.
+fn regions_join(touched: &Touched<'_>, shell: Id<Shell>, sides: &Sides) -> bool {
+    let next = touched.next;
+    let in_next = |f: Id<Face>| get(next, f).map(|r| r.shell) == Some(shell);
+    let in_base = |f: Id<Face>| get(touched.base, f).map(|r| r.shell) == Some(shell);
+    let all = regions(touched, shell, sides);
+    let held = all.iter().filter(|region| region.iter().any(|f| sides.live.contains(f))).count();
+    let existed = get(touched.base, shell).is_some();
+    all.iter().all(|region| {
+        let live: BTreeSet<Id<Face>> = region.intersection(&sides.live).copied().collect();
+        let Some(&first) = live.first() else { return true };
+        let border: BTreeSet<Id<Face>> = live
+            .iter()
+            .flat_map(|&f| adjacent(next, f).collect::<Vec<_>>())
+            .filter(|f| !region.contains(f) && !sides.gone.contains(f) && in_next(*f))
+            .collect();
+        if border.is_empty() && (held > 1 || (existed && !region.iter().any(|&f| in_base(f)))) {
+            return false;
+        }
+        let allowed: BTreeSet<Id<Face>> = live.union(&border).copied().collect();
+        reach(next, first, |f| allowed.contains(&f), &allowed).len() == allowed.len()
+    })
 }
 
 /// Where the search of `shell` begins: its first target, unless the shell was there before and no target was already
@@ -209,4 +308,43 @@ fn start(touched: &Touched<'_>, shell: Id<Shell>, targets: &mut BTreeSet<Id<Face
     let anchor = get(touched.next, shell).map(|s| s.face).filter(|&f| own(touched.next, f))?;
     targets.insert(anchor);
     Some(anchor)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::check::tests::clean;
+    use crate::models::cube;
+
+    #[test]
+    fn each_kind_reaches_the_faces_and_edges_it_bounds_and_the_entities_whose_counts_it_may_change() {
+        // On the cube: a use bounds its loop's face and its edge's ring, a loop its face and its edges' rings, an edge
+        // its own ring, and a shell the face it begins from; a vertex's count may change with it, an edge's and its
+        // ends' with the edge, and with each of its uses.
+        let (snapshot, built) = clean(&cube());
+        let m = &snapshot.model;
+        let u = built.uses[0];
+        let (e, UseOwner::Loop(l)) = get(m, u).map(|r| (r.edge, r.owner)).unwrap() else { panic!("a loop's use") };
+        let face = get(m, l).unwrap().face;
+        let ends = get(m, e).unwrap().ends;
+        let shell = built.shell.unwrap();
+        let reach = |entity: EntityRef| {
+            let (mut faces, mut edges) = (BTreeSet::new(), BTreeSet::new());
+            neighbours(m, entity, &mut faces, &mut edges);
+            (faces, edges)
+        };
+        assert_eq!(reach(u.entity()), (BTreeSet::from([face]), BTreeSet::from([e])));
+        assert_eq!(reach(l.entity()), (BTreeSet::from([face]), face_edges(m, face).into_iter().collect()));
+        assert_eq!(reach(e.entity()), (BTreeSet::new(), BTreeSet::from([e])));
+        assert_eq!(reach(shell.entity()), (BTreeSet::from([get(m, shell).unwrap().face]), BTreeSet::new()));
+        let count = |entity: EntityRef| {
+            let mut out = BTreeSet::new();
+            counted(m, entity, &mut out);
+            out
+        };
+        let edge_and_ends = BTreeSet::from([e.entity(), ends.0.entity(), ends.1.entity()]);
+        assert_eq!(count(ends.0.entity()), BTreeSet::from([ends.0.entity()]));
+        assert_eq!(count(e.entity()), edge_and_ends);
+        assert_eq!(count(u.entity()), edge_and_ends);
+    }
 }
