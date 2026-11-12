@@ -58,6 +58,69 @@ pub struct Partial {
     pub values: Vec<NamedValue>,
 }
 
+/// Where in a request a bad input is, as the request wrote it: an invalid input names the operation, the parameter, the
+/// value and the rule (S6: blind on S1's report, an agent repaired a zero radius by inventing one). The rule is the code,
+/// a number is among the values, and the names are here.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Input {
+    /// The step's index in the request, from 0, if the input is in a step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step: Option<u32>,
+    /// The operation the step asks for, as written, if it names one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation: Option<String>,
+    /// Where the input is, as a path into the request: `units.length`, `steps[2].radius`.
+    pub parameter: String,
+    /// What the request gave there, where it is text or of the wrong kind: a name, a label, a JSON type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub given: Option<String>,
+    /// What the rule wants there, where that is text: a JSON type, or the names allowed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected: Option<String>,
+}
+
+impl Input {
+    /// The input at `parameter`, a path into the request.
+    #[must_use]
+    pub fn at(parameter: &str) -> Self {
+        Self { parameter: parameter.to_string(), ..Self::default() }
+    }
+
+    /// In step `index`, which asks for `operation` if it names one.
+    #[must_use]
+    pub fn in_step(mut self, index: u32, operation: Option<&str>) -> Self {
+        self.step = Some(index);
+        self.operation = operation.map(str::to_string);
+        self
+    }
+
+    /// What the request gave there.
+    #[must_use]
+    pub fn given(mut self, given: &str) -> Self {
+        self.given = Some(given.to_string());
+        self
+    }
+
+    /// What the rule wants there.
+    #[must_use]
+    pub fn expected(mut self, expected: &str) -> Self {
+        self.expected = Some(expected.to_string());
+        self
+    }
+
+    /// The text of the field `name` for the wording, if it has one.
+    fn field(&self, name: &str) -> Option<String> {
+        match name {
+            "step" => self.step.map(|step| step.to_string()),
+            "operation" => self.operation.clone(),
+            "parameter" => Some(self.parameter.clone()),
+            "given" => self.given.clone(),
+            "expected" => self.expected.clone(),
+            _ => None,
+        }
+    }
+}
+
 /// What a [`Report`] says.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Details {
@@ -78,6 +141,9 @@ pub struct Details {
     /// What had been achieved, if the operation failed partway.
     #[serde(default)]
     pub partial: Option<Partial>,
+    /// Where in a request the input it is about is, if it is about one.
+    #[serde(default)]
+    pub input: Option<Input>,
 }
 
 /// Something occam has to say about an operation (L1). The details are on the heap, so that every `Result<T, Report>` in the
@@ -109,7 +175,7 @@ impl Report {
 
     fn with_fault(code: Code, fault: Option<Fault>) -> Self {
         let (entities, values, remedies) = (Vec::new(), Vec::new(), Vec::new());
-        Self(Box::new(Details { code, fault, reason: None, entities, values, remedies, partial: None }))
+        Self(Box::new(Details { code, fault, reason: None, entities, values, remedies, partial: None, input: None }))
     }
 
     /// Says why, from the closed list.
@@ -154,6 +220,13 @@ impl Report {
         self
     }
 
+    /// Says where in a request the input it is about is.
+    #[must_use]
+    pub fn with_input(mut self, input: Input) -> Self {
+        self.0.input = Some(input);
+        self
+    }
+
     /// The number of this name.
     #[must_use]
     pub fn value(&self, name: &str) -> Option<&NamedValue> {
@@ -166,8 +239,8 @@ impl Report {
         self.remedies.iter().find(|remedy| remedy.kind == kind)
     }
 
-    /// The wording from the catalogue, with numbers in the caller's units (L9). A placeholder with no value of its name stays
-    /// as it is, so a mismatch between wording and values shows.
+    /// The wording from the catalogue, with numbers in the caller's units (L9) and the names of a request's input as
+    /// written. A placeholder with no value or input field of its name stays as it is, so a mismatch shows.
     #[must_use]
     pub fn message(&self, units: DisplayUnits) -> String {
         let mut out = String::new();
@@ -181,6 +254,8 @@ impl Report {
             };
             if let Some(value) = self.value(name) {
                 out.push_str(&value.shown(units));
+            } else if let Some(text) = self.input.as_ref().and_then(|input| input.field(name)) {
+                out.push_str(&text);
             } else {
                 out.push('{');
                 out.push_str(name);
@@ -240,6 +315,23 @@ mod tests {
         assert_eq!(schema_report().remedy(RemedyKind::UseSchema), None);
         assert_eq!(remedy.value("version"), Some(&NamedValue::count("version", 1)));
         assert_eq!(remedy.value("absent"), None);
+    }
+
+    #[test]
+    fn a_bad_input_is_named_by_where_it_is_in_the_request() {
+        let input = Input::at("steps[2].units").in_step(2, Some("box")).given("furlong").expected("mm, cm, m or in");
+        let report = Report::new(Code::InputUnknownName, Fault::InvalidInput).with_input(input.clone());
+        assert_eq!(report.input, Some(input.clone()));
+        let units = DisplayUnits::default();
+        assert_eq!(report.message(units), "steps[2].units is furlong, which is not one of mm, cm, m or in.");
+        let fields = ["step", "operation", "parameter", "given", "expected", "other"].map(|name| input.field(name));
+        let want = [Some("2"), Some("box"), Some("steps[2].units"), Some("furlong"), Some("mm, cm, m or in"), None];
+        assert_eq!(fields, want.map(|text| text.map(str::to_string)));
+        let named = report.with_value(NamedValue::count("given", 3));
+        assert_eq!(named.message(units), "steps[2].units is 3, which is not one of mm, cm, m or in.", "a value wins");
+        let bare = Report::new(Code::InputUnknownName, Fault::InvalidInput).with_input(Input::at("units"));
+        assert_eq!(bare.message(units), "units is {given}, which is not one of {expected}.");
+        assert_eq!(Input::at("units").field("step"), None);
     }
 
     #[test]

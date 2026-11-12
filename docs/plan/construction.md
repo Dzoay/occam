@@ -33,19 +33,6 @@ real out of [the type sketch](../sketch/src/lib.rs).
 
 ## Steps
 
-### `construction.request`
-
-`occam-ops` with the request: its schema version, units, an optional tolerance, and steps, each with an optional label
-a later step can name as an operand. It is checked and converted once, before any geometry, with a code per kind of
-bad input naming the operation, parameter, value and rule (`input.invalid-parameter`, S6). The runner in `occam` runs
-the steps in order through `Edit`, stops at the first failure with the model after the last good step, and gives each
-step's outcome: the ids it created, changed and deleted, and the tolerance in force. An operation the first release does
-not have is refused by name, and a listing says what is supported and what is refused.
-
-*Failing test first:* each kind of bad input gets its code naming the parameter, value and rule, with a test that
-follows its remedy; an unknown operation is refused by name; a failing step leaves the model as the last good step
-left it, and a new model takes the request's tolerance or the default and says which.
-
 ### `construction.wires`
 
 Edges from points, lines and arcs; a wire from edges, a gap reported by where it is; a planar face from a closed wire,

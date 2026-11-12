@@ -1,11 +1,12 @@
 # `gates counts`: the fewest tests each binary may have, `<binary> <minimum>`. `just counts` raises minimums and adds
 # binaries, and never lowers one. Lowering one by hand needs a reason in the PR.
-occam 11
+occam 19
 occam-cli::bin/occam 7
 occam-cli::cli 4
 occam-geom 358
 occam-math 117
-occam-report 42
+occam-ops 20
+occam-report 44
 occam-topo 132
 occam-units 48
 occam-verify 30

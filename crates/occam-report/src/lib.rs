@@ -54,5 +54,5 @@ pub use follow::follow_remedy;
 pub use json::SCHEMA;
 pub use origin::StepRole;
 pub use outcome::{Batch, Outcome};
-pub use report::{Details, Partial, Remedy, Report};
+pub use report::{Details, Input, Partial, Remedy, Report};
 pub use value::{EntityKind, EntityRef, NamedValue, Quantity, Value};

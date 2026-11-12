@@ -1,9 +1,11 @@
-//! `occam-ops`: operations as data. A request is validated and converted once, before any geometry, with a code for each
-//! kind of invalid input (S6: blind on S1's report, an agent "repaired" a zero-radius hole by setting 0.0001 mm).
+//! `occam-ops`: what it gains after `construction.request`, which made the request real (its schema, units, tolerance,
+//! steps, labels and operands, checked before any geometry, with a code for each kind of bad input): the parameters of
+//! each operation, the per-item results of fillets, and the boolean's phases.
 
 use std::sync::Arc;
 
-use occam_report::{AngleUnit, Batch, LengthUnit, Outcome, Report};
+use occam_ops::Operand;
+use occam_report::{Batch, Outcome, Report};
 use occam_units::{Length, Point, UvPoint, World};
 use serde::Deserialize;
 
@@ -12,45 +14,6 @@ use occam_report::{EntityRef, Stage};
 use occam_topo::{Body, Changes, Edge, Face, Id, Snapshot};
 
 use crate::report::Describe;
-
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct Units {
-    pub length: LengthUnit,
-    pub angle: AngleUnit,
-}
-
-/// A new model's tolerance, in the request's units. Omitted, it is the default of O12, and the outcome says which was
-/// used (`measure.tolerance-used`). On an existing model the model's own tolerance governs, and asking for a finer one is
-/// `measure.tolerance-below-model`, as today.
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct RequestTolerance {
-    pub length: f64,
-    pub angle: f64,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct Request {
-    pub schema: u32,
-    pub units: Units,
-    pub tolerance: Option<RequestTolerance>,
-    pub steps: Vec<Step>,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct Step {
-    /// A name later steps in the same request can use as an operand.
-    pub label: Option<String>,
-    #[serde(flatten)]
-    pub op: Op,
-}
-
-/// An earlier step's label, or an entity by id.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(untagged)]
-pub enum Operand {
-    Label(String),
-    Entity(EntityRef),
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 pub struct Frame3 {
@@ -91,11 +54,10 @@ pub enum Measurement {
     Bounds,
 }
 
-/// The first release's operations (PARITY tiers 1 and 2 in its milestones); the rest are listed as refused.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(tag = "op", rename_all = "kebab-case")]
+/// The parameters each operation reads from its step's other fields (`occam_ops::Step::parameters`), as its step will
+/// make them real. The request, its steps and its operands are in `occam-ops` since `construction.request`.
+#[derive(Clone, Debug, PartialEq)]
 pub enum Op {
-    #[serde(rename = "box")]
     Block {
         frame: Frame3,
         size: [f64; 3],
@@ -144,19 +106,13 @@ pub enum Op {
     },
 }
 
-/// A step's result. Steps stop at the first failure, and the model returned is the one after the last step that
-/// succeeded, so nothing that failed changed the input (L5).
+/// What a step with many items will add to `occam::Ran` (L6): one result per item. Under `AllOrNothing`, an item that
+/// would have succeeded says so and nothing was applied; under `Feasible`, the items that succeeded were. The runner,
+/// its `Ran` and a step that does one thing are in `occam` since `construction.request`.
 pub enum StepResult {
     Done(Outcome<Changes>),
-    /// One result per item (L6). Under `AllOrNothing`, an item that would have succeeded says so and nothing was
-    /// applied; under `Feasible`, the items that succeeded were.
     PerItem(Batch<Changes>),
     Failed(Failure),
-}
-
-pub struct Ran {
-    pub model: Arc<Snapshot>,
-    pub steps: Vec<StepResult>,
 }
 
 /// Everything that failed, in item order (P2: every failing pair, in candidate order), and the frozen outputs reached,

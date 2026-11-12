@@ -180,9 +180,12 @@ dependencies = [
  "gungraun",
  "occam-geom",
  "occam-math",
+ "occam-ops",
  "occam-report",
  "occam-topo",
  "occam-units",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -208,6 +211,17 @@ dependencies = [
  "fearless_simd",
  "occam-report",
  "rayon",
+]
+
+[[package]]
+name = "occam-ops"
+version = "0.0.0"
+dependencies = [
+ "occam-math",
+ "occam-report",
+ "occam-topo",
+ "occam-units",
+ "serde_json",
 ]
 
 [[package]]

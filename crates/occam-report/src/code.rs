@@ -20,64 +20,322 @@ text_enum! {
     }
 }
 
-text_enum! {
-    /// A stable identifier for everything occam can report.
-    Code {
-        /// The text given to [`Report::from_json`] is not a report.
-        Malformed = "report.malformed",
-        /// The text given to [`Report::from_json`] uses a schema version this build cannot read.
-        UnsupportedSchema = "report.unsupported-schema",
-        /// A number given as a length or an angle is NaN or infinite, or becomes infinite when converted.
-        NotFinite = "units.not-finite",
-        /// A tolerance is not a finite number greater than zero.
-        ToleranceOutOfRange = "units.tolerance-out-of-range",
-        /// An operation was asked for a finer tolerance than the model is built to.
-        ToleranceBelowModel = "measure.tolerance-below-model",
-        /// What tolerance an operation worked to.
-        ToleranceUsed = "measure.tolerance-used",
-        /// A command-line argument is missing or is not understood.
-        BadArgument = "cli.bad-argument",
-        /// The threads asked for could not be started.
-        ThreadsUnavailable = "exec.threads-unavailable",
-        /// A direction was asked of a vector too short to have one.
-        DegenerateDirection = "geom.degenerate-direction",
-        /// A curve or surface was asked for a parameter where it is not defined.
-        UndefinedParameter = "geom.undefined-parameter",
-        /// A curve or surface was given a size that is not a finite number greater than zero.
-        SizeNotPositive = "geom.size-not-positive",
-        /// A curve or surface was given a size or an angle outside the range its form allows.
-        OutOfRange = "geom.out-of-range",
-        /// A curve or surface was given the wrong number of knots, poles or weights.
-        WrongCount = "geom.wrong-count",
-        /// A B-spline's knots decrease, or repeat more often than its degree allows.
-        KnotsNotValid = "geom.knots-not-valid",
-        /// A rational curve or surface was given a weight that is not a finite number greater than zero.
-        WeightNotPositive = "geom.weight-not-positive",
-        /// A surface was asked for a derivative of an order it does not have, as a mesh has none above the first.
-        NoDerivative = "geom.no-derivative",
-        /// A mesh's triangle names a vertex it does not have, does not run anticlockwise with some area in the surface's
-        /// parameters, or overlaps another there.
-        TriangleNotValid = "geom.triangle-not-valid",
-        /// A curve was swept along a direction it runs along: a line along its own direction, which makes no surface,
-        /// or a hyperbola along an asymptote without end, which makes one whose edge is at infinity.
-        SweptAlongItself = "geom.swept-along-itself",
-        /// A surface was offset whose normal is not continuous: it has no second derivative, as a mesh has none.
-        NotSmooth = "geom.not-smooth",
-        /// A curve in a face's parameters does not lie along its edge's curve within the band.
-        EdgeOffSurface = "geom.edge-off-surface",
-        /// A curve given as a parameter curve leaves the plane `z = 0`, whose `x` and `y` are a face's parameters.
-        NotInPlane = "geom.not-in-plane",
-        /// A curve has no tangent, or a surface no normal, at the parameter asked: its derivatives there span no
-        /// direction.
-        SingularPoint = "geom.singular-point",
-        /// A join between two curves or two surfaces is less smooth than the continuity required of it.
-        JoinBelowContinuity = "geom.join-below-continuity",
-        /// A measure did not reach the accuracy asked within the work it is allowed.
-        NotConverged = "measure.not-converged",
-        /// An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one.
-        StaleId = "topo.stale-id",
-        /// An edit would leave the model breaking an invariant of the B-rep, so it was not committed.
-        InvariantFailed = "check.invariant-failed",
+/// Declares the closed list of codes with everything the catalogue says about each, so each code is written once and the
+/// catalogue's matches, generated here, name every code (L4).
+macro_rules! catalogue {
+    ($(
+        $(#[$meta:meta])*
+        $variant:ident = $text:literal {
+            $severity:ident, [$($remedy:ident),*],
+            $summary:literal,
+            $template:literal $(,)?
+        }
+    )*) => {
+        text_enum! {
+            /// A stable identifier for everything occam can report.
+            Code {
+                $($(#[$meta])* $variant = $text,)*
+            }
+        }
+
+        impl Code {
+            /// How serious it is.
+            const fn severity(self) -> Severity {
+                match self {
+                    $(Self::$variant => Severity::$severity,)*
+                }
+            }
+
+            /// One sentence on what it means.
+            const fn summary(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $summary,)*
+                }
+            }
+
+            /// The wording, with `{name}` for each value it shows.
+            const fn template(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $template,)*
+                }
+            }
+
+            /// The kinds of fix it can suggest.
+            const fn remedies(self) -> &'static [RemedyKind] {
+                match self {
+                    $(Self::$variant => &[$(RemedyKind::$remedy),*],)*
+                }
+            }
+        }
+    };
+}
+
+catalogue! {
+    /// The text given to [`Report::from_json`] is not a report.
+    Malformed = "report.malformed" {
+        Error, [],
+        "The text is not a report.",
+        "The text is not a valid report: the problem is at line {line}, column {column}.",
+    }
+
+    /// The text given to [`Report::from_json`] uses a schema version this build cannot read.
+    UnsupportedSchema = "report.unsupported-schema" {
+        Error, [UseSchema],
+        "The report uses a schema version this build cannot read.",
+        "Schema version {found} is not supported. This build reads version {supported}.",
+    }
+
+    /// A number given as a length or an angle is NaN or infinite, or becomes infinite when converted.
+    NotFinite = "units.not-finite" {
+        Error, [],
+        "A number given as a length or an angle is not finite.",
+        "The number given is {value}, which is not finite in occam's internal units.",
+    }
+
+    /// A tolerance is not a finite number greater than zero.
+    ToleranceOutOfRange = "units.tolerance-out-of-range" {
+        Error, [],
+        "A tolerance must be a finite number greater than zero.",
+        "The tolerance {tolerance} is not a finite number greater than zero.",
+    }
+
+    /// An operation was asked for a finer tolerance than the model is built to.
+    ToleranceBelowModel = "measure.tolerance-below-model" {
+        Error, [UseModelTolerance],
+        "An operation cannot work to a finer tolerance than its model is built to.",
+        "The tolerance asked for, {requested}, is finer than the model's tolerance, {model}.",
+    }
+
+    /// What tolerance an operation worked to.
+    ToleranceUsed = "measure.tolerance-used" {
+        Note, [],
+        "The tolerance an operation worked to.",
+        "The operation worked to a tolerance of {tolerance}.",
+    }
+
+    /// A command-line argument is missing or is not understood.
+    BadArgument = "cli.bad-argument" {
+        Error, [],
+        "A command-line argument is missing or is not understood.",
+        "Argument {position} is not understood. Expected: occam distance --from X,Y,Z --to X,Y,Z \
+        --model-tolerance LENGTH,ANGLE --tolerance LENGTH [--json], in millimetres and radians.",
+    }
+
+    /// The threads asked for could not be started.
+    ThreadsUnavailable = "exec.threads-unavailable" {
+        Error, [UseThreads],
+        "The threads asked for could not be started.",
+        "{threads} threads could not be started on this machine.",
+    }
+
+    /// A direction was asked of a vector too short to have one.
+    DegenerateDirection = "geom.degenerate-direction" {
+        Error, [],
+        "A vector no longer than the model's tolerance has no direction.",
+        "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction.",
+    }
+
+    /// A curve or surface was asked for a parameter where it is not defined.
+    UndefinedParameter = "geom.undefined-parameter" {
+        Error, [],
+        "A curve or surface is not defined at the parameter asked for.",
+        "The parameter {parameter} is outside the domain from {low} to {high}.",
+    }
+
+    /// A curve or surface was given a size that is not a finite number greater than zero.
+    SizeNotPositive = "geom.size-not-positive" {
+        Error, [],
+        "A curve or surface was given a size that is not a finite number greater than zero.",
+        "The size given, {size}, is not a finite number greater than zero.",
+    }
+
+    /// A curve or surface was given a size or an angle outside the range its form allows.
+    OutOfRange = "geom.out-of-range" {
+        Error, [],
+        "A curve or surface was given a size or an angle outside the range its form allows.",
+        "The value given, {value}, is not strictly between {low} and {high}.",
+    }
+
+    /// A curve or surface was given the wrong number of knots, poles or weights.
+    WrongCount = "geom.wrong-count" {
+        Error, [],
+        "A curve or surface was given the wrong number of knots, poles or weights.",
+        "{found} were given where {needed} are needed.",
+    }
+
+    /// A B-spline's knots decrease, or repeat more often than its degree allows.
+    KnotsNotValid = "geom.knots-not-valid" {
+        Error, [],
+        "A B-spline's knots must not decrease, and may repeat at most its degree times inside and once more at an \
+        end.",
+        "Knot {index}, {knot}, is out of order or repeated more often than the degree allows.",
+    }
+
+    /// A rational curve or surface was given a weight that is not a finite number greater than zero.
+    WeightNotPositive = "geom.weight-not-positive" {
+        Error, [],
+        "A rational curve or surface was given a weight that is not a finite number greater than zero.",
+        "Weight {index} is {weight}, which is not a finite number greater than zero.",
+    }
+
+    /// A surface was asked for a derivative of an order it does not have, as a mesh has none above the first.
+    NoDerivative = "geom.no-derivative" {
+        Error, [],
+        "A surface was asked for a derivative of an order it does not have.",
+        "A derivative of order {order} was asked for, and this surface has them to order {highest}.",
+    }
+
+    /// A mesh's triangle names a vertex it does not have, does not run anticlockwise with some area in the surface's
+    /// parameters, or overlaps another there.
+    TriangleNotValid = "geom.triangle-not-valid" {
+        Error, [],
+        "A mesh's triangle must name three of its vertices, run anticlockwise with some area in the parameters, \
+        and overlap no other there.",
+        "Triangle {index} names a vertex there is not, does not run anticlockwise with some area in the \
+        parameters, or overlaps another there.",
+    }
+
+    /// A curve was swept along a direction it runs along: a line along its own direction, which makes no surface,
+    /// or a hyperbola along an asymptote without end, which makes one whose edge is at infinity.
+    SweptAlongItself = "geom.swept-along-itself" {
+        Error, [],
+        "A curve swept along a direction it runs along makes no surface, or one with an edge at infinity.",
+        "The curve runs along {direction}, the direction it is swept along: trim it, or sweep it another way.",
+    }
+
+    /// A surface was offset whose normal is not continuous: it has no second derivative, as a mesh has none.
+    NotSmooth = "geom.not-smooth" {
+        Error, [],
+        "An offset needs a surface with second derivatives, so that its normal is continuous.",
+        "The surface has derivatives to order {highest}, and an offset needs them to order {needed}.",
+    }
+
+    /// A curve in a face's parameters does not lie along its edge's curve within the band.
+    EdgeOffSurface = "geom.edge-off-surface" {
+        Error, [],
+        "A curve in a face's parameters does not lie along its edge's curve within the band.",
+        "The edge's curve on the face is {gap} from its own at {point}, more than the band of {band}.",
+    }
+
+    /// A curve given as a parameter curve leaves the plane `z = 0`, whose `x` and `y` are a face's parameters.
+    NotInPlane = "geom.not-in-plane" {
+        Error, [],
+        "A parameter curve must be drawn in the plane z = 0, whose x and y are the face's parameters.",
+        "The curve reaches {height} from the plane z = 0, in which a parameter curve is drawn.",
+    }
+
+    /// A curve has no tangent, or a surface no normal, at the parameter asked: its derivatives there span no
+    /// direction.
+    SingularPoint = "geom.singular-point" {
+        Error, [],
+        "A curve has no tangent, or a surface no normal, where its derivatives span no direction.",
+        "The derivatives at the parameter asked span {span}, too little to give a direction there.",
+    }
+
+    /// A join between two curves or two surfaces is less smooth than the continuity required of it.
+    JoinBelowContinuity = "geom.join-below-continuity" {
+        Error, [],
+        "A join is less smooth than the continuity required of it.",
+        "The join first fails at order {failed}, short of the order {required} required, by {gap}.",
+    }
+
+    /// A measure did not reach the accuracy asked within the work it is allowed.
+    NotConverged = "measure.not-converged" {
+        Error, [],
+        "A measure did not reach the accuracy asked within the work it is allowed.",
+        "The measure reached an accuracy of {reached} where {asked} was asked for.",
+    }
+
+    /// An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one.
+    StaleId = "topo.stale-id" {
+        Error, [],
+        "An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one.",
+        "No live entity of the kind wanted has this slot and generation: the slot holds generation {live} now, or \
+        nothing if that is 0.",
+    }
+
+    /// An edit would leave the model breaking an invariant of the B-rep, so it was not committed.
+    InvariantFailed = "check.invariant-failed" {
+        Error, [],
+        "An edit would leave the model breaking an invariant of the B-rep, so it was not committed.",
+        "The edit would break the invariant given as the reason, at the entities named, so the model is unchanged.",
+    }
+
+    /// The text given as a request is not JSON.
+    RequestMalformed = "request.malformed" {
+        Error, [],
+        "The request is not JSON.",
+        "The request is not JSON: the problem is at line {line}, column {column}.",
+    }
+
+    /// The request uses a schema version this build cannot read.
+    RequestUnsupportedSchema = "request.unsupported-schema" {
+        Error, [UseSchema],
+        "The request uses a schema version this build cannot read.",
+        "Request schema version {found} is not supported. This build reads version {supported}.",
+    }
+
+    /// A step asks for an operation occam does not have.
+    UnknownOperation = "request.unknown-operation" {
+        Error, [],
+        "A step asks for an operation occam does not have.",
+        "{parameter} is {given}, which is not an operation occam has.",
+    }
+
+    /// A step asks for an operation occam has, and does not do yet.
+    NotSupported = "request.not-supported" {
+        Error, [],
+        "A step asks for an operation occam does not do yet.",
+        "{parameter} is {operation}, which occam does not do yet.",
+    }
+
+    /// A request leaves out something it needs.
+    InputMissing = "input.missing" {
+        Error, [],
+        "A request leaves out something it needs.",
+        "{parameter} is missing.",
+    }
+
+    /// A request gives something of the wrong kind: text where a number is wanted, or a number where a list is.
+    InputWrongType = "input.wrong-type" {
+        Error, [],
+        "A request gives something of the wrong kind where it gives it.",
+        "{parameter} is a {given}, where a {expected} is wanted.",
+    }
+
+    /// A request gives a name outside the closed list that place takes, such as a unit.
+    InputUnknownName = "input.unknown-name" {
+        Error, [],
+        "A request gives a name that is not one of those allowed there.",
+        "{parameter} is {given}, which is not one of {expected}.",
+    }
+
+    /// A request gives a field the place it is in does not take, as a misspelt one.
+    InputUnknownField = "input.unknown-field" {
+        Error, [],
+        "A request gives a field that is not taken there.",
+        "{parameter} is not a field the request takes there.",
+    }
+
+    /// Two steps of a request have the same label, so a later step could not tell them apart.
+    InputDuplicateLabel = "input.duplicate-label" {
+        Error, [],
+        "Two steps of a request have the same label.",
+        "{parameter} is {given}, which step {first} is already labelled.",
+    }
+
+    /// A step's label is empty, or reads as an entity's id, as `edge:41/1`, so an operand naming it would be read as that id.
+    InputLabelNotValid = "input.label-not-valid" {
+        Error, [],
+        "A label must be text that is not empty and is not an entity's id.",
+        "{parameter} is {given}: a label is text that is not empty and is not an entity's id.",
+    }
+
+    /// An operand names a label no earlier step of the request has.
+    InputUnknownLabel = "input.unknown-label" {
+        Error, [],
+        "An operand names a label no earlier step has.",
+        "{parameter} names {given}, which no earlier step is labelled.",
     }
 }
 
@@ -115,182 +373,6 @@ impl Code {
             summary: self.summary(),
             template: self.template(),
             remedies: self.remedies(),
-        }
-    }
-
-    /// How serious it is.
-    const fn severity(self) -> Severity {
-        match self {
-            Self::Malformed
-            | Self::UnsupportedSchema
-            | Self::NotFinite
-            | Self::ToleranceOutOfRange
-            | Self::ToleranceBelowModel
-            | Self::BadArgument
-            | Self::ThreadsUnavailable
-            | Self::DegenerateDirection
-            | Self::UndefinedParameter
-            | Self::SizeNotPositive
-            | Self::OutOfRange
-            | Self::WrongCount
-            | Self::KnotsNotValid
-            | Self::WeightNotPositive
-            | Self::NoDerivative
-            | Self::TriangleNotValid
-            | Self::SweptAlongItself
-            | Self::NotSmooth
-            | Self::EdgeOffSurface
-            | Self::NotInPlane
-            | Self::SingularPoint
-            | Self::JoinBelowContinuity
-            | Self::NotConverged
-            | Self::StaleId
-            | Self::InvariantFailed => Severity::Error,
-            Self::ToleranceUsed => Severity::Note,
-        }
-    }
-
-    /// One sentence on what it means.
-    const fn summary(self) -> &'static str {
-        match self {
-            Self::Malformed => "The text is not a report.",
-            Self::UnsupportedSchema => "The report uses a schema version this build cannot read.",
-            Self::NotFinite => "A number given as a length or an angle is not finite.",
-            Self::ToleranceOutOfRange => "A tolerance must be a finite number greater than zero.",
-            Self::ToleranceBelowModel => "An operation cannot work to a finer tolerance than its model is built to.",
-            Self::ToleranceUsed => "The tolerance an operation worked to.",
-            Self::BadArgument => "A command-line argument is missing or is not understood.",
-            Self::ThreadsUnavailable => "The threads asked for could not be started.",
-            Self::DegenerateDirection => "A vector no longer than the model's tolerance has no direction.",
-            Self::UndefinedParameter => "A curve or surface is not defined at the parameter asked for.",
-            Self::SizeNotPositive => {
-                "A curve or surface was given a size that is not a finite number greater than zero."
-            }
-            Self::OutOfRange => "A curve or surface was given a size or an angle outside the range its form allows.",
-            Self::WrongCount => "A curve or surface was given the wrong number of knots, poles or weights.",
-            Self::KnotsNotValid => {
-                "A B-spline's knots must not decrease, and may repeat at most its degree times inside and once more at an end."
-            }
-            Self::WeightNotPositive => {
-                "A rational curve or surface was given a weight that is not a finite number greater than zero."
-            }
-            Self::NoDerivative => "A surface was asked for a derivative of an order it does not have.",
-            Self::TriangleNotValid => {
-                "A mesh's triangle must name three of its vertices, run anticlockwise with some area in the parameters, and overlap no other there."
-            }
-            Self::SweptAlongItself => {
-                "A curve swept along a direction it runs along makes no surface, or one with an edge at infinity."
-            }
-            Self::NotSmooth => "An offset needs a surface with second derivatives, so that its normal is continuous.",
-            Self::EdgeOffSurface => {
-                "A curve in a face's parameters does not lie along its edge's curve within the band."
-            }
-            Self::NotInPlane => {
-                "A parameter curve must be drawn in the plane z = 0, whose x and y are the face's parameters."
-            }
-            Self::SingularPoint => {
-                "A curve has no tangent, or a surface no normal, where its derivatives span no direction."
-            }
-            Self::JoinBelowContinuity => "A join is less smooth than the continuity required of it.",
-            Self::NotConverged => "A measure did not reach the accuracy asked within the work it is allowed.",
-            Self::StaleId => {
-                "An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one."
-            }
-            Self::InvariantFailed => {
-                "An edit would leave the model breaking an invariant of the B-rep, so it was not committed."
-            }
-        }
-    }
-
-    /// The wording, with `{name}` for each value it shows.
-    const fn template(self) -> &'static str {
-        match self {
-            Self::Malformed => "The text is not a valid report: the problem is at line {line}, column {column}.",
-            Self::UnsupportedSchema => "Schema version {found} is not supported. This build reads version {supported}.",
-            Self::NotFinite => "The number given is {value}, which is not finite in occam's internal units.",
-            Self::ToleranceOutOfRange => "The tolerance {tolerance} is not a finite number greater than zero.",
-            Self::ToleranceBelowModel => {
-                "The tolerance asked for, {requested}, is finer than the model's tolerance, {model}."
-            }
-            Self::ToleranceUsed => "The operation worked to a tolerance of {tolerance}.",
-            Self::BadArgument => {
-                "Argument {position} is not understood. Expected: occam distance --from X,Y,Z --to X,Y,Z \
-                 --model-tolerance LENGTH,ANGLE --tolerance LENGTH [--json], in millimetres and radians."
-            }
-            Self::ThreadsUnavailable => "{threads} threads could not be started on this machine.",
-            Self::DegenerateDirection => {
-                "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction."
-            }
-            Self::UndefinedParameter => "The parameter {parameter} is outside the domain from {low} to {high}.",
-            Self::SizeNotPositive => "The size given, {size}, is not a finite number greater than zero.",
-            Self::OutOfRange => "The value given, {value}, is not strictly between {low} and {high}.",
-            Self::WrongCount => "{found} were given where {needed} are needed.",
-            Self::KnotsNotValid => {
-                "Knot {index}, {knot}, is out of order or repeated more often than the degree allows."
-            }
-            Self::WeightNotPositive => "Weight {index} is {weight}, which is not a finite number greater than zero.",
-            Self::NoDerivative => {
-                "A derivative of order {order} was asked for, and this surface has them to order {highest}."
-            }
-            Self::TriangleNotValid => {
-                "Triangle {index} names a vertex there is not, does not run anticlockwise with some area in the parameters, or overlaps another there."
-            }
-            Self::SweptAlongItself => {
-                "The curve runs along {direction}, the direction it is swept along: trim it, or sweep it another way."
-            }
-            Self::NotSmooth => {
-                "The surface has derivatives to order {highest}, and an offset needs them to order {needed}."
-            }
-            Self::EdgeOffSurface => {
-                "The edge's curve on the face is {gap} from its own at {point}, more than the band of {band}."
-            }
-            Self::NotInPlane => "The curve reaches {height} from the plane z = 0, in which a parameter curve is drawn.",
-            Self::SingularPoint => {
-                "The derivatives at the parameter asked span {span}, too little to give a direction there."
-            }
-            Self::JoinBelowContinuity => {
-                "The join first fails at order {failed}, short of the order {required} required, by {gap}."
-            }
-            Self::NotConverged => "The measure reached an accuracy of {reached} where {asked} was asked for.",
-            Self::StaleId => {
-                "No live entity of the kind wanted has this slot and generation: the slot holds generation {live} now, \
-                 or nothing if that is 0."
-            }
-            Self::InvariantFailed => {
-                "The edit would break the invariant given as the reason, at the entities named, so the model is unchanged."
-            }
-        }
-    }
-
-    /// The kinds of fix it can suggest.
-    const fn remedies(self) -> &'static [RemedyKind] {
-        match self {
-            Self::UnsupportedSchema => &[RemedyKind::UseSchema],
-            Self::ToleranceBelowModel => &[RemedyKind::UseModelTolerance],
-            Self::ThreadsUnavailable => &[RemedyKind::UseThreads],
-            Self::Malformed
-            | Self::NotFinite
-            | Self::ToleranceOutOfRange
-            | Self::ToleranceUsed
-            | Self::BadArgument
-            | Self::DegenerateDirection
-            | Self::UndefinedParameter
-            | Self::SizeNotPositive
-            | Self::OutOfRange
-            | Self::NotSmooth
-            | Self::WrongCount
-            | Self::KnotsNotValid
-            | Self::WeightNotPositive
-            | Self::NoDerivative
-            | Self::TriangleNotValid
-            | Self::SweptAlongItself
-            | Self::EdgeOffSurface
-            | Self::NotInPlane
-            | Self::SingularPoint
-            | Self::JoinBelowContinuity
-            | Self::NotConverged
-            | Self::StaleId
-            | Self::InvariantFailed => &[],
         }
     }
 }
@@ -623,6 +705,111 @@ mod tests {
         ])
     }
 
+    fn request_codes() -> Value {
+        json!([
+            {
+                "name": "RequestMalformed",
+                "code": "request.malformed",
+                "severity": "error",
+                "summary": "The request is not JSON.",
+                "template": "The request is not JSON: the problem is at line {line}, column {column}.",
+                "remedies": []
+            },
+            {
+                "name": "RequestUnsupportedSchema",
+                "code": "request.unsupported-schema",
+                "severity": "error",
+                "summary": "The request uses a schema version this build cannot read.",
+                "template": "Request schema version {found} is not supported. This build reads version {supported}.",
+                "remedies": [
+                    "use-schema"
+                ]
+            },
+            {
+                "name": "UnknownOperation",
+                "code": "request.unknown-operation",
+                "severity": "error",
+                "summary": "A step asks for an operation occam does not have.",
+                "template": "{parameter} is {given}, which is not an operation occam has.",
+                "remedies": []
+            },
+            {
+                "name": "NotSupported",
+                "code": "request.not-supported",
+                "severity": "error",
+                "summary": "A step asks for an operation occam does not do yet.",
+                "template": "{parameter} is {operation}, which occam does not do yet.",
+                "remedies": []
+            }
+        ])
+    }
+
+    fn input_codes() -> Value {
+        json!([
+            {
+                "name": "InputMissing",
+                "code": "input.missing",
+                "severity": "error",
+                "summary": "A request leaves out something it needs.",
+                "template": "{parameter} is missing.",
+                "remedies": []
+            },
+            {
+                "name": "InputWrongType",
+                "code": "input.wrong-type",
+                "severity": "error",
+                "summary": "A request gives something of the wrong kind where it gives it.",
+                "template": "{parameter} is a {given}, where a {expected} is wanted.",
+                "remedies": []
+            },
+            {
+                "name": "InputUnknownName",
+                "code": "input.unknown-name",
+                "severity": "error",
+                "summary": "A request gives a name that is not one of those allowed there.",
+                "template": "{parameter} is {given}, which is not one of {expected}.",
+                "remedies": []
+            },
+            {
+                "name": "InputUnknownField",
+                "code": "input.unknown-field",
+                "severity": "error",
+                "summary": "A request gives a field that is not taken there.",
+                "template": "{parameter} is not a field the request takes there.",
+                "remedies": []
+            }
+        ])
+    }
+
+    fn label_codes() -> Value {
+        json!([
+            {
+                "name": "InputDuplicateLabel",
+                "code": "input.duplicate-label",
+                "severity": "error",
+                "summary": "Two steps of a request have the same label.",
+                "template": "{parameter} is {given}, which step {first} is already labelled.",
+                "remedies": []
+            },
+            {
+                "name": "InputLabelNotValid",
+                "code": "input.label-not-valid",
+                "severity": "error",
+                "summary": "A label must be text that is not empty and is not an entity's id.",
+                "template": "{parameter} is {given}: a label is text that is not empty and is not an entity's id.",
+                "remedies": []
+            },
+            {
+                "name": "InputUnknownLabel",
+                "code": "input.unknown-label",
+                "severity": "error",
+                "summary": "An operand names a label no earlier step has.",
+                "template": "{parameter} names {given}, which no earlier step is labelled.",
+                "remedies": []
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -657,6 +844,9 @@ mod tests {
             edge_codes(),
             measure_codes(),
             topology_codes(),
+            request_codes(),
+            input_codes(),
+            label_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())

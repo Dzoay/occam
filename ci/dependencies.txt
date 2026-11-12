@@ -7,6 +7,9 @@ serde occam-report report-json
 serde_json occam-report report-json
 serde occam-verify serde
 serde_json occam-verify serde
+serde occam serde
+serde_json occam serde
+serde_json occam-ops serde
 syn occam-xtask xtask-dependencies
 toml occam-xtask xtask-dependencies
 itoa transitive xtask-dependencies

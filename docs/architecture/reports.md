@@ -35,6 +35,7 @@ This is the answer to [O26](open-decisions.md#o26-how-an-agent-learns-what-an-en
 | Named value | Can hold a point; NaN and infinities still round-trip | A position is one value |
 | Tolerance in force | Added whenever a tolerance decided the outcome | An agent reasoned from the wrong one |
 | Empty result | A `boolean.empty-result` note with the operands' separation | An agent got `ok` and a volume of 0 |
+| Input | Where in a request a bad input is: the step, its operation, the parameter's path, and the text given and wanted where they are text. Each kind of bad input has its own code, whose wording states the rule | c12: an invalid input names the operation, parameter, value and rule |
 
 Every new code and remedy has a test that follows the remedy (L2).
 

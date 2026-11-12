@@ -3,7 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Code, DisplayUnits, EntityRef, Fault, NamedValue, Partial, Reason, Remedy, RemedyKind, Report, Severity};
+use crate::{
+    Code, DisplayUnits, EntityRef, Fault, Input, NamedValue, Partial, Reason, Remedy, RemedyKind, Report, Severity,
+};
 
 /// The version of every JSON form here. It changes when a form changes in a way a reader would notice.
 pub const SCHEMA: u32 = 2;
@@ -24,6 +26,8 @@ pub(crate) struct ReportWire<'a> {
     remedies: &'a [Remedy],
     #[serde(skip_serializing_if = "Option::is_none")]
     partial: Option<&'a Partial>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input: Option<&'a Input>,
 }
 
 impl<'a> ReportWire<'a> {
@@ -39,6 +43,7 @@ impl<'a> ReportWire<'a> {
             values: &report.values,
             remedies: &report.remedies,
             partial: report.partial.as_ref(),
+            input: report.input.as_ref(),
         }
     }
 }
@@ -144,6 +149,19 @@ mod tests {
             assert!(text.contains(part), "{part} in {text}");
         }
         assert_eq!(Report::from_json(&text), Ok(report));
+    }
+
+    #[test]
+    fn a_bad_inputs_place_in_the_request_round_trips() {
+        let input = Input::at("steps[0].op").in_step(0, Some("loft")).given("loft");
+        let report = Report::new(Code::UnknownOperation, Fault::InvalidInput).with_input(input);
+        let text = report.to_json(DisplayUnits::default()).unwrap();
+        let part = r#""input":{"step":0,"operation":"loft","parameter":"steps[0].op","given":"loft"}"#;
+        assert!(text.contains(part), "{text}");
+        assert!(text.contains(r#""message":"steps[0].op is loft, which is not an operation occam has.""#), "{text}");
+        assert_eq!(Report::from_json(&text), Ok(report));
+        let plain = Report::new(Code::Malformed, Fault::InvalidInput).to_json(DisplayUnits::default()).unwrap();
+        assert!(!plain.contains(r#""input":"#), "{plain}");
     }
 
     #[test]

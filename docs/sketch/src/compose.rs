@@ -1,21 +1,14 @@
-//! `occam`, the composition crate (L25): the request runner, the one resolver of descriptions, and the session the
-//! facades wrap. `occam-cli`, `occam-wasm` and the later `occam-capi` and `occam-mcp` bind this and nothing else.
+//! `occam`, the composition crate (L25): what it gains after `construction.request`, which made the request runner real
+//! (`occam::run`): the one resolver of descriptions, and the session the facades wrap. `occam-cli`, `occam-wasm` and the later `occam-capi` and `occam-mcp` bind this and nothing else.
 
 use std::sync::Arc;
 
 use occam_math::Exec;
-use crate::ops::{Ran, Request};
 use occam_report::EntityRef;
 
 use occam_topo::Snapshot;
 
 use crate::report::{Describe, Description, Details};
-
-/// Runs a request against a model, or against a new one.
-#[must_use]
-pub fn run(exec: &Exec, model: Option<Arc<Snapshot>>, request: &Request) -> Ran {
-    unimplemented!()
-}
 
 /// The one place results leave the kernel. Every id in a result's reports, remedies and partial state is described in
 /// one batch, against the snapshot and, for a failure, its frozen outputs, and the descriptions go into the report's
