@@ -13,6 +13,7 @@ use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
 use crate::exact::{self, Conic};
 use crate::identity::{Content, FamilyName, Shape};
+use crate::restore::Numbers;
 use crate::support::{enclose, exact, positive, seen, span};
 
 /// One branch of a hyperbola, unbounded or trimmed.
@@ -39,6 +40,22 @@ impl Hyperbola {
     pub fn placed(placement: &Placement<Local, World>, x_radius: Length, y_radius: Length) -> Result<Self, Report> {
         let range = ParamRange::unbounded(ParamKind::Knot);
         Ok(Self { axes: Axes::of(placement), radii: (positive(x_radius)?, positive(y_radius)?), range })
+    }
+
+    /// The hyperbola saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, `geom.size-not-positive` for its radii, and for its range as [`ParamRange::trimmed`] and `geom.out-of-range` for a range trimming would not give.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let radii =
+            (positive(Length::from_millimetres(read.next()?))?, positive(Length::from_millimetres(read.next()?))?);
+        let range = read.range(ParamRange::unbounded(ParamKind::Knot), true)?;
+        read.done()?;
+        Ok(Self { axes, radii, range })
     }
 
     /// The part from parameter `lo` to `hi`.
@@ -314,7 +331,7 @@ mod tests {
         assert_eq!(shape.values[6], NamedValue::new("to", Quantity::Ratio, 1.5));
         let mut content = Content::default();
         Curve::content(&part, &mut content);
-        assert_eq!(content.words().len(), 26, "the name, the axes, two radii and the range");
+        assert_eq!(content.words().len(), 27, "the name, the axes, two radii, the range and how it wraps");
     }
 
     #[test]

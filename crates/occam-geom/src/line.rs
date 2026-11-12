@@ -12,7 +12,8 @@ use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
-use crate::support::{enclose, exact, foot_at, seen, splat};
+use crate::restore::Numbers;
+use crate::support::{enclose, exact, finite, foot_at, seen, splat};
 use crate::surface::Closest;
 
 /// A line, unbounded or trimmed to a segment.
@@ -28,6 +29,22 @@ impl Line {
     #[must_use]
     pub fn new(origin: Point<World>, direction: Direction<World>) -> Self {
         Self { origin: origin.to_vec3(), direction: direction.get(), range: ParamRange::unbounded(ParamKind::Length) }
+    }
+
+    /// The line saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `units.not-finite` for an origin that is not, `geom.degenerate-direction` for a direction that is not a unit axis, and for its range as [`ParamRange::trimmed`] and `geom.out-of-range` for a range trimming would not give.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let origin = read.vec3()?;
+        finite(Point::from_vec3(origin))?;
+        let direction = Direction::<World>::kept(read.vec3()?)?.get();
+        let range = read.range(ParamRange::unbounded(ParamKind::Length), false)?;
+        read.done()?;
+        Ok(Self { origin, direction, range })
     }
 
     /// The segment from parameter `lo` to `hi`.

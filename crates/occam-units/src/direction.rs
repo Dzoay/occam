@@ -37,6 +37,28 @@ impl<F: Frame> Direction<F> {
     }
 }
 
+impl<F: Frame> Direction<F> {
+    /// A unit axis kept exactly as given, bit for bit, as one written down and read back must be: dividing it by its
+    /// length again could move its last bits. Refused unless its squared length is within 8 machine epsilons of 1, which
+    /// any unit axis this crate computes is.
+    ///
+    /// # Errors
+    ///
+    /// [`Code::DegenerateDirection`] with its `length` if `v` is not a unit axis, or is not finite.
+    pub fn kept(v: Vec3) -> Result<Self, Report> {
+        let squared = v.dot(v);
+        if (squared - 1.0).abs() <= 8.0 * f64::EPSILON {
+            Ok(Self { unit: v, frame: PhantomData })
+        } else {
+            Err(Report::new(Code::DegenerateDirection, Fault::InvalidInput).with_value(NamedValue::new(
+                "length",
+                occam_report::Quantity::Ratio,
+                squared.sqrt(),
+            )))
+        }
+    }
+}
+
 impl<F: Frame, R: Real> Direction<F, R> {
     /// `v` divided by its length, for a formula that has just computed a unit axis, as a normal is. NaN in every lane
     /// where `v` is zero or not finite: an undefined direction is NaN, never a guess.
@@ -101,6 +123,22 @@ mod tests {
         let d = Direction::along(vector(0.0, 3.0, 4.0), tolerance()).unwrap();
         assert_eq!(d.get(), Vec3::new(0.0, 0.6, 0.8));
         assert_eq!(d.reversed().get(), Vec3::new(-0.0, -0.6, -0.8));
+    }
+
+    #[test]
+    fn a_unit_axis_is_kept_bit_for_bit_and_anything_else_refused() {
+        let unit = Direction::<World>::normalised(Vec3::new(1.0, 2.0, 3.0)).get();
+        assert_eq!(Direction::<World>::kept(unit).unwrap().get(), unit);
+        let k = 1.0 + 8.0 * f64::EPSILON;
+        let off = Vec3::new(unit.x * k, unit.y * k, unit.z * k);
+        let report = Direction::<World>::kept(off).unwrap_err();
+        assert_eq!(report.code, Code::DegenerateDirection);
+        assert!(report.value("length").and_then(NamedValue::number).is_some_and(|l| l > 1.0));
+        let edge = 1.0 + 8.0 * f64::EPSILON;
+        assert!(Direction::<World>::kept(Vec3::new(edge.sqrt(), 0.0, 0.0)).is_ok(), "the limit included");
+        for bad in [Vec3::new(0.0, 0.0, 0.0), Vec3::new(f64::NAN, 0.0, 0.0), Vec3::new(f64::INFINITY, 0.0, 0.0)] {
+            assert!(Direction::<World>::kept(bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]

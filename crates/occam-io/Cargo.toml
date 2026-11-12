@@ -1,0 +1,25 @@
+[package]
+name = "occam-io"
+description = "The native format, which is also the readable dump, and later STEP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+occam-geom = { path = "../occam-geom" }
+occam-math = { path = "../occam-math" }
+occam-report = { path = "../occam-report" }
+occam-topo = { path = "../occam-topo" }
+occam-units = { path = "../occam-units" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+
+[dev-dependencies]
+occam-topo = { path = "../occam-topo", features = ["workloads"] }
+
+[[example]]
+name = "load"
+
+[lints]
+workspace = true

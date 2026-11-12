@@ -190,6 +190,28 @@ impl<R: Clone> Table<R> {
         true
     }
 
+    /// A table of `slots`, in slot order: each the generation of its latest entity and its record if that entity is
+    /// live, as a file holds them. Its free slots are reused lowest first, as the table they were saved from would.
+    pub(crate) fn restore(slots: impl IntoIterator<Item = (NonZeroU32, Option<R>)>) -> Self {
+        let mut table = Self::with_most(u32::MAX);
+        for (generation, record) in slots {
+            if table.chunks.last().is_none_or(|chunk| chunk.len() >= CHUNK) {
+                table.chunks.push(Arc::new(Vec::with_capacity(CHUNK)));
+                table.free.push(0);
+            }
+            let state = record.map_or(State::Free, State::Live);
+            let slot = Slot { generation: generation.get(), state };
+            if let Some(count) = table.free.last_mut().filter(|_| slot.reusable()) {
+                *count = count.saturating_add(1);
+            }
+            if let Some(chunk) = table.chunks.last_mut() {
+                Arc::make_mut(chunk).push(slot);
+            }
+        }
+        table.lowest = table.free.iter().position(|&n| n > 0).unwrap_or(table.chunks.len());
+        table
+    }
+
     /// How many chunks this table shares with `other`.
     #[cfg(test)]
     #[expect(clippy::disallowed_methods, reason = "a test that chunks are shared compares them by address")]

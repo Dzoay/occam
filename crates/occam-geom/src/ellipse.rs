@@ -13,6 +13,7 @@ use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
 use crate::exact::{self, Conic};
 use crate::identity::{Content, FamilyName, Shape};
+use crate::restore::Numbers;
 use crate::support::positive;
 use crate::turn::{arc_box, on_turn, on_turn_first, on_turn_second, turn, turn_derivatives};
 
@@ -33,6 +34,22 @@ impl Ellipse {
     /// `geom.size-not-positive` for a radius that is not a finite length greater than zero.
     pub fn placed(placement: &Placement<Local, World>, x_radius: Length, y_radius: Length) -> Result<Self, Report> {
         Ok(Self { axes: Axes::of(placement), radii: (positive(x_radius)?, positive(y_radius)?), range: turn() })
+    }
+
+    /// The ellipse saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, `geom.size-not-positive` for its radii, and for its range as [`ParamRange::trimmed`] and `geom.out-of-range` for a range trimming would not give.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let radii =
+            (positive(Length::from_millimetres(read.next()?))?, positive(Length::from_millimetres(read.next()?))?);
+        let range = read.range(turn(), true)?;
+        read.done()?;
+        Ok(Self { axes, radii, range })
     }
 
     /// The arc from angle `lo` to `hi`.
@@ -187,7 +204,7 @@ mod tests {
         assert_eq!(shape.values[6], NamedValue::new("to", Quantity::Angle, 2.5));
         let mut content = Content::default();
         Curve::content(&e, &mut content);
-        assert_eq!(content.words().len(), 24, "the name, the axes, two radii and the range");
+        assert_eq!(content.words().len(), 25, "the name, the axes, two radii, the range and how it wraps");
         let b = Curve::bounds(&e, 0.0, TAU);
         assert!(
             b.contains(Point::from_vec3(local(12.0, 0.0, 0.0))) && b.contains(Point::from_vec3(local(0.0, -5.0, 0.0)))

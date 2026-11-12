@@ -13,6 +13,7 @@ use crate::curve::{ParametricCurve, holding};
 use crate::domain::ParamRange;
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
+use crate::restore::Numbers;
 use crate::support::{enclose, exact, positive, seen, span};
 
 /// A parabola, unbounded or trimmed.
@@ -33,9 +34,28 @@ impl Parabola {
     ///
     /// `geom.size-not-positive` for a focal length that is not a finite length greater than zero.
     pub fn placed(placement: &Placement<Local, World>, focal_length: Length) -> Result<Self, Report> {
+        Self::on(Axes::of(placement), focal_length, ParamRange::unbounded(ParamKind::Length))
+    }
+
+    /// The parabola on `axes` over `range`, as [`Parabola::placed`] makes it.
+    fn on(axes: Axes, focal_length: Length, range: ParamRange) -> Result<Self, Report> {
         let focal = positive(focal_length)?;
-        let range = ParamRange::unbounded(ParamKind::Length);
-        Ok(Self { axes: Axes::of(placement), focal, quarter: 0.25 / focal, half: 0.5 / focal, range })
+        Ok(Self { axes, focal, quarter: 0.25 / focal, half: 0.5 / focal, range })
+    }
+
+    /// The parabola saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, `geom.size-not-positive` for its focal length, and for its range as [`ParamRange::trimmed`] and `geom.out-of-range` for a range trimming would not give.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let focal = Length::from_millimetres(read.next()?);
+        let range = read.range(ParamRange::unbounded(ParamKind::Length), true)?;
+        read.done()?;
+        Self::on(axes, focal, range)
     }
 
     /// The part from parameter `lo` to `hi`.
@@ -248,7 +268,7 @@ mod tests {
         assert_eq!(shape.values[3], NamedValue::length("focal-length", 3.0));
         let mut content = Content::default();
         Curve::content(&parabola().trimmed(-5.0, 12.0).unwrap(), &mut content);
-        assert_eq!(content.words().len(), 24, "the name, the axes, the focal length and the range");
+        assert_eq!(content.words().len(), 25, "the name, the axes, the focal length, the range and how it wraps");
         assert_eq!(content.words()[23], 12.0f64.to_bits());
     }
 

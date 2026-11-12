@@ -421,6 +421,27 @@ catalogue! {
         "A face names something that is not a wire it can be made from.",
         "{parameter} names {given}, which is not a wire a face can be made from.",
     }
+
+    /// The bytes given to load are not a model in the native format.
+    NotReadable = "io.not-readable" {
+        Error, [],
+        "The bytes given to load are not a model in the native format.",
+        "The file is not a native model: it fails at line {line}, column {column}.",
+    }
+
+    /// A native model file is of a format version this build does not read.
+    OtherVersion = "io.other-version" {
+        Error, [],
+        "A native model file is of a format version this build does not read.",
+        "The file is format version {version}; this build reads version {supported}.",
+    }
+
+    /// A model holds a curve or surface of a family the native format does not write yet, so it was not saved.
+    NotSaved = "io.not-saved" {
+        Error, [],
+        "A model holds a curve or surface of a family the native format does not write yet, so it was not saved.",
+        "The geometry named is of a family the native format does not write yet, so nothing was saved.",
+    }
 }
 
 text_enum! {
@@ -1004,6 +1025,35 @@ mod tests {
         ])
     }
 
+    fn io_codes() -> Value {
+        json!([
+            {
+                "name": "NotReadable",
+                "code": "io.not-readable",
+                "severity": "error",
+                "summary": "The bytes given to load are not a model in the native format.",
+                "template": "The file is not a native model: it fails at line {line}, column {column}.",
+                "remedies": []
+            },
+            {
+                "name": "OtherVersion",
+                "code": "io.other-version",
+                "severity": "error",
+                "summary": "A native model file is of a format version this build does not read.",
+                "template": "The file is format version {version}; this build reads version {supported}.",
+                "remedies": []
+            },
+            {
+                "name": "NotSaved",
+                "code": "io.not-saved",
+                "severity": "error",
+                "summary": "A model holds a curve or surface of a family the native format does not write yet, so it was not saved.",
+                "template": "The geometry named is of a family the native format does not write yet, so nothing was saved.",
+                "remedies": []
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -1049,6 +1099,7 @@ mod tests {
             label_codes(),
             construct_codes(),
             face_codes(),
+            io_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())

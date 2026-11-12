@@ -66,16 +66,6 @@ Volume, surface area and centre of mass of a solid by the divergence theorem ove
 *Failing test first:* the closed forms of each primitive and of the extruded and revolved solids, within the
 quadrature's stated tolerance; the box of a rotated cylinder is tight, not its bounding box's box.
 
-### `construction.native`
-
-`occam-io`: save and load in the native format, the readable dump itself (row 2.17). JSON with every finite number
-exact, versioned from the first commit, holding the tolerance, the step counter and every slot's generation, so a
-loaded model has the same ids and digest. Loading trusts nothing: it measures and checks the whole model, as `commit`
-would. Bytes at the seam (`Vec<u8>`, `&[u8]`).
-
-*Failing test first:* every clean model round-trips to the same digest; a saved file with one record corrupted is
-refused naming it; a file of another version is refused with its version.
-
 ### `construction.describer`
 
 The one resolver ([O26](../architecture/open-decisions.md#o26-how-an-agent-learns-what-an-entity-is)): `describe_all`

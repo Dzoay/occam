@@ -9,7 +9,9 @@ use occam_math::Exec;
 use occam_units::{Angle, Length, Tolerance};
 
 use crate::edit::Edit;
-use crate::models::{Built, build, plate, split, top_square};
+use crate::models::{
+    Built, build, cube, cylinder, disc, frame, holed_sheet, plate, sheet, split, straight_pcurves, top_square, wire,
+};
 use crate::snapshot::Snapshot;
 
 /// A plate `k` by `k` by 1 of unit squares, committed: its bottom and its top each `k²` squares, and each side `k`, so
@@ -55,6 +57,39 @@ impl Plate {
         }
         edit
     }
+}
+
+/// The tests' clean models, each built in one edit and committed on `exec`, by name: a cube, a block of genus 1, a
+/// cylinder split at its seam, a sheet, a wire, a disc bounded by one closed edge, a sheet with a hole, and the cube
+/// with a parameter curve on every use. Empty only if a commit refuses one, which no clean model makes it do.
+#[must_use]
+pub fn models(exec: &Exec) -> Vec<(&'static str, Snapshot)> {
+    let Ok(tolerance) = Tolerance::new(Length::from_millimetres(1e-7), Angle::from_radians(1e-9)) else {
+        return Vec::new();
+    };
+    let specs = [
+        ("cube", cube()),
+        ("frame", frame()),
+        ("cylinder", cylinder()),
+        ("sheet", sheet()),
+        ("wire", wire()),
+        ("disc", disc()),
+        ("holed-sheet", holed_sheet()),
+        ("cube-with-parameter-curves", cube()),
+    ];
+    let mut found = Vec::new();
+    for (name, spec) in specs {
+        let mut edit = Snapshot::empty(tolerance).edit();
+        let built = build(&mut edit, &spec);
+        if name == "cube-with-parameter-curves" {
+            straight_pcurves(&mut edit, &built);
+        }
+        match edit.commit(exec) {
+            Ok((snapshot, _)) => found.push((name, snapshot)),
+            Err(_) => return Vec::new(),
+        }
+    }
+    found
 }
 
 #[cfg(test)]

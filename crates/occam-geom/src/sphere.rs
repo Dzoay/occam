@@ -17,6 +17,7 @@ use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
+use crate::restore::Numbers;
 use crate::support::positive;
 use crate::surface::Parametric;
 use crate::turn::turn;
@@ -38,7 +39,26 @@ impl Sphere {
     ///
     /// `geom.size-not-positive` for a radius that is not a finite length greater than zero.
     pub fn placed(placement: &Placement<Local, World>, radius: Length) -> Result<Self, Report> {
-        let (axes, radius) = (Axes::of(placement), positive(radius)?);
+        Self::on(Axes::of(placement), radius)
+    }
+
+    /// The sphere saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, and `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, and `geom.size-not-positive` for its radius.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let radius = read.next()?;
+        read.done()?;
+        Self::on(axes, Length::from_millimetres(radius))
+    }
+
+    /// The sphere about `axes`' origin, its poles along their normal, as [`Sphere::placed`] makes it.
+    fn on(axes: Axes, radius: Length) -> Result<Self, Report> {
+        let radius = positive(radius)?;
         let pole = |at: f64, normal: occam_units::Direction<World>| Degeneracy {
             param: Param::V,
             at,

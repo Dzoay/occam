@@ -14,6 +14,7 @@ use crate::domain::{Domain, ParamRange, UvBox};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
+use crate::restore::Numbers;
 use crate::support::positive;
 use crate::surface::Parametric;
 use crate::turn::turn;
@@ -34,6 +35,20 @@ impl Cylinder {
     /// `geom.size-not-positive` for a radius that is not a finite length greater than zero.
     pub fn placed(placement: &Placement<Local, World>, radius: Length) -> Result<Self, Report> {
         Ok(Self { axes: Axes::of(placement), radius: positive(radius)? })
+    }
+
+    /// The cylinder saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, and `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, and `geom.size-not-positive` for its radius.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let radius = positive(Length::from_millimetres(read.next()?))?;
+        read.done()?;
+        Ok(Self { axes, radius })
     }
 }
 

@@ -15,6 +15,7 @@ use crate::domain::{Domain, UvBox};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
+use crate::restore::Numbers;
 use crate::support::{between, positive};
 use crate::surface::Parametric;
 use crate::turn::{above, turn};
@@ -36,9 +37,28 @@ impl Torus {
     /// `geom.size-not-positive` for a radius that is not a finite length greater than zero, and `geom.out-of-range`
     /// for a minor radius not less than the major.
     pub fn placed(placement: &Placement<Local, World>, major: Length, minor: Length) -> Result<Self, Report> {
+        Self::on(Axes::of(placement), major, minor)
+    }
+
+    /// The torus about `axes`' normal, as [`Torus::placed`] makes it.
+    fn on(axes: Axes, major: Length, minor: Length) -> Result<Self, Report> {
         let (major, minor) = (positive(major)?, positive(minor)?);
         let minor = between(minor, (0.0, major), Quantity::Length)?;
-        Ok(Self { axes: Axes::of(placement), major, minor })
+        Ok(Self { axes, major, minor })
+    }
+
+    /// The torus saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, and `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, and as [`Torus::placed`] for its radii.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let (major, minor) = (read.next()?, read.next()?);
+        read.done()?;
+        Self::on(axes, Length::from_millimetres(major), Length::from_millimetres(minor))
     }
 }
 

@@ -16,6 +16,7 @@ use crate::domain::{ParamRange, Wrap};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::knots::{Rows, canonical};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
+use crate::restore::{Numbers, knots as saved_knots, poles as saved_poles};
 use crate::spline::{CAPACITIES, curve_quotient};
 use crate::support::{everything, padded};
 
@@ -52,6 +53,28 @@ impl SplineCurve {
         let range = ParamRange { lo: at(p), hi: at(n), wrap: Wrap::Open, kind: ParamKind::Knot };
         let poles = homogeneous(&form.poles, form.weights.as_deref());
         Ok(Self { degree: p, knots, poles, rational: form.weights.is_some(), bezier: false, range })
+    }
+
+    /// The curve saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written. The knots are made canonical, and a Bézier form must have its own knots.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `geom.out-of-range` for a flag, degree or count that is not
+    /// one, and as [`SplineCurve::new`] for the knots and the poles, a weight other than 1 in a form that is not rational being
+    /// `geom.out-of-range`.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let (bezier, rational) = (read.flag()?, read.flag()?);
+        let p = read.count(u32::from(MAX_DEGREE))?;
+        let n = read.left().saturating_sub(p.saturating_add(1)).checked_div(5).unwrap_or(0);
+        let knots = saved_knots(&mut read, n.saturating_add(p).saturating_add(1), bezier.then_some(p))?;
+        let poles = saved_poles(&mut read, n, rational)?;
+        read.done()?;
+        let (p, n) = checked_knots(u16::try_from(p).unwrap_or(u16::MAX), n, &knots)?;
+        let at = |i: usize| knots.get(i).copied().unwrap_or(f64::NAN);
+        let range = ParamRange { lo: at(p), hi: at(n), wrap: Wrap::Open, kind: ParamKind::Knot };
+        Ok(Self { degree: p, knots, poles, rational, bezier, range })
     }
 
     /// The Bézier curve of these poles and their weights, if it is rational: degree one less than the poles, from 0

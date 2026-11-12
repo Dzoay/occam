@@ -13,6 +13,7 @@ use crate::curve::ParametricCurve;
 use crate::domain::ParamRange;
 use crate::exact::{self, Conic};
 use crate::identity::{Content, FamilyName, Shape};
+use crate::restore::Numbers;
 use crate::support::{foot_at, positive};
 use crate::surface::Closest;
 use crate::turn::{above, arc_box, on_turn, on_turn_first, on_turn_second, turn, turn_derivatives};
@@ -33,6 +34,21 @@ impl Circle {
     /// `geom.size-not-positive` for a radius that is not a finite length greater than zero.
     pub fn placed(placement: &Placement<Local, World>, radius: Length) -> Result<Self, Report> {
         Ok(Self { axes: Axes::of(placement), radius: positive(radius)?, range: turn() })
+    }
+
+    /// The circle saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, `geom.size-not-positive` for its radius, and for its range as [`ParamRange::trimmed`] and `geom.out-of-range` for a range trimming would not give.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let radius = positive(Length::from_millimetres(read.next()?))?;
+        let range = read.range(turn(), true)?;
+        read.done()?;
+        Ok(Self { axes, radius, range })
     }
 
     /// The arc from angle `lo` to `hi`.
@@ -252,8 +268,8 @@ mod tests {
         assert_eq!(shape.values[5], NamedValue::new("to", Quantity::Angle, 2.5));
         let mut content = Content::default();
         Curve::content(&arc, &mut content);
-        assert_eq!(content.words().len(), 22, "the name, the axes, the radius and the range");
-        assert_eq!(content.words().last(), Some(&2.5f64.to_bits()));
+        assert_eq!(content.words().len(), 23, "the name, the axes, the radius, the range and how it wraps");
+        assert_eq!(content.words()[21..], [2.5f64.to_bits(), 0.0f64.to_bits()], "its end, then open");
     }
 
     #[test]

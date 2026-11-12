@@ -19,6 +19,7 @@ use crate::foot::foot;
 use crate::identity::{BatchKey, Content, FamilyName, Shape};
 use crate::knots::{Rows, canonical, transposed};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
+use crate::restore::{Numbers, knots as saved_knots, poles as saved_poles};
 use crate::spline::{CAPACITIES, index, surface_quotient, triangle};
 use crate::support::{everything, padded};
 use crate::surface::Parametric;
@@ -85,6 +86,30 @@ impl SplineSurface {
         let poles = homogeneous(&form.poles, form.weights.as_deref());
         let rational = form.weights.is_some();
         Ok(Self { degree: (p, q), count: (nu, nv), knots_u, knots_v, poles, rational, bezier: false, domain })
+    }
+
+    /// The surface saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written. The knots are made canonical, and a Bézier form must have its own knots.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `geom.out-of-range` for a flag, degree or count that is not
+    /// one, and as [`SplineSurface::new`] for the knots and the poles, a weight other than 1 in a form that is not rational being
+    /// `geom.out-of-range`.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let (bezier, rational) = (read.flag()?, read.flag()?);
+        let (p, q) = (read.count(u32::from(MAX_DEGREE))?, read.count(u32::from(MAX_DEGREE))?);
+        let (nu, nv) = (read.count(u32::MAX)?, read.count(u32::MAX)?);
+        let knots_u = saved_knots(&mut read, nu.saturating_add(p).saturating_add(1), bezier.then_some(p))?;
+        let knots_v = saved_knots(&mut read, nv.saturating_add(q).saturating_add(1), bezier.then_some(q))?;
+        let poles = saved_poles(&mut read, nu.saturating_mul(nv), rational)?;
+        read.done()?;
+        let degree = |d: usize| u16::try_from(d).unwrap_or(u16::MAX);
+        let (p, nu) = checked_knots(degree(p), nu, &knots_u)?;
+        let (q, nv) = checked_knots(degree(q), nv, &knots_v)?;
+        let domain = Domain { u: range(&knots_u, p, nu), v: range(&knots_v, q, nv) };
+        Ok(Self { degree: (p, q), count: (nu, nv), knots_u, knots_v, poles, rational, bezier, domain })
     }
 
     /// The Bézier surface of `count.0` by `count.1` poles, a row of constant `v` at a time, and their weights, if it is

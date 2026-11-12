@@ -14,6 +14,9 @@ flowchart LR
 
 - **The records, with their [names and colours](topology.md#names-and-colours), as JSON.** Every finite number
   round-trips exactly.
+- **Curves and surfaces as their family's name and the numbers that define them,** the numbers their content holds,
+  so each family restores itself bit for bit and refuses what none of its constructors makes. A family the format does
+  not write yet is refused at save, by name, never dropped.
 - **Versioned from the first commit.** It holds the tolerance, the step counter and every slot's generation, so a loaded
   model has the same ids and digest as the saved one.
 - **Loading checks the whole model.** Nothing from outside is trusted.

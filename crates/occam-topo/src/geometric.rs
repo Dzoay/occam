@@ -21,10 +21,12 @@ mod winding;
 /// finds witnesses by the same count. See [`winding::number`].
 pub use winding::number as winding_number;
 
-use core::num::NonZeroU32;
+use core::num::{NonZeroU32, NonZeroUsize};
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use occam_geom::{Curve, Scratch, join_edge};
+use occam_math::Exec;
 use occam_report::{Code, EntityKind, EntityRef, Fault, NamedValue, Quantity, Reason, Report};
 use occam_units::{Length, Tolerance};
 
@@ -288,10 +290,7 @@ pub(crate) fn measure(edit: &mut Edit) -> Vec<Report> {
         match deviation(next, e) {
             Ok(d) if e.deviation().millimetres().to_bits() != d.to_bits() => measured.push((e.id(), d)),
             Ok(_) => {}
-            Err(miss) => failures.push(
-                failed(Reason::DeviationNotMeasured, &[e.id().entity(), miss.face.entity()])
-                    .with_value(NamedValue::new("parameter", miss.quantity, miss.t)),
-            ),
+            Err(miss) => failures.push(unmeasured(e.id(), &miss)),
         }
     }
     for (e, deviation) in measured {
@@ -300,6 +299,46 @@ pub(crate) fn measure(edit: &mut Edit) -> Vec<Report> {
             if !edit.created.contains(&e.entity()) {
                 edit.changed.insert(e.entity());
             }
+        }
+    }
+    failures
+}
+
+/// The report of an edge whose distance from a face could not be measured.
+fn unmeasured(e: Id<Edge>, miss: &Unmeasured) -> Report {
+    failed(Reason::DeviationNotMeasured, &[e.entity(), miss.face.entity()]).with_value(NamedValue::new(
+        "parameter",
+        miss.quantity,
+        miss.t,
+    ))
+}
+
+/// How many edges one task of [`measure_all`] measures.
+const EDGES_A_TASK: NonZeroUsize = match NonZeroUsize::new(256) {
+    Some(n) => n,
+    None => NonZeroUsize::MIN,
+};
+
+/// Measures every edge's deviation from each face that uses it and stores it, as a model read back from a file must be
+/// (the deviation cap's decision): in tasks of [`EDGES_A_TASK`] edges on `exec`, stored in slot order, so the bits are
+/// the same at any thread count. Gives one report for each edge whose distance from a face could not be measured.
+pub(crate) fn measure_all(model: &mut Model, exec: &Exec) -> Vec<Report> {
+    let edges: Arc<Vec<Id<Edge>>> =
+        Arc::new(Edge::table(model).records().map(|(slot, generation, _)| Id::new(slot, generation)).collect());
+    let (shared, count) = (Arc::new(model.clone()), edges.len());
+    let measured = exec.map_chunks(count, EDGES_A_TASK, move |range| {
+        let ids = edges.get(range).unwrap_or_default();
+        ids.iter().filter_map(|&e| view(&shared, e)).map(|e| (e.id(), deviation(&shared, e))).collect()
+    });
+    let mut failures = Vec::new();
+    for (e, found) in measured {
+        match found {
+            Ok(d) => {
+                if let Some(record) = Edge::table_mut(model).live_mut(e.slot(), e.generation()) {
+                    record.deviation = Length::from_millimetres(d);
+                }
+            }
+            Err(miss) => failures.push(unmeasured(e, &miss)),
         }
     }
     failures

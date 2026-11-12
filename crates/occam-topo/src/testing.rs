@@ -3,10 +3,10 @@
 
 use std::sync::Arc;
 
-use occam_geom::Line;
-use occam_math::Exec;
-use occam_report::{Report, Value};
-use occam_units::{Angle, Direction, Length, Point, Tolerance, Vec3, World};
+use occam_geom::{Content, Domain, FamilyName, Jet1, Jet2, Line, Parametric, Plane, Scratch, Shape, UvBox};
+use occam_math::{Exec, Real};
+use occam_report::{Code, Fault, Report, Value};
+use occam_units::{Angle, Bounds, Direction, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::kind::{Id, Kind};
 use crate::records::{CurveRecord, VertexRecord};
@@ -48,4 +48,56 @@ pub(crate) fn number(report: &Report, name: &str) -> Option<f64> {
         Value::Scalar(x) => Some(x),
         Value::Point(_) => None,
     })
+}
+
+/// A plane on which no point can be found: what a surface whose search fails looks like to the checks.
+pub(crate) struct Unfindable(pub(crate) Plane);
+
+impl Parametric for Unfindable {
+    fn eval_point<R: Real>(&self, uv: UvPoint<R>) -> Point<World, R> {
+        self.0.eval_point(uv)
+    }
+
+    fn eval_first<R: Real>(&self, uv: UvPoint<R>) -> Jet1<R> {
+        self.0.eval_first(uv)
+    }
+
+    fn eval_second<R: Real>(&self, uv: UvPoint<R>) -> Jet2<R> {
+        self.0.eval_second(uv)
+    }
+
+    fn derivatives(
+        &self,
+        uv: UvPoint,
+        order: u8,
+        out: &mut Vec<Tangent<World>>,
+        scratch: &mut Scratch,
+    ) -> Result<(), Report> {
+        self.0.derivatives(uv, order, out, scratch)
+    }
+
+    fn domain(&self) -> Domain {
+        self.0.domain()
+    }
+
+    fn bounds(&self, patch: UvBox) -> Bounds {
+        self.0.bounds(patch)
+    }
+
+    fn invert(&self, _: Point<World>, _: Option<UvPoint>, _: Tolerance, _: &mut Scratch) -> Result<UvPoint, Report> {
+        Err(Report::new(Code::NotConverged, Fault::NumericallySensitive))
+    }
+
+    fn family(&self) -> FamilyName {
+        FamilyName("unfindable")
+    }
+
+    fn content(&self, out: &mut Content) {
+        self.0.content(out);
+        out.push_family(self.family());
+    }
+
+    fn shape(&self) -> Shape {
+        self.0.shape()
+    }
 }

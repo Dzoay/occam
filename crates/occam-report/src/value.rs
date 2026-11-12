@@ -205,31 +205,15 @@ mod number {
     use serde::ser::SerializeTuple;
 
     use super::Value;
-
-    /// One number as it is written.
-    struct One(f64);
-
-    impl serde::Serialize for One {
-        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            if self.0.is_finite() {
-                serializer.serialize_f64(self.0)
-            } else if self.0.is_nan() {
-                serializer.serialize_str("nan")
-            } else if self.0.is_sign_positive() {
-                serializer.serialize_str("inf")
-            } else {
-                serializer.serialize_str("-inf")
-            }
-        }
-    }
+    use crate::number::{Number, named};
 
     pub fn serialize<S: Serializer>(value: &Value, serializer: S) -> Result<S::Ok, S::Error> {
         match *value {
-            Value::Scalar(number) => One(number).serialize(serializer),
+            Value::Scalar(number) => Number(number).serialize(serializer),
             Value::Point(coordinates) => {
                 let mut tuple = serializer.serialize_tuple(3)?;
                 for coordinate in coordinates {
-                    tuple.serialize_element(&One(coordinate))?;
+                    tuple.serialize_element(&Number(coordinate))?;
                 }
                 tuple.end()
             }
@@ -253,12 +237,7 @@ mod number {
     fn read<E: Error>(single: Single) -> Result<f64, E> {
         match single {
             Single::Number(value) => Ok(value),
-            Single::Text(text) => match text.as_str() {
-                "nan" => Ok(f64::NAN),
-                "inf" => Ok(f64::INFINITY),
-                "-inf" => Ok(f64::NEG_INFINITY),
-                other => Err(E::custom(format!("not a number: {other}"))),
-            },
+            Single::Text(text) => named(&text).ok_or_else(|| E::custom(format!("not a number: {text}"))),
         }
     }
 

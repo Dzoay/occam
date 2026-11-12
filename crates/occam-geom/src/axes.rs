@@ -3,12 +3,13 @@
 //! turned about an axis are written in.
 
 use occam_math::{Interval, Real};
-use occam_report::{NamedValue, Quantity, Value};
+use occam_report::{Code, Fault, NamedValue, Quantity, Report, Value};
 use occam_units::{Direction, Local, Placement, Point, Vec3, World};
 
 use crate::domain::ParamRange;
 use crate::identity::Content;
-use crate::support::{exact, splat};
+use crate::restore::{Numbers, wrap_code};
+use crate::support::{exact, finite, splat};
 
 /// An origin and two perpendicular unit axes in `World`, with the normal they face.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -91,11 +92,40 @@ impl Axes {
         }
     }
 
-    /// Adds what defines a curve placed on these axes: the axes, its `sizes`, and its range's ends.
+    /// Adds what defines a curve placed on these axes: the axes, its `sizes`, its range's ends, and how the range wraps,
+    /// since an arc trimmed to a whole turn stops at its seam where an untrimmed one carries on round.
     pub(crate) fn push_curve(&self, out: &mut Content, sizes: &[f64], range: ParamRange) {
         self.push(out);
-        for x in sizes.iter().copied().chain([range.lo, range.hi]) {
+        for x in sizes.iter().copied().chain([range.lo, range.hi, wrap_code(range.wrap)]) {
             out.push(x);
+        }
+    }
+
+    /// Axes read back as [`Axes::push`] wrote them. The two axes and the normal must each be a unit axis, square to
+    /// each other within 64 machine epsilons and right-handed, as a placement's are, and the origin finite.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` if too few numbers are left, `units.not-finite` for an origin that is not finite, and
+    /// `geom.degenerate-direction` for axes that are not as a placement makes them.
+    pub(crate) fn restore(numbers: &mut Numbers<'_>) -> Result<Self, Report> {
+        let origin = numbers.vec3()?;
+        finite(Point::from_vec3(origin))?;
+        let (x, y) = (numbers.vec3()?, numbers.vec3()?);
+        let normal = Direction::<World>::kept(numbers.vec3()?)?;
+        Direction::<World>::kept(x)?;
+        Direction::<World>::kept(y)?;
+        let n = normal.get();
+        let worst =
+            [x.dot(y), x.dot(n), y.dot(n)].into_iter().fold(0.0, |a: f64, d| if d.abs() > a { d.abs() } else { a });
+        if worst <= 64.0 * f64::EPSILON && x.cross(y).dot(n) > 0.0 {
+            Ok(Self { origin, x, y, normal })
+        } else {
+            Err(Report::new(Code::DegenerateDirection, Fault::InvalidInput).with_value(NamedValue::new(
+                "square",
+                Quantity::Ratio,
+                worst,
+            )))
         }
     }
 

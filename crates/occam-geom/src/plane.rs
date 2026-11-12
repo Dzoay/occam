@@ -12,6 +12,7 @@ use crate::bspline::BsplineSurface;
 use crate::domain::{Domain, ParamRange, UvBox};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
+use crate::restore::Numbers;
 use crate::support::{enclose, exact, splat};
 use crate::surface::Parametric;
 
@@ -26,6 +27,19 @@ impl Plane {
     #[must_use]
     pub fn placed(placement: &Placement<Local, World>) -> Self {
         Self { axes: Axes::of(placement) }
+    }
+
+    /// The plane saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, and `units.not-finite` and `geom.degenerate-direction` for axes no placement makes.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        read.done()?;
+        Ok(Self { axes })
     }
 }
 

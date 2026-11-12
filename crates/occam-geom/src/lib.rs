@@ -54,6 +54,9 @@ mod offset_surface;
 mod parabola;
 mod param_curve;
 mod plane;
+mod restore;
+#[cfg(test)]
+mod restore_families;
 mod revolution;
 #[cfg(test)]
 mod source_check;
