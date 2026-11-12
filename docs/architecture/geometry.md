@@ -1,6 +1,6 @@
 # Geometry
 
-[Architecture](../ARCHITECTURE.md) › Geometry · crate `occam-geom` · sketch [`geom.rs`](../sketch/src/geom.rs)
+[Architecture](../ARCHITECTURE.md) › Geometry · crate `occam-geom` · frozen seam [`ci/seam.txt`](../../ci/seam.txt)
 
 Curves and surfaces. A family implements one trait; everything else calls another. All stored geometry is in `World`.
 
@@ -144,6 +144,19 @@ Every measure reads `dyn Curve` or `dyn Surface`, so each family, present or to 
   curvature equal. A surface's parametric class depends on how a shell parameterises its faces, so it is not measured,
   and a mesh is shown `G1` at most. A join below what was required is `geom.join-below-continuity`, naming the first
   order that fails, the order required and the measure that fails it.
+
+## The seam is frozen
+
+Once every family passed the suite, analytic, B-spline and mesh-backed (L21), the seam was frozen, as the
+[approved plan](../decisions/2026-11-08-the-plan-and-its-first-answers.md)'s step `geometry.freeze` does. It is the
+public items of the modules of the two layers and of every type their signatures name: `surface.rs`, `curve.rs`,
+`param_curve.rs`, `batch.rs`, `domain.rs`, `identity.rs`, and the presentations `analytic.rs` and `bspline.rs`, which a
+caller reads through the seam. Each later change to it needs a decision of the user's. `gates seam` reads them with `syn`, cuts each signature out of
+the source, normalises it (comments, whitespace and argument names do not count, types do), and compares it with
+`ci/seam.txt`. A change, an addition or a removal fails, until a decision allows it and `just seam --update` records the
+seam under it. A family's own constructors are not in it, and neither is the conformance suite, whose checks can tighten
+without a decision. `every_family.rs` runs the suite over every family in one table, and fails when a family exists
+that the table does not list.
 
 ## No cross-family store
 

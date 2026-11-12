@@ -62,4 +62,4 @@ Two proposals with opposite emphases, and a critic on each (L50): [A](evidence/2
 ([critique](evidence/2026-11-10-design-a-critique.md)) and [B](evidence/2026-11-10-design-b.md)
 ([critique](evidence/2026-11-10-design-b-critique.md)). "A:3" means point 3 of A's critique. S1 to S6 and P1 to P12 are
 the [spike findings](evidence/README.md). The crate list `gates layers` reads is [§4 of the plan](PLAN.md#4-layers);
-the signatures are in [the type sketch](sketch/src/lib.rs) (`just sketch`).
+the signatures are in the crates where they exist, occam-geom's, [frozen](architecture/geometry.md#the-seam-is-frozen), in `ci/seam.txt`, and otherwise in [the type sketch](sketch/src/lib.rs) (`just sketch`).

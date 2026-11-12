@@ -3,10 +3,10 @@
 occam 11
 occam-cli::bin/occam 7
 occam-cli::cli 4
-occam-geom 276
+occam-geom 354
 occam-math 117
 occam-report 41
 occam-units 48
 occam-verify 30
 occam-wasm 3
-occam-xtask::bin/occam-xtask 229
+occam-xtask::bin/occam-xtask 243

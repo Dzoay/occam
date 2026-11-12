@@ -10,9 +10,11 @@ use occam_report::Report;
 use occam_units::{Length, Point, Tolerance, UvPoint, World};
 use serde::{Deserialize, Serialize};
 
-use crate::geom::{Curve, ParamCurve, Surface};
+use occam_geom::{Curve, ParamCurve, Surface};
 use occam_math::Exec;
-use crate::report::{Description, EntityKind, EntityRef, StepRole};
+use occam_report::{EntityKind, EntityRef};
+
+use crate::report::{Description, StepRole};
 
 mod sealed {
     pub trait Sealed {}

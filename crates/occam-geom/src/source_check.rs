@@ -85,16 +85,34 @@ fn sources(dir: &Path, src: &Path, out: &mut Vec<(String, String)>) {
     }
 }
 
-#[test]
-fn no_family_is_named_outside_its_module_and_nothing_recovers_a_type() {
+/// Every library file of the crate, as its path from `src` and its text, and the modules declared for tests alone.
+fn library_sources() -> (Vec<(String, String)>, Vec<String>) {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut texts = Vec::new();
     sources(&src, &src, &mut texts);
     let test_only = test_modules(&std::fs::read_to_string(src.join("lib.rs")).unwrap());
     let library =
         |path: &str| !test_only.iter().any(|m| path == format!("{m}.rs") || path.starts_with(&format!("{m}/")));
-    let files: Vec<(String, Vec<&str>)> =
-        texts.iter().filter(|(path, _)| library(path)).map(|(path, text)| (path.clone(), library_code(text))).collect();
+    texts.retain(|(path, _)| library(path));
+    (texts, test_only)
+}
+
+/// The families the library declares by their `impl` lines, by type name, each once, in order.
+pub(crate) fn families() -> Vec<String> {
+    let (texts, _) = library_sources();
+    let mut found: Vec<String> = texts
+        .iter()
+        .flat_map(|(_, text)| library_code(text).into_iter().filter_map(family_of).map(str::to_string))
+        .collect();
+    found.sort_unstable();
+    found.dedup();
+    found
+}
+
+#[test]
+fn no_family_is_named_outside_its_module_and_nothing_recovers_a_type() {
+    let (texts, test_only) = library_sources();
+    let files: Vec<(String, Vec<&str>)> = texts.iter().map(|(path, text)| (path.clone(), library_code(text))).collect();
     let found: Vec<&str> = files.iter().flat_map(|(_, code)| code.iter().filter_map(|line| family_of(line))).collect();
     assert!(
         found.contains(&"Plane") && found.contains(&"Line") && found.contains(&"UvCurve"),

@@ -26,9 +26,4 @@ vectorisation check where it has one. Geometry is stored in `World`. No new depe
 
 ## Steps
 
-### `geometry.freeze`
-
-The suite runs over every family in one table, the seam is frozen (L21), and the type sketch's `geom.rs`, `units.rs`
-and schema 2's part of `report.rs` are deleted. A changed seam signature then fails a test until a decision allows it.
-
-*Failing test first:* a seam signature changed on purpose fails the freeze test.
+Every step is done; the exit gate above is checked on the milestone's PR.

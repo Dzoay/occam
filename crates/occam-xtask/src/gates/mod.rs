@@ -13,6 +13,7 @@ mod mutants;
 mod perf;
 mod plan;
 mod provenance;
+mod seam;
 
 use std::process::ExitCode;
 
@@ -23,12 +24,13 @@ use crate::verdict::{self, Finding, Verdict};
 type Gate = fn(&Repo, &[String]) -> Verdict;
 
 /// The gates in force, in the order `gates all` runs them.
-const GATES: [(&str, Gate); 11] = [
+const GATES: [(&str, Gate); 12] = [
     ("layers", layers::run),
     ("complexity", complexity::run),
     ("provenance", provenance::run),
     ("docs", docs::run),
     ("plan", plan::run),
+    ("seam", seam::run),
     ("deps", deps::run),
     ("errors", errors::run),
     ("determinism", determinism::run),

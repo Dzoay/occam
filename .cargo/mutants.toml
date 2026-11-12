@@ -150,4 +150,34 @@ exclude_re = [
     "continuity\\.rs:\\d+:\\d+: replace < with <= in measure_surfaces$",
     "continuity\\.rs:257:57: replace \\* with / in measure_surfaces$",
     "continuity\\.rs:258:36: replace \\* with / in measure_surfaces$",
+    # A chord of no length, or a point exactly at either end of it: 0 / 0, -0 and 1 give the same foot either way. Ends
+    # in order that are equal. A guess exactly at either end of the range, or a Newton step exactly on either end of the
+    # bracket, is taken where the middle would have been, which changes only how soon a length is found; and a gap of
+    # exactly nought has already been returned.
+    "spacing\\.rs:\\d+:\\d+: replace < with <= in from_chord$",
+    "spacing\\.rs:\\d+:\\d+: replace > with >= in from_chord$",
+    "spacing\\.rs:\\d+:\\d+: replace < with <= in ends$",
+    "spacing\\.rs:116:27: replace > with >= in advance$",
+    "spacing\\.rs:116:43: replace < with <= in advance$",
+    "spacing\\.rs:123:16: replace < with <= in advance$",
+    "spacing\\.rs:129:27: replace < with <= in advance$",
+    "spacing\\.rs:129:46: replace < with <= in advance$",
+    # Refining every sample with a neighbour no further, not only the local largest: more golden-section searches, each
+    # of which can only find a point at least as far as the largest found without them. Not a tie; it changes the cost,
+    # and where a narrow peak hides between two samples it finds what the samples miss, which no test can ask it not to.
+    "spacing\\.rs:154:27: replace && with \\|\\| in furthest$",
+    # The parameter step's (geometry.parameter). No range has exactly one end finite (`ParamRange`), so the stretch of
+    # one is never taken.
+    "uv_curve\\.rs:6[67]:\\d+: replace .* in stretch$",
+    # The offset step's (geometry.offset). A lane-at-a-time evaluation that also evaluates the lane past those it returns,
+    # at the padding (0, 0), changes only its speed: for a surface and for a curve.
+    "offset_surface\\.rs:\\d+:\\d+: replace < with <= in <impl Parametric for OffsetSurface<S>>::eval_second$",
+    "offset_curve\\.rs:\\d+:\\d+: replace < with <= in <impl ParametricCurve for OffsetCurve<C>>::eval_second$",
+    # A parameter moved exactly to the part's start is at it either way.
+    "trimmed_surface\\.rs:\\d+:\\d+: replace < with <= in into$",
+    # The swept step's. A box's size is a sum of magnitudes from nought: taking each away instead gives exactly its
+    # negative, and the margin it gives is taken as a magnitude.
+    "extrusion\\.rs:123:111: replace \\+ with - in <impl Parametric for Extrusion<C>>::bounds$",
+    # The splines step's. Ends in order that are equal.
+    "spline_curve\\.rs:\\d+:\\d+: replace < with <= in <impl ParametricCurve for SplineCurve>::bounds$",
 ]

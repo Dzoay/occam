@@ -1,6 +1,6 @@
 # Units
 
-[Architecture](../ARCHITECTURE.md) › Units · crate `occam-units` · sketch [`units.rs`](../sketch/src/units.rs)
+[Architecture](../ARCHITECTURE.md) › Units · crate `occam-units`
 
 Numbers become quantities once, at the API. Inside, everything is typed and lives in one frame.
 

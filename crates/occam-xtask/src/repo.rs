@@ -31,6 +31,12 @@ impl Repo {
         Self { root: manifest.ancestors().nth(2).map_or_else(|| PathBuf::from("."), Path::to_path_buf) }
     }
 
+    /// A repository at `root`, for a test that builds one in a scratch directory.
+    #[cfg(test)]
+    pub const fn rooted(root: PathBuf) -> Self {
+        Self { root }
+    }
+
     pub fn read(&self, rel: &str) -> Result<String, Finding> {
         fs::read_to_string(self.root.join(rel)).map_err(|e| io(rel, &e))
     }

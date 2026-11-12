@@ -31,6 +31,8 @@ mod curve;
 mod cylinder;
 mod domain;
 mod ellipse;
+#[cfg(test)]
+mod every_family;
 mod exact;
 mod extrusion;
 mod facet;

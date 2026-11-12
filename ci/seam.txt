@@ -1,0 +1,154 @@
+# `gates seam`: occam-geom's frozen seam (L21). Each `item` line is a public item of a seam module, its signature with
+# comments and whitespace normalised away; `gates seam` fails on any difference from the source. `just seam --update
+# docs/decisions/<decision>.md` re-records it, only under a decision newer than the last named here.
+decision	docs/decisions/2026-11-08-the-plan-and-its-first-answers.md
+module	crates/occam-geom/src/analytic.rs
+module	crates/occam-geom/src/batch.rs
+module	crates/occam-geom/src/bspline.rs
+module	crates/occam-geom/src/curve.rs
+module	crates/occam-geom/src/domain.rs
+module	crates/occam-geom/src/identity.rs
+module	crates/occam-geom/src/param_curve.rs
+module	crates/occam-geom/src/surface.rs
+item	crates/occam-geom/src/analytic.rs	enum Analytic	enum Analytic{Plane{origin:Point<World>,normal:Direction<World>},Cylinder{on_axis:Point<World>,axis:Direction<World>,radius:Length},Cone{apex:Point<World>,axis:Direction<World>,half_angle:Angle},Sphere{centre:Point<World>,radius:Length},Torus{centre:Point<World>,axis:Direction<World>,major:Length,minor:Length}}
+item	crates/occam-geom/src/batch.rs	enum Order	enum Order{Point,First,Second}
+item	crates/occam-geom/src/batch.rs	fn eval_in_lanes	fn eval_in_lanes<const W:usize,S:Parametric>(&S,&[UvPoint],Order,&mut Jets,Level)
+item	crates/occam-geom/src/batch.rs	impl Jets::first_undefined	fn first_undefined(&self)->Option<usize>
+item	crates/occam-geom/src/batch.rs	impl Scratch::reals	fn reals(&mut self,usize)->&mut[f64]
+item	crates/occam-geom/src/batch.rs	impl Scratch::reals_and_vectors	fn reals_and_vectors(&mut self,usize,usize)->(&mut[f64],&mut[Vec3])
+item	crates/occam-geom/src/batch.rs	impl<const W:usize,S:Parametric>LaneKernel for Batch<'_,W,S>	impl<const W:usize,S:Parametric>LaneKernel for Batch<'_,W,S>
+item	crates/occam-geom/src/batch.rs	struct Jet1	struct Jet1<R:Real=f64>{pub point:Point<World,R>,pub du:Tangent<World,R>,pub dv:Tangent<World,R>}
+item	crates/occam-geom/src/batch.rs	struct Jet2	struct Jet2<R:Real=f64>{pub first:Jet1<R>,pub duu:Tangent<World,R>,pub duv:Tangent<World,R>,pub dvv:Tangent<World,R>}
+item	crates/occam-geom/src/batch.rs	struct Jets	struct Jets{pub points:Vec<Point<World>>,pub du:Vec<Tangent<World>>,pub dv:Vec<Tangent<World>>,pub duu:Vec<Tangent<World>>,pub duv:Vec<Tangent<World>>,pub dvv:Vec<Tangent<World>>,pub defined:Vec<bool>}
+item	crates/occam-geom/src/batch.rs	struct Scratch	struct Scratch{reals:Vec<f64>,vectors:Vec<Vec3>}
+item	crates/occam-geom/src/bspline.rs	struct BsplineCurve	struct BsplineCurve{pub degree:u16,pub knots:Vec<f64>,pub poles:Vec<Point<World>>,pub weights:Option<Vec<f64>>}
+item	crates/occam-geom/src/bspline.rs	struct BsplineSurface	struct BsplineSurface{pub degree:(u16,u16),pub count:(u32,u32),pub knots_u:Vec<f64>,pub knots_v:Vec<f64>,pub poles:Vec<Point<World>>,pub weights:Option<Vec<f64>>}
+item	crates/occam-geom/src/curve.rs	Curve::bounds	fn bounds(&self,f64,f64)->Bounds
+item	crates/occam-geom/src/curve.rs	Curve::closest	fn closest(&self,Point<World>,Option<f64>,Tolerance,&mut Scratch)->Result<Closest<f64>,Report>
+item	crates/occam-geom/src/curve.rs	Curve::content	fn content(&self,&mut Content)
+item	crates/occam-geom/src/curve.rs	Curve::derivatives	fn derivatives(&self,f64,u8,&mut Vec<Tangent<World>>,&mut Scratch)->Result<(),Report>
+item	crates/occam-geom/src/curve.rs	Curve::family	fn family(&self)->FamilyName
+item	crates/occam-geom/src/curve.rs	Curve::first	fn first(&self,f64)->(Point<World>,Tangent<World>)
+item	crates/occam-geom/src/curve.rs	Curve::fit	fn fit(&self)->Option<Length>
+item	crates/occam-geom/src/curve.rs	Curve::invert	fn invert(&self,Point<World>,Option<f64>,Tolerance,&mut Scratch)->Result<f64,Report>
+item	crates/occam-geom/src/curve.rs	Curve::point	fn point(&self,f64)->Point<World>
+item	crates/occam-geom/src/curve.rs	Curve::range	fn range(&self)->ParamRange
+item	crates/occam-geom/src/curve.rs	Curve::second	fn second(&self,f64)->(Point<World>,Tangent<World>,Tangent<World>)
+item	crates/occam-geom/src/curve.rs	Curve::shape	fn shape(&self)->Shape
+item	crates/occam-geom/src/curve.rs	Curve::to_bspline	fn to_bspline(&self,f64,f64)->Option<BsplineCurve>
+item	crates/occam-geom/src/curve.rs	ParametricCurve::bounds	fn bounds(&self,f64,f64)->Bounds
+item	crates/occam-geom/src/curve.rs	ParametricCurve::closest	fn closest(&self,Point<World>,Option<f64>,Tolerance,&mut Scratch)->Result<Closest<f64>,Report>
+item	crates/occam-geom/src/curve.rs	ParametricCurve::content	fn content(&self,&mut Content)
+item	crates/occam-geom/src/curve.rs	ParametricCurve::derivatives	fn derivatives(&self,f64,u8,&mut Vec<Tangent<World>>,&mut Scratch)->Result<(),Report>
+item	crates/occam-geom/src/curve.rs	ParametricCurve::eval_first	fn eval_first<R:Real>(&self,R)->(Point<World,R>,Tangent<World,R>)
+item	crates/occam-geom/src/curve.rs	ParametricCurve::eval_point	fn eval_point<R:Real>(&self,R)->Point<World,R>
+item	crates/occam-geom/src/curve.rs	ParametricCurve::eval_second	fn eval_second<R:Real>(&self,R)->(Point<World,R>,Tangent<World,R>,Tangent<World,R>)
+item	crates/occam-geom/src/curve.rs	ParametricCurve::family	fn family(&self)->FamilyName
+item	crates/occam-geom/src/curve.rs	ParametricCurve::fit	fn fit(&self)->Option<Length>
+item	crates/occam-geom/src/curve.rs	ParametricCurve::invert	fn invert(&self,Point<World>,Option<f64>,Tolerance,&mut Scratch)->Result<f64,Report>
+item	crates/occam-geom/src/curve.rs	ParametricCurve::range	fn range(&self)->ParamRange
+item	crates/occam-geom/src/curve.rs	ParametricCurve::search	fn search(&self,Point<World>)->(f64,f64)
+item	crates/occam-geom/src/curve.rs	ParametricCurve::shape	fn shape(&self)->Shape
+item	crates/occam-geom/src/curve.rs	ParametricCurve::to_bspline	fn to_bspline(&self,f64,f64)->Option<BsplineCurve>
+item	crates/occam-geom/src/curve.rs	ParametricCurve::within	fn within(&self,Point<World>,Option<Direction<World>>,f64)->Option<(f64,f64)>
+item	crates/occam-geom/src/curve.rs	impl<C:ParametricCurve>Curve for C	impl<C:ParametricCurve>Curve for C
+item	crates/occam-geom/src/curve.rs	trait Curve	trait Curve:Send+Sync
+item	crates/occam-geom/src/curve.rs	trait ParametricCurve	trait ParametricCurve:Sized+Send+Sync+'static
+item	crates/occam-geom/src/domain.rs	enum Param	enum Param{U,V}
+item	crates/occam-geom/src/domain.rs	enum Wrap	enum Wrap{Open,Closed,Periodic}
+item	crates/occam-geom/src/domain.rs	impl Domain::check	fn check(self,UvPoint)->Result<(),Report>
+item	crates/occam-geom/src/domain.rs	impl Domain::contains	fn contains(self,UvPoint)->bool
+item	crates/occam-geom/src/domain.rs	impl ParamRange::check	fn check(self,f64)->Result<(),Report>
+item	crates/occam-geom/src/domain.rs	impl ParamRange::clamp	fn clamp(self,f64)->f64
+item	crates/occam-geom/src/domain.rs	impl ParamRange::contains	fn contains(self,f64)->bool
+item	crates/occam-geom/src/domain.rs	impl ParamRange::quantity	const fn quantity(self)->Quantity
+item	crates/occam-geom/src/domain.rs	impl ParamRange::trimmed	fn trimmed(self,f64,f64)->Result<Self,Report>
+item	crates/occam-geom/src/domain.rs	impl ParamRange::unbounded	const fn unbounded(ParamKind)->Self
+item	crates/occam-geom/src/domain.rs	impl UvBox::corners	const fn corners(self)->[UvPoint;4]
+item	crates/occam-geom/src/domain.rs	impl UvBox::new	const fn new(UvPoint,UvPoint)->Self
+item	crates/occam-geom/src/domain.rs	struct Degeneracy	struct Degeneracy{pub param:Param,pub at:f64,pub point:Point<World>,pub normal:Option<Direction<World>>}
+item	crates/occam-geom/src/domain.rs	struct Domain	struct Domain{pub u:ParamRange,pub v:ParamRange}
+item	crates/occam-geom/src/domain.rs	struct ParamRange	struct ParamRange{pub lo:f64,pub hi:f64,pub wrap:Wrap,pub kind:ParamKind}
+item	crates/occam-geom/src/domain.rs	struct UvBox	struct UvBox{pub lo:UvPoint,pub hi:UvPoint}
+item	crates/occam-geom/src/identity.rs	impl Content::push	fn push(&mut self,f64)
+item	crates/occam-geom/src/identity.rs	impl Content::push_family	fn push_family(&mut self,FamilyName)
+item	crates/occam-geom/src/identity.rs	impl Content::push_vec3	fn push_vec3(&mut self,Vec3)
+item	crates/occam-geom/src/identity.rs	impl Content::start	fn start(&mut self,FamilyName)
+item	crates/occam-geom/src/identity.rs	impl Content::words	fn words(&self)->&[u64]
+item	crates/occam-geom/src/identity.rs	struct BatchKey	struct BatchKey{pub family:FamilyName,pub degree:(u16,u16)}
+item	crates/occam-geom/src/identity.rs	struct Content	struct Content(Vec<u64>);
+item	crates/occam-geom/src/identity.rs	struct FamilyName	struct FamilyName(pub&'static str);
+item	crates/occam-geom/src/identity.rs	struct Shape	struct Shape{pub form:&'static str,pub values:Vec<NamedValue>}
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::bounds	fn bounds(&self,f64,f64)->UvBox
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::closest	fn closest(&self,UvPoint,Option<f64>,&mut Scratch)->Result<UvClosest,Report>
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::content	fn content(&self,&mut Content)
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::derivatives	fn derivatives(&self,f64,u8,&mut Vec<UvVector>,&mut Scratch)->Result<(),Report>
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::family	fn family(&self)->FamilyName
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::first	fn first(&self,f64)->(UvPoint,UvVector)
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::fit	fn fit(&self)->Option<f64>
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::invert	fn invert(&self,UvPoint,Option<f64>,&mut Scratch)->Result<f64,Report>
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::range	fn range(&self)->ParamRange
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::second	fn second(&self,f64)->(UvPoint,UvVector,UvVector)
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::shape	fn shape(&self)->Shape
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::to_bspline	fn to_bspline(&self,f64,f64)->Option<BsplineCurve>
+item	crates/occam-geom/src/param_curve.rs	ParamCurve::uv	fn uv(&self,f64)->UvPoint
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::bounds	fn bounds(&self,f64,f64)->UvBox
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::closest	fn closest(&self,UvPoint,Option<f64>,&mut Scratch)->Result<UvClosest,Report>
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::content	fn content(&self,&mut Content)
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::derivatives	fn derivatives(&self,f64,u8,&mut Vec<UvVector>,&mut Scratch)->Result<(),Report>
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::eval_first	fn eval_first<R:Real>(&self,R)->(UvPoint<R>,UvVector<R>)
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::eval_second	fn eval_second<R:Real>(&self,R)->(UvPoint<R>,UvVector<R>,UvVector<R>)
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::eval_uv	fn eval_uv<R:Real>(&self,R)->UvPoint<R>
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::family	fn family(&self)->FamilyName
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::fit	fn fit(&self)->Option<f64>
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::invert	fn invert(&self,UvPoint,Option<f64>,&mut Scratch)->Result<f64,Report>
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::range	fn range(&self)->ParamRange
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::shape	fn shape(&self)->Shape
+item	crates/occam-geom/src/param_curve.rs	ParametricParamCurve::to_bspline	fn to_bspline(&self,f64,f64)->Option<BsplineCurve>
+item	crates/occam-geom/src/param_curve.rs	impl<P:ParametricParamCurve>ParamCurve for P	impl<P:ParametricParamCurve>ParamCurve for P
+item	crates/occam-geom/src/param_curve.rs	struct UvClosest	struct UvClosest{pub at:f64,pub uv:UvPoint,pub distance:f64}
+item	crates/occam-geom/src/param_curve.rs	trait ParamCurve	trait ParamCurve:Send+Sync
+item	crates/occam-geom/src/param_curve.rs	trait ParametricParamCurve	trait ParametricParamCurve:Sized+Send+Sync+'static
+item	crates/occam-geom/src/surface.rs	Parametric::analytic	fn analytic(&self,Tolerance)->Option<Analytic>
+item	crates/occam-geom/src/surface.rs	Parametric::batch_key	fn batch_key(&self)->BatchKey
+item	crates/occam-geom/src/surface.rs	Parametric::bounds	fn bounds(&self,UvBox)->Bounds
+item	crates/occam-geom/src/surface.rs	Parametric::closest	fn closest(&self,Point<World>,Option<UvPoint>,Tolerance,&mut Scratch)->Result<Closest,Report>
+item	crates/occam-geom/src/surface.rs	Parametric::content	fn content(&self,&mut Content)
+item	crates/occam-geom/src/surface.rs	Parametric::degeneracies	fn degeneracies(&self)->&[Degeneracy]
+item	crates/occam-geom/src/surface.rs	Parametric::derivatives	fn derivatives(&self,UvPoint,u8,&mut Vec<Tangent<World>>,&mut Scratch)->Result<(),Report>
+item	crates/occam-geom/src/surface.rs	Parametric::domain	fn domain(&self)->Domain
+item	crates/occam-geom/src/surface.rs	Parametric::eval_batch	fn eval_batch(&self,&[UvPoint],Order,&mut Jets,&mut Scratch,Level)
+item	crates/occam-geom/src/surface.rs	Parametric::eval_first	fn eval_first<R:Real>(&self,UvPoint<R>)->Jet1<R>
+item	crates/occam-geom/src/surface.rs	Parametric::eval_point	fn eval_point<R:Real>(&self,UvPoint<R>)->Point<World,R>
+item	crates/occam-geom/src/surface.rs	Parametric::eval_second	fn eval_second<R:Real>(&self,UvPoint<R>)->Jet2<R>
+item	crates/occam-geom/src/surface.rs	Parametric::family	fn family(&self)->FamilyName
+item	crates/occam-geom/src/surface.rs	Parametric::highest_derivative	fn highest_derivative(&self)->Option<u8>
+item	crates/occam-geom/src/surface.rs	Parametric::invert	fn invert(&self,Point<World>,Option<UvPoint>,Tolerance,&mut Scratch)->Result<UvPoint,Report>
+item	crates/occam-geom/src/surface.rs	Parametric::shape	fn shape(&self)->Shape
+item	crates/occam-geom/src/surface.rs	Parametric::to_bspline	fn to_bspline(&self,UvBox)->Option<BsplineSurface>
+item	crates/occam-geom/src/surface.rs	Parametric::triangles	fn triangles(&self)->Option<&dyn TriangleView>
+item	crates/occam-geom/src/surface.rs	Surface::analytic	fn analytic(&self,Tolerance)->Option<Analytic>
+item	crates/occam-geom/src/surface.rs	Surface::batch_key	fn batch_key(&self)->BatchKey
+item	crates/occam-geom/src/surface.rs	Surface::bounds	fn bounds(&self,UvBox)->Bounds
+item	crates/occam-geom/src/surface.rs	Surface::closest	fn closest(&self,Point<World>,Option<UvPoint>,Tolerance,&mut Scratch)->Result<Closest,Report>
+item	crates/occam-geom/src/surface.rs	Surface::content	fn content(&self,&mut Content)
+item	crates/occam-geom/src/surface.rs	Surface::degeneracies	fn degeneracies(&self)->&[Degeneracy]
+item	crates/occam-geom/src/surface.rs	Surface::derivatives	fn derivatives(&self,UvPoint,u8,&mut Vec<Tangent<World>>,&mut Scratch)->Result<(),Report>
+item	crates/occam-geom/src/surface.rs	Surface::domain	fn domain(&self)->Domain
+item	crates/occam-geom/src/surface.rs	Surface::eval_batch	fn eval_batch(&self,&[UvPoint],Order,&mut Jets,&mut Scratch,Level)
+item	crates/occam-geom/src/surface.rs	Surface::family	fn family(&self)->FamilyName
+item	crates/occam-geom/src/surface.rs	Surface::first	fn first(&self,UvPoint)->Jet1
+item	crates/occam-geom/src/surface.rs	Surface::highest_derivative	fn highest_derivative(&self)->Option<u8>
+item	crates/occam-geom/src/surface.rs	Surface::invert	fn invert(&self,Point<World>,Option<UvPoint>,Tolerance,&mut Scratch)->Result<UvPoint,Report>
+item	crates/occam-geom/src/surface.rs	Surface::point	fn point(&self,UvPoint)->Point<World>
+item	crates/occam-geom/src/surface.rs	Surface::second	fn second(&self,UvPoint)->Jet2
+item	crates/occam-geom/src/surface.rs	Surface::shape	fn shape(&self)->Shape
+item	crates/occam-geom/src/surface.rs	Surface::to_bspline	fn to_bspline(&self,UvBox)->Option<BsplineSurface>
+item	crates/occam-geom/src/surface.rs	Surface::triangles	fn triangles(&self)->Option<&dyn TriangleView>
+item	crates/occam-geom/src/surface.rs	TriangleView::triangle	fn triangle(&self,usize)->Option<[Point<World>;3]>
+item	crates/occam-geom/src/surface.rs	TriangleView::triangle_count	fn triangle_count(&self)->usize
+item	crates/occam-geom/src/surface.rs	impl<S:Parametric>Surface for S	impl<S:Parametric>Surface for S
+item	crates/occam-geom/src/surface.rs	struct Closest	struct Closest<P=UvPoint>{pub at:P,pub point:Point<World>,pub distance:Length}
+item	crates/occam-geom/src/surface.rs	trait Parametric	trait Parametric:Sized+Send+Sync+'static
+item	crates/occam-geom/src/surface.rs	trait Surface	trait Surface:Send+Sync
+item	crates/occam-geom/src/surface.rs	trait TriangleView	trait TriangleView:Send+Sync

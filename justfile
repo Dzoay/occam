@@ -113,6 +113,12 @@ tools-test: corpus-test
 [group('gates')]
 gates: fmt-check clippy test-all wasm tools-test (gate "all" "--except" "mutants,perf")
 
+# occam-geom's frozen seam against ci/seam.txt; `just seam --update docs/decisions/<decision>.md`: re-record it under it
+[env("CARGO_TARGET_DIR", target)]
+[group('gates')]
+seam *args:
+    cargo xtask gates seam "$@"
+
 # Instruction counts per operation class, and browser timing; `just perf --update`: rewrite the record
 [env("CARGO_TARGET_DIR", target)]
 [group('gates')]
