@@ -8,22 +8,23 @@
 //! A description gives the entity's form: its geometry's for a face or an edge (`plane`, `line`), what a body is
 //! (`solid`, `sheet`, `wire`), whether a loop is a face's outer one or a hole, and the kind otherwise. Its values are
 //! its geometry's parameters, where it is (a vertex's point, an edge's start and finish), the corners `low` and `high`
-//! of a box that holds it, rounded outward, and how many of what it is made of. Its origin is the step that made it,
-//! for the bodies, faces and edges that keep one. Its neighbours are what an agent walks by (PARITY 1.1): a body's
-//! shells and wires; a shell's body and faces; a face's shell, surface, loops and edges; a loop's face and edges; a
-//! wire's body and edges; a use's loop or wire, edge and curve in the face's parameters; an edge's faces, wires,
-//! vertices and curve; a vertex's edges. Geometry names none: what lies on it names it.
+//! of a box that holds it, rounded outward and as tight as `measure` finds it, and how many of what it is made of. Its
+//! origin is the step that made it, for the bodies, faces and edges that keep one. Its neighbours are what an agent
+//! walks by (PARITY 1.1): a body's shells and wires; a shell's body and faces; a face's shell, surface, loops and
+//! edges; a loop's face and edges; a wire's body and edges; a use's loop or wire, edge and curve in the face's
+//! parameters; an edge's faces, wires, vertices and curve; a vertex's edges. Geometry names none: what lies on it
+//! names it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use occam_geom::{Curve, Shape, Surface, UvBox};
-use occam_ops::Operation;
+use occam_geom::{Curve, Shape, Surface};
+use occam_ops::{Operation, face_bounds};
 use occam_report::{Description, EntityKind, EntityRef, NamedValue, Origin, Report};
 use occam_topo::{
     Body, BodyKind, CurveGeom, Edge, EdgeUse, Edit, Face, Id, Kind, Loop, ParamCurveGeom, Provenance, Shell, Snapshot,
     SurfaceGeom, UseOwner, Vertex, View, Wire,
 };
-use occam_units::{Bounds, Point, UvPoint, World};
+use occam_units::{Bounds, Point, Tolerance, World};
 
 use crate::run::{Done, Failed, Refused};
 
@@ -42,6 +43,14 @@ impl<'a> Source<'a> {
         match self {
             Self::Model(model) => model.view(id),
             Self::Edit(edit) => edit.view(id),
+        }
+    }
+
+    /// The tolerance its model is built to.
+    const fn tolerance(self) -> Tolerance {
+        match self {
+            Self::Model(model) => model.tolerance(),
+            Self::Edit(edit) => edit.tolerance(),
         }
     }
 
@@ -221,23 +230,6 @@ fn union(boxes: impl IntoIterator<Item = Option<Bounds>>) -> Option<Bounds> {
     all
 }
 
-/// The smaller of two numbers, the first if they are equal, so the sign of a zero is fixed (not `f64::min`).
-fn smaller(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
-}
-
-/// The larger of two numbers, the first if they are equal.
-fn larger(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
-}
-
-/// The rectangle holding both.
-fn uv_union(a: UvBox, b: UvBox) -> UvBox {
-    let lo = UvPoint::new(smaller(a.lo.u(), b.lo.u()), smaller(a.lo.v(), b.lo.v()));
-    let hi = UvPoint::new(larger(a.hi.u(), b.hi.u()), larger(a.hi.v(), b.hi.v()));
-    UvBox::new(lo, hi)
-}
-
 /// A box holding the edge `id`: its curve's over its range.
 fn edge_box(source: Source<'_>, id: Id<Edge>) -> Option<Bounds> {
     let edge = source.of(id)?;
@@ -245,19 +237,11 @@ fn edge_box(source: Source<'_>, id: Id<Edge>) -> Option<Bounds> {
     Some(edge.curve()?.bounds(lo, hi))
 }
 
-/// A box holding the face `id`: its surface's over the rectangle that holds its outer loop in the face's parameters,
-/// read from the curve in the parameters of each of the loop's uses. A face lies inside its outer loop, so the box holds
-/// it however its surface bulges between its edges. `None` where a use has no such curve.
+/// The face `id`'s own box, as `measure` finds it: its edges' boxes and where its surface reaches further inside it,
+/// not its surface's box over its parameters, which a face that does not fill them, or a surface whose box is not its
+/// patch's, leaves loose. `None` where a use the face needs has no curve in its parameters.
 fn face_box(source: Source<'_>, id: Id<Face>) -> Option<Bounds> {
-    let face = source.of(id)?;
-    let mut patch: Option<UvBox> = None;
-    for u in source.of(face.outer())?.uses() {
-        let u = source.of(u)?;
-        let (lo, hi) = source.of(u.edge())?.range();
-        let piece = u.pcurve()?.bounds(lo, hi);
-        patch = Some(patch.map_or(piece, |patch| uv_union(patch, piece)));
-    }
-    Some(face.surface()?.bounds(patch?))
+    face_bounds(source.of(id)?, source.tolerance()).ok().flatten()
 }
 
 /// The edges `uses` use, in order.

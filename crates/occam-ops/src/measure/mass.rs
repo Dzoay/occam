@@ -16,7 +16,7 @@ use core::cell::Cell;
 
 use occam_geom::{ParamCurve, Surface};
 use occam_report::{Code, EntityRef, Fault, Report};
-use occam_topo::{Face, Id, Snapshot};
+use occam_topo::{EdgeUse, Face, Id, Loop, Snapshot, View};
 use occam_units::{UvPoint, Vec3};
 
 use super::quadrature::{Budget, Integral, integral};
@@ -91,12 +91,12 @@ fn corrupt(entity: EntityRef) -> Report {
 }
 
 /// The pieces of the loop whose uses are `uses`, each its curve in `face`'s parameters.
-fn pieces<'a>(model: &'a Snapshot, face: Id<Face>, uses: &[Id<occam_topo::EdgeUse>]) -> Result<Vec<Piece<'a>>, Report> {
+fn pieces<'a>(face: View<'a, Face>, uses: &[Id<EdgeUse>]) -> Result<Vec<Piece<'a>>, Report> {
     let mut curves = Vec::new();
     for &id in uses {
-        let view = model.view(id).ok_or_else(|| corrupt(id.entity()))?;
-        let edge = model.view(view.edge()).ok_or_else(|| corrupt(view.edge().entity()))?;
-        let curve = view.pcurve().ok_or_else(|| no_curve(face, view.edge().entity()))?;
+        let view = face.of(id).ok_or_else(|| corrupt(id.entity()))?;
+        let edge = face.of(view.edge()).ok_or_else(|| corrupt(view.edge().entity()))?;
+        let curve = view.pcurve().ok_or_else(|| no_curve(face.id(), view.edge().entity()))?;
         let (lo, hi) = edge.range();
         curves.push(if view.reversed() { Piece::Curve(curve, hi, lo) } else { Piece::Curve(curve, lo, hi) });
     }
@@ -124,12 +124,20 @@ fn joined<'a>(curves: &[Piece<'a>]) -> Vec<Piece<'a>> {
 ///
 /// `measure.no-parameter-curve` where one of its uses has no curve in its parameters.
 pub(super) fn patch(model: &Snapshot, face: Id<Face>) -> Result<Patch<'_>, Report> {
-    let view = model.view(face).ok_or_else(|| corrupt(face.entity()))?;
+    of(model.view(face).ok_or_else(|| corrupt(face.entity()))?)
+}
+
+/// The face `view` to integrate over, read from the model or edit it is in.
+///
+/// # Errors
+///
+/// `measure.no-parameter-curve` where one of its uses has no curve in its parameters.
+pub(super) fn of(view: View<'_, Face>) -> Result<Patch<'_>, Report> {
     let surface = view.surface().ok_or_else(|| corrupt(view.surface_id().entity()))?;
     let mut loops = Vec::new();
     for id in view.loops() {
-        let uses = model.view(id).map(occam_topo::View::<occam_topo::Loop>::uses).unwrap_or_default();
-        loops.push(pieces(model, face, &uses)?);
+        let uses = view.of(id).map(View::<Loop>::uses).unwrap_or_default();
+        loops.push(pieces(view, &uses)?);
     }
     Ok(Patch { surface, reversed: view.reversed(), loops })
 }

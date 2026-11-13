@@ -20,7 +20,7 @@ pub use args::Args;
 pub use construct::given::{FaceArgs, Piece, WireArgs, WireRef};
 pub use execute::execute;
 pub use guide::guide;
-pub use measure::{MeasureArgs, Measured, Measurement, RELATIVE, measure};
+pub use measure::{MeasureArgs, Measured, Measurement, RELATIVE, face_bounds, measure};
 pub use operand::{Labels, Operand};
 pub use operation::{Operation, listing};
 pub use primitive::{Pose, PrimitiveArgs, Shape};

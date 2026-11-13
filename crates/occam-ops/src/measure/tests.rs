@@ -561,3 +561,28 @@ fn the_revolved_solids_have_the_volume_area_and_centre_of_mass_of_their_closed_f
     assert!(as_closed(&torus, &want), "{torus:?}");
     assert!(boxed_as(&torus, (Vec3::new(-12.0, -12.0, -2.0), Vec3::new(12.0, 12.0, 2.0))), "{torus:?}");
 }
+
+#[test]
+fn each_half_of_a_sphere_has_its_own_box_not_the_whole_spheres() {
+    // A sphere of radius 5 is two faces split along y. Each reaches all of ±5 in x and z, but only its own side in y:
+    // the turning point at the other side's pole is outside it, so its box stops at the seam.
+    let (model, _) =
+        measured(&json!([{"op": "sphere", "label": "ball", "radius": 5}, {"op": "measure", "target": "ball"}]))
+            .unwrap();
+    let mut sides = Vec::new();
+    for face in model.ids::<Face>() {
+        let text = json!({"schema": 1, "units": {"length": "mm", "angle": "rad"},
+                          "steps": [{"op": "measure", "target": face.entity().text(), "what": ["bounds"]}]});
+        let step = &Request::parse(&text.to_string()).unwrap().steps[0];
+        let m = measure(&model, step, &Labels::default()).unwrap();
+        let (low, high) = (point(&m, "bounds-low"), point(&m, "bounds-high"));
+        let at_seam = if low.y.abs() < 1e-9 { 0.0 } else { -5.0 };
+        assert!(
+            boxed_as(&m, (Vec3::new(-5.0, at_seam, -5.0), Vec3::new(5.0, at_seam + 5.0, 5.0))),
+            "{low:?}..{high:?}"
+        );
+        sides.push(at_seam);
+    }
+    sides.sort_by(f64::total_cmp);
+    assert_eq!(sides, [-5.0, 0.0], "one face each side of the seam");
+}

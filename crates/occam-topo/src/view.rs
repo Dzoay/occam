@@ -7,7 +7,7 @@
 use std::collections::BTreeSet;
 
 use occam_geom::{Curve, ParamCurve, Surface};
-use occam_units::{Length, Point, UvPoint, World};
+use occam_units::{Length, Point, Tolerance, UvPoint, World};
 
 use crate::edit::Edit;
 use crate::kind::sealed::Sealed;
@@ -33,11 +33,18 @@ impl<K: Kind> Clone for View<'_, K> {
 
 impl<K: Kind> Copy for View<'_, K> {}
 
-impl<K: Kind> View<'_, K> {
+impl<'a, K: Kind> View<'a, K> {
     /// The entity's id.
     #[must_use]
     pub const fn id(self) -> Id<K> {
         self.id
+    }
+
+    /// The entity `id` names in the same model or edit, or `None` if it is not live there: how a reader walks from
+    /// one entity to the next with nothing else in hand.
+    #[must_use]
+    pub fn of<J: Kind>(self, id: Id<J>) -> Option<View<'a, J>> {
+        view(self.model, id)
     }
 }
 
@@ -50,6 +57,12 @@ impl Snapshot {
 }
 
 impl Edit {
+    /// The tolerance the model it edits is built to.
+    #[must_use]
+    pub const fn tolerance(&self) -> Tolerance {
+        self.next.tolerance
+    }
+
     /// The entity `id` names in this edit as it stands, written but not yet checked, or `None` if it is not live here.
     /// Reading is all it allows, and every walk from it is bounded, as on any model, so an edit `commit` refused can
     /// still say what its reports name.

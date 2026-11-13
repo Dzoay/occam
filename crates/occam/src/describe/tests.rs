@@ -343,8 +343,6 @@ fn a_box_round_nothing_and_a_union_of_none_are_no_box() {
     let one = Bounds::of([Point::<World>::new(mm(1.0), mm(0.0), mm(0.0))]);
     assert_eq!(union([one, None]), None);
     assert_eq!(union([one, one]), one);
-    assert_eq!((smaller(-0.0, 0.0).to_bits(), larger(0.0, -0.0).to_bits()), ((-0.0f64).to_bits(), 0.0f64.to_bits()));
-    assert_eq!((smaller(2.0, 1.0), larger(1.0, 2.0)), (1.0, 2.0));
 }
 
 #[test]
@@ -385,4 +383,67 @@ fn a_snapshot_is_its_own_source_and_nothing_else_is_read() {
     let from_edit = said(Source::Edit(&edit), face).map(|s| s.form);
     assert_eq!(from_edit, Some("plane".to_string()));
     assert!(said(Source::Model(&Snapshot::empty(model.tolerance())), face).is_none());
+}
+
+/// Solids every sweep and a turned copy make, in millimetres: c8's hexagon plate, c2's angle bar, c3's stepped shaft, a
+/// pin and its copy lying along x, the plate's copy tilted out of every axis, and a sphere and a torus turned.
+fn swept_and_turned() -> Value {
+    let (r, s) = (30.0, 25.980_762_114);
+    json!([
+        {"op": "wire", "label": "outline", "closed": true,
+         "points": [[r, 0, 0], [15, s, 0], [-15, s, 0], [-r, 0, 0], [-15, -s, 0], [15, -s, 0]]},
+        {"op": "face", "label": "blank", "outer": "outline"},
+        {"op": "extrude", "label": "plate", "face": "blank", "vector": [0, 0, 5]},
+        {"op": "face", "label": "section",
+         "outer": {"points": [[0, 0, 0], [50, 0, 0], [50, 0, 5], [5, 0, 5], [5, 0, 40], [0, 0, 40]], "closed": true}},
+        {"op": "extrude", "face": "section", "vector": [0, 200, 0]},
+        {"op": "face", "label": "profile",
+         "outer": {"points": [[0, 0, 0], [20, 0, 0], [20, 0, 30], [12, 0, 30], [12, 0, 80], [0, 0, 80]], "closed": true}},
+        {"op": "revolve", "profile": "profile", "origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 360},
+        {"op": "cylinder", "label": "pin", "radius": 4, "height": 30},
+        {"op": "copy", "target": "pin", "frame": {"origin": [100, 0, 0], "z": [1, 0, 0], "x": [0, 0, -1]}},
+        {"op": "copy", "target": "plate", "frame": {"origin": [0, 300, 0], "z": [1, 2, 2], "x": [2, 1, -2]}},
+        {"op": "sphere", "label": "ball", "radius": 10},
+        {"op": "copy", "target": "ball", "frame": {"origin": [0, 0, 400], "z": [0, 1, 1], "x": [1, 0, 0]}},
+        {"op": "torus", "label": "ring", "major": 30, "minor": 8},
+        {"op": "copy", "target": "ring", "frame": {"origin": [0, 0, 500], "z": [1, 1, 1], "x": [1, -1, 0]}}
+    ])
+}
+
+/// The corners of `values`' box under `low` and `high`.
+fn box_of(values: &[NamedValue], low: &str, high: &str) -> ([f64; 3], [f64; 3]) {
+    let point = |name: &str| match values.iter().find(|v| v.name == name).map(|v| &v.value) {
+        Some(Held::Point(p)) => *p,
+        other => panic!("{name}: {other:?} in {values:?}"),
+    };
+    (point(low), point(high))
+}
+
+#[test]
+fn a_faces_box_and_a_bodys_are_as_tight_as_measure_finds_them_after_any_sweep_or_turned_copy() {
+    let ran = run(None, &request("mm", &swept_and_turned()));
+    assert_eq!(ran.failed, None);
+    let model = ran.model.as_ref().unwrap();
+    let band = model.tolerance().length().millimetres();
+    let mut ids: Vec<EntityRef> = model.ids::<Face>().iter().map(|f| f.entity()).collect();
+    ids.extend(model.ids::<Body>().iter().map(|b| b.entity()));
+    let mut loose = Vec::new();
+    for (id, said) in ids.iter().zip(describe(model, &ids)) {
+        let text = json!({"schema": 1, "units": {"length": "mm", "angle": "deg"},
+                          "steps": [{"op": "measure", "target": id.text(), "what": ["bounds"]}]});
+        let asked = Request::parse(&text.to_string()).unwrap();
+        let tight = occam_ops::measure(model, &asked.steps[0], &occam_ops::Labels::default()).unwrap();
+        let (low, high) = box_of(&said.values, "low", "high");
+        let (true_low, true_high) = box_of(&tight.values, "bounds-low", "bounds-high");
+        let gaps: Vec<(f64, f64)> = (0..3).map(|k| (true_low[k] - low[k], high[k] - true_high[k])).collect();
+        assert!(
+            gaps.iter().all(|&(under, over)| under >= -1e-9 && over >= -1e-9),
+            "{} holds {true_low:?}..{true_high:?}: {low:?}..{high:?}",
+            id.text()
+        );
+        if gaps.iter().any(|&(under, over)| under > band || over > band) {
+            loose.push(format!("{} is {true_low:?}..{true_high:?}, described {low:?}..{high:?}", id.text()));
+        }
+    }
+    assert!(loose.is_empty(), "{} of {} boxes are looser than the band:\n{}", loose.len(), ids.len(), loose.join("\n"));
 }

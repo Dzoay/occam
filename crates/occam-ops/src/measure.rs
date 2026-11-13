@@ -20,8 +20,8 @@ mod quadrature;
 mod tests;
 
 use occam_report::{Code, EntityKind, EntityRef, Fault, NamedValue, Quantity, Reason, Report};
-use occam_topo::{Body, BodyKind, Edge, Face, Id, Shell, Snapshot, Vertex, Wire};
-use occam_units::{Bounds, Point, Vec3, World};
+use occam_topo::{Body, BodyKind, Edge, Face, Id, Shell, Snapshot, Vertex, View, Wire};
+use occam_units::{Bounds, Point, Tolerance, Vec3, World};
 use serde_json::{Map, Value};
 
 use crate::args::Args;
@@ -223,7 +223,12 @@ fn not_converged(reached: Sums, asked: Sums) -> Report {
 
 /// The box holding `edges` of `model`, from their curves' own boxes over their ranges, and `points`.
 fn rough(model: &Snapshot, edges: &[Id<Edge>], points: &[Vec3]) -> Option<Bounds> {
-    let boxes = edges.iter().filter_map(|&e| model.view(e)).filter_map(|e| {
+    spanned(edges.iter().filter_map(|&e| model.view(e)), points)
+}
+
+/// The box holding `edges`, from their curves' own boxes over their ranges, and `points`.
+fn spanned<'a>(edges: impl Iterator<Item = View<'a, Edge>>, points: &[Vec3]) -> Option<Bounds> {
+    let boxes = edges.filter_map(|e| {
         let (lo, hi) = e.range();
         e.curve().map(|c| c.bounds(lo, hi))
     });
@@ -342,19 +347,41 @@ fn bounds(
     let tolerance = model.tolerance();
     let mut points = points;
     let mut boxes = Vec::new();
-    for &face in faces {
-        // A plane, a cylinder and a cone reach no further inside than their edges, so their faces need no loops.
-        let surface = model.view(face).and_then(occam_topo::View::<Face>::surface);
-        match surface.map(|s| extent::turning(s, tolerance)) {
-            None => {}
-            Some(Some(found)) if found.is_empty() => {}
-            Some(turning) => match extent::interior(&mass::patch(model, face)?, turning, tolerance) {
-                Inside::Points(found) => points.extend(found),
-                Inside::Boxed(b) => boxes.push(b),
-            },
+    for view in faces.iter().filter_map(|&face| model.view(face)) {
+        match inside(view, tolerance)? {
+            Inside::Points(found) => points.extend(found),
+            Inside::Boxed(b) => boxes.push(b),
         }
     }
     Ok(corners(boxes.into_iter().fold(rough(model, edges, &points), |all, b| Some(all.map_or(b, |a| a.union(&b))))))
+}
+
+/// What inside the face `face` reaches further than its edges, to `tolerance`. A plane, a cylinder and a cone reach no
+/// further inside than their edges, so their faces need no loops.
+fn inside(face: View<'_, Face>, tolerance: Tolerance) -> Result<Inside, Report> {
+    let Some(surface) = face.surface() else { return Ok(Inside::Points(Vec::new())) };
+    match extent::turning(surface, tolerance) {
+        Some(found) if found.is_empty() => Ok(Inside::Points(found)),
+        turning => Ok(extent::interior(&mass::of(face)?, turning, tolerance)),
+    }
+}
+
+/// The tight box of the face `face`, to `tolerance`, as [`Measurement::Bounds`] finds a body's: its edges' own boxes,
+/// and where its surface reaches further inside it. Read from the model or edit the view is in, so a refused step's
+/// faces have one too. `None` for a face with no edge.
+///
+/// # Errors
+///
+/// `measure.no-parameter-curve` for a face on a surface that may reach further inside than its edges, a use of whose
+/// loops has no curve in its parameters.
+pub fn face_bounds(face: View<'_, Face>, tolerance: Tolerance) -> Result<Option<Bounds>, Report> {
+    let edges = face.edges();
+    let (points, boxed) = match inside(face, tolerance)? {
+        Inside::Points(found) => (found, None),
+        Inside::Boxed(b) => (Vec::new(), Some(b)),
+    };
+    let rough = spanned(edges.iter().filter_map(|&e| face.of(e)), &points);
+    Ok(boxed.into_iter().fold(rough, |all, b| Some(all.map_or(b, |a| a.union(&b)))))
 }
 
 /// The low and high corners of `bounds`, or of the origin where there are none.
