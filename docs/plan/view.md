@@ -31,7 +31,9 @@ x86-64 and on wasm32 baseline and simd128. In headless Chromium:
 
 **Exit (goal):** [P9's](../evidence/2026-11-09-p9.md) quality and scaling tables on the real mesher; the mesh pool timed
 in the browser beside [P10's](../evidence/2026-11-09-p10.md); and write-through and picking timed on real GPUs in
-Chromium and Firefox, against the bar that [O30](../PLAN.md#7-decisions-the-user-still-owns) sets.
+Chromium and Firefox, as [goals](../decisions/2026-11-13-gpu-figures-are-goals.md): 60 Hz with a whole face re-evaluated
+every frame at 1,000,000 and 4,000,000 points on a discrete GPU and 1,000,000 on an integrated one, under 1 ms a frame
+on the main thread, and a pick within 16.7 ms on P9's 10,001-face model, a target no measurement grounds.
 
 **PR grouping:** every step shares one PR, with a commit each, as for the milestones before it.
 
@@ -41,9 +43,11 @@ does. GPU results stay display-only ([decision](../decisions/2026-11-09-gpu-draw
 never in a digest, a mesh, a pick, the watertight check, or a test that holds them to recorded bits. Write-through's
 crack test compares two faces' GPU positions with each other, in one frame. No Rust dependency is expected beyond the
 allowed [`wasm-bindgen`](../decisions/2026-11-09-wasm-bindgen.md); `js-sys` or `web-sys`, if needed, is the user's call.
-`web/` expects no runtime dependency (O8), and its tests use the Playwright `gates perf` already runs. Each face is
-meshed once: [view-dependent detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes after the
-release. The sketch's `mesh.rs`, then `compose.rs`'s `Session`, are deleted as they become real.
+`web/` is built with [Preact and signals](../decisions/2026-11-13-preact-with-signals.md), which the full web
+application grows from. `view.renderer` adds them and esbuild at pinned versions, asking for each again under the
+dependency rule. `web/`'s tests use the Playwright `gates perf` already runs. Each face is meshed once: [view-dependent
+detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes after the release. The sketch's `mesh.rs`,
+then `compose.rs`'s `Session`, are deleted as they become real.
 
 ## Steps
 
@@ -107,8 +111,9 @@ native mesher's hash; a failing face is named and the rest arrive; the main thre
 
 `web/`, the viewer: a page that draws the per-face buffers with WebGPU. Its buffers can be read by both a storage
 binding and a vertex fetch, coordinates are `f32` offsets from an `f64` origin the page keeps, uploads are bounded per
-frame, and the frame loop keeps submitting during interaction. It orbits, pans and zooms. A browser without WebGPU gets
-a named report with its remedy. CI has no GPU, so its tests run on headless Chromium's software adapter and assert
+frame, and the frame loop keeps submitting during interaction. It orbits, pans and zooms. Preact draws the controls and
+signals carry their state; the frame loop and the GPU work stay outside the component tree. A browser without WebGPU
+gets a named report with its remedy. CI has no GPU, so its tests run on headless Chromium's software adapter and assert
 buffers, not pixels.
 
 *Failing test first:* the page draws a cube, and the buffers it uploaded match the mesh, offsets within `f32` of the
@@ -140,15 +145,17 @@ evaluates each shared edge once. A WGSL shader then evaluates each face at its C
 face's new parameter box if that moved, and reads its boundary from the edges. Trims, triangles and the index buffer
 therefore stay as they are. When the edit stops, the touched faces are meshed again and their CPU blocks replace the
 GPU's. Uploads keep P12's bounds: vertex data in calls of at most 2 MiB, indices in 16 MiB, and a wait for the GPU after
-each 64 MiB. What produces each frame's surfaces is [O29](../PLAN.md#7-decisions-the-user-still-owns), needed before
-this step.
+each 64 MiB. Each frame's surfaces come from [re-running the edit's
+request](../decisions/2026-11-13-continuous-edits-rerun-the-request.md) in the editing worker, from the snapshot before
+the edit, committed with its checks and meshed only when the edit stops.
 
-*Failing test first:* on the software adapter, reading back for the test only, a face is streamed for 60 frames. Its
-index buffer and per-face ranges stay the same byte for byte. Its positions are within 1e-6 of the part's size of the
-`f64` surface at the same parameters, at offsets of up to 10⁷ part sizes from the origin (P12 measured 2.1e-7 to
-2.8e-7). The two faces at a shared edge hold the same bits there every frame (P12: 0 of 501 differ). A 1,000,000-point
-face's first fill goes in bounded pieces, and the page submits every frame during the edit. When the edit stops, the
-drawn blocks equal the CPU mesh's, and the mesh hash is the same as with write-through off.
+*Failing test first:* a request whose number changes every frame is re-run from the snapshot before the edit, and every
+frame's commit passes its checks. On the software adapter, reading back for the test only, a face is streamed for 60
+frames. Its index buffer and per-face ranges stay the same byte for byte. Its positions are within 1e-6 of the part's
+size of the `f64` surface at the same parameters, at offsets of up to 10⁷ part sizes from the origin (P12 measured
+2.1e-7 to 2.8e-7). The two faces at a shared edge hold the same bits there every frame (P12: 0 of 501 differ). A
+1,000,000-point face's first fill goes in bounded pieces, and the page submits every frame during the edit. When the
+edit stops, the drawn blocks equal the CPU mesh's, and the mesh hash is the same as with write-through off.
 
 ### `view.timing`
 
@@ -163,14 +170,18 @@ in Chromium and Firefox. Chromium runs headed if headless reaches only a softwar
 with P12's measures and its 60 Hz rule (median frame at most 17.5 ms, 95th percentile at most 25 ms), with a whole face
 re-evaluated every frame at 1,000,000 and 4,000,000 points. These runs add what P12 left out: trims, per-face dispatch
 on a many-face model, rational surfaces, and the editing worker's time per frame. A pick is timed on P9's 10,001-face
-model. [O30](../PLAN.md#7-decisions-the-user-still-owns) says whether these figures are a gate or a goal.
+model. These figures are [goals](../decisions/2026-11-13-gpu-figures-are-goals.md), recorded in the PR; the pick's 16.7
+ms is a target no measurement grounds.
 
 *Failing test first:* each new class is `perf.unrecorded` until the record takes it; the mesher's lane kernel fails
 the vectorisation check until it beats width 1; the GPU timing script refuses a run on a software adapter.
 
 ## Open questions for the user
 
-Three decisions in [the plan's §7](../PLAN.md#7-decisions-the-user-still-owns) are due here, each recommended there:
-O8, a framework for the page, needed before `view.renderer`; O29, what produces each frame's surfaces in a continuous
-edit, needed before `view.write-through`; and O30, whether the figures on real GPUs are a gate or a goal, and a pick's
-target, needed before `view.timing`. O19, O20 and O28 are answered in the decisions linked at the top.
+None is open. The six of [the plan's §7](../PLAN.md#7-decisions-the-user-still-owns) due here are answered:
+[O8](../decisions/2026-11-13-preact-with-signals.md), [O19](../decisions/2026-11-13-webgpu-on-chromium-and-firefox.md),
+[O20](../decisions/2026-11-13-write-through-in-the-first-release.md),
+[O28](../decisions/2026-11-13-picking-in-the-first-release.md),
+[O29](../decisions/2026-11-13-continuous-edits-rerun-the-request.md) and
+[O30](../decisions/2026-11-13-gpu-figures-are-goals.md). `view.renderer`'s PR still asks for its npm packages and
+esbuild under the dependency rule.
