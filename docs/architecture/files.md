@@ -27,7 +27,9 @@ flowchart LR
   encoding, telling them apart by the twin's magic.
 - **The binary twin** holds the same records, under the same version, in `postcard`'s encoding, links as their kind,
   slot and generation and numbers as their eight bytes. It is refused for whatever the JSON would be refused for, with
-  the same codes ([the decision](../decisions/2026-11-12-binary-twin.md)).
+  the same codes ([the decision](../decisions/2026-11-12-binary-twin.md)). It ends with a CRC-32 of the rest, checked
+  before the records are read, and its reader is tested against files made to break it
+  ([the checksum decision](../decisions/2026-11-13-binary-twin-checksum.md)).
 - **STEP export** writes solids with their names and colours. Import comes in the `exchange` milestone and keeps them
   (PARITY 2.9).
 - **Load time is a risk** ([risks](risks.md)). Parsing 10⁵ faces from JSON took 1.445 s, over the risk's second, so

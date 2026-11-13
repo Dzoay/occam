@@ -7,8 +7,9 @@
 //!
 //! The model is occam-topo's plate, `2k² + 4k` faces for `k` squares across (223 gives 100,350). Parsing is timed for
 //! the readable file as saved, which is compact, for the same JSON pretty-printed, as it was first written, and for the
-//! binary twin. Checking is every edge measured and the whole model checked, on one thread and on every thread the
-//! machine has. Times are medians.
+//! binary twin, whose parse includes its checksum; the checksum alone is timed as the twin with its last byte changed,
+//! which is refused once the checksum is found wrong. Checking is every edge measured and the whole model checked, on
+//! one thread and on every thread the machine has. Times are medians.
 #![allow(clippy::print_stdout, clippy::print_stderr, reason = "a command-line tool prints")]
 #![allow(clippy::arithmetic_side_effects, reason = "a timing tool's own counting, far from any bound")]
 
@@ -34,6 +35,17 @@ fn parsing(bytes: &[u8], repeats: usize) -> Option<Duration> {
     for _ in 0..repeats {
         let start = Instant::now();
         occam_io::parse(bytes).ok()?;
+        times.push(start.elapsed());
+    }
+    Some(median(times))
+}
+
+/// Parses `bytes`, which must be refused, `repeats` times: the median.
+fn refusing(bytes: &[u8], repeats: usize) -> Option<Duration> {
+    let mut times = Vec::new();
+    for _ in 0..repeats {
+        let start = Instant::now();
+        occam_io::parse(bytes).err()?;
         times.push(start.elapsed());
     }
     Some(median(times))
@@ -98,6 +110,15 @@ fn main() -> ExitCode {
         };
         println!("{name}: {:.1} MB, parse {:.3} s", megabytes(file), time.as_secs_f64());
     }
+    let mut damaged = twin.clone();
+    if let Some(last) = damaged.last_mut() {
+        *last ^= 1;
+    }
+    let Some(time) = refusing(&damaged, repeats) else {
+        eprintln!("the twin with its last byte changed was not refused");
+        return ExitCode::FAILURE;
+    };
+    println!("binary, checksum alone: {:.3} s", time.as_secs_f64());
     for (name, exec) in [("1 thread", &serial), ("all threads", &pool)] {
         let Some(time) = checking(&bytes, exec, repeats) else {
             eprintln!("the plate did not load");

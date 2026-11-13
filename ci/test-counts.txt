@@ -4,7 +4,7 @@ occam 31
 occam-cli::bin/occam 7
 occam-cli::cli 4
 occam-geom 362
-occam-io 13
+occam-io 27
 occam-math 117
 occam-ops 117
 occam-report 50

@@ -1,8 +1,11 @@
 //! Source: original
 //! The native format's tests: every clean model, and a model holding every family the format writes, comes back with
 //! its digest; a file with one record wrong is refused naming it; a file of another version is refused with its version;
-//! and a family the format does not write yet is refused at save, named. The binary twin holds the same records, and
-//! is refused for the same faults with the same reports.
+//! and a family the format does not write yet is refused at save, named. The binary twin holds the same records, ends
+//! with their checksum, and is refused for the same faults with the same reports; [`hostile`] holds it against files
+//! made to break it.
+
+mod hostile;
 
 use std::sync::Arc;
 
@@ -232,6 +235,8 @@ fn the_binary_twin_holds_what_the_readable_file_holds_and_both_come_back_alike()
             "{name}: magic, version 1"
         );
         assert!(twin.len() < json.len(), "{name}: {} bytes, against {}", twin.len(), json.len());
+        let (summed, sum) = twin.split_last_chunk::<CHECKSUM>().unwrap();
+        assert_eq!(u32::from_le_bytes(*sum), crc::crc32(summed), "{name}: the CRC-32 of everything before it, last");
         assert_eq!(transcoded(&json), twin, "{name}: the same records");
         let back = load(&twin, &serial()).unwrap_or_else(|r| panic!("{name}: {r:#?}"));
         assert_eq!(back.digest(), model.digest(), "{name}");
@@ -280,9 +285,10 @@ fn what_is_not_the_binary_twin_is_refused_at_the_byte_where_reading_stops() {
         assert_eq!(report.code, Code::NotReadable, "{report:#?}");
         assert_eq!(place(&report), (Some(1.0), Some(f64::from(u32::try_from(column).unwrap()))));
     };
-    let length = twin.len();
-    at(twin.get(..length - 1).unwrap(), length);
-    at(&[twin.as_slice(), &[0]].concat(), length + 1);
+    // Records cut short a byte, or a byte after them, beneath a checksum made good again: where reading stopped.
+    let records = twin.get(..twin.len() - CHECKSUM).unwrap();
+    at(&sealed(records.get(..records.len() - 1).unwrap().to_vec()), records.len());
+    at(&sealed([records, &[0]].concat()), records.len() + 1);
     at(MAGIC, MAGIC.len() + 1);
     at(twin.get(..MAGIC.len() + 3).unwrap(), MAGIC.len() + 1);
     let mut file = file_of(&cube).unwrap();
@@ -294,6 +300,12 @@ fn what_is_not_the_binary_twin_is_refused_at_the_byte_where_reading_stops() {
     let mut mangled = twin.clone();
     *mangled.get_mut(6).unwrap() = b'\n';
     at(&mangled, 1);
+    // The same, with the checksum left as written: it no longer matches.
+    let length = twin.len();
+    for damaged in [twin.get(..length - 1).unwrap(), &[twin.as_slice(), &[0]].concat()] {
+        let report = refusal(damaged);
+        assert_eq!((report.code, report.fault), (Code::Damaged, Some(Fault::InvalidInput)), "{report:#?}");
+    }
 }
 
 #[test]

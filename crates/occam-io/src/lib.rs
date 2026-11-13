@@ -6,13 +6,16 @@
 //!
 //! The same file has a binary twin, for loading fast (docs/decisions/2026-11-12-binary-twin.md): [`save_binary`] writes
 //! [`MAGIC`], the version as four bytes, little-endian, then the same records in `postcard`'s encoding, links as their
-//! kind, slot and generation and numbers as their eight bytes. One version covers both, and [`parse`] reads either,
-//! telling them apart by the magic, which no JSON text begins with.
+//! kind, slot and generation and numbers as their eight bytes, and last the CRC-32 of everything before it, four bytes
+//! little-endian (docs/decisions/2026-11-13-binary-twin-checksum.md). One version covers both, and [`parse`] reads
+//! either, telling them apart by the magic, which no JSON text begins with.
 //!
-//! Reading trusts nothing. [`parse`] reads the bytes, and refuses what is not the format where it is written, and a
-//! curve or surface its family would not make, naming it; then `Restore::finish` measures every edge and checks the
-//! whole model, as `commit` would. [`load`] is the two in turn, which the `construction` exit times apart.
+//! Reading trusts nothing. [`parse`] reads the bytes, and refuses a twin whose checksum does not match before it reads
+//! its records, what is not the format where it is written, and a curve or surface its family would not make, naming
+//! it; then `Restore::finish` measures every edge and checks the whole model, as `commit` would. [`load`] is the two in
+//! turn, which the `construction` exit times apart.
 
+mod crc;
 mod exact;
 mod geometry;
 mod link;
@@ -179,11 +182,21 @@ pub fn save(model: &Snapshot) -> Result<Vec<u8>, Report> {
     serde_json::to_vec(&file_of(model)?).map_err(not_written)
 }
 
-/// `file` as the binary twin: [`MAGIC`], the version, then the records.
+/// The length of a binary twin's checksum, which ends it.
+const CHECKSUM: usize = 4;
+
+/// `bytes` with their CRC-32 after them, as a binary twin ends.
+fn sealed(mut bytes: Vec<u8>) -> Vec<u8> {
+    let sum = crc::crc32(&bytes);
+    bytes.extend_from_slice(&sum.to_le_bytes());
+    bytes
+}
+
+/// `file` as the binary twin: [`MAGIC`], the version, the records, then the checksum of them all.
 fn binary(file: &File) -> Result<Vec<u8>, postcard::Error> {
     let mut bytes = MAGIC.to_vec();
     bytes.extend_from_slice(&VERSION.to_le_bytes());
-    postcard::to_extend(file, bytes)
+    postcard::to_extend(file, bytes).map(sealed)
 }
 
 /// `model` in the native format's binary twin, which holds the same records as [`save`]'s file and loads faster.
@@ -210,31 +223,44 @@ fn other_version(version: u32) -> Report {
         .with_value(NamedValue::new("supported", Quantity::Count, f64::from(VERSION)))
 }
 
-/// The binary file `rest` holds after its magic, if it is one of this version. A binary file is one line, and its
+/// The refusal of a binary file whose checksum does not match what it holds.
+fn damaged() -> Report {
+    Report::new(Code::Damaged, Fault::InvalidInput)
+}
+
+/// The binary file `bytes`, which begin with [`MAGIC`], if it is one of this version and its checksum matches. Its
+/// version is read before its checksum, since another version may end otherwise. A binary file is one line, and its
 /// columns are its bytes, counted from 1 at the first byte of the magic.
-fn binary_file(rest: &[u8]) -> Result<File, Report> {
-    let at =
-        |left: usize| not_readable(1, MAGIC.len().saturating_add(rest.len()).saturating_sub(left).saturating_add(1));
-    let Some((version, body)) = rest.split_first_chunk::<4>() else { return Err(at(rest.len())) };
+fn binary_file(bytes: &[u8]) -> Result<File, Report> {
+    let at = |offset: usize| not_readable(1, offset.saturating_add(1));
+    let rest = bytes.get(MAGIC.len()..).unwrap_or_default();
+    let Some((version, rest)) = rest.split_first_chunk::<4>() else { return Err(at(MAGIC.len())) };
     let version = u32::from_le_bytes(*version);
     if version != VERSION {
         return Err(other_version(version));
     }
+    let Some((body, sum)) = rest.split_last_chunk::<CHECKSUM>() else { return Err(at(bytes.len())) };
+    let summed = bytes.len().saturating_sub(CHECKSUM);
+    if crc::crc32(bytes.get(..summed).unwrap_or_default()) != u32::from_le_bytes(*sum) {
+        return Err(damaged());
+    }
+    let start = summed.saturating_sub(body.len());
     let mut reader = postcard::Deserializer::from_bytes(body);
     let read = File::deserialize(&mut reader);
     let left = reader.finalize().map_or(0, <[u8]>::len);
+    let stopped = summed.saturating_sub(left);
     match read {
-        Ok(_) if left > 0 => Err(at(left)),
-        Ok(file) if file.format != FORMAT || file.version != VERSION => Err(at(body.len())),
+        Ok(_) if left > 0 => Err(at(stopped)),
+        Ok(file) if file.format != FORMAT || file.version != VERSION => Err(at(start)),
         Ok(file) => Ok(file),
-        Err(_) => Err(at(left)),
+        Err(_) => Err(at(stopped)),
     }
 }
 
 /// The file `bytes` hold, if they are one of this version, in either encoding.
 fn file(bytes: &[u8]) -> Result<File, Report> {
-    if let Some(rest) = bytes.strip_prefix(MAGIC) {
-        return binary_file(rest);
+    if bytes.starts_with(MAGIC) {
+        return binary_file(bytes);
     }
     match serde_json::from_slice::<File>(bytes) {
         Ok(file) if file.format != FORMAT => Err(not_readable(1, 1)),
@@ -279,9 +305,9 @@ fn read_geometry<K: Kind, F, G>(
 /// # Errors
 ///
 /// `io.not-readable` with the line and column where the bytes stop being the format (in a binary file, line 1 and the
-/// byte), `io.other-version` with the
-/// version of a file this build does not read, `units.tolerance-out-of-range` for the tolerance, and each curve or
-/// surface its family refuses, with the family's code and the record named.
+/// byte), `io.other-version` with the version of a file this build does not read, `io.damaged` for a binary file whose
+/// checksum does not match it, `units.tolerance-out-of-range` for the tolerance, and each curve or surface its family
+/// refuses, with the family's code and the record named.
 pub fn parse(bytes: &[u8]) -> Result<Restore, Vec<Report>> {
     let f = file(bytes).map_err(|report| vec![report])?;
     let tolerance =

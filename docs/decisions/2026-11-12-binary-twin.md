@@ -24,7 +24,8 @@ This section is Claude's working reading of the decision. The user can change it
   10-byte magic, `\x89occam\r\n\x1a\n`: a first byte no text begins with, the short name, then both kinds of line end
   and an end-of-file mark, which show a file mangled as text in transit. Next comes the version as four bytes,
   little-endian, and then the records in postcard's encoding. Each link is written as its kind, slot and generation,
-  and each number as its eight bytes, so a NaN keeps its payload.
+  and each number as its eight bytes, so a NaN keeps its payload. Since 2026-11-13 the twin ends with a checksum
+  ([the checksum decision](2026-11-13-binary-twin-checksum.md)).
 - **Reading either.** `parse` and `load` read both encodings and tell them apart by the magic. They refuse a twin for
   everything they refuse a JSON file for, with the same codes: a link of the wrong kind, a version they don't read
   (`io.other-version`, read from the header alone), a family's refusal, or a check that fails. A binary file has no

@@ -443,6 +443,13 @@ catalogue! {
         "The geometry named is of a family the native format does not write yet, so nothing was saved.",
     }
 
+    /// A binary model file's checksum does not match what it holds, so it was changed or damaged after it was written.
+    Damaged = "io.damaged" {
+        Error, [],
+        "A binary model file's checksum does not match its contents.",
+        "The file's last four bytes, its CRC-32, do not match the rest of it: it was changed or damaged after it was written.",
+    }
+
     /// A size that may be zero but not negative, as a cone's radius or a wedge's top width, is negative.
     InputNegative = "input.negative" {
         Error, [],
@@ -1120,6 +1127,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A model holds a curve or surface of a family the native format does not write yet, so it was not saved.",
                 "template": "The geometry named is of a family the native format does not write yet, so nothing was saved.",
+                "remedies": []
+            },
+            {
+                "name": "Damaged",
+                "code": "io.damaged",
+                "severity": "error",
+                "summary": "A binary model file's checksum does not match its contents.",
+                "template": "The file's last four bytes, its CRC-32, do not match the rest of it: it was changed or damaged after it was written.",
                 "remedies": []
             }
         ])
