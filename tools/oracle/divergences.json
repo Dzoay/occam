@@ -1,4 +1,355 @@
 {
-  "entries": [],
-  "schema": "occam-oracle-divergences/1"
+  "entries": [
+    {
+      "case": "near-crossed-external-0008-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "Crossed cylinders of radius 5.898 and 5.236 overlap by e = 4.01e-08. Their intersection is a solid of positive volume, about 2.806e-14 by quadrature, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "quadrature": 2.80591e-14
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-external-0009-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "Crossed cylinders of radius 15.712 and 9.079 overlap by e = 1.22e-09. Their intersection is a solid of positive volume, about 5.576e-17 by quadrature, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "quadrature": 5.57561e-17
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-external-0016-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "Crossed cylinders of radius 10.731 and 7.971 overlap by e = 1.66e-07, the pair then rotated together. Their intersection is a solid of positive volume, about 7.997e-13 by quadrature, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "quadrature": 7.99685e-13
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-external-0017-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "Crossed cylinders of radius 5.601 and 3.413 overlap by e = 1.02e-08, the pair then rotated together. Their intersection is a solid of positive volume, about 1.437e-15 by quadrature, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "quadrature": 1.43748e-15
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-external-0018-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "Crossed cylinders of radius 12.552 and 9.142 overlap by e = 1.96e-09, the pair then rotated together. Their intersection is a solid of positive volume, about 1.289e-16 by quadrature, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "quadrature": 1.28887e-16
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-internal-0007-union",
+      "decided_by": "closed",
+      "measure": "closed",
+      "note": "The union of crossed cylinders of radius 16.125 and 6.629, internally tangent but for e = 1.21e-07, is not closed: an edge bounds an odd number of face sides. A union of two solids is a closed solid.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-internal-0009-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "The thinner cylinder (radius 8.78) crosses inside the wider (12.015), internally tangent but for e = 4.17e-09. Their intersection is most of the thinner one's crossing, about 5099.7 by quadrature, and OCCT's result has no volume.",
+      "values": {
+        "quadrature": 5099.7
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-internal-0009-union",
+      "decided_by": "valid",
+      "measure": "valid",
+      "note": "The union of crossed cylinders of radius 12.015 and 8.78, internally tangent but for e = 4.17e-09, fails OCCT's own checker. A union of two solids is a valid solid.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-internal-0016-union",
+      "decided_by": "closed",
+      "measure": "closed",
+      "note": "The union of crossed cylinders of radius 12.471 and 4.618, internally tangent but for e = 1.34e-07, the pair then rotated together, is not closed: an edge bounds an odd number of face sides. A union of two solids is a closed solid.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-crossed-internal-0017-union",
+      "decided_by": "valid",
+      "measure": "valid",
+      "note": "The union of crossed cylinders of radius 4.146 and 2.757, internally tangent but for e = 2.42e-08, the pair then rotated together, fails OCCT's own checker. A union of two solids is a valid solid.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-sphere-box-0008-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "A box face cuts e = 4.84e-08 into a sphere of radius 13.302. The intersection is a cap of volume pi e^2 (3R - e) / 3, about 9.806e-14, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "closed-form": 9.80562e-14
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-sphere-box-0009-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "A box face cuts e = 2.16e-09 into a sphere of radius 13.277. The intersection is a cap of volume pi e^2 (3R - e) / 3, about 1.95e-16, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "closed-form": 1.94967e-16
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-sphere-box-0016-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "A box face cuts e = 2.74e-07 into a sphere of radius 6.634, the pair then rotated together. The intersection is a cap of volume pi e^2 (3R - e) / 3, about 1.56e-12, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "closed-form": 1.56012e-12
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-sphere-box-0017-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "A box face cuts e = 4.75e-08 into a sphere of radius 17.942, the pair then rotated together. The intersection is a cap of volume pi e^2 (3R - e) / 3, about 1.27e-13, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "closed-form": 1.27016e-13
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "near-sphere-box-0018-intersection",
+      "decided_by": "volume-positive",
+      "measure": "volume",
+      "note": "A box face cuts e = 4.58e-09 into a sphere of radius 11.355, the pair then rotated together. The intersection is a cap of volume pi e^2 (3R - e) / 3, about 7.493e-16, and OCCT's result has none, with no report of the lost overlap.",
+      "values": {
+        "closed-form": 7.49269e-16
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-common-0002",
+      "decided_by": "closed-form",
+      "measure": "bbox",
+      "note": "OCCT's optimal box, asked for with no tolerance, reaches the whole sphere's extreme along y, past the plane y = -15.435 where the common ends, and the closed-form box ends at that plane. The oracle's README records this weakness on trimmed spherical faces.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-common-0005",
+      "decided_by": "closed-form",
+      "measure": "area",
+      "note": "In this common, the cut circle passes within 0.165R of a pole of the sphere (along z), and OCCT's area misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 6116.54714009
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-common-0005",
+      "decided_by": "closed-form",
+      "measure": "bbox",
+      "note": "OCCT's optimal box, asked for with no tolerance, reaches the whole sphere's extreme along y, past the plane y = -17.446 where the common ends, and the closed-form box ends at that plane. The oracle's README records this weakness on trimmed spherical faces.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-common-0005",
+      "decided_by": "closed-form",
+      "measure": "volume",
+      "note": "In this common, the cut circle passes within 0.165R of a pole of the sphere (along z), and OCCT's volume misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 37326.4313382
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-common-0008",
+      "decided_by": "closed-form",
+      "measure": "bbox",
+      "note": "OCCT's optimal box, asked for with no tolerance, reaches the whole sphere's extreme along y, past the plane y = -11.182 where the common ends, and the closed-form box ends at that plane. The oracle's README records this weakness on trimmed spherical faces.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-cut-0002",
+      "decided_by": "closed-form",
+      "measure": "area",
+      "note": "In this cut, the cut circle passes within 0.026R of a pole of the sphere (along z), and OCCT's area misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 33.4546159646
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-cut-0002",
+      "decided_by": "closed-form",
+      "measure": "bbox",
+      "note": "OCCT's optimal box, asked for with no tolerance, reaches the whole sphere's extreme along y, past the plane y = -16.096 where the cut ends, and the closed-form box ends at that plane. The oracle's README records this weakness on trimmed spherical faces.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-cut-0002",
+      "decided_by": "closed-form",
+      "measure": "volume",
+      "note": "In this cut, the cut circle passes within 0.026R of a pole of the sphere (along z), and OCCT's volume misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 14.1888102665
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-cut-0004",
+      "decided_by": "closed-form",
+      "measure": "area",
+      "note": "In this cut, the cut circle passes within 0.030R of a pole of the sphere (along z), and OCCT's area misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 8.2243471335
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-cut-0004",
+      "decided_by": "closed-form",
+      "measure": "bbox",
+      "note": "OCCT's optimal box, asked for with no tolerance, reaches the whole sphere's extreme along x, past the plane x = -17.583 where the cut ends, and the closed-form box ends at that plane. The oracle's README records this weakness on trimmed spherical faces.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-cut-0004",
+      "decided_by": "closed-form",
+      "measure": "volume",
+      "note": "In this cut, the cut circle passes within 0.030R of a pole of the sphere (along z), and OCCT's volume misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 1.73285726669
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-cap-cut-0008",
+      "decided_by": "closed-form",
+      "measure": "bbox",
+      "note": "OCCT's optimal box, asked for with no tolerance, reaches the whole sphere's extreme along y, past the plane y = -16.397 where the cut ends, and the closed-form box ends at that plane. The oracle's README records this weakness on trimmed spherical faces.",
+      "values": {},
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-common-0002",
+      "decided_by": "closed-form",
+      "measure": "area",
+      "note": "In this common, the circle where the spheres meet passes within 0.046R of a pole of a sphere (along z), and OCCT's area misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 37.8808196246
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-common-0002",
+      "decided_by": "closed-form",
+      "measure": "volume",
+      "note": "In this common, the circle where the spheres meet passes within 0.046R of a pole of a sphere (along z), and OCCT's volume misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 21.0321468499
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-common-0006",
+      "decided_by": "closed-form",
+      "measure": "area",
+      "note": "In this common, the circle where the spheres meet passes within 0.071R of a pole of a sphere (along z), and OCCT's area misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 384.742705511
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-common-0006",
+      "decided_by": "closed-form",
+      "measure": "volume",
+      "note": "In this common, the circle where the spheres meet passes within 0.071R of a pole of a sphere (along z), and OCCT's volume misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 669.358853964
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-common-0007",
+      "decided_by": "closed-form",
+      "measure": "area",
+      "note": "In this common, the circle where the spheres meet passes within 0.084R of a pole of a sphere (along z), and OCCT's area misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 556.754543316
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-common-0007",
+      "decided_by": "closed-form",
+      "measure": "volume",
+      "note": "In this common, the circle where the spheres meet passes within 0.084R of a pole of a sphere (along z), and OCCT's volume misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 1197.91201271
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-fuse-0004",
+      "decided_by": "closed-form",
+      "measure": "area",
+      "note": "In this fuse, the circle where the spheres meet passes within 0.015R of a pole of a sphere (along z), and OCCT's area misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 27.2285379143
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-fuse-0004",
+      "decided_by": "closed-form",
+      "measure": "volume",
+      "note": "In this fuse, the circle where the spheres meet passes within 0.015R of a pole of a sphere (along z), and OCCT's volume misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 11.6306378559
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-fuse-0006",
+      "decided_by": "closed-form",
+      "measure": "area",
+      "note": "In this fuse, the circle where the spheres meet passes within 0.005R of a pole of a sphere (along z), and OCCT's area misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 125.481387645
+      },
+      "verdict": "occt-wrong"
+    },
+    {
+      "case": "sphere-lens-fuse-0006",
+      "decided_by": "closed-form",
+      "measure": "volume",
+      "note": "In this fuse, the circle where the spheres meet passes within 0.005R of a pole of a sphere (along z), and OCCT's volume misses the closed form by more than the case's 1e-6. The closed form is recomputed independently to 3e-12 and was checked by quadrature in the corpus inventory, and no cap or lens case further from a pole disagrees on volume or area.",
+      "values": {
+        "closed-form": 129.134521027
+      },
+      "verdict": "occt-wrong"
+    }
+  ],
+  "schema": "occam-oracle-divergences/2"
 }

@@ -2,11 +2,16 @@
 
 import re
 
-SCHEMA = "occam-oracle-divergences/1"
+SCHEMA = "occam-oracle-divergences/2"
 
 VERDICTS = {"occt-wrong", "closed-form-wrong", "second-opinion-wrong", "undecided"}
 # The invariant or arbiter that decided the entry; `none` only with the verdict `undecided`.
 DECIDED_BY = {"closed-form", "valid", "closed", "volume-positive", "euler", "volume-identity", "watertight", "none"}
+
+# Sources whose values the register does not hold. OCCT's stay out while O6, whether oracle output carries licence
+# terms, is open (docs/decisions/2026-11-13-divergences-without-occt-numbers.md); an entry says in its verdict and note
+# that OCCT disagreed.
+WITHHELD = frozenset({"occt"})
 
 _SOURCE = re.compile(r"^[a-z][a-z0-9-]*$")
 _FIELDS = {"case", "measure", "values", "decided_by", "verdict", "note"}
@@ -32,13 +37,16 @@ def _check_entry(entry, where):
         if not isinstance(entry[key], str) or not entry[key].strip():
             errors.append(f"{where}.{key}: expected a non-empty string")
     values = entry["values"]
-    if not isinstance(values, dict) or len(values) < 2:
-        errors.append(f"{where}.values: expected at least two sources")
+    if not isinstance(values, dict):
+        errors.append(f"{where}.values: expected an object, empty if no source but OCCT has a value")
     else:
         if not all(_SOURCE.match(source) for source in values):
             errors.append(f"{where}.values: a source name is not a lower-case slug")
         if not all(_number_or_flag(value) for value in values.values()):
             errors.append(f"{where}.values: every value must be a number or a boolean")
+        withheld = sorted(WITHHELD & set(values))
+        if withheld:
+            errors.append(f"{where}.values: {', '.join(withheld)} values are not recorded while O6 is open")
     if entry["decided_by"] not in DECIDED_BY:
         errors.append(f"{where}.decided_by: unknown {entry['decided_by']!r}")
     if entry["verdict"] not in VERDICTS:
