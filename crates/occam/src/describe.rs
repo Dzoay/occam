@@ -10,10 +10,10 @@
 //! its geometry's parameters, where it is (a vertex's point, an edge's start and finish), the corners `low` and `high`
 //! of a box that holds it, rounded outward and as tight as `measure` finds it, and how many of what it is made of. Its
 //! origin is the step that made it, for the bodies, faces and edges that keep one. Its neighbours are what an agent
-//! walks by (PARITY 1.1): a body's shells and wires; a shell's body and faces; a face's shell, surface, loops and
-//! edges; a loop's face and edges; a wire's body and edges; a use's loop or wire, edge and curve in the face's
-//! parameters; an edge's faces, wires, vertices and curve; a vertex's edges. Geometry names none: what lies on it
-//! names it.
+//! walks by (PARITY 1.1): a body's shells and wires; a shell's body and faces; a face's shell, surface, loops, edges
+//! and the faces it shares an edge with; a loop's face and edges; a wire's body and edges; a use's loop or wire, edge
+//! and curve in the face's parameters; an edge's faces, wires, vertices and curve; a vertex's edges. Geometry names
+//! none: what lies on it names it.
 
 use std::collections::BTreeSet;
 
@@ -278,7 +278,9 @@ fn shell(source: Source<'_>, s: View<'_, Shell>) -> Said {
 }
 
 fn face(source: Source<'_>, f: View<'_, Face>) -> Said {
-    let loops = f.loops();
+    let (loops, edges) = (f.loops(), f.edges());
+    let round: Vec<Id<Face>> =
+        edges.iter().filter_map(|&e| source.of(e)).flat_map(View::<Edge>::faces).filter(|&g| g != f.id()).collect();
     Said::shaped(f.surface().map(Surface::shape), "face")
         .count("loops", loops.len())
         .boxed(face_box(source, f.id()))
@@ -286,7 +288,8 @@ fn face(source: Source<'_>, f: View<'_, Face>) -> Said {
         .near([f.shell()])
         .near([f.surface_id()])
         .near(loops)
-        .near(f.edges())
+        .near(edges)
+        .near(round)
 }
 
 fn looped(source: Source<'_>, l: View<'_, Loop>) -> Said {

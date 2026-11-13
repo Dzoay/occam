@@ -473,3 +473,17 @@ fn what_a_step_made_says_its_request_step_and_operation_long_after_the_request()
     assert_eq!(said(&origins[1]), copy, "the copy's own step, naming whose copy it is");
     assert_eq!(said(&origins[2]), copy, "and so for each of its faces");
 }
+
+#[test]
+fn a_face_names_among_its_neighbours_each_face_it_shares_an_edge_with() {
+    // c5's agent found a face's neighbours edge by edge: `adjacent` on a face gave its edges and vertices, not faces.
+    let model = run(None, &request("mm", &json!([{"op": "box", "size": [10, 20, 30]}]))).model.unwrap();
+    let faces = model.ids::<Face>();
+    for (face, said) in faces.iter().zip(describe(&model, &faces.iter().map(|f| f.entity()).collect::<Vec<_>>())) {
+        let near: BTreeSet<EntityRef> = said.adjacent.iter().copied().filter(|e| e.kind == EntityKind::Face).collect();
+        let edges = model.view(*face).unwrap().edges();
+        let sharing = edges.iter().flat_map(|&e| model.view(e).unwrap().faces()).map(Id::entity);
+        let want: BTreeSet<EntityRef> = sharing.filter(|&f| f != face.entity()).collect();
+        assert_eq!((near.len(), &near), (4, &want), "{}: the four faces round it, not itself", face.entity().text());
+    }
+}
