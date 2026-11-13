@@ -24,5 +24,5 @@ This section is Claude's working reading of the decision. The user can change it
   Control points are offsets from the page's `f64` origin.
 - The shader evaluates rational B-splines. Families with an exact B-spline form reach it through `to_bspline` over the
   face's range. The other families update on the CPU.
-- What produces each frame's new surfaces is a question still open, [O29](../PLAN.md#7-decisions-the-user-still-owns).
-  Whether the 60 Hz figures are a gate or a goal is [O30](../PLAN.md#7-decisions-the-user-still-owns).
+- Each frame's new surfaces come from [re-running the edit's request](2026-11-13-continuous-edits-rerun-the-request.md)
+  (O29). The 60 Hz figures are [goals, not gates](2026-11-13-gpu-figures-are-goals.md) (O30).
