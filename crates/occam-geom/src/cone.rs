@@ -4,7 +4,7 @@
 //! where `v` is `−r / sin α`, into its other nappe. Its foot is closed-form: the nearer of the feet on the two lines in
 //! which the plane through the axis and the point cuts it.
 
-use std::f64::consts::{FRAC_PI_2, PI};
+use std::f64::consts::FRAC_PI_2;
 
 use occam_math::{Real, sin_cos};
 use occam_report::{NamedValue, Quantity, Report};
@@ -17,10 +17,10 @@ use crate::bspline::BsplineSurface;
 use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
-use crate::meridian::{self, Meridian, cylindrical, turned_box};
+use crate::meridian::{self, Meridian, cylindrical, opposite, turned_box};
 use crate::support::{between, not_negative};
 use crate::surface::Parametric;
-use crate::turn::{above, turn};
+use crate::turn::turn;
 
 /// A cone, both nappes, unbounded.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,14 +96,14 @@ impl Parametric for Cone {
         _scratch: &mut Scratch,
     ) -> Result<UvPoint, Report> {
         // In the plane through the axis and `p`, `p` being `(across, height)`, the cone is the line at `u`, through
-        // `(r, 0)` along `(sin α, cos α)`, and its mirror across the axis, the line at `u + π`. The foot is on the nearer,
-        // `v` along it.
+        // `(r, 0)` along `(sin α, cos α)`, and its mirror across the axis, the line at the opposite angle. The foot is on
+        // the nearer, `v` along it.
         let (across, u, height) = cylindrical(&self.axes, p);
         let (sin, cos) = self.slope;
         let near_gap = ((across - self.radius) * cos - height * sin).abs();
         let far_gap = ((across + self.radius) * cos + height * sin).abs();
         Ok(if far_gap < near_gap {
-            UvPoint::new(above(u + PI, 0.0), height * cos - (across + self.radius) * sin)
+            UvPoint::new(opposite(&self.axes, p), height * cos - (across + self.radius) * sin)
         } else {
             UvPoint::new(u, (across - self.radius) * sin + height * cos)
         })
@@ -148,7 +148,7 @@ impl Parametric for Cone {
 
 #[cfg(test)]
 mod tests {
-    use std::f64::consts::{FRAC_PI_4, TAU};
+    use std::f64::consts::{FRAC_PI_4, PI, TAU};
 
     use occam_report::Code;
     use occam_units::{Direction, Vec3};
@@ -263,6 +263,13 @@ mod tests {
         assert!((on_axis.distance.millimetres() - (5.0 - apex_height) * sin).abs() < 1e-12, "{on_axis:?}");
         let behind = Surface::invert(&s, Point::from_vec3(local(-3.0, -3.0, 1.0)), None, tol, &mut Scratch::default());
         assert!((behind.unwrap().u() - 5.0 * FRAC_PI_4).abs() < 1e-14, "the angle is from 0 to 2π");
+        // Beyond the apex at angles 1 and 4 about the axis: the far line is half a turn round, from 0 to 2π.
+        for (angle, far) in [(1.0, 1.0 + PI), (4.0, 4.0 - PI)] {
+            let (sin_a, cos_a) = sin_cos(angle);
+            let p = Point::from_vec3(local(cos_a, sin_a, -15.0));
+            let at = Surface::invert(&s, p, None, tol, &mut Scratch::default()).unwrap();
+            assert!((at.u() - far).abs() < 1e-14 && (at.v() - (-15.0 * cos - 5.0 * sin)).abs() < 1e-12, "{at:?}");
+        }
     }
 
     #[test]

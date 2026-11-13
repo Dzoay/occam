@@ -144,6 +144,14 @@ pub(crate) fn cylindrical(axes: &Axes, p: Point<World>) -> (f64, f64, f64) {
     (across, above(atan2(local.y, local.x), 0.0), local.z)
 }
 
+/// The angle about the axis, from 0 to 2π, of the direction opposite `p`'s across it: that of the line through the axis
+/// on `p`'s far side. It is found as itself, not as `p`'s angle and half a turn, which `above` would take the same
+/// whether the half turn were added or taken away.
+pub(crate) fn opposite(axes: &Axes, p: Point<World>) -> f64 {
+    let local = axes.local(p);
+    above(atan2(-local.y, -local.x), 0.0)
+}
+
 /// The box of the surface over `patch`, rounding included. Each coordinate is `o + ρ(v) e(u) + ζ(v) n`, where `e` and
 /// `n` are that coordinate of `e(u)` and of the axis: the extremes of `e` over the patch's `u` come from [`swing`], and
 /// then the meridian's over its `v`, by [`along_line`] or [`along_circle`]. A patch that is not finite gives all of

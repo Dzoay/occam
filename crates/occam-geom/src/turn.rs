@@ -2,7 +2,7 @@
 //! What the circle and the ellipse share: a parameter that is an angle and comes round, derivatives that turn by a
 //! quarter at each order, and the box of an arc.
 
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::TAU;
 
 use occam_math::{Real, atan2, sin_cos};
 use occam_units::{Bounds, Length, ParamKind, Point, Tangent, Vec3, World};
@@ -86,14 +86,15 @@ pub(crate) fn larger(a: f64, b: f64) -> f64 {
 }
 
 /// The least and the greatest of `o + x cos t + y sin t` for `t` from `lo` to `hi`, both finite, whose values at the ends
-/// are `ends`. It is `o + A cos(t − φ)`, so it reaches `o ± A` where the range holds `φ` or `φ + π`, and is otherwise
-/// extreme at an end.
+/// are `ends`. It is `o + A cos(t − φ)`, so it reaches `o + A` where the range holds `φ`, the angle of `(x, y)`, and
+/// `o − A` where it holds the angle of `(−x, −y)`, and is otherwise extreme at an end. That angle is found as itself,
+/// not as `φ` and half a turn, which `above` would take the same whether the half turn were added or taken away.
 pub(crate) fn swing(o: f64, (x, y): (f64, f64), (lo, hi): (f64, f64), ends: (f64, f64)) -> (f64, f64) {
     let whole = hi - lo >= TAU;
     let holds = |angle: f64| whole || above(angle, lo) <= hi;
-    let (amplitude, phase) = ((x * x + y * y).sqrt(), atan2(y, x));
-    let low = if holds(phase + PI) { o - amplitude } else { smaller(ends.0, ends.1) };
-    let high = if holds(phase) { o + amplitude } else { larger(ends.0, ends.1) };
+    let amplitude = (x * x + y * y).sqrt();
+    let low = if holds(atan2(-y, -x)) { o - amplitude } else { smaller(ends.0, ends.1) };
+    let high = if holds(atan2(y, x)) { o + amplitude } else { larger(ends.0, ends.1) };
     (low, high)
 }
 
@@ -120,9 +121,22 @@ pub(crate) fn arc_box(axes: &Axes, radii: (f64, f64), (lo, hi): (f64, f64), (fro
 
 #[cfg(test)]
 mod tests {
+    use std::f64::consts::PI;
+
     use occam_units::{Local, Placement, Vector};
 
     use super::*;
+
+    #[test]
+    fn the_least_is_where_the_range_holds_the_opposite_direction() {
+        // 3 + cos t + sin t is 3 + √2 cos(t − π/4): least at 5π/4, the angle of (−1, −1), which the range from π to
+        // 3π/2 holds, and greatest at π/4, which it does not, so the greater of its ends, both 2, is.
+        let (lo, hi) = (PI, 1.5 * PI);
+        assert_eq!(swing(3.0, (1.0, 1.0), (lo, hi), (2.0, 2.0)), (3.0 - 2.0_f64.sqrt(), 2.0));
+        // Turned a quarter, 3 − cos t + sin t: greatest at 3π/4 and least at 7π/4, the angle of (1, −1), neither of which
+        // the range holds, so its ends are both: 4 at π and 2 at 3π/2.
+        assert_eq!(swing(3.0, (-1.0, 1.0), (lo, hi), (4.0, 2.0)), (2.0, 4.0));
+    }
 
     #[test]
     fn an_angle_whole_turns_from_the_start_comes_back_to_it_and_never_below() {
