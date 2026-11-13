@@ -218,32 +218,34 @@ Comparison is geometric, with tolerances, never by topology or bits (L12).
 ## The divergence register
 
 [`divergences.json`](divergences.json) records each disagreement between OCCT, a second opinion, or a closed-form answer.
-It is empty until there is one. `just oracle register` checks it. Schema `occam-oracle-divergences/1`:
+`just oracle register` checks it. Schema `occam-oracle-divergences/2`:
 
 ```json
 {
-  "schema": "occam-oracle-divergences/1",
+  "schema": "occam-oracle-divergences/2",
   "entries": [
     {
       "case": "box-cut-cylinder-0001",
       "measure": "volume",
-      "values": {"occt": 5623.0, "closed-form": 5623.1},
+      "values": {"closed-form": 5623.1},
       "decided_by": "closed-form",
       "verdict": "occt-wrong",
-      "note": "One sentence on what happened and why this verdict stands."
+      "note": "One or two sentences on what happened and why this verdict stands."
     }
   ]
 }
 ```
 
-`values` names at least two sources (lower-case slugs: `occt`, `closed-form`, or an engine name) with their numbers or
-booleans. `decided_by` is the invariant or arbiter that decided it (`closed-form`, `valid`, `closed`, `volume-positive`,
-`euler`, `volume-identity`, `watertight`), or `none`. `verdict` is `occt-wrong`, `closed-form-wrong`,
-`second-opinion-wrong` or `undecided`; `none` and `undecided` go together, since an undecided entry has no arbiter yet.
-Entries are sorted by case then measure, and a case and measure appear once.
+`values` names the sources other than OCCT that have a number or boolean for the measure, as lower-case slugs:
+`closed-form`, `quadrature`, `occam`, or an engine name. It may be empty. OCCT's values are not recorded while O6 is
+open ([decision](../../docs/decisions/2026-11-13-divergences-without-occt-numbers.md)), and the check refuses an `occt`
+value: the verdict and the note say in words that OCCT disagreed. `decided_by` is the invariant or arbiter that decided
+it (`closed-form`, `valid`, `closed`, `volume-positive`, `euler`, `volume-identity`, `watertight`), or `none`. `verdict`
+is `occt-wrong`, `closed-form-wrong`, `second-opinion-wrong` or `undecided`; `none` and `undecided` go together, since
+an undecided entry has no arbiter yet. Entries are sorted by case then measure, and a case and measure appear once.
 
-Whether oracle output carries licence terms is O6 in [the plan](../../docs/PLAN.md#7-decisions-the-user-still-owns), still
-open. Record only the numbers an entry needs, and ask before the first entry lands that holds a value from OCCT.
+The register holds the 26 generated cases the [corpus inventory](../../docs/evidence/2026-11-09-corpus-inventory.md)
+found disagreeing, one entry per case and measure.
 
 ## Scrubbed environment and threads
 
