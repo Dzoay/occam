@@ -9,7 +9,7 @@ use occam_units::{Angle, Length, Point, World};
 
 use occam_math::{Exec, Grain};
 use crate::topo::{Edge, Face, Id, Snapshot};
-use crate::units::Direction;
+use occam_units::Direction;
 
 /// Limits come first: without them one collapsed NURBS row took 11.9 GB in seconds (P9).
 #[derive(Clone, Copy, Debug, PartialEq)]

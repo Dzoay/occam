@@ -1,10 +1,13 @@
-"""How close the separate sin, cos and atan2 come to the true values, measured in units in the last place.
+"""How close the separate sin, cos, atan2, exp, expm1, sinh and cosh come to the true values, measured in units in the
+last place.
 
 Each reference is computed in Decimal to 130 significant digits from π found here, by Gauss's arctangent formula in
 integers: sin and cos by Taylor's series after reducing the argument by π/2 at 480 digits, which leaves over 170 after
-the point for an argument as large as 1.8e308, and atan by Gregory's series after halving the angle. The error of a
-result is |computed - exact| / ulp(exact), with ulp(v) = 2^(floor(log2 |v|) - 52), and never below the subnormal
-spacing 2^-1074. The inputs come from SplitMix64, seeded per set, so every run measures the same numbers.
+the point for an argument as large as 1.8e308, and atan by Gregory's series after halving the angle. e^x is Decimal's
+own exponential, which it rounds correctly. e^x - 1, sinh and cosh come from it for |x| of 1 or more, and from their
+Taylor series below that, where subtracting from e^x would cancel the leading digits. The error of a result is
+|computed - exact| / ulp(exact), with ulp(v) = 2^(floor(log2 |v|) - 52), and never below the subnormal spacing
+2^-1074. The inputs come from SplitMix64, seeded per set, so every run measures the same numbers.
 
 `python3 -B tools/determinism/accuracy.py [--count N]` prints, for each function and set of inputs, how many were
 measured, the share correctly rounded (within half an ulp), and the largest error.
@@ -18,6 +21,7 @@ import sys
 from decimal import Decimal
 
 from atan2 import atan2
+from exp import exp, expm1, sinh_cosh
 from sincos import sin_cos
 from stream import SplitMix64, bits, double
 
@@ -26,6 +30,7 @@ WIDE = 480  # digits for reducing by π/2: an argument below 2^1024 has at most 
 PI_DIGITS = 520  # digits of π, more than the widest reduction uses
 GUARD = 10  # extra decimal places carried while summing π's series in integers
 COUNT = 2000  # inputs per set, by default
+LN_LARGEST = 709.78  # just below the logarithm of the largest double, 709.7827: e^x is infinite above it
 
 NARROW = decimal.Context(prec=DIGITS, rounding=decimal.ROUND_HALF_EVEN, Emin=-99999, Emax=99999)
 REDUCING = decimal.Context(prec=WIDE, rounding=decimal.ROUND_HALF_EVEN, Emin=-99999, Emax=99999)
@@ -127,6 +132,50 @@ def reference_atan2(y, x):
         return -angle if math.copysign(1.0, y) < 0.0 else +angle
 
 
+def series(first, z, index):
+    """The sum of first·z^j·index!/(index + 2j)! over j from 0, in the current context: sinh and cosh's series from
+    their term in x^index, with z = x·x, summed until a term no longer changes the total.
+    """
+    total, term = first, first
+    while True:
+        term = term * z / ((index + 1) * (index + 2))
+        index += 2
+        if total + term == total:
+            return total
+        total += term
+
+
+def reference_exp(x):
+    """e^x for a finite double x, to 130 significant digits."""
+    with decimal.localcontext(NARROW):
+        return Decimal(x).exp()
+
+
+def reference_expm1(x):
+    """e^x - 1 for a finite double x, to 130 significant digits: below 1, as sinh x + (cosh x - 1), neither of which
+    cancels.
+    """
+    with decimal.localcontext(NARROW):
+        exact = Decimal(x)
+        if exact.copy_abs() < 1:
+            square = exact * exact
+            return series(exact, square, 1) + series(square / 2, square, 2)
+        return exact.exp() - 1
+
+
+def reference_sinh_cosh(x):
+    """sinh x and cosh x for a finite double x, to 130 significant digits."""
+    with decimal.localcontext(NARROW):
+        exact = Decimal(x)
+        if exact.copy_abs() < 1:
+            square = exact * exact
+            return series(exact, square, 1), 1 + series(square / 2, square, 2)
+        grow = exact.copy_abs().exp()
+        shrink = 1 / grow
+        sinh = (grow - shrink) / 2
+        return (sinh if exact > 0 else -sinh), (grow + shrink) / 2
+
+
 def ulp(v):
     """The spacing of doubles at a real v: 2^(floor(log2 |v|) - 52), and 2^-1074 among the subnormals."""
     magnitude = v.copy_abs()
@@ -203,6 +252,12 @@ def small_integer(generator):
     return float(-magnitude if generator.next_u64() & 1 else magnitude)
 
 
+def near_one_thirty_second(generator):
+    """A double of either sign within 1024 places of 2^-5, where expm1 leaves its polynomial for the reduction."""
+    x = offset(2.0**-5, generator)
+    return -x if generator.next_u64() & 1 else x
+
+
 def near_axes(generator):
     """A point whose smaller coordinate is between 2^-60 and 2^-30 of the larger, on either axis."""
     large = uniform(generator, -1.0, 1.0)
@@ -232,6 +287,25 @@ ATAN2_SETS = {
     "near the axes": near_axes,
     "near the diagonal": near_diagonal,
     "huge and tiny": lambda g: (spread(g, 1e-300, 1e300), spread(g, 1e-300, 1e300)),
+}
+
+EXP_SETS = {
+    "uniform": lambda g: uniform(g, -745.0, LN_LARGEST),
+    "near 0": lambda g: spread(g, 2.0**-60, 2.0**-20),
+    "subnormal results": lambda g: uniform(g, -745.13, -708.4),
+}
+
+EXPM1_SETS = {
+    "uniform": lambda g: uniform(g, -40.0, LN_LARGEST),
+    "near 0": lambda g: uniform(g, -0.05, 0.05),
+    "around 2^-5": near_one_thirty_second,
+    "tiny": lambda g: spread(g, 2.0**-60, 2.0**-20),
+}
+
+SINH_COSH_SETS = {
+    "uniform": lambda g: uniform(g, -710.0, 710.0),
+    "within 1": lambda g: uniform(g, -1.0, 1.0),
+    "near 0": lambda g: spread(g, 2.0**-60, 1e-4),
 }
 
 
@@ -265,6 +339,27 @@ def measure_atan2(name, count):
     return [ulps(atan2(y, x), reference_atan2(y, x)) for y, x in inputs(ATAN2_SETS, "atan2", name, count)]
 
 
+def measure_exp(name, count):
+    """The errors of exp, in ulps, on a set's inputs."""
+    return [ulps(exp(x), reference_exp(x)) for x in inputs(EXP_SETS, "exp", name, count)]
+
+
+def measure_expm1(name, count):
+    """The errors of expm1, in ulps, on a set's inputs."""
+    return [ulps(expm1(x), reference_expm1(x)) for x in inputs(EXPM1_SETS, "expm1", name, count)]
+
+
+def measure_sinh_cosh(name, count):
+    """The errors of sinh and cosh, in ulps, on a set's inputs."""
+    errors = {"sinh": [], "cosh": []}
+    for x in inputs(SINH_COSH_SETS, "sinh_cosh", name, count):
+        s, c = sinh_cosh(x)
+        exact_sinh, exact_cosh = reference_sinh_cosh(x)
+        errors["sinh"].append(ulps(s, exact_sinh))
+        errors["cosh"].append(ulps(c, exact_cosh))
+    return errors
+
+
 def summary(errors):
     """(count, share correctly rounded, largest error) of a list of errors."""
     return len(errors), sum(error <= 0.5 for error in errors) / len(errors), max(errors)
@@ -278,6 +373,13 @@ def rows(count):
         found += [(function, name, *summary(errors[function])) for function in ("sin", "cos")]
     for name in ATAN2_SETS:
         found.append(("atan2", name, *summary(measure_atan2(name, count))))
+    for name in EXP_SETS:
+        found.append(("exp", name, *summary(measure_exp(name, count))))
+    for name in EXPM1_SETS:
+        found.append(("expm1", name, *summary(measure_expm1(name, count))))
+    for name in SINH_COSH_SETS:
+        errors = measure_sinh_cosh(name, count)
+        found += [(function, name, *summary(errors[function])) for function in ("sinh", "cosh")]
     return found
 
 

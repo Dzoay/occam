@@ -35,7 +35,7 @@ fn a_refusal_is_json_and_following_its_remedy_succeeds() {
     let refused = asking_for("0.0001");
     assert_eq!(refused.status.code(), Some(1));
     let want = concat!(
-        r#"{"schema":1,"code":"measure.tolerance-below-model","severity":"error","#,
+        r#"{"schema":2,"code":"measure.tolerance-below-model","severity":"error","fault":"invalid-input","#,
         r#""message":"The tolerance asked for, 0.0001 mm, is finer than the model's tolerance, 0.001 mm.","entities":[],"#,
         r#""values":[{"name":"requested","quantity":"length","value":0.0001},"#,
         r#"{"name":"model","quantity":"length","value":0.001}],"#,
@@ -48,9 +48,9 @@ fn a_refusal_is_json_and_following_its_remedy_succeeds() {
     let report = Report::from_json(stdout(&refused).trim()).unwrap();
     assert_eq!(report.code, Code::ToleranceBelowModel);
     let remedy = report.remedy(RemedyKind::UseModelTolerance).unwrap();
-    let followed = asking_for(&remedy.value("tolerance").unwrap().value.to_string());
+    let followed = asking_for(&remedy.value("tolerance").unwrap().number().unwrap().to_string());
     assert_eq!(followed.status.code(), Some(0));
-    assert!(stdout(&followed).starts_with(r#"{"schema":1,"value":5.0,"#), "{}", stdout(&followed));
+    assert!(stdout(&followed).starts_with(r#"{"schema":2,"value":5.0,"#), "{}", stdout(&followed));
 }
 
 #[test]

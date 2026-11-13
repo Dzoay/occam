@@ -26,10 +26,158 @@ exclude_globs = [
 # it applies are in the module's pure functions, which are mutated. The same goes for `gates::main` and `usage`, and for
 # `gates determinism`'s `levels`, which runs the probe and hands its output to `parsed_levels`.
 exclude_re = [
+    # Where the order is the degree, `order` and `p` are the same number, so `<=` picks the same one.
+    "replace < with <= in rows_len$",
+    # The lower or higher of numbers that are equal is either: a tie gives the same number. A triangle's span, the
+    # lower and higher of two parameters, a value already at an end of its window, and the largest coordinate of a box.
+    "replace < with <= in Facet::span$",
+    "replace > with >= in Facet::span$",
+    "replace < with <= in ordered$",
+    "replace < with <= in inside$",
+    "replace > with >= in padded$",
+    "foot\\.rs:\\d+:\\d+: replace > with >= in within$",
+    "foot\\.rs:\\d+:\\d+: replace < with <= in within$",
+    "replace > with >= in inside$",
+    # A point as near as the best found is as good a foot: taking it or keeping the best gives the same distance.
+    "replace < with <= in nearer$",
+    "foot\\.rs:\\d+:\\d+: replace < with <= in foot$",
+    "replace < with <= in <impl Parametric for MeshSurface>::invert$",
+    # A lane beyond a value's lanes is never read: evaluating it or not changes only the speed.
+    "replace match guard k < R::LANES with true in",
+    "replace < with <= in [A-Za-z]+::rungs$",
+    # Every lane evaluated alone gives the bits the lanes give together, by design: only the speed differs.
+    "replace == with != in SplineCurve::rungs$",
+    # A curve's rungs need 4p + 6 numbers to order 1, which six rows of room for 4 hold at degree 4 and of room for 8 at
+    # degree 8 too: moving either edge by one changes only how much the stack zeroes.
+    "replace < with (==|<=) in SplineCurve::at$",
+    # Refining a sample nearer than its neighbours a second time, as this mutant does, finds what the first time found.
+    "foot\\.rs:\\d+:\\d+: replace && with \\|\\| in foot$",
+    # A sample is its own neighbour only in this mutant, and equal to itself, so it holds as before.
+    "replace > with >= in lowest$",
+    # A slope of exactly zero at an end: frozen or free, the parameter's step there is held at the end by the window.
+    "replace > with >= in free$",
+    "replace < with <= in free$",
+    # Where `a` is 0, `det` is `-b * b`, never above 0, so the pivot test `a > 0` already fails on `det`.
+    "foot\\.rs:57:16: replace > with >= in newton$",
+    # The default is the empty slice, and so is this mutant: the same function, which no test can tell apart.
+    "replace Parametric::degeneracies -> &\\[Degeneracy\\] with Vec::leak\\(Vec::new\\(\\)\\)",
+    # occam-math's exp.rs, by line: an edit there moves them, and the gate then names the mutant again. Below 2^-54 in
+    # magnitude e^x rounds to 1 on the main path as well, and so do 1 + x and 1 − x; Arm keeps the case only to raise no
+    # spurious underflow.
+    "exp\\.rs:242:13: replace < with (==|<=) in exp_one$",
+    "exp\\.rs:243:20: replace \\+ with - in exp_one$",
+    # At ±512 the scale is 2^±738.7, a double, and the care's powers of 2 scale it and back exactly: the same bits.
+    "exp\\.rs:246:13: replace < with <= in exp_one$",
+    # At y = 1, hi is 2 and lo under half of 2's ulp, so the rounded value is y.
+    "exp\\.rs:230:22: replace < with <= in below$",
+    # At ±2^-54 Taylor's polynomial gives x, x²/2 being under half an ulp of x; at ±2^-5 it gives the table's bits,
+    # as both paths of tools/determinism/exp.py show.
+    "exp\\.rs:260:27: replace < with <= in expm1_one$",
+    "exp\\.rs:263:13: replace < with <= in expm1_one$",
+    # occam-geom. Where the two sides of a comparison are equal, both branches give the same value: the smaller or
+    # larger of two equal numbers, an end and a parameter at it, an angle at the start of its turn, and equal halves of a
+    # span. In `refine`, a zero rate of change is the root, which Newton's step then leaves where it is, and a step onto
+    # an end of the bracket, where the rate's sign is known, carries on from there as a step inside it would.
+    "(turn|hyperbola)\\.rs:\\d+:\\d+: replace > with >= in larger$",
+    "turn\\.rs:\\d+:\\d+: replace < with <= in (smaller|above)$",
+    "hyperbola\\.rs:\\d+:\\d+: replace < with <= in smaller_larger$",
+    "domain\\.rs:\\d+:\\d+: replace (< with <=|> with >=) in ParamRange::clamp$",
+    "support\\.rs:\\d+:\\d+: replace > with >= in span$",
+    "parabola\\.rs:\\d+:\\d+: replace (< with <=|> with >=) in <impl ParametricCurve for Parabola>::bounds$",
+    "nearest\\.rs:\\d+:\\d+: replace < with <= in refine$",
+    # Where the least `ρ` of a round meridian is exactly 0, either box holds it. On a cone's axis, its two lines through
+    # the axis are as near, and every point of the circle at that `v` is a foot.
+    "meridian\\.rs:\\d+:\\d+: replace < with <= in along_circle$",
+    # By line. Only a sphere's meridian crosses the axis, and its centre is 0, so its reach there is its radius of
+    # either sign, and the box is the same from either corner.
+    "meridian\\.rs:206:34: replace \\+ with - in along_circle$",
+    "cone\\.rs:\\d+:\\d+: replace < with <= in <impl Parametric for Cone>::invert$",
+    # By line. An arc holds `φ + π` where it holds `φ − π`, and a cone's mirrored line is at `u + π` as at `u − π`: a
+    # whole turn apart, which `above` takes off.
+    "turn\\.rs:80:30: replace \\+ with - in swing$",
+    "cone\\.rs:104:34: replace \\+ with - in <impl Parametric for Cone>::invert$",
+    # By line. Each changes only how much a search refines, and so only its speed: refining a piece where the slope does
+    # not turn from falling to rising ends at one of its ends, which is no nearer than the nearest found.
+    "nearest\\.rs:81:21: replace < with <= in nearest$",
+    "nearest\\.rs:81:27: replace && with \\|\\| in nearest$",
     "replace run -> Verdict",
     "in run$",
     "replace (measure|browser|built|counts|summaries|levels) ",
     "in (measure|browser|built|counts|summaries|levels)$",
     "replace (main|usage) -> ExitCode",
     "in (main|usage)$",
+    # The swept step's (geometry.swept). Ties, which give the same value either way: the window that holds an anchor, the
+    # part two windows share, the doubling that first passes a bound, and the box of a turned curve's part.
+    "curve\\.rs:\\d+:\\d+: replace < with <= in holding$",
+    "curve\\.rs:\\d+:\\d+: replace > with >= in holding$",
+    "parabola\\.rs:\\d+:\\d+: replace > with >= in narrowed$",
+    "parabola\\.rs:\\d+:\\d+: replace < with <= in narrowed$",
+    "hyperbola\\.rs:\\d+:\\d+: replace > with >= in <impl ParametricCurve for Hyperbola>::within$",
+    "replace > with >= in <impl Parametric for Revolution<C>>::bounds$",
+    "replace < with <= in <impl Parametric for Revolution<C>>::bounds$",
+    # `|a x + b y|` is `|a x - b y|`, for the perpendicular unit axes `x` and `y`.
+    "hyperbola\\.rs:115:39: replace \\+ with - in <impl ParametricCurve for Hyperbola>::within$",
+    # Exactly no bend, or no slope across it: that branch's bounds are NaN, which narrowing a window ignores.
+    "parabola\\.rs:127:19: replace > with >= in <impl ParametricCurve for Parabola>::within$",
+    "parabola\\.rs:134:18: replace > with >= in <impl ParametricCurve for Parabola>::within$",
+    # No window or range has exactly one end finite: ranges are whole, trimmed at both ends, or without end both ways,
+    # and a parabola's window narrows from both ends at once.
+    "parabola\\.rs:139:25: replace && with \\|\\| in <impl ParametricCurve for Parabola>::within$",
+    "swept\\.rs:\\d+:\\d+: replace && with \\|\\| in window$",
+    # `side` is -1 or 1, never 0.
+    "revolution\\.rs:\\d+:\\d+: replace < with <= in collapse$",
+    # Refining more pieces, or one whose slope is exactly zero at a sample, which the piece before already refines to,
+    # finds no point nearer than the minimum the search finds without them.
+    "nearest\\.rs:69:21: replace < with <= in nearest_by$",
+    "nearest\\.rs:69:27: replace && with \\|\\| in nearest_by$",
+    # The measures step's (geometry.measures). Ties, which give the same value either way: a length's ends in order.
+    "arc\\.rs:\\d+:\\d+: replace < with <= in length$",
+    # By line where the operator is not alone in its function. Derivatives of equal length in order, and a spread of
+    # exactly +0, whose root is +0: a tie, the same value either way. The larger of curvatures as large as each other.
+    "local\\.rs:\\d+:\\d+: replace < with <= in no_plane$",
+    "local\\.rs:158:26: replace > with >= in surface_local$",
+    "local\\.rs:160:41: replace > with >= in surface_local$",
+    # Ties, which give the same value either way: the larger of two lengths in `same` and `same_number`, and in a
+    # surface join the farther of two feet and the running largest gap, angle and difference of curvatures.
+    "continuity\\.rs:\\d+:\\d+: replace > with >= in same$",
+    "continuity\\.rs:\\d+:\\d+: replace > with >= in same_number$",
+    "continuity\\.rs:249:34: replace > with >= in measure_surfaces$",
+    "continuity\\.rs:250:38: replace > with >= in measure_surfaces$",
+    "continuity\\.rs:255:25: replace > with >= in measure_surfaces$",
+    "continuity\\.rs:259:31: replace > with >= in measure_surfaces$",
+    # Normals exactly square to each other are a quarter turn apart either way round, and such a join is G0 at best
+    # whatever its curvatures. `flip` is exactly 1 or -1, so dividing by it is multiplying by it.
+    "continuity\\.rs:\\d+:\\d+: replace < with <= in measure_surfaces$",
+    "continuity\\.rs:257:57: replace \\* with / in measure_surfaces$",
+    "continuity\\.rs:258:36: replace \\* with / in measure_surfaces$",
+    # A chord of no length, or a point exactly at either end of it: 0 / 0, -0 and 1 give the same foot either way. Ends
+    # in order that are equal. A guess exactly at either end of the range, or a Newton step exactly on either end of the
+    # bracket, is taken where the middle would have been, which changes only how soon a length is found; and a gap of
+    # exactly nought has already been returned.
+    "spacing\\.rs:\\d+:\\d+: replace < with <= in from_chord$",
+    "spacing\\.rs:\\d+:\\d+: replace > with >= in from_chord$",
+    "spacing\\.rs:\\d+:\\d+: replace < with <= in ends$",
+    "spacing\\.rs:116:27: replace > with >= in advance$",
+    "spacing\\.rs:116:43: replace < with <= in advance$",
+    "spacing\\.rs:123:16: replace < with <= in advance$",
+    "spacing\\.rs:129:27: replace < with <= in advance$",
+    "spacing\\.rs:129:46: replace < with <= in advance$",
+    # Refining every sample with a neighbour no further, not only the local largest: more golden-section searches, each
+    # of which can only find a point at least as far as the largest found without them. Not a tie; it changes the cost,
+    # and where a narrow peak hides between two samples it finds what the samples miss, which no test can ask it not to.
+    "spacing\\.rs:154:27: replace && with \\|\\| in furthest$",
+    # The parameter step's (geometry.parameter). No range has exactly one end finite (`ParamRange`), so the stretch of
+    # one is never taken.
+    "uv_curve\\.rs:6[67]:\\d+: replace .* in stretch$",
+    # The offset step's (geometry.offset). A lane-at-a-time evaluation that also evaluates the lane past those it returns,
+    # at the padding (0, 0), changes only its speed: for a surface and for a curve.
+    "offset_surface\\.rs:\\d+:\\d+: replace < with <= in <impl Parametric for OffsetSurface<S>>::eval_second$",
+    "offset_curve\\.rs:\\d+:\\d+: replace < with <= in <impl ParametricCurve for OffsetCurve<C>>::eval_second$",
+    # A parameter moved exactly to the part's start is at it either way.
+    "trimmed_surface\\.rs:\\d+:\\d+: replace < with <= in into$",
+    # The swept step's. A box's size is a sum of magnitudes from nought: taking each away instead gives exactly its
+    # negative, and the margin it gives is taken as a magnitude.
+    "extrusion\\.rs:123:111: replace \\+ with - in <impl Parametric for Extrusion<C>>::bounds$",
+    # The splines step's. Ends in order that are equal.
+    "spline_curve\\.rs:\\d+:\\d+: replace < with <= in <impl ParametricCurve for SplineCurve>::bounds$",
 ]

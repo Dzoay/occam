@@ -103,13 +103,14 @@ jobs:
         shell: bash
         run: just perf | tee -a "$GITHUB_STEP_SUMMARY"
 
+  # Eight slices, so each fits in a job's six hours: at four, the geometry milestone's took 3h50 to over 6h.
   mutants-shard:
-    name: mutants (shard ${{ matrix.shard }} of 4)
+    name: mutants (shard ${{ matrix.shard }} of 8)
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -118,7 +119,7 @@ jobs:
         with:
           components: clippy # the lint probes run clippy
           tools: just cargo-nextest cargo-mutants
-      - run: just mutants --shard ${{ matrix.shard }}/4
+      - run: just mutants --shard ${{ matrix.shard }}/8
         env:
           OCCAM_MUTANTS_JOBS: "2"
 

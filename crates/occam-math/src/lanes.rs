@@ -24,12 +24,6 @@ impl<const W: usize> Lanes<W> {
         self.0
     }
 
-    /// `op` on every lane.
-    #[inline(always)]
-    fn map(self, op: impl Fn(f64) -> f64) -> Self {
-        Self(self.0.map(op))
-    }
-
     /// `test` on every pair of lanes.
     #[inline(always)]
     fn compare(self, rhs: Self, test: impl Fn(f64, f64) -> bool) -> LaneMask<W> {
@@ -120,6 +114,11 @@ impl<const W: usize> Real for Lanes<W> {
         for lane in self.0 {
             visit(lane);
         }
+    }
+
+    #[inline(always)]
+    fn map(self, op: impl Fn(f64) -> f64) -> Self {
+        Self(self.0.map(op))
     }
 
     #[inline(always)]

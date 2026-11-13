@@ -40,7 +40,7 @@ mod tests {
     #[test]
     fn every_number_reaches_the_query() {
         let got = distance(1.0, 2.0, 3.0, 4.0, 6.0, 3.0, 0.001, 0.00001, 0.01);
-        assert!(got.starts_with(r#"{"schema":1,"value":5.0,"#), "{got}");
+        assert!(got.starts_with(r#"{"schema":2,"value":5.0,"#), "{got}");
     }
 
     #[test]

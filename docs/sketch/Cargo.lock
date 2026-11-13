@@ -52,6 +52,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "occam-geom"
+version = "0.0.0"
+dependencies = [
+ "occam-math",
+ "occam-report",
+ "occam-units",
+]
+
+[[package]]
 name = "occam-math"
 version = "0.0.0"
 dependencies = [
@@ -161,6 +170,7 @@ dependencies = [
 name = "sketch"
 version = "0.0.0"
 dependencies = [
+ "occam-geom",
  "occam-math",
  "occam-report",
  "occam-units",

@@ -97,6 +97,7 @@ the same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 | `gates mutants` | Mutation testing on the PR's diff, zero survivors. Runs the unmutated suite first; the timeout floor exceeds a full suite (L13, L14) | `bedrock.gates` |
 | `gates counts` | Test-count ratchet, with a merge driver (L44) | `bedrock.gates` |
 | `gates plan` | A step PR carries its `Plan-Step:` footers, and `just next` agrees (L40) | `bedrock.gates` |
+| `gates seam` | occam-geom's seam matches `ci/seam.txt`, every public signature of its modules; a change needs a newer decision, named in the record (L21) | `geometry.freeze` |
 | `gates docs` | Links resolve, step and decision ids are unique, files in `docs/evidence/` are unchanged once merged (L41, L45) | `bedrock.gates` |
 | `gates deps` | Dependency allow-list, `cargo deny`, `cargo shear`, REUSE | `bedrock.gates` |
 | `gates errors` | Every code is in the catalogue; every code and remedy pair is registered by a followed-remedy test (L2); matches are exhaustive (L4) | `bedrock.report` |

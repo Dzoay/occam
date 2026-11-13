@@ -8,7 +8,7 @@ use occam_units::{Length, Point, UvPoint, World};
 use serde::Deserialize;
 
 use occam_math::Exec;
-use crate::report::{EntityRef, Stage};
+use occam_report::{EntityRef, Stage};
 use crate::topo::{Body, Changes, Describe, Edge, Face, Id, Snapshot};
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]

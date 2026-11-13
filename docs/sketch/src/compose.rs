@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use occam_math::Exec;
 use crate::ops::{Ran, Request};
-use crate::report::{Details, EntityRef};
+use occam_report::EntityRef;
+
+use crate::report::Details;
 use crate::topo::{Describe, Snapshot};
 
 /// Runs a request against a model, or against a new one.
@@ -25,7 +27,7 @@ pub fn describe_all(reports: &mut [Details], sources: &[&dyn Describe]) {
 /// What an agent asks between steps (PARITY 1.1): every entity of a kind, the neighbours of one, and what any of them
 /// is. Each takes many ids and gives one result per id (L6).
 #[must_use]
-pub fn list(model: &Snapshot, kind: crate::report::EntityKind) -> Vec<EntityRef> {
+pub fn list(model: &Snapshot, kind: occam_report::EntityKind) -> Vec<EntityRef> {
     unimplemented!()
 }
 

@@ -33,6 +33,7 @@ flowchart TD
 |---|---|
 | `Real` | One number type for `f64` and lanes. Gains `lt`, `le`, `select` and a mask. `f64::min` stays banned |
 | Owned `sin_cos`, `atan2` | The same bits on every target, lane width and build (O14). `tan`, `atan`, `asin`, `acos` follow when needed |
+| Owned `exp`, `expm1`, `sinh_cosh` | The same, for the hyperbola. `exp` is [Arm's, by way of phasekit](../decisions/2026-11-11-exp-from-arm.md); in lanes, each lane runs it alone through `Real::map` |
 | `Level::detect()` | Finds the widest instruction level, once |
 | `dispatch(level, kernel)` | Runs a `LaneKernel` compiled for that level, inside a family's batch method |
 | `Lanes::from_fn` | Becomes a plain loop |
@@ -48,7 +49,8 @@ execution layer, `Exec`, is in this crate too: see [threads and lanes](threads-a
 - [P6](../evidence/2026-11-09-p6.md): each 1% of decisions reaching the exact stage adds about 33 ns a decision on one
   thread, hence `Tally` in every outcome.
 - [S5](../evidence/2026-11-09-s5.md): the owned functions, within about 0.75 and 1.5 ulps. Their coefficients are
-  [occam's own fit](../decisions/2026-11-11-own-coefficients.md) (O15).
+  [occam's own fit](../decisions/2026-11-11-own-coefficients.md) (O15); `exp`'s are
+  [Arm's](../decisions/2026-11-11-exp-from-arm.md).
 - [P4](../evidence/2026-11-09-p4.md): a kernel is a trait, not a closure, because `run` and all it calls must be
   `#[inline(always)]` or a leaf compiles without the level's features, and a closure cannot carry that attribute on
   stable Rust (B:8). Dispatch cannot cross `dyn` (A:10). `array::from_fn` falling out of line cost a rational kernel

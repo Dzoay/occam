@@ -53,7 +53,7 @@ for (let round = 0; round < ROUNDS; round += 1) {
   }
 }
 // Each lane kernel in the simd128 build, at width 1 and at its width, alternating in the same way.
-const KERNELS = ["masks", "filter", "sines", "angles"];
+const KERNELS = ["masks", "filter", "sines", "angles", "splines"];
 const REPEATS = 50;
 const kernelTimed = (name, lanes) =>
   page.evaluate(

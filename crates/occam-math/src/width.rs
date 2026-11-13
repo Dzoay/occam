@@ -16,3 +16,8 @@ pub const FILTER: usize = 4;
 /// width 1's instructions at 4, and 1.9 and 1.4 times as fast with simd128. At 2 on x86-64, `atan2` took more
 /// instructions than at width 1.
 pub const ANALYTIC: usize = 4;
+
+/// Spline surfaces at many points of one span, as a tessellator asks for them, where the span's knots and poles are
+/// read once for every lane: 49% of width 1's instructions at 4 on a bicubic's points and first derivatives, and 2.05
+/// times as fast with simd128.
+pub const SPLINE: usize = 4;

@@ -5,11 +5,11 @@
 
 use std::process::ExitCode;
 
-use occam::{Code, DisplayUnits, DistanceQuery, NamedValue, Report, distance_json};
+use occam::{Code, DisplayUnits, DistanceQuery, Fault, NamedValue, Report, distance_json};
 
 /// The first problem with the command line. `position` counts arguments from 1.
 fn bad(position: u32) -> Report {
-    Report::new(Code::BadArgument).with_value(NamedValue::count("position", position))
+    Report::new(Code::BadArgument, Fault::InvalidInput).with_value(NamedValue::count("position", position))
 }
 
 fn numbers<const N: usize>(text: &str, position: u32) -> Result<[f64; N], Report> {
@@ -167,14 +167,14 @@ mod tests {
     #[test]
     fn with_the_flag_a_success_is_the_json_form() {
         let (text, status) = run(&strings(GOOD));
-        assert!(text.starts_with(r#"{"schema":1,"value":5.0,"#), "{text}");
+        assert!(text.starts_with(r#"{"schema":2,"value":5.0,"#), "{text}");
         assert_eq!(status, 0);
     }
 
     fn position(arguments: &[&str]) -> f64 {
         let report = parse(&strings(arguments)).unwrap_err();
         assert_eq!(report.code, Code::BadArgument);
-        report.value("position").map_or(f64::NAN, |value| value.value)
+        report.value("position").and_then(NamedValue::number).unwrap_or(f64::NAN)
     }
 
     #[test]

@@ -5,7 +5,7 @@ use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Code, DisplayUnits, EntityRef, NamedValue, RemedyKind};
+use crate::{Code, DisplayUnits, EntityRef, Fault, NamedValue, Reason, RemedyKind, Stage};
 
 /// A fix occam suggests, with the parameters to apply it (L3).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -46,15 +46,16 @@ impl Remedy {
     }
 }
 
-/// What a solver had achieved when it stopped (L5).
+/// What a solver had achieved when it stopped (L5). The input model is unchanged on failure, so there is no last valid
+/// one to name (S6: no agent used it).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Partial {
+    /// Where it stopped.
+    pub stage: Stage,
     /// The entities it failed on, such as a pair of faces.
     pub failing: Vec<EntityRef>,
     /// What it had measured, such as curves found and the residual gap.
     pub values: Vec<NamedValue>,
-    /// The last valid model, if there is one. The input model is unchanged on failure.
-    pub last_valid: Option<EntityRef>,
 }
 
 /// What a [`Report`] says.
@@ -62,6 +63,12 @@ pub struct Partial {
 pub struct Details {
     /// What happened.
     pub code: Code,
+    /// What kind of failure it is, chosen where it was found. A note or a warning has none.
+    #[serde(default)]
+    pub fault: Option<Fault>,
+    /// Why, from a closed list, where one applies.
+    #[serde(default)]
+    pub reason: Option<Reason>,
     /// The entities involved.
     pub entities: Vec<EntityRef>,
     /// The numbers involved, named and tagged by quantity.
@@ -90,8 +97,33 @@ impl Deref for Report {
 impl Report {
     /// A report of this code with nothing else yet.
     #[must_use]
-    pub fn new(code: Code) -> Self {
-        Self(Box::new(Details { code, entities: Vec::new(), values: Vec::new(), remedies: Vec::new(), partial: None }))
+    pub fn new(code: Code, fault: Fault) -> Self {
+        Self::with_fault(code, Some(fault))
+    }
+
+    /// A note or a warning on an operation that succeeded, which is no failure and so has no fault.
+    #[must_use]
+    pub fn note(code: Code) -> Self {
+        Self::with_fault(code, None)
+    }
+
+    fn with_fault(code: Code, fault: Option<Fault>) -> Self {
+        let (entities, values, remedies) = (Vec::new(), Vec::new(), Vec::new());
+        Self(Box::new(Details { code, fault, reason: None, entities, values, remedies, partial: None }))
+    }
+
+    /// Says why, from the closed list.
+    #[must_use]
+    pub fn with_reason(mut self, reason: Reason) -> Self {
+        self.0.reason = Some(reason);
+        self
+    }
+
+    /// Adds the tolerance that decided the outcome, as `tolerance-in-force`, so that an agent reasons from the right one
+    /// (S6: c04).
+    #[must_use]
+    pub fn with_tolerance_in_force(self, millimetres: f64) -> Self {
+        self.with_value(NamedValue::length("tolerance-in-force", millimetres))
     }
 
     /// Adds an entity involved.
@@ -171,7 +203,7 @@ mod tests {
     use crate::{AngleUnit, EntityKind, LengthUnit};
 
     fn schema_report() -> Report {
-        Report::new(Code::UnsupportedSchema)
+        Report::new(Code::UnsupportedSchema, Fault::InvalidInput)
             .with_value(NamedValue::count("found", 9))
             .with_value(NamedValue::count("supported", 1))
     }
@@ -185,12 +217,12 @@ mod tests {
     #[test]
     fn a_placeholder_with_no_value_stays_visible() {
         let want = "Schema version {found} is not supported. This build reads version {supported}.";
-        assert_eq!(Report::new(Code::UnsupportedSchema).message(DisplayUnits::default()), want);
+        assert_eq!(Report::new(Code::UnsupportedSchema, Fault::InvalidInput).message(DisplayUnits::default()), want);
     }
 
     #[test]
     fn numbers_in_the_wording_use_the_callers_units() {
-        let report = Report::new(Code::Malformed).with_value(NamedValue::length("line", 20.0));
+        let report = Report::new(Code::Malformed, Fault::InvalidInput).with_value(NamedValue::length("line", 20.0));
         let units = DisplayUnits { length: LengthUnit::Centimetre, angle: AngleUnit::Radian };
         assert_eq!(
             report.message(units),
@@ -217,9 +249,9 @@ mod tests {
 
     #[test]
     fn builders_accumulate() {
-        let edge = EntityRef::new(EntityKind::Edge, 7);
-        let partial = Partial { failing: vec![edge], values: vec![], last_valid: None };
-        let report = Report::new(Code::Malformed).with_entity(edge).with_partial(partial.clone());
+        let edge = EntityRef::new(EntityKind::Edge, 7, 1);
+        let partial = Partial { failing: vec![edge], values: vec![], stage: Stage::Pairs };
+        let report = Report::new(Code::Malformed, Fault::InvalidInput).with_entity(edge).with_partial(partial.clone());
         assert_eq!(report.entities, [edge]);
         assert_eq!(report.partial, Some(partial));
         assert_eq!(Remedy::new(RemedyKind::UseSchema).with_entity(edge).entities, [edge]);

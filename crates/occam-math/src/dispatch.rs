@@ -3,6 +3,7 @@
 //! `unsafe` and no `target-cpu` build (P4). Every level gives the same bits, because nothing fuses, so
 //! `docs/DETERMINISM.md` rule 5 stands. `fearless_simd` is named here and nowhere else in the kernel.
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use fearless_simd::Simd;
 
 /// An instruction level a kernel can be compiled for.

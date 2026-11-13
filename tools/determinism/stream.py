@@ -11,6 +11,7 @@ import struct
 import sys
 
 from atan2 import atan2
+from exp import exp, expm1, sinh_cosh
 from sincos import sin_cos
 
 RECORD = pathlib.Path(__file__).resolve().parents[2] / "ci" / "determinism-hashes.txt"
@@ -143,6 +144,7 @@ def select(mask, yes, no):
 def outputs(a, b, c):
     """Every operation on one set of inputs, in the order of the record."""
     sine, cosine = sin_cos(a)
+    hyperbolic_sine, hyperbolic_cosine = sinh_cosh(a)
     return [
         ("add", a + b),
         ("sub", a - b),
@@ -160,6 +162,10 @@ def outputs(a, b, c):
         ("cos", cosine),
         ("copysign", math.copysign(a, b)),
         ("atan2", atan2(a, b)),
+        ("exp", exp(a)),
+        ("expm1", expm1(a)),
+        ("sinh", hyperbolic_sine),
+        ("cosh", hyperbolic_cosine),
     ]
 
 

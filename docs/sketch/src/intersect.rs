@@ -6,7 +6,7 @@ use std::sync::Arc;
 use occam_report::Report;
 use occam_units::{Length, Point, Tolerance, UvPoint, World};
 
-use crate::geom::{Curve, ParamCurve, Surface};
+use occam_geom::{Curve, ParamCurve, Surface};
 use occam_math::{Exec, Grain, Tally};
 
 /// A section curve, with its image on both surfaces (S1 item 7), its fit (S1 item 10) carried by the curves themselves.

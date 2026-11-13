@@ -26,6 +26,15 @@ precedence = "override"
 SPDX-FileCopyrightText = ["2026 The occam contributors", "2026 The phasekit contributors"]
 SPDX-License-Identifier = "MIT OR Apache-2.0"
 
+# occam-math's `exp` is phasekit's port of Arm's optimized-routines v26.07 (math/exp.c, with the table and coefficients
+# of math/exp_data.c, without FMA), and its `expm1` is phasekit's own on that reduction. Arm's licence is MIT OR
+# Apache-2.0 WITH LLVM-exception, taken here under MIT (docs/decisions/2026-11-11-exp-from-arm.md).
+[[annotations]]
+path = "crates/occam-math/src/exp.rs"
+precedence = "override"
+SPDX-FileCopyrightText = ["2026 The occam contributors", "2026 The phasekit contributors", "2018-2025 Arm Limited"]
+SPDX-License-Identifier = "(MIT OR Apache-2.0) AND (MIT OR Apache-2.0 WITH LLVM-exception)"
+
 # Test recipes converted from the arris fixture corpus (tests/fixtures/), under the same licence. Attribution per case
 # is in each file's `origin`, and the commit in tools/corpus/sources.lock.json.
 [[annotations]]
