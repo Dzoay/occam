@@ -2,30 +2,45 @@
 
 The fifth milestone of [the first release](first-release.md). A model is meshed and drawn in a browser. A new crate,
 `occam-mesh`, samples each shared edge once, meshes each face against those samples, and checks every output for
-watertightness. Mesh workers mesh ranges of faces from the native bytes the editing worker publishes, and a page in
-`web/` draws them on the GPU. The design is [mesh and renderer](../architecture/mesh-and-renderer.md),
-[the browser](../architecture/browser.md) and [determinism](../architecture/determinism.md). Parity row 1.7.
+watertightness. Mesh workers mesh ranges of faces from the native bytes the editing worker publishes. A page in `web/`
+draws them with [WebGPU](../decisions/2026-11-13-webgpu-on-chromium-and-firefox.md),
+[picks](../decisions/2026-11-13-picking-in-the-first-release.md) faces and edges by id against the CPU mesh, and lets
+the GPU write the display of faces under a
+[continuous edit](../decisions/2026-11-13-write-through-in-the-first-release.md). The design is
+[mesh and renderer](../architecture/mesh-and-renderer.md), [the browser](../architecture/browser.md) and
+[determinism](../architecture/determinism.md). Parity row 1.7.
 
 ```mermaid
 flowchart LR
   edges --> faces --> watertight --> buffers
   buffers --> workers & renderer
-  workers & renderer --> timing
+  workers & renderer --> pick & wt["write-through"]
+  pick & wt --> timing
 ```
 
-**Exit (gate):** `just gates`, `just mutants` and `just perf` are green; the watertight check passes on every mesh the
-tests make, and every seeded crack is caught and named by its edge; meshes hash the same at 1 and N threads, on x86-64
-and on wasm32 baseline and simd128; in headless Chromium the page draws `construction`'s exit model from the mesh
-workers, with its buffers asserted. **Exit (goal):** [P9's](../evidence/2026-11-09-p9.md) quality and scaling tables on
-the real mesher, and the mesh pool timed in the browser beside [P10's](../evidence/2026-11-09-p10.md).
+**Exit (gate):** `just gates`, `just mutants` and `just perf` are green. The watertight check passes on every mesh the
+tests make, and every seeded crack is caught and named by its edge. Meshes and picks are the same at 1 and N threads, on
+x86-64 and on wasm32 baseline and simd128. In headless Chromium:
+
+- the page draws `construction`'s exit model from the mesh workers, with its buffers asserted;
+- a click on a face, and one on an edge, give the ids `occam pick` gives for the same rays, and `occam describe` of each
+  names what was clicked;
+- on the software adapter, write-through's positions are within 1e-6 of the part's size of the `f64` surface;
+  neighbours hold the same bits along their shared edge; the index buffer does not change during an edit; and the mesh
+  hash is the same with write-through on and off.
+
+**Exit (goal):** [P9's](../evidence/2026-11-09-p9.md) quality and scaling tables on the real mesher; the mesh pool timed
+in the browser beside [P10's](../evidence/2026-11-09-p10.md); and write-through and picking timed on real GPUs in
+Chromium and Firefox, against the bar that [O30](../PLAN.md#7-decisions-the-user-still-owns) sets.
 
 **PR grouping:** every step shares one PR, with a commit each, as for the milestones before it.
 
 **Throughout.** `occam-mesh` takes its place in [the layers](../PLAN.md#4-layers), std-only, computing through
 `occam-math` and running in parallel only through `Exec`. Meshing [ships complete](first-release.md) as an operation
-does. GPU results stay display-only ([decision](../decisions/2026-11-09-gpu-drawing.md)): never in a digest, a mesh,
-the watertight check or a test that compares bits. No Rust dependency is expected beyond the allowed
-[`wasm-bindgen`](../decisions/2026-11-09-wasm-bindgen.md); `js-sys` or `web-sys`, if needed, is the user's call.
+does. GPU results stay display-only ([decision](../decisions/2026-11-09-gpu-drawing.md)), write-through's included:
+never in a digest, a mesh, a pick, the watertight check, or a test that holds them to recorded bits. Write-through's
+crack test compares two faces' GPU positions with each other, in one frame. No Rust dependency is expected beyond the
+allowed [`wasm-bindgen`](../decisions/2026-11-09-wasm-bindgen.md); `js-sys` or `web-sys`, if needed, is the user's call.
 `web/` expects no runtime dependency (O8), and its tests use the Playwright `gates perf` already runs. Each face is
 meshed once: [view-dependent detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes after the
 release. The sketch's `mesh.rs`, then `compose.rs`'s `Session`, are deleted as they become real.
@@ -68,14 +83,15 @@ lane width.
 
 ### `view.buffers`
 
-The mesh as [the renderer contract](../architecture/mesh-and-renderer.md#the-renderer-contract) wants it: flat arrays
-of `f64` positions, unit normals and `u32` indices, with a vertex block and a triangle range per face. After an edit,
-only the faces it touched and those sharing an edge whose samples changed are meshed again; the rest keep their blocks
-bit for bit. `occam mesh` writes them, with a `--json` summary, and `occam-wasm` exposes the same.
+The mesh as [the renderer contract](../architecture/mesh-and-renderer.md#the-renderer-contract) wants it: flat arrays of
+`f64` positions, unit normals, each vertex's `(u, v)` on its face (write-through evaluates there) and `u32` indices,
+with a vertex block and a triangle range per face. After an edit, only the faces it touched and those sharing an edge
+whose samples changed are meshed again; the rest keep their blocks bit for bit. `occam mesh` writes them, with a
+`--json` summary, and `occam-wasm` exposes the same.
 
 *Failing test first:* a cube's and a cylinder's buffers are asserted (counts, strides, per-face ranges, indices in
-range); adding a second primitive leaves the first's blocks unchanged and unmeshed; `occam mesh --json` gives one
-result per face.
+range, and each vertex within the band of its face's surface at its `(u, v)`); adding a second primitive leaves the
+first's blocks unchanged and unmeshed; `occam mesh --json` gives one result per face.
 
 ### `view.workers`
 
@@ -89,14 +105,50 @@ native mesher's hash; a failing face is named and the rest arrive; the main thre
 
 ### `view.renderer`
 
-`web/`, the viewer: a page that draws the per-face buffers with the API O19 picks. Its buffers can be read by both a
-storage binding and a vertex fetch, coordinates are `f32` offsets from an `f64` origin the page keeps, uploads are
-bounded per frame, and the frame loop keeps submitting during interaction. It orbits, pans and zooms; it does not
-pick. CI has no GPU, so its tests run on headless Chromium's software adapter and assert buffers, not pixels.
+`web/`, the viewer: a page that draws the per-face buffers with WebGPU. Its buffers can be read by both a storage
+binding and a vertex fetch, coordinates are `f32` offsets from an `f64` origin the page keeps, uploads are bounded per
+frame, and the frame loop keeps submitting during interaction. It orbits, pans and zooms. A browser without WebGPU gets
+a named report with its remedy. CI has no GPU, so its tests run on headless Chromium's software adapter and assert
+buffers, not pixels.
 
 *Failing test first:* the page draws a cube, and the buffers it uploaded match the mesh, offsets within `f32` of the
 `f64` positions; a model over the per-frame bound is uploaded in pieces; a face edited away disappears without the
-others being uploaded again.
+others being uploaded again; a page denied WebGPU shows the report, not a blank canvas.
+
+### `view.pick`
+
+`occam-mesh` picks against the CPU mesh, never GPU output. A ray, built in `f64` from the page's origin and camera, is
+tested against each face's triangles through a box tree built with the mesh, and against each edge's samples within a
+tolerance the caller gives; the page gives a few pixels at the hit's depth. The nearest hit gives its id, an edge
+winning over its faces within the tolerance, and ties go to the smaller id. `occam pick --json` and `occam-wasm` expose
+it. In the page, a click goes to a mesh worker and comes back as JSON with the id and the point hit, and the page shows
+the id. A ray that hits nothing answers no id, with the reason.
+
+*Failing test first:* a ray through the centre of each face of a cube picks that face; a ray within the tolerance of an
+edge picks the edge, and one just beyond it the face; the same rays give the same ids at 1 and N threads and on wasm32;
+from JSON alone, an agent test builds `construction`'s exit model, picks the cylinder's side with `occam pick`, and
+`occam describe` of the answer says a cylinder of radius 4; in headless Chromium a click at that face's projected centre
+gives the same id, and the pick path maps no GPU buffer.
+
+### `view.write-through`
+
+During a continuous edit, the GPU writes the display of each face the edit changes:
+[P12's](../evidence/2026-11-09-p12.md) compute write-through, drawn and never read back. Each frame the page uploads the
+touched faces' new surfaces as rational B-splines, their control points offsets from its `f64` origin. Families with an
+exact B-spline form get there through `to_bspline` over the face's range; the others update on the CPU. An edge pass
+evaluates each shared edge once. A WGSL shader then evaluates each face at its CPU mesh's own `(u, v)`, mapped onto the
+face's new parameter box if that moved, and reads its boundary from the edges. Trims, triangles and the index buffer
+therefore stay as they are. When the edit stops, the touched faces are meshed again and their CPU blocks replace the
+GPU's. Uploads keep P12's bounds: vertex data in calls of at most 2 MiB, indices in 16 MiB, and a wait for the GPU after
+each 64 MiB. What produces each frame's surfaces is [O29](../PLAN.md#7-decisions-the-user-still-owns), needed before
+this step.
+
+*Failing test first:* on the software adapter, reading back for the test only, a face is streamed for 60 frames. Its
+index buffer and per-face ranges stay the same byte for byte. Its positions are within 1e-6 of the part's size of the
+`f64` surface at the same parameters, at offsets of up to 10⁷ part sizes from the origin (P12 measured 2.1e-7 to
+2.8e-7). The two faces at a shared edge hold the same bits there every frame (P12: 0 of 501 differ). A 1,000,000-point
+face's first fill goes in bounded pieces, and the page submits every frame during the edit. When the edit stops, the
+drawn blocks equal the CPU mesh's, and the mesh hash is the same as with write-through off.
 
 ### `view.timing`
 
@@ -106,11 +158,19 @@ and 10,001-face models; the native speed-up at 1 to 6 threads; and the pool in t
 warm. The editing worker's longest call on `construction`'s requests is recorded too, which
 [the browser topic](../architecture/browser.md) waits on before splitting a boolean across calls.
 
+Write-through and picking are timed on real GPUs, the measuring machine's discrete one and the laptop's integrated one,
+in Chromium and Firefox. Chromium runs headed if headless reaches only a software adapter. Write-through is measured
+with P12's measures and its 60 Hz rule (median frame at most 17.5 ms, 95th percentile at most 25 ms), with a whole face
+re-evaluated every frame at 1,000,000 and 4,000,000 points. These runs add what P12 left out: trims, per-face dispatch
+on a many-face model, rational surfaces, and the editing worker's time per frame. A pick is timed on P9's 10,001-face
+model. [O30](../PLAN.md#7-decisions-the-user-still-owns) says whether these figures are a gate or a goal.
+
 *Failing test first:* each new class is `perf.unrecorded` until the record takes it; the mesher's lane kernel fails
-the vectorisation check until it beats width 1.
+the vectorisation check until it beats width 1; the GPU timing script refuses a run on a software adapter.
 
 ## Open questions for the user
 
-Four decisions in [the plan's §7](../PLAN.md#7-decisions-the-user-still-owns) are due here, each recommended there:
-O19, which browsers, and so WebGPU or WebGL2, needed before `view.renderer`; O8, a framework for the page; O20,
-continuous editing of whole very large faces; and O28, picking in the viewer.
+Three decisions in [the plan's §7](../PLAN.md#7-decisions-the-user-still-owns) are due here, each recommended there:
+O8, a framework for the page, needed before `view.renderer`; O29, what produces each frame's surfaces in a continuous
+edit, needed before `view.write-through`; and O30, whether the figures on real GPUs are a gate or a goal, and a pick's
+target, needed before `view.timing`. O19, O20 and O28 are answered in the decisions linked at the top.
