@@ -319,3 +319,30 @@ fn a_binary_file_of_another_version_is_refused_with_its_version() {
         assert_eq!(refused.value("supported").and_then(NamedValue::number), Some(1.0));
     }
 }
+
+#[test]
+fn what_each_named_step_was_comes_back_from_either_encoding() {
+    let (_, cube) = models(&serial()).swap_remove(0);
+    let mut edit = cube.edit();
+    edit.name_step(3, "cylinder");
+    let named = edit.step();
+    let cube = edit.commit(&serial()).unwrap().0;
+    let mut edit = cube.edit();
+    let body = cube.ids::<Body>()[0].entity();
+    edit.copying(body);
+    edit.name_step(0, "copy");
+    let copied = edit.step();
+    let model = edit.commit(&serial()).unwrap().0;
+    let json: Value = serde_json::from_slice(&save(&model).unwrap()).unwrap();
+    let want = serde_json::json!([
+        {"step": named, "request-step": 3, "operation": "cylinder", "copy-of": null},
+        {"step": copied, "request-step": 0, "operation": "copy", "copy-of": body.text()}
+    ]);
+    assert_eq!(json["steps"], want, "after the step counter, in step order");
+    let from_json = load(&save(&model).unwrap(), &serial()).unwrap();
+    let from_twin = load(&save_binary(&model).unwrap(), &serial()).unwrap();
+    for back in [&from_json, &from_twin] {
+        assert_eq!((back.note(named), back.note(copied)), (model.note(named), model.note(copied)));
+        assert_eq!(back.digest(), model.digest());
+    }
+}

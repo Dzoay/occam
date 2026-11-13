@@ -2,11 +2,11 @@
 //! The topology's records as the native format writes them: every field by name, links in their text form, numbers
 //! exact, and nothing a record does not have, so a misspelt or extra field fails where it is written.
 
-use occam_report::StepRole;
+use occam_report::{EntityRef, StepRole};
 use occam_topo::{
     Around, Body, BodyKind, BodyRecord, CurveGeom, Edge, EdgeRecord, EdgeRole, EdgeUse, EdgeUseRecord, End, Face,
-    FaceRecord, Id, Loop, LoopRecord, ParamCurveGeom, Provenance, Sheet, Shell, ShellRecord, SurfaceGeom, UseOwner,
-    Vertex, VertexRecord, Wire, WireRecord,
+    FaceRecord, Id, Loop, LoopRecord, ParamCurveGeom, Provenance, Sheet, Shell, ShellRecord, StepNote, SurfaceGeom,
+    UseOwner, Vertex, VertexRecord, Wire, WireRecord,
 };
 use occam_units::{Length, Point, UvPoint, Vec3, World};
 use serde::{Deserialize, Serialize};
@@ -46,6 +46,28 @@ pub(crate) enum Which {
 pub(crate) struct Born {
     step: u64,
     role: StepRole,
+}
+
+/// What a step's request named it, kept with the model by the step's number.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub(crate) struct NoteFile {
+    step: u64,
+    request_step: u32,
+    operation: String,
+    copy_of: Option<EntityRef>,
+}
+
+impl NoteFile {
+    /// The note of the step `step`, as written.
+    pub(crate) fn of(step: u64, note: &StepNote) -> Self {
+        Self { step, request_step: note.request_step, operation: note.operation.clone(), copy_of: note.copy_of }
+    }
+
+    /// The step it is the note of, and the note.
+    pub(crate) fn read(self) -> (u64, StepNote) {
+        (self.step, StepNote { request_step: self.request_step, operation: self.operation, copy_of: self.copy_of })
+    }
 }
 
 /// A place round a vertex's star.

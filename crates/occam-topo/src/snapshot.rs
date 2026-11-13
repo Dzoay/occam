@@ -3,6 +3,7 @@
 //! costs a pointer per chunk.
 
 use core::num::NonZeroU32;
+use std::collections::BTreeMap;
 
 use occam_report::{Code, EntityKind, EntityRef, Fault, NamedValue, Quantity, Report};
 use occam_units::Tolerance;
@@ -10,7 +11,7 @@ use occam_units::Tolerance;
 use crate::kind::{Id, Kind, Visit, dispatch};
 use crate::records::{
     BodyRecord, CurveRecord, EdgeRecord, EdgeUseRecord, FaceRecord, LoopRecord, ParamCurveRecord, Provenance,
-    ShellRecord, SurfaceRecord, VertexRecord, WireRecord,
+    ShellRecord, StepNote, SurfaceRecord, VertexRecord, WireRecord,
 };
 use crate::table::{State, Table};
 
@@ -20,6 +21,8 @@ pub struct Model {
     pub(crate) tolerance: Tolerance,
     /// The last step committed: steps count over the model's life, so a step number is unique across requests.
     pub(crate) step: u64,
+    /// What each step a request named was, by the step's number.
+    pub(crate) notes: BTreeMap<u64, StepNote>,
     pub(crate) bodies: Table<BodyRecord>,
     pub(crate) shells: Table<ShellRecord>,
     pub(crate) faces: Table<FaceRecord>,
@@ -50,6 +53,7 @@ impl Model {
         Self {
             tolerance,
             step: 0,
+            notes: BTreeMap::new(),
             bodies: Table::with_most(most),
             shells: Table::with_most(most),
             faces: Table::with_most(most),
@@ -208,6 +212,17 @@ impl Snapshot {
     #[must_use]
     pub const fn tolerance(&self) -> Tolerance {
         self.model.tolerance
+    }
+
+    /// What its request said the step `step` was, if a request named it.
+    #[must_use]
+    pub fn note(&self, step: u64) -> Option<&StepNote> {
+        self.model.notes.get(&step)
+    }
+
+    /// What its requests said each step they named was, by step, in order: what a file saves.
+    pub fn notes(&self) -> impl Iterator<Item = (u64, &StepNote)> + '_ {
+        self.model.notes.iter().map(|(&step, note)| (step, note))
     }
 
     /// The last step committed, counted over the model's life: 0 for a model no edit has changed.

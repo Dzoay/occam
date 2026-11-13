@@ -14,14 +14,17 @@ use crate::{DisplayUnits, EntityRef, NamedValue, StepRole};
 pub struct Origin {
     /// The model's step that made it, counted over the model's whole life, so unique across requests.
     pub step: u64,
-    /// That step's index in the request being answered, if that request made it.
+    /// That step's index in its request, from 0, as `occam run` numbers it, if a request named the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_step: Option<u32>,
-    /// What that step asked for, as a request names it, if the request being answered made it.
+    /// What that step asked for, as a request names it, if a request named the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation: Option<String>,
     /// Its part in that step.
     pub role: StepRole,
+    /// The body the step copied, for a copy's entities: whose copy it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy_of: Option<EntityRef>,
 }
 
 /// What an entity is in the caller's terms (S6, O26).
@@ -107,8 +110,13 @@ mod tests {
     use crate::{AngleUnit, EntityKind, LengthUnit, Quantity};
 
     fn edge() -> Description {
-        let origin =
-            Origin { step: 4, request_step: Some(1), operation: Some("wire".to_string()), role: StepRole::Made };
+        let origin = Origin {
+            step: 4,
+            request_step: Some(1),
+            operation: Some("wire".to_string()),
+            role: StepRole::Made,
+            copy_of: None,
+        };
         Description {
             entity: EntityRef::new(EntityKind::Edge, 3, 1),
             form: "line".to_string(),
@@ -139,13 +147,15 @@ mod tests {
     fn a_description_is_read_back_without_what_is_shown() {
         let text = serde_json::to_string(&edge().shown(DisplayUnits::default())).unwrap();
         assert_eq!(serde_json::from_str::<Description>(&text).unwrap(), edge());
-        let older = Origin { step: 2, request_step: None, operation: None, role: StepRole::Profile };
+        let older = Origin { step: 2, request_step: None, operation: None, role: StepRole::Profile, copy_of: None };
         let text = serde_json::to_string(&older).unwrap();
-        assert_eq!(
-            text, r#"{"step":2,"role":"profile"}"#,
-            "a step of an earlier request has no index or operation here"
-        );
+        assert_eq!(text, r#"{"step":2,"role":"profile"}"#, "a step no request named has no index or operation");
         assert_eq!(serde_json::from_str::<Origin>(&text).unwrap(), older);
+        let body = EntityRef::new(EntityKind::Body, 0, 1);
+        let copy = Origin { copy_of: Some(body), role: StepRole::Copy, ..edge().origin.unwrap() };
+        let text = serde_json::to_string(&copy).unwrap();
+        assert_eq!(text, r#"{"step":4,"request-step":1,"operation":"wire","role":"copy","copy-of":"body:0/1"}"#);
+        assert_eq!(serde_json::from_str::<Origin>(&text).unwrap(), copy);
     }
 
     #[test]

@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use occam_report::{Code, EntityRef, Fault, Report};
+use occam_report::{Code, EntityRef, Fault, Report, StepRole};
 use occam_topo::{
     Around, Body, CurveRecord, Derivation, Edge, EdgeUse, Edit, Face, Id, Kind, Loop, ParamCurveRecord, Record, Shell,
     SurfaceRecord, UseOwner, Vertex, Wire,
@@ -152,6 +152,7 @@ impl Copier<'_> {
     fn body_shells_faces(&mut self, edit: &mut Edit) -> Result<(), Report> {
         let ids = &self.ids;
         let mut r = record(edit, ids.body.0)?;
+        r.born = edit.provenance(StepRole::Copy);
         r.first_shell = r.first_shell.map(|s| to(&ids.shells, s));
         r.first_wire = r.first_wire.map(|w| to(&ids.wires, w));
         edit.set(ids.body.1, r)?;
@@ -170,6 +171,7 @@ impl Copier<'_> {
             }
             r.surface = to(&surfaces, r.surface);
             r.sheet = self.moves.sheets.get(&old).copied().unwrap_or(r.sheet);
+            r.born = edit.provenance(StepRole::Copy);
             (r.shell, r.outer) = (to(&ids.shells, r.shell), to(&ids.loops, r.outer));
             edit.set(new, r)?;
         }
@@ -222,6 +224,7 @@ impl Copier<'_> {
             r.ends = (to(&ids.vertices, r.ends.0), to(&ids.vertices, r.ends.1));
             r.around = (ids.around(r.around.0), ids.around(r.around.1));
             r.first_use = r.first_use.map(|u| to(&ids.uses, u));
+            r.born = edit.provenance(StepRole::Copy);
             edit.set(new, r)?;
         }
         for (&old, &new) in &ids.vertices {
@@ -235,13 +238,14 @@ impl Copier<'_> {
     }
 }
 
-/// Writes a moved copy of the body `body`, every entity new and derived as copied from the one it came from, and gives
-/// the copy.
+/// Writes a moved copy of the body `body`, every entity new and derived as copied from the one it came from, each that
+/// keeps a provenance made by this step as a copy, the step noted as copying `body`, and gives the copy.
 ///
 /// # Errors
 ///
 /// What the edit reports.
 pub(super) fn copied(edit: &mut Edit, body: Id<Body>, parts: &Parts, moves: &Moves) -> Result<Id<Body>, Report> {
+    edit.copying(body.entity());
     let ids = Ids {
         body: (body, edit.reserve()),
         shells: fresh(edit, &parts.shells),

@@ -136,7 +136,11 @@ fn a_description_in_words_gives_its_values_origin_and_neighbours_where_it_has_th
     let vertex = "vertex:0/1 vertex: point (0, 0, 0) mm; adjacent edge:0/1 edge:3/1 edge:9/1";
     assert_eq!(lines[0], (true, vertex.to_string()));
     assert!(lines[1].1.starts_with("body:0/1 solid: shells 1, faces 6, wires 0, low ("), "{}", lines[1].1);
-    assert!(lines[1].1.ends_with(" mm; made at step 1; adjacent shell:0/1"), "{}", lines[1].1);
+    assert!(
+        lines[1].1.ends_with(" mm; made by step 0, box; adjacent shell:0/1"),
+        "as `run` numbers it: {}",
+        lines[1].1
+    );
     assert!(lines[2].1.starts_with("surface:0/1 plane: origin (5, 10, 0) mm, normal ("), "{}", lines[2].1);
     assert!(!lines[2].1.contains("adjacent"), "geometry names no neighbour: {}", lines[2].1);
 }

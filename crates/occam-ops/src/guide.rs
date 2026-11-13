@@ -62,7 +62,9 @@ Refused by this build, by name: {refused}.
 
 Bad input is refused before any step runs, each with its code and its place, such as steps[2].size[0]. A step that
 fails stops the request, and the model is written back only if every step went through. The result says what each
-step made, created, changed and deleted, by id, and describes what it created."#,
+step made, created, changed and deleted, by id, and describes what it created. A description says which step made
+an entity as this numbers a request's steps, from 0, with the step's operation, even in a later command; a copy's
+also names the body it copied."#,
         lengths = either(&lengths),
         angles = either(&angles),
         operations = operations(),

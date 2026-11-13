@@ -32,7 +32,10 @@ erDiagram
 
 - **Seams are real edges** between chart-sized patches. No face crosses its own seam.
 - **Provenance:** bodies, faces and edges record the step that made them and their part in it (profile, target, tool,
-  input, made). Step numbers count over the model's life. This is what agents asked for first (S6).
+  input, made, copy). Step numbers count over the model's life. The model keeps a note of each step a request named:
+  its index in the request, from 0, its operation, and for a copy the body it copied, so a description says it as
+  `occam run` does ([decision](../decisions/2026-11-13-step-numbers-as-run-gives-them.md)). This is what agents asked
+  for first (S6).
 
 ## Ids
 
@@ -69,7 +72,8 @@ flowchart LR
   exists.
 - `reserve` gives an id for a record written later, so cycles (an edge and its uses) can be built.
 - `derive(new, old, how)` records lineage: split, trimmed, merged, copied or swept. A new entity takes the provenance
-  of the first of its own kind it came from, unless it was swept from it: what a sweep makes is its own.
+  of the first of its own kind it came from, unless it was swept or copied from it: what a sweep or a copy makes is
+  its own.
 - `Changes` lists what was created, changed and deleted, and each new entity's lineage.
 - `Snapshot::check_all` checks the whole model, for loading, importing and tests.
 

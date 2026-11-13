@@ -11,6 +11,7 @@ use occam_units::Tolerance;
 
 use crate::geometric;
 use crate::kind::Kind;
+use crate::records::StepNote;
 use crate::snapshot::{Model, Snapshot};
 use crate::table::{State, Table};
 
@@ -41,6 +42,11 @@ impl Restore {
     /// Gives kind `K`'s table `slots`, in slot order, in place of what it had.
     pub fn table<K: Kind>(&mut self, slots: Vec<Saved<K::Record>>) {
         *K::table_mut(&mut self.model) = Table::restore(slots.into_iter().map(|s| (s.generation, s.record)));
+    }
+
+    /// Gives the step `step` the note its request named it by, in place of what it had.
+    pub fn note(&mut self, step: u64, note: StepNote) {
+        self.model.notes.insert(step, note);
     }
 
     /// The snapshot: every edge's deviation measured and stored, then the whole model checked on `exec`.

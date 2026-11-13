@@ -20,8 +20,8 @@ flowchart LR
 - **Curves and surfaces as their family's name and the numbers that define them,** the numbers their content holds,
   so each family restores itself bit for bit and refuses what none of its constructors makes. A family the format does
   not write yet is refused at save, by name, never dropped.
-- **Versioned from the first commit.** It holds the tolerance, the step counter and every slot's generation, so a loaded
-  model has the same ids and digest as the saved one.
+- **Versioned from the first commit.** It holds the tolerance, the step counter, each named step's note and every
+  slot's generation, so a loaded model has the same ids, origins and digest as the saved one.
 - **Loading checks the whole model.** Nothing from outside is trusted.
 - **Bytes at the seam, not text.** `save` and `save_binary` give `Vec<u8>`, and `load` takes `&[u8]` in either
   encoding, telling them apart by the twin's magic.

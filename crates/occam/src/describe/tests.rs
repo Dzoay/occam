@@ -326,8 +326,8 @@ fn describing_any_ids_gives_one_description_each_in_the_order_asked() {
     assert_eq!(forms, ["line", "plane", "none", "line", "none", "none"]);
     assert_eq!(
         got[1].origin.as_ref().map(|o| (o.step, o.request_step, o.role)),
-        Some((3, None, StepRole::Made)),
-        "no request here"
+        Some((3, Some(2), StepRole::Made)),
+        "the face step as its request numbered it, though no request is being answered here"
     );
     let surface = model.view(model.ids::<Face>()[0]).unwrap().surface_id().entity();
     let curve = model.view(model.ids::<Edge>()[0]).unwrap().curve_id().entity();
@@ -446,4 +446,30 @@ fn a_faces_box_and_a_bodys_are_as_tight_as_measure_finds_them_after_any_sweep_or
         }
     }
     assert!(loose.is_empty(), "{} of {} boxes are looser than the band:\n{}", loose.len(), ids.len(), loose.join("\n"));
+}
+
+#[test]
+fn what_a_step_made_says_its_request_step_and_operation_long_after_the_request() {
+    // c5's build, whose two measures change no model, so the model's steps and the request's differ, then a copy.
+    let steps = json!([
+        {"op": "box", "label": "base", "size": [60, 40, 10]},
+        {"op": "measure", "target": "base", "what": ["volume"]},
+        {"op": "measure", "target": "base", "what": ["area"]},
+        {"op": "wedge", "size": [30, 40, 20], "top": {"start": 10, "width": 10}, "frame": {"origin": [100, 0, 0]}},
+        {"op": "cylinder", "label": "post", "radius": 6, "height": 25, "frame": {"origin": [200, 0, 0]}},
+        {"op": "copy", "target": "post", "frame": {"origin": [300, 0, 0], "z": [1, 0, 0], "x": [0, 0, -1]}}
+    ]);
+    let ran = run(None, &request("mm", &steps));
+    assert_eq!(ran.failed, None);
+    let model = ran.model.unwrap();
+    let bodies = model.ids::<Body>();
+    let copy_faces = model.view(bodies[3]).map(View::shells).and_then(|s| model.view(s[0])).unwrap().faces();
+    let ids = [bodies[2].entity(), bodies[3].entity(), copy_faces[0].entity()];
+    let origins: Vec<Origin> = describe(&model, &ids).into_iter().map(|d| d.origin.unwrap()).collect();
+    let said = |o: &Origin| (o.request_step, o.operation.clone(), o.role, o.copy_of);
+    let cylinder = Some("cylinder".to_string());
+    assert_eq!(said(&origins[0]), (Some(4), cylinder, StepRole::Made, None), "the cylinder, at step 4 as run gave it");
+    let copy = (Some(5), Some("copy".to_string()), StepRole::Copy, Some(bodies[2].entity()));
+    assert_eq!(said(&origins[1]), copy, "the copy's own step, naming whose copy it is");
+    assert_eq!(said(&origins[2]), copy, "and so for each of its faces");
 }

@@ -15,7 +15,7 @@ use occam_report::{
 use occam_topo::{Changes, Edit, Snapshot};
 use occam_units::Tolerance;
 
-use crate::describe::{self, Source, Steps};
+use crate::describe::{self, Source};
 
 pub use wire::ran_json;
 pub(crate) use wire::report_value;
@@ -108,7 +108,7 @@ pub fn run(model: Option<&Snapshot>, request: &str) -> Ran {
 /// What a request refused before any step ran did: nothing.
 fn refused(model: Option<&Snapshot>, units: DisplayUnits, reports: Vec<Report>) -> Ran {
     let sources: Vec<Source<'_>> = model.into_iter().map(Source::Model).collect();
-    let reports = reports.into_iter().map(|r| describe::report(r, &sources, &Steps::new())).collect();
+    let reports = reports.into_iter().map(|r| describe::report(r, &sources)).collect();
     let failed = Some(Failed { step: None, reports });
     Ran { model: model.cloned(), units, tolerance: None, done: Vec::new(), failed }
 }
@@ -134,11 +134,9 @@ pub(crate) fn run_request(
         Err(report) => return refused(model, units, vec![report]),
     };
     // Each model the run passes through, kept to describe what was gone by the end; a snapshot shares its chunks.
-    let (mut models, mut steps, mut labels, mut done) =
-        (vec![first.clone()], Steps::new(), Labels::default(), Vec::new());
+    let (mut models, mut labels, mut done) = (vec![first.clone()], Labels::default(), Vec::new());
     let (mut current, mut stopped) = (first, None);
     for step in &request.steps {
-        steps.insert(current.step().saturating_add(1), (step.index, step.operation));
         match one(&current, step, &labels, &mut execute) {
             Ok((next, made, changes, measured)) => {
                 if let (Some(label), Some(made)) = (&step.label, made) {
@@ -157,7 +155,7 @@ pub(crate) fn run_request(
             }
         }
     }
-    let failed = describe::describe_all(&models, &steps, &mut done, stopped);
+    let failed = describe::describe_all(&models, &mut done, stopped);
     Ran { model: Some(current), units, tolerance: Some(tolerance), done, failed }
 }
 
@@ -176,6 +174,7 @@ fn one(
         };
     }
     let mut edit = model.edit();
+    edit.name_step(step.index, step.operation.name());
     let made = match execute(&mut edit, step, labels) {
         Ok(made) => made,
         Err(report) => return Err((vec![report], Box::new(edit))),

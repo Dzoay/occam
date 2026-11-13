@@ -36,7 +36,7 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use exact::Exact;
 use geometry::{CurveFamily, Geometry, SurfaceFamily};
-use records::{BodyFile, EdgeFile, FaceFile, LoopFile, ShellFile, UseFile, VertexFile, WireFile};
+use records::{BodyFile, EdgeFile, FaceFile, LoopFile, NoteFile, ShellFile, UseFile, VertexFile, WireFile};
 
 /// What a native file says it is.
 pub const FORMAT: &str = "occam-native";
@@ -87,6 +87,7 @@ struct File {
     version: u32,
     tolerance: ToleranceFile,
     step: u64,
+    steps: Vec<NoteFile>,
     bodies: Vec<Slot<BodyFile>>,
     shells: Vec<Slot<ShellFile>>,
     faces: Vec<Slot<FaceFile>>,
@@ -153,6 +154,7 @@ fn file_of(model: &Snapshot) -> Result<File, Report> {
             angle: Exact(tolerance.angle().radians()),
         },
         step: model.step(),
+        steps: model.notes().map(|(step, note)| NoteFile::of(step, note)).collect(),
         bodies: slots::<Body, _>(model, |r: &BodyRecord| BodyFile::from(r)),
         shells: slots::<Shell, _>(model, |r: &ShellRecord| ShellFile::from(r)),
         faces: slots::<Face, _>(model, |r: &FaceRecord| FaceFile::from(r)),
@@ -327,6 +329,9 @@ pub fn parse(bytes: &[u8]) -> Result<Restore, Vec<Report>> {
         return Err(failures);
     }
     let mut restore = Restore::new(tolerance, f.step);
+    for (step, note) in f.steps.into_iter().map(NoteFile::read) {
+        restore.note(step, note);
+    }
     restore.table::<Body>(read::<Body, _>(f.bodies, Into::into));
     restore.table::<Shell>(read::<Shell, _>(f.shells, Into::into));
     restore.table::<Face>(read::<Face, _>(f.faces, Into::into));

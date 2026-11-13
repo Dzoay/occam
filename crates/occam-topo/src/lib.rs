@@ -54,7 +54,7 @@ pub use kind::{
 };
 pub use records::{
     Around, BodyKind, BodyRecord, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord,
-    ParamCurveRecord, Provenance, Sheet, ShellRecord, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
+    ParamCurveRecord, Provenance, Sheet, ShellRecord, StepNote, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
 };
 pub use restore::{Restore, Saved};
 pub use snapshot::Snapshot;

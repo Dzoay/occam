@@ -15,14 +15,14 @@
 //! parameters; an edge's faces, wires, vertices and curve; a vertex's edges. Geometry names none: what lies on it
 //! names it.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use occam_geom::{Curve, Shape, Surface};
-use occam_ops::{Operation, face_bounds};
-use occam_report::{Description, EntityKind, EntityRef, NamedValue, Origin, Report};
+use occam_ops::face_bounds;
+use occam_report::{Description, EntityKind, EntityRef, NamedValue, Origin, Report, StepRole};
 use occam_topo::{
     Body, BodyKind, CurveGeom, Edge, EdgeUse, Edit, Face, Id, Kind, Loop, ParamCurveGeom, Provenance, Shell, Snapshot,
-    SurfaceGeom, UseOwner, Vertex, View, Wire,
+    StepNote, SurfaceGeom, UseOwner, Vertex, View, Wire,
 };
 use occam_units::{Bounds, Point, Tolerance, World};
 
@@ -46,6 +46,14 @@ impl<'a> Source<'a> {
         }
     }
 
+    /// What its request said the step `step` was, if a request named it.
+    fn note(self, step: u64) -> Option<&'a StepNote> {
+        match self {
+            Self::Model(model) => model.note(step),
+            Self::Edit(edit) => edit.note(step),
+        }
+    }
+
     /// The tolerance its model is built to.
     const fn tolerance(self) -> Tolerance {
         match self {
@@ -60,29 +68,21 @@ impl<'a> Source<'a> {
     }
 }
 
-/// The steps of the request being answered, by the model's step each one was: its index and what it asked for.
-pub(crate) type Steps = BTreeMap<u64, (u32, Operation)>;
-
 /// The one place a run's result leaves the kernel: every id each step in `done` names is described, from the model the
 /// run left, which is what the caller works on next, then from the one the step left and the one it began from, for
 /// what was gone by the end; and every id the reports of a step that was refused name, from its edit as it stood, then
 /// from the model the run left. `models` holds each model the run passed through, in order. Gives the failure, if
 /// there is one, its reports described.
-pub(crate) fn describe_all(
-    models: &[Snapshot],
-    steps: &Steps,
-    done: &mut [Done],
-    refused: Option<Refused>,
-) -> Option<Failed> {
+pub(crate) fn describe_all(models: &[Snapshot], done: &mut [Done], refused: Option<Refused>) -> Option<Failed> {
     let last: Vec<Source<'_>> = models.last().map(Source::Model).into_iter().collect();
     for (step, (before, after)) in done.iter_mut().zip(models.iter().zip(models.iter().skip(1))) {
         let sources: Vec<Source<'_>> =
             last.iter().copied().chain([Source::Model(after), Source::Model(before)]).collect();
-        step.described = batch(&sources, steps, step.named());
+        step.described = batch(&sources, step.named());
     }
     refused.map(|(step, reports, edit)| {
         let sources: Vec<Source<'_>> = [Source::Edit(&edit)].into_iter().chain(last.iter().copied()).collect();
-        let reports = reports.into_iter().map(|r| report(r, &sources, steps)).collect();
+        let reports = reports.into_iter().map(|r| report(r, &sources)).collect();
         Failed { step: Some(step), reports }
     })
 }
@@ -92,29 +92,29 @@ pub(crate) fn describe_all(
 #[must_use]
 pub fn describe(model: &Snapshot, ids: &[EntityRef]) -> Vec<Description> {
     let sources = [Source::Model(model)];
-    ids.iter().map(|&entity| one(&sources, &Steps::new(), entity)).collect()
+    ids.iter().map(|&entity| one(&sources, entity)).collect()
 }
 
 /// Each of `ids` once, in id order, described from the first of `sources` it is live in.
-fn batch(sources: &[Source<'_>], steps: &Steps, ids: impl IntoIterator<Item = EntityRef>) -> Vec<Description> {
+fn batch(sources: &[Source<'_>], ids: impl IntoIterator<Item = EntityRef>) -> Vec<Description> {
     let ids: BTreeSet<EntityRef> = ids.into_iter().collect();
-    ids.into_iter().map(|entity| one(sources, steps, entity)).collect()
+    ids.into_iter().map(|entity| one(sources, entity)).collect()
 }
 
 /// `report`, with what each entity it names is.
-pub(crate) fn report(report: Report, sources: &[Source<'_>], steps: &Steps) -> Report {
+pub(crate) fn report(report: Report, sources: &[Source<'_>]) -> Report {
     let named = report.named();
     if named.is_empty() {
         return report;
     }
-    let described = batch(sources, steps, named);
+    let described = batch(sources, named);
     report.with_described(described)
 }
 
 /// `entity` described from the first of `sources` it is live in.
-fn one(sources: &[Source<'_>], steps: &Steps, entity: EntityRef) -> Description {
-    let said = sources.iter().find_map(|&source| said(source, entity));
-    said.map_or_else(|| Description::none(entity), |said| said.of(entity, steps))
+fn one(sources: &[Source<'_>], entity: EntityRef) -> Description {
+    let said = sources.iter().find_map(|&source| said(source, entity).map(|said| said.of(entity, source)));
+    said.unwrap_or_else(|| Description::none(entity))
 }
 
 /// What is said of `entity` in `source`, if it is live there.
@@ -199,15 +199,16 @@ impl Said {
         self
     }
 
-    /// The description of `entity`, its origin read against `steps`.
-    fn of(self, entity: EntityRef, steps: &Steps) -> Description {
+    /// The description of `entity`, its origin read from `source`, which keeps what each step's request named it.
+    fn of(self, entity: EntityRef, source: Source<'_>) -> Description {
         let origin = self.born.map(|born| {
-            let here = steps.get(&born.step);
+            let note = source.note(born.step);
             Origin {
                 step: born.step,
-                request_step: here.map(|&(index, _)| index),
-                operation: here.map(|&(_, operation)| operation.name().to_string()),
+                request_step: note.map(|n| n.request_step),
+                operation: note.map(|n| n.operation.clone()),
                 role: born.role,
+                copy_of: note.and_then(|n| n.copy_of).filter(|_| born.role == StepRole::Copy),
             }
         });
         Description { entity, form: self.form, values: self.values, origin, adjacent: self.adjacent }

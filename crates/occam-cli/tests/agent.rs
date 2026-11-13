@@ -141,6 +141,8 @@ fn a_solid_is_built_from_json_alone_then_listed_described_measured_and_checked()
     let made = &made.unwrap()["origin"];
     assert_eq!((&made["operation"], &made["request-step"]), (&json!("extrude"), &json!(2)), "made by the extrude");
     assert_eq!(described["origin"]["step"], made["step"], "described later as the step that made it");
+    let later = (&described["origin"]["operation"], &described["origin"]["request-step"]);
+    assert_eq!(later, (&json!("extrude"), &json!(2)), "and numbered and named as run gave it, after the run");
 
     let (_, near_edge) = occam(&["adjacent", "--model", text(&model), &edge]);
     let faces: Vec<String> =

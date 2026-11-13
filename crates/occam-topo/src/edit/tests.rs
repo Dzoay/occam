@@ -7,7 +7,7 @@ use occam_units::Length;
 use super::*;
 use crate::kind::{CurveGeom, Edge, Face, Vertex};
 use crate::models::join_star;
-use crate::records::{Around, EdgeRecord, EdgeRole, End, VertexRecord};
+use crate::records::{Around, EdgeRecord, EdgeRole, End, StepNote, VertexRecord};
 use crate::testing::{number, record, serial, tolerance, vertex, x_axis};
 
 /// The reports' reasons and entities, to compare at once.
@@ -279,4 +279,38 @@ fn a_table_with_no_slot_left_fails_the_commit() {
     edit.add(x_axis());
     let reports = edit.commit(&serial()).unwrap_err();
     assert_eq!(failures(&reports), [(Reason::TableFull, vec![])]);
+}
+
+#[test]
+fn a_step_its_request_named_is_kept_with_the_model_through_the_steps_after_it() {
+    let (base, _, _) = one_edge();
+    let mut edit = base.edit();
+    edit.name_step(4, "cylinder");
+    let step = edit.step();
+    let (after, _) = edit.commit(&serial()).unwrap();
+    let want = StepNote { request_step: 4, operation: "cylinder".to_string(), copy_of: None };
+    assert_eq!(after.note(step), Some(&want));
+    let (later, _) = after.edit().commit(&serial()).unwrap();
+    assert_eq!(
+        (later.note(step), later.note(later.step())),
+        (Some(&want), None),
+        "kept; a step no request named has none"
+    );
+    assert_ne!(after.digest(), base.edit().commit(&serial()).unwrap().0.digest(), "the note is part of the model");
+}
+
+#[test]
+fn a_copy_is_made_by_the_step_that_copies_and_that_steps_note_names_what_it_copied() {
+    let (base, e, [a, b]) = one_edge();
+    let curve = record(&base, e).unwrap().curve;
+    let mut edit = base.edit();
+    edit.name_step(1, "copy");
+    edit.copying(e.entity());
+    let copy = edge(&mut edit, curve, (a, b), StepRole::Copy);
+    edit.derive(copy.entity(), e.entity(), Derivation::Copied).unwrap();
+    let step = edit.step();
+    let (after, _) = edit.commit(&serial()).unwrap();
+    let born = record(&after, copy).map(|r| r.born);
+    assert_eq!(born, Some(Provenance { step, role: StepRole::Copy }), "the copy's own step, not its source's");
+    assert_eq!(after.note(step).and_then(|n| n.copy_of), Some(e.entity()));
 }

@@ -4,7 +4,7 @@
 //! found. In words, each answer is a line, and the refused ones are told apart so the command line can send them to
 //! standard error. Numbers are in millimetres and radians, as every result gives them.
 
-use occam_report::{Description, DisplayUnits, EntityRef, Report, SCHEMA};
+use occam_report::{Description, DisplayUnits, EntityRef, Origin, Report, SCHEMA};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -47,6 +47,19 @@ fn line<T>((id, answer): &PerId<T>, say: impl Fn(&T) -> String) -> (bool, String
 }
 
 /// What a description says, in a line: its form, its values, the step that made it and its neighbours.
+/// Where an entity came from in words, as `occam run` numbers and names a request's steps: "made by step 4, cylinder",
+/// a copy's "made by step 5, copy, of body:2/1", or the model's own step where no request named it.
+fn made_by(origin: &Origin) -> String {
+    let by = match (origin.request_step, &origin.operation) {
+        (Some(index), Some(operation)) => format!("made by step {index}, {operation}"),
+        _ => format!("made at the model's step {}", origin.step),
+    };
+    match origin.copy_of {
+        Some(body) => format!("{by}, of {}", body.text()),
+        None => by,
+    }
+}
+
 fn description_words(described: &Description) -> String {
     let units = DisplayUnits::default();
     let values: Vec<String> = described.values.iter().map(|v| format!("{} {}", v.name, v.shown(units))).collect();
@@ -55,7 +68,7 @@ fn description_words(described: &Description) -> String {
         parts.push(values.join(", "));
     }
     if let Some(origin) = &described.origin {
-        parts.push(format!("made at step {}", origin.step));
+        parts.push(made_by(origin));
     }
     if !described.adjacent.is_empty() {
         parts.push(format!("adjacent {}", texts(&described.adjacent).join(" ")));

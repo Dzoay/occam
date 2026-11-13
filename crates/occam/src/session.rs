@@ -16,7 +16,7 @@ use occam_topo::Snapshot;
 
 pub use wire::ran_words;
 
-use crate::describe::{self, Source, Steps};
+use crate::describe::{self, Source};
 use crate::run::{Failed, Ran};
 
 /// Which of the native format's two encodings a model is saved in.
@@ -117,7 +117,7 @@ impl Session {
                 (ran, Some(bytes))
             }
             Err(report) => {
-                let report = describe::report(report, &[Source::Model(next)], &Steps::new());
+                let report = describe::report(report, &[Source::Model(next)]);
                 ran.failed = Some(Failed { step: None, reports: vec![report] });
                 (ran, None)
             }
@@ -155,9 +155,7 @@ impl Session {
             Err(report) => return ids.iter().map(|&id| (id, Err(report.clone()))).collect(),
         };
         let one = |id: EntityRef| -> Result<Description, Report> {
-            model
-                .resolve_entity(id)
-                .map_err(|report| describe::report(report, &[Source::Model(&model)], &Steps::new()))?;
+            model.resolve_entity(id).map_err(|report| describe::report(report, &[Source::Model(&model)]))?;
             let mut described = describe::describe(&model, &[id]);
             Ok(described.pop().unwrap_or_else(|| Description::none(id)))
         };

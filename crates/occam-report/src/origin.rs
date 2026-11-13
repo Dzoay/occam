@@ -14,6 +14,8 @@ text_enum! {
         Input = "input",
         /// Made by the step from no operand, such as a primitive's faces.
         Made = "made",
+        /// A copy of another entity, made by a step that copies a body, which the step's note names.
+        Copy = "copy",
     }
 }
 
@@ -24,7 +26,7 @@ mod tests {
     #[test]
     fn step_roles_have_stable_text() {
         let texts: Vec<&str> = StepRole::ALL.iter().map(|role| role.text()).collect();
-        assert_eq!(texts, ["profile", "target", "tool", "input", "made"]);
+        assert_eq!(texts, ["profile", "target", "tool", "input", "made", "copy"]);
         assert_eq!(serde_json::to_string(&StepRole::Tool).unwrap(), r#""tool""#);
     }
 }

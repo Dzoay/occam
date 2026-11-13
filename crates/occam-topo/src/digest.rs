@@ -17,7 +17,7 @@ use occam_units::{Length, Point, UvPoint, World};
 use crate::kind::{Id, Kind};
 use crate::records::{
     Around, BodyKind, BodyRecord, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord,
-    ParamCurveRecord, Provenance, Sheet, ShellRecord, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
+    ParamCurveRecord, Provenance, Sheet, ShellRecord, StepNote, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
 };
 use crate::snapshot::{Model, Snapshot};
 use crate::table::{State, Table};
@@ -281,6 +281,7 @@ impl Model {
         let Self {
             tolerance,
             step,
+            notes,
             bodies,
             shells,
             faces,
@@ -306,6 +307,10 @@ impl Model {
         table(digest, EntityKind::Surface, surfaces);
         table(digest, EntityKind::Curve, curves);
         table(digest, EntityKind::ParamCurve, pcurves);
+        for (step, StepNote { request_step, operation, copy_of }) in notes {
+            let copied = copy_of.map(|e| (e.kind.text(), (e.slot, e.generation)));
+            ((step, request_step), (operation.as_str(), copied)).hash(digest);
+        }
     }
 }
 

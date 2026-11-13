@@ -106,6 +106,7 @@ fn encode<T: Serialize>(value: &T) -> Vec<u8> {
 fn parts(file: &File) -> Vec<(&'static str, Vec<u8>)> {
     vec![
         ("head", encode(&(&file.format, file.version, &file.tolerance, file.step))),
+        ("steps", encode(&file.steps)),
         ("bodies", encode(&file.bodies)),
         ("shells", encode(&file.shells)),
         ("faces", encode(&file.faces)),
