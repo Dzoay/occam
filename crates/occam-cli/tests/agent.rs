@@ -176,15 +176,28 @@ fn an_agent_learns_to_write_a_request_from_the_command_alone() {
     for operation in occam::Operation::ALL.into_iter().filter(|operation| operation.supported()) {
         assert!(run.contains(&format!("\n  {:<10} ", operation.name())), "{operation:?} in {run}");
     }
-    let dir = scratch("guide");
-    let (model, request) = (dir.join("example.occam"), dir.join("example.json"));
     let guide = occam::guide();
-    let (start, end) = (guide.find("  {\"schema\"").unwrap(), guide.find("  ]}").unwrap().saturating_add(4));
-    let example = guide.get(start..end).unwrap();
-    std::fs::write(&request, example).unwrap();
-    let (status, ran) = occam(&["run", "--model", text(&model), text(&request)]);
-    assert_eq!((status, &ran["ok"]), (Some(0), &json!(true)), "the guide's own example runs: {ran}");
-    assert!(near(named(&ran["steps"][1]["measured"]["values"], "volume"), 8_000.0, 8_000.0), "{ran}");
+    let examples: Vec<String> = guide
+        .split("\n  {\"schema\"")
+        .skip(1)
+        .map(|rest| format!("{{\"schema\"{}\n  ]}}", rest.split("\n  ]}").next().unwrap()))
+        .collect();
+    assert_eq!(examples.len(), 2, "a box measured, then wires written in place and a revolve: {guide}");
+    let ran: Vec<Value> =
+        examples.iter().enumerate().map(|(k, example)| ran_alone(&format!("example{k}"), example)).collect();
+    assert!(near(named(&ran[0]["steps"][1]["measured"]["values"], "volume"), 8_000.0, 8_000.0), "{}", ran[0]);
+    let made: Vec<&str> = [1, 3].map(|k| ran[1]["steps"][k]["made"].as_str().unwrap_or_default()).to_vec();
+    assert!(made.iter().all(|m| m.starts_with("body:")), "the extrude and the revolve each make a body: {}", ran[1]);
+}
+
+/// `request` run alone on a new model in its own scratch directory `name`, which must go through.
+fn ran_alone(name: &str, request: &str) -> Value {
+    let dir = scratch(name);
+    let (model, path) = (dir.join("example.occam"), dir.join("example.json"));
+    std::fs::write(&path, request).unwrap();
+    let (status, ran) = occam(&["run", "--model", text(&model), text(&path)]);
+    assert_eq!((status, at(&ran, "/ok")), (Some(0), &json!(true)), "the guide's own example runs: {request} {ran}");
+    ran
 }
 
 #[test]

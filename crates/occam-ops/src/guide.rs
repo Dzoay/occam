@@ -54,6 +54,19 @@ pub fn guide() -> String {
 A point or a vector is [x, y, z]; a direction is [x, y, z] of any length. A frame is {{"origin": point, "z": direction,
 "x": direction}}, each optional, and the world's if left out.
 
+A face's outer wire and its holes may be written in place, as a wire step's fields, instead of naming wire steps. Here a
+plate with a round hole is extruded, and a profile drawn in the xz plane is revolved whole about an axis in it:
+
+  {{"schema": {SCHEMA}, "units": {{"length": "mm", "angle": "deg"}}, "steps": [
+    {{"op": "face", "label": "plate",
+     "outer": {{"points": [[0, 0, 0], [60, 0, 0], [60, 40, 0], [0, 40, 0]], "closed": true}},
+     "holes": [{{"edges": [{{"circle": {{"centre": [30, 20, 0], "radius": 5, "normal": [0, 0, 1]}}}}]}}]}},
+    {{"op": "extrude", "face": "plate", "vector": [0, 0, 6]}},
+    {{"op": "face", "label": "profile",
+     "outer": {{"points": [[100, 0, 0], [120, 0, 0], [120, 0, 30], [100, 0, 30]], "closed": true}}}},
+    {{"op": "revolve", "profile": "profile", "origin": [100, 0, 0], "axis": [0, 0, 1], "angle": 360}}
+  ]}}
+
 Operations:
 {operations}
 
@@ -94,14 +107,30 @@ mod tests {
         assert!(guide.contains("(1e-7 mm and 1e-9 rad if left out)"), "{guide}");
     }
 
+    /// Each example request the guide gives, in order.
+    fn examples(guide: &str) -> Vec<&str> {
+        guide.split("\n  {\"schema\"").skip(1).map(|rest| rest.split("\n  ]}").next().unwrap_or_default()).collect()
+    }
+
     #[test]
-    fn the_guide_s_own_example_is_a_request_the_reader_takes() {
+    fn each_of_the_guide_s_own_examples_is_a_request_the_reader_takes() {
         let guide = guide();
-        let start = guide.find("  {\"schema\"").unwrap_or_default();
-        let end = guide.find("  ]}").map_or(0, |end| end + 4);
-        let example = guide.get(start..end).unwrap_or_default();
-        let request = Request::parse(example).map_err(|reports| format!("{reports:?}: {example}"));
-        assert_eq!(request.map(|r| r.steps.len()), Ok(2));
+        let examples = examples(&guide);
+        let read: Vec<Result<Vec<Operation>, String>> = examples
+            .iter()
+            .map(|body| format!("{{\"schema\"{body}\n  ]}}"))
+            .map(|text| {
+                Request::parse(&text)
+                    .map(|r| r.steps.iter().map(|s| s.operation).collect())
+                    .map_err(|e| format!("{e:?}: {text}"))
+            })
+            .collect();
+        assert_eq!(read.first(), Some(&Ok(vec![Operation::Box, Operation::Measure])));
+        let second = read.get(1).cloned().unwrap_or_else(|| Err("no second example".to_string()));
+        assert_eq!(second, Ok(vec![Operation::Face, Operation::Extrude, Operation::Face, Operation::Revolve]));
+        let written_in_place =
+            examples.get(1).is_some_and(|e| e.contains("\"outer\": {") && e.contains("\"holes\": [{"));
+        assert!(written_in_place, "a face's wires written in place, a hole among them: {guide}");
     }
 
     #[test]
