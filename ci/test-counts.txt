@@ -5,8 +5,9 @@ occam-cli::bin/occam 7
 occam-cli::cli 4
 occam-geom 356
 occam-math 117
-occam-report 41
+occam-report 42
+occam-topo 132
 occam-units 48
 occam-verify 30
 occam-wasm 3
-occam-xtask::bin/occam-xtask 243
+occam-xtask::bin/occam-xtask 250

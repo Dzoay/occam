@@ -3,7 +3,7 @@
 use occam_report::Report;
 
 use occam_math::Exec;
-use crate::topo::{Body, Id, Snapshot};
+use occam_topo::{Body, Id, Snapshot};
 
 /// The native format: the records as JSON, which is also the readable dump (PARITY 2.17, L8). It carries a schema
 /// version from the first commit, the tolerance, the step counter and every slot's generation, so ids survive a save and

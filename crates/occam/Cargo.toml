@@ -16,6 +16,8 @@ occam-units = { path = "../occam-units" }
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 # Pinned to the version of gungraun-runner in scripts/toolchain.sh, which must match. See docs/decisions/2026-11-09-gungraun.md.
 gungraun = "=0.20.0"
+# The topology's workloads for the benchmarks: plates built through `Edit` (`gates perf`).
+occam-topo = { path = "../occam-topo", features = ["workloads"] }
 
 [[bench]]
 name = "operations"

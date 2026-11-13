@@ -9,7 +9,9 @@ use serde::Deserialize;
 
 use occam_math::Exec;
 use occam_report::{EntityRef, Stage};
-use crate::topo::{Body, Changes, Describe, Edge, Face, Id, Snapshot};
+use occam_topo::{Body, Changes, Edge, Face, Id, Snapshot};
+
+use crate::report::Describe;
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 pub struct Units {

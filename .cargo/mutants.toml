@@ -20,11 +20,21 @@ exclude_globs = [
     # Measured by `gates perf`, whose record catches a change in what they compute. No test can.
     "crates/occam/benches/*.rs",
     "crates/occam-wasm/examples/*.rs",
+    # The topology's test models and helpers, which the tests build from: a mutant changes what a test builds, not the
+    # kernel. They are compiled outside the tests only for the hidden probe and bench features, which nothing ships.
+    "crates/occam-topo/src/models.rs",
+    "crates/occam-topo/src/models/*.rs",
+    "crates/occam-topo/src/testing.rs",
+    # What `gates determinism` hashes and `gates perf` times: their records catch a change in what these compute.
+    "crates/occam-topo/src/probe.rs",
+    "crates/occam-topo/src/workloads.rs",
+    "crates/occam-topo/examples/*.rs",
 ]
 
 # Each gate's `run` gathers its input through `repo` and is exercised by running the gate, not by unit tests; the rules
 # it applies are in the module's pure functions, which are mutated. The same goes for `gates::main` and `usage`, and for
-# `gates determinism`'s `levels`, which runs the probe and hands its output to `parsed_levels`.
+# `gates determinism`'s `levels` and `runs_of`, which run the probes and hand their output to `parsed_levels` and
+# `check`; `check` refuses a probe no build ran.
 exclude_re = [
     # Where the order is the degree, `order` and `p` are the same number, so `<=` picks the same one.
     "replace < with <= in rows_len$",
@@ -102,8 +112,8 @@ exclude_re = [
     "nearest\\.rs:81:27: replace && with \\|\\| in nearest$",
     "replace run -> Verdict",
     "in run$",
-    "replace (measure|browser|built|counts|summaries|levels) ",
-    "in (measure|browser|built|counts|summaries|levels)$",
+    "replace (measure|browser|built|counts|summaries|levels|runs_of) ",
+    "in (measure|browser|built|counts|summaries|levels|runs_of)$",
     "replace (main|usage) -> ExitCode",
     "in (main|usage)$",
     # The swept step's (geometry.swept). Ties, which give the same value either way: the window that holds an anchor, the
@@ -180,4 +190,28 @@ exclude_re = [
     "extrusion\\.rs:123:111: replace \\+ with - in <impl Parametric for Extrusion<C>>::bounds$",
     # The splines step's. Ends in order that are equal.
     "spline_curve\\.rs:\\d+:\\d+: replace < with <= in <impl ParametricCurve for SplineCurve>::bounds$",
+    # The checker step's (topology.checker). A search that meets each face once, and only faces the model holds, has
+    # run out of faces by the time it has searched as many as the table has slots: one search more is never there to
+    # make.
+    "shell\\.rs:\\d+:\\d+: replace < with <= in reach$",
+    # By line. Reading the edges of a shell that is new, whose faces the edit touched and so already reached, or of one
+    # whose body is unchanged, which is all a check of an edge reads of its shell: more reads, the same failures.
+    "scope\\.rs:146:37: replace && with \\|\\| in further$",
+    # The geometric step's (topology.geometric). Ties, which give the same value either way: the farther of a
+    # parameter's distances below and above its chart, the least of two clearances, and the largest deviation found so
+    # far.
+    "trace\\.rs:\\d+:\\d+: replace > with >= in Chart::beyond$",
+    "trace\\.rs:\\d+:\\d+: replace < with <= in least$",
+    "geometric\\.rs:\\d+:\\d+: replace > with >= in deviation$",
+    # By line. A step whose arc comes exactly to the band at the far end of its bound is within it for certain; halved
+    # again, the half holding the arc's nearest point still bounds it from below by no more than the band, so the least
+    # clearance stays within it and a point there stays unsettled either way.
+    "trace\\.rs:385:54: replace < with <= in Trace<'_>::refine$",
+    # By line. One halving more than 24, which changes only how much a search refines: a step 2^-24 of the first strays
+    # from its chord by about 2^-48 of what the first does, below a double's resolution of the distance to it, so it is
+    # still unsure there only where the band and that distance agree to the last bit. Not a tie; no test can reach it.
+    "trace\\.rs:386:55: replace < with <= in Trace<'_>::refine$",
+    # The scale step's (topology.scale). A tie: an operation measured at one size alone is its own smallest and largest,
+    # so it never grows.
+    "perf\\.rs:\\d+:\\d+: replace < with <= in check_growth$",
 ]

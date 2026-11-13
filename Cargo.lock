@@ -181,6 +181,7 @@ dependencies = [
  "occam-geom",
  "occam-math",
  "occam-report",
+ "occam-topo",
  "occam-units",
 ]
 
@@ -215,6 +216,16 @@ version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "occam-topo"
+version = "0.0.0"
+dependencies = [
+ "occam-geom",
+ "occam-math",
+ "occam-report",
+ "occam-units",
 ]
 
 [[package]]

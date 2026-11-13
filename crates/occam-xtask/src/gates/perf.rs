@@ -31,6 +31,11 @@ const MIN_GAIN: f64 = 1.25;
 const MOST_AT_WIDTH: u64 = 90;
 /// In the browser's simd128 build, a lane kernel at its width must be at least this many times as fast as at width 1.
 const MIN_LANE_GAIN: f64 = 1.15;
+/// An operation measured on models of several sizes, as `<operation>_n<size>`, may take on the largest at most this
+/// percentage of its instructions on the smallest: what an edit costs follows the edit, not the model (P1). The commit
+/// of one split face measured 109% on a hundred times the faces, all but 0.4% of it musl's allocator on the larger heap.
+/// A commit that walked the larger model's shell, at even 100 instructions a face, would take over five times as many.
+const MOST_GROWTH: u64 = 125;
 
 /// One browser run: how long each build took, and what each computed.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -119,6 +124,41 @@ fn check_widths(measured: &BTreeMap<String, u64>) -> Vec<Finding> {
     findings
 }
 
+/// The operation and model size of a class named `<operation>_n<size>`.
+fn operation_size(class: &str) -> Option<(&str, u64)> {
+    let (operation, size) = class.rsplit_once("_n")?;
+    Some((operation, size.parse().ok()?))
+}
+
+/// Every operation measured on models of several sizes takes about as many instructions on the largest as on the
+/// smallest.
+fn check_growth(measured: &BTreeMap<String, u64>) -> Vec<Finding> {
+    let mut sizes: BTreeMap<&str, BTreeMap<u64, u64>> = BTreeMap::new();
+    for (class, count) in measured {
+        if let Some((operation, size)) = operation_size(class) {
+            sizes.entry(operation).or_default().insert(size, *count);
+        }
+    }
+    let mut findings = Vec::new();
+    for (operation, counts) in sizes {
+        let (Some((small, base)), Some((large, count))) = (counts.first_key_value(), counts.last_key_value()) else {
+            continue;
+        };
+        if small < large && count.saturating_mul(100) > base.saturating_mul(MOST_GROWTH) {
+            let message = format!(
+                "{operation} takes {count} instructions on a model of {large}, against {base} on {small}; it may take at most {MOST_GROWTH}%"
+            );
+            findings.push(Finding::new(
+                "perf.grows-with-model",
+                BENCH,
+                message,
+                "find what it reads beyond what the edit touched (P1)",
+            ));
+        }
+    }
+    findings
+}
+
 fn check(record: &str, measured: &BTreeMap<String, u64>) -> Verdict {
     if measured.is_empty() {
         return Err(vec![Finding::new(
@@ -164,6 +204,7 @@ fn check(record: &str, measured: &BTreeMap<String, u64>) -> Verdict {
         ));
     }
     findings.extend(check_widths(measured));
+    findings.extend(check_growth(measured));
     let kernels = measured.keys().filter(|class| kernel_width(class).is_some_and(|(_, width)| width > 1)).count();
     let summary = format!(
         "{} operation classes within 2% of the record, {kernels} lane kernels clearly ahead of width 1",
@@ -449,6 +490,38 @@ mod tests {
         assert_eq!(kernel_width("mask_box_w16"), Some(("mask_box", 16)));
         assert_eq!(kernel_width("maths_lanes4"), None);
         assert_eq!(kernel_width("swap_wide"), None);
+    }
+
+    #[test]
+    fn an_operation_about_as_costly_on_a_larger_model_passes() {
+        let rows = [("commit_n1000", 1000), ("commit_n100000", 1250), ("commit_n5000", 1050)];
+        let record = "commit_n1000 1000\ncommit_n100000 1250\ncommit_n5000 1050\n";
+        assert_eq!(codes(&check(record, &measured(&rows))), [""; 0]);
+    }
+
+    #[test]
+    fn an_operation_seeded_to_grow_with_the_model_fails() {
+        let rows = [("commit_n1000", 1000), ("commit_n5000", 1000), ("commit_n100000", 1251)];
+        let record = "commit_n1000 1000\ncommit_n5000 1000\ncommit_n100000 1251\n";
+        let found = check(record, &measured(&rows)).unwrap_err();
+        assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["perf.grows-with-model"]);
+        assert!(
+            found[0].message.starts_with("commit takes 1251 instructions on a model of 100000, against 1000 on 1000"),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn an_operation_measured_on_one_size_is_not_compared() {
+        assert_eq!(codes(&check("commit_n1000 1000\n", &measured(&[("commit_n1000", 1000)]))), [""; 0]);
+    }
+
+    #[test]
+    fn only_names_ending_in_a_size_are_measured_on_models() {
+        assert_eq!(operation_size("topo_commit_n1056"), Some(("topo_commit", 1056)));
+        assert_eq!(operation_size("maths_lanes2"), None);
+        assert_eq!(operation_size("topo_snapshot"), None);
+        assert_eq!(operation_size("scan_nothing"), None);
     }
 
     #[test]

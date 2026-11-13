@@ -13,6 +13,7 @@ publish = false
 [dependencies]
 occam-geom = { path = "../../crates/occam-geom" }
 occam-math = { path = "../../crates/occam-math" }
+occam-topo = { path = "../../crates/occam-topo" }
 occam-report = { path = "../../crates/occam-report" }
 occam-units = { path = "../../crates/occam-units" }
 # Approved for the kernel: docs/decisions/2026-11-09-serde.md.

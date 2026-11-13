@@ -1,0 +1,32 @@
+[package]
+name = "occam-topo"
+description = "The B-rep: records in copy-on-write chunks, stable ids, the edit and its checker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+occam-geom = { path = "../occam-geom" }
+occam-math = { path = "../occam-math" }
+occam-report = { path = "../occam-report" }
+occam-units = { path = "../occam-units" }
+
+[features]
+# The determinism probe and the models it builds, for `gates determinism` (examples/determinism.rs). Nothing that ships
+# turns it on.
+determinism = []
+# The plates and edits `gates perf` counts and examples/scale.rs times, built from the tests' models. Nothing that ships
+# turns it on.
+workloads = []
+
+[[example]]
+name = "determinism"
+required-features = ["determinism"]
+
+[[example]]
+name = "scale"
+required-features = ["workloads"]
+
+[lints]
+workspace = true

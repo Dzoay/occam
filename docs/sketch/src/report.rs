@@ -3,7 +3,7 @@
 //! `geometry.freeze`. What is left is O26's descriptions and the codes and remedies of the milestones to come. It still
 //! depends on nothing of occam's: a description is a form name and named values, never a geometry type.
 
-use occam_report::{EntityRef, NamedValue};
+use occam_report::{EntityRef, NamedValue, StepRole};
 use serde::{Deserialize, Serialize};
 
 /// `occam_report`'s private `text_enum!`, repeated so that the sketch can declare closed enums the same way.
@@ -29,21 +29,9 @@ macro_rules! text_enum {
 }
 
 text_enum! {
-    /// NEW. An entity's part in the step that made it (S6: "the operation and operand it came from").
-    StepRole {
-        Profile = "profile",
-        Target = "target",
-        Tool = "tool",
-        Input = "input",
-        Made = "made",
-    }
-}
-
-text_enum! {
     /// NEW codes of the milestones to come, joining the closed `Code` with wording and followed-remedy tests (L2).
     NewCode {
         InvalidParameter = "input.invalid-parameter",
-        StaleId = "topo.stale-id",
         Undecided = "decide.undecided",
         Incomplete = "intersect.incomplete",
         BelowResolution = "intersect.below-resolution",
@@ -52,7 +40,6 @@ text_enum! {
         EmptyResult = "boolean.empty-result",
         RadiusTooLarge = "blend.radius-too-large",
         FaceFailed = "mesh.face-failed",
-        InvariantFailed = "check.invariant-failed",
         Decisions = "measure.decisions",
     }
 }
@@ -73,6 +60,12 @@ pub struct Origin {
     pub step: u64,
     pub operation: String,
     pub role: StepRole,
+}
+
+/// NEW, and the sketch's until `construction`'s describer gives it a home: anything that can say what an entity is, a
+/// snapshot for the model's entities and a failed operation's frozen outputs for the ones that exist only there (O26).
+pub trait Describe: Sync {
+    fn describe(&self, entity: EntityRef) -> Option<Description>;
 }
 
 /// NEW. What an entity is in the caller's terms (S6, O26). Filled by one resolver as the result leaves the kernel, never
