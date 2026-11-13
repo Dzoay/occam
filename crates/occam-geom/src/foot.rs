@@ -225,6 +225,7 @@ mod tests {
     use crate::conformance::placement;
     use crate::plane::Plane;
     use crate::sphere::Sphere;
+    use crate::spline_surface::SplineSurface;
 
     #[test]
     fn only_the_first_of_equal_neighbours_is_lowest() {
@@ -298,6 +299,23 @@ mod tests {
         let window = UvBox::new(UvPoint::new(0.0, -1.5), UvPoint::new(3.0, 1.5));
         let (uv, _) = refine(&sphere, q, (UvPoint::new(1.4, 0.1), 5), (window, (1.0, 1.0)));
         assert!((uv.u() - 1.1).abs() < 1e-10 && (uv.v() - 0.3).abs() < 1e-10, "{uv:?}");
+    }
+
+    #[test]
+    fn newtons_step_holds_the_twist_of_a_surface_whose_lines_are_not_its_curvature_lines() {
+        // The saddle (x, y, xy) for x and y from -1 to 1, a bilinear patch in s and t from 0 to 1: its mixed derivative,
+        // (0, 0, 4), has a part along the normal, which a sphere's never has. A point 0.4 along the normal from
+        // (x, y) = (0.2, 0.1), whose foot is (s, t) = (0.6, 0.55): with the twist the rate is quadratic; with its sign
+        // turned, the Hessian is still positive definite, and the rate about three quarters a step.
+        let corner = |x: f64, y: f64| Point::from_vec3(Vec3::new(x, y, x * y));
+        let corners = vec![corner(-1.0, -1.0), corner(1.0, -1.0), corner(-1.0, 1.0), corner(1.0, 1.0)];
+        let saddle = SplineSurface::bezier((2, 2), corners, None).unwrap();
+        let (x, y) = (0.2, 0.1);
+        let normal = Vec3::new(-y, -x, 1.0);
+        let q = Vec3::new(x, y, x * y) + normal * (0.4 / normal.norm());
+        let window = UvBox::new(UvPoint::new(0.0, 0.0), UvPoint::new(1.0, 1.0));
+        let (uv, _) = refine(&saddle, q, (UvPoint::new(0.65, 0.5), 5), (window, (1.0, 1.0)));
+        assert!((uv.u() - 0.6).abs() < 1e-10 && (uv.v() - 0.55).abs() < 1e-10, "{uv:?}");
     }
 
     #[test]
