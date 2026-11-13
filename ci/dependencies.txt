@@ -65,3 +65,11 @@ either transitive rayon
 cobs transitive binary-twin
 thiserror transitive binary-twin
 thiserror-impl transitive binary-twin
+clap occam-cli clap
+anstyle transitive clap
+clap_builder transitive clap
+clap_derive transitive clap
+clap_lex transitive clap
+heck transitive clap
+serde_json occam-cli serde
+serde_json occam-wasm serde

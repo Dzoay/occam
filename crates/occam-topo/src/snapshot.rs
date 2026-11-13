@@ -4,7 +4,7 @@
 
 use core::num::NonZeroU32;
 
-use occam_report::{Code, EntityRef, Fault, NamedValue, Quantity, Report};
+use occam_report::{Code, EntityKind, EntityRef, Fault, NamedValue, Quantity, Report};
 use occam_units::Tolerance;
 
 use crate::kind::{Id, Kind, Visit, dispatch};
@@ -121,6 +121,19 @@ impl Visit for Holding<'_> {
     }
 }
 
+/// Lists the live ids of a kind.
+struct Listing<'a> {
+    model: &'a Model,
+}
+
+impl Visit for Listing<'_> {
+    type Out = Vec<EntityRef>;
+
+    fn visit<K: Kind>(self) -> Vec<EntityRef> {
+        K::table(self.model).records().map(|(slot, generation, _)| Id::<K>::new(slot, generation).entity()).collect()
+    }
+}
+
 /// Lists what an entity's record links to.
 struct Linked<'a> {
     model: &'a Model,
@@ -209,6 +222,27 @@ impl Snapshot {
         K::table(&self.model).records().map(|(slot, generation, _)| Id::new(slot, generation)).collect()
     }
 
+    /// The live ids of the kind `kind` names, in slot order, as [`Snapshot::ids`] gives them; none for a kind no table
+    /// holds, as a failed operation's sections and regions.
+    #[must_use]
+    pub fn entities(&self, kind: EntityKind) -> Vec<EntityRef> {
+        dispatch(kind, Listing { model: &self.model }).unwrap_or_default()
+    }
+
+    /// `entity`, of any kind, if it names a live entity here: what a command checks each id it is given against, so
+    /// one stale id is refused alone.
+    ///
+    /// # Errors
+    ///
+    /// [`Code::StaleId`] as [`Snapshot::resolve`] gives it: the entity was removed, its slot holds a newer one, or its
+    /// kind is one no table holds.
+    pub fn resolve_entity(&self, entity: EntityRef) -> Result<EntityRef, Report> {
+        if self.model.is_live(entity) {
+            return Ok(entity);
+        }
+        Err(stale(entity, self.model.live_generation(entity)))
+    }
+
     /// An `EntityRef` from a report or a request, checked against this snapshot.
     ///
     /// # Errors
@@ -293,6 +327,42 @@ mod tests {
         assert_eq!(snapshot.resolve::<Vertex>(beyond).map_err(|r| live_value(&r)), Err(Some(0.0)));
         let older = EntityRef::new(EntityKind::Vertex, 0, 2);
         assert_eq!(snapshot.resolve::<Vertex>(older).map_err(|r| live_value(&r)), Err(Some(1.0)), "a newer one");
+    }
+
+    #[test]
+    fn a_kinds_entities_are_its_live_ids_in_slot_order_and_a_kind_no_table_holds_has_none() {
+        let mut snapshot = Snapshot::empty(tolerance());
+        let ids: Vec<Id<Vertex>> = (0..4).map(|k| add(&mut snapshot, f64::from(k))).collect();
+        remove(&mut snapshot, ids[1]);
+        let again = add(&mut snapshot, 9.0);
+        let want: Vec<EntityRef> = [ids[0], again, ids[2], ids[3]].iter().map(|id| id.entity()).collect();
+        assert_eq!(snapshot.entities(EntityKind::Vertex), want);
+        assert_eq!(snapshot.entities(EntityKind::Edge), []);
+        for kind in [EntityKind::Model, EntityKind::Section, EntityKind::Region] {
+            assert_eq!(snapshot.entities(kind), [], "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn an_entity_of_any_kind_resolves_only_while_it_is_live() {
+        let mut snapshot = Snapshot::empty(tolerance());
+        let old = add(&mut snapshot, 1.0);
+        assert_eq!(snapshot.resolve_entity(old.entity()), Ok(old.entity()));
+        remove(&mut snapshot, old);
+        let new = add(&mut snapshot, 2.0);
+        let stale = snapshot.resolve_entity(old.entity()).unwrap_err();
+        assert_eq!(
+            (stale.code, stale.entities.as_slice(), live_value(&stale)),
+            (Code::StaleId, &[old.entity()][..], Some(2.0))
+        );
+        assert_eq!(snapshot.resolve_entity(new.entity()), Ok(new.entity()));
+        let as_edge = EntityRef::new(EntityKind::Edge, 0, 2);
+        assert_eq!(snapshot.resolve_entity(as_edge).map_err(|r| live_value(&r)), Err(Some(0.0)), "no edge there");
+        let section = EntityRef::new(EntityKind::Section, 0, 0);
+        assert_eq!(
+            snapshot.resolve_entity(section).map_err(|r| (r.code, live_value(&r))),
+            Err((Code::StaleId, Some(0.0)))
+        );
     }
 
     #[test]

@@ -33,14 +33,6 @@ for the native format's binary twin. Each step moves what it makes real out of [
 
 ## Steps
 
-### `construction.commands`
-
-`occam run`, `list`, `adjacent`, `describe` and `check`, each with `--json`, many ids and one result per id; `run`
-exposed in wasm too. Saving and loading go through the native format.
-
-*Failing test first:* each command's JSON for a known model; an unknown id is `topo.stale-id` for that id alone, the
-others answered.
-
 ### `construction.agent`
 
 The exit test: a solid built from JSON alone through the `occam` command, the bracket test's plate with its cylinder

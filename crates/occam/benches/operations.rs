@@ -8,8 +8,12 @@
 use std::hint::black_box;
 
 use gungraun::{library_benchmark, library_benchmark_group, main};
+use occam::operation_workloads::{MEASURES, PRIMITIVES, SWEEPS, TRANSFORMS};
 use occam::spline_workloads as splines;
-use occam::{Angle, Jets, Lanes, Length, Model, Point, Real, SplineSurface, Tolerance, UvPoint, World, distance};
+use occam::{
+    Angle, Encoding, EntityKind, EntityRef, Jets, Lanes, Length, Model, Point, Real, Session, SplineSurface, Tolerance,
+    UvPoint, World, distance,
+};
 use occam_geom::{OffsetCurve, OffsetSurface, SplineCurve};
 use occam_math::{Exec, Level, stream, width, workloads};
 use occam_topo::Edit;
@@ -276,15 +280,6 @@ library_benchmark_group!(
     name = topology,
     benchmarks = [topo_snapshot, topo_edit, topo_commit_n1056, topo_commit_n100350]
 );
-/// A request making each primitive once, in millimetres.
-const PRIMITIVES: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
-    {"op": "box", "size": [10, 20, 30]},
-    {"op": "wedge", "size": [10, 5, 4], "top": {"start": 2, "width": 3}},
-    {"op": "cylinder", "radius": 5, "height": 10},
-    {"op": "cone", "radius1": 5, "radius2": 2, "height": 10},
-    {"op": "sphere", "radius": 5},
-    {"op": "torus", "major": 10, "minor": 2}
-]}"#;
 
 // Reading a request and making each primitive once, each step committed and so checked. What it made is leaked, so
 // that the count is the making and not the freeing.
@@ -296,17 +291,6 @@ fn construct_primitives() -> bool {
     made
 }
 
-/// The plan's tests for sweeps, as one request: the plate extruded, and a rectangle turned a whole turn off its axis.
-const SWEEPS: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
-    {"op": "wire", "label": "outline", "points": [[0, 0, 0], [40, 0, 0], [40, 20, 0], [0, 20, 0]], "closed": true},
-    {"op": "wire", "label": "hole", "edges": [{"circle": {"centre": [20, 10, 0], "radius": 3, "normal": [0, 0, 1]}}]},
-    {"op": "face", "label": "plate", "outer": "outline", "holes": ["hole"]},
-    {"op": "extrude", "face": "plate", "vector": [0, 0, 5]},
-    {"op": "wire", "label": "side", "points": [[50, 0, 0], [60, 0, 0], [60, 0, 5], [50, 0, 5]], "closed": true},
-    {"op": "face", "label": "rect", "outer": "side"},
-    {"op": "revolve", "profile": "rect", "origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 360}
-]}"#;
-
 // The request read and checked, and each step made and committed, which checks it; what it made is leaked, as above.
 #[library_benchmark]
 fn construct_sweeps() -> bool {
@@ -315,16 +299,6 @@ fn construct_sweeps() -> bool {
     core::mem::forget(ran);
     made
 }
-
-/// The plan's tests for transforms, as one request: a box copied and moved, a cylinder scaled alike, and one stretched
-/// along a tilted frame, which makes its side exact B-splines.
-const TRANSFORMS: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
-    {"op": "box", "label": "box", "size": [10, 20, 30]},
-    {"op": "copy", "target": "box", "frame": {"origin": [100, 0, 0]}},
-    {"op": "cylinder", "label": "round", "radius": 5, "height": 10},
-    {"op": "transform", "target": "round", "scale": 2.5, "about": {"origin": [1, 2, 3]}},
-    {"op": "copy", "target": "round", "scale": [2, 1, 0.5], "about": {"origin": [1, -2, 3], "z": [1, 2, 2], "x": [2, -1, 0]}}
-]}"#;
 
 // The request read and checked, and each step made and committed, which checks it; what it made is leaked, as above.
 #[library_benchmark]
@@ -340,16 +314,6 @@ fn primitives() -> occam_topo::Snapshot {
     occam::run(None, PRIMITIVES).model.unwrap()
 }
 
-/// A request measuring everything each primitive has, by its body's id.
-const MEASURES: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
-    {"op": "measure", "target": "body:0/1"},
-    {"op": "measure", "target": "body:1/1"},
-    {"op": "measure", "target": "body:2/1"},
-    {"op": "measure", "target": "body:3/1"},
-    {"op": "measure", "target": "body:4/1"},
-    {"op": "measure", "target": "body:5/1"}
-]}"#;
-
 // Measuring each primitive's volume, area, centre of mass and box, on one thread.
 #[library_benchmark]
 #[bench::primitives(primitives())]
@@ -360,8 +324,52 @@ fn measure_primitives(model: occam_topo::Snapshot) -> bool {
     measured
 }
 
+/// The primitives' model as the native format's readable JSON: setup, which the counts leave out.
+fn primitives_saved() -> Vec<u8> {
+    Session::new(Encoding::Json).run(PRIMITIVES).1.unwrap()
+}
+
+// Opening the primitives' model from its readable JSON, as every command but `run` on a new model begins: parsed, each
+// edge's deviation measured and the whole model checked, on one thread. What it opened is leaked, as above.
+#[library_benchmark]
+#[bench::saved(primitives_saved())]
+fn commands_open(bytes: Vec<u8>) -> bool {
+    let opened = Session::open(black_box(&bytes), &Exec::serial());
+    let ok = opened.is_ok();
+    core::mem::forget((opened, bytes));
+    ok
+}
+
+/// The primitives' model in a session, and the id of every entity in it, of every kind: setup.
+fn primitives_listed() -> (Session, Vec<EntityRef>) {
+    let mut session = Session::new(Encoding::Json);
+    let _ = session.run(PRIMITIVES);
+    let kinds = [EntityKind::Body, EntityKind::Shell, EntityKind::Face, EntityKind::Loop, EntityKind::Wire];
+    let more = [EntityKind::EdgeUse, EntityKind::Edge, EntityKind::Vertex, EntityKind::Surface, EntityKind::Curve];
+    let all: Vec<EntityKind> = kinds.into_iter().chain(more).chain([EntityKind::ParamCurve]).collect();
+    let ids = session.list(&all).into_iter().flat_map(|listed| listed.entities).collect();
+    (session, ids)
+}
+
+// Describing every entity of the primitives' model, each id checked first, as `occam describe` answers.
+#[library_benchmark]
+#[bench::listed(primitives_listed())]
+fn commands_describe((session, ids): (Session, Vec<EntityRef>)) -> bool {
+    let described = session.describe(black_box(&ids));
+    let ok = described.iter().all(|(_, answer)| answer.is_ok());
+    core::mem::forget((described, session, ids));
+    ok
+}
+
 library_benchmark_group!(
     name = construction,
-    benchmarks = [construct_primitives, construct_sweeps, construct_transforms, measure_primitives]
+    benchmarks = [
+        construct_primitives,
+        construct_sweeps,
+        construct_transforms,
+        measure_primitives,
+        commands_open,
+        commands_describe
+    ]
 );
 main!(library_benchmark_groups = operations, kernels, topology, construction);

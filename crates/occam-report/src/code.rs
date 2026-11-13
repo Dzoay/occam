@@ -117,8 +117,21 @@ catalogue! {
     BadArgument = "cli.bad-argument" {
         Error, [],
         "A command-line argument is missing or is not understood.",
-        "Argument {position} is not understood. Expected: occam distance --from X,Y,Z --to X,Y,Z \
-        --model-tolerance LENGTH,ANGLE --tolerance LENGTH [--json], in millimetres and radians.",
+        "The command line is wrong at {parameter}. `occam help` lists the commands and what each takes.",
+    }
+
+    /// A file the command line names could not be read.
+    FileNotRead = "cli.file-not-read" {
+        Error, [],
+        "A file the command line names could not be read.",
+        "The file {given}, given as {parameter}, could not be read.",
+    }
+
+    /// The model could not be written to the file the command line names, which is left as it was.
+    FileNotWritten = "cli.file-not-written" {
+        Error, [],
+        "The model could not be written to the file the command line names, which is left as it was.",
+        "The model could not be written to {given}, given as {parameter}; the file is as it was.",
     }
 
     /// The threads asked for could not be started.
@@ -733,7 +746,23 @@ mod tests {
                 "code": "cli.bad-argument",
                 "severity": "error",
                 "summary": "A command-line argument is missing or is not understood.",
-                "template": "Argument {position} is not understood. Expected: occam distance --from X,Y,Z --to X,Y,Z --model-tolerance LENGTH,ANGLE --tolerance LENGTH [--json], in millimetres and radians.",
+                "template": "The command line is wrong at {parameter}. `occam help` lists the commands and what each takes.",
+                "remedies": [],
+            },
+            {
+                "name": "FileNotRead",
+                "code": "cli.file-not-read",
+                "severity": "error",
+                "summary": "A file the command line names could not be read.",
+                "template": "The file {given}, given as {parameter}, could not be read.",
+                "remedies": [],
+            },
+            {
+                "name": "FileNotWritten",
+                "code": "cli.file-not-written",
+                "severity": "error",
+                "summary": "The model could not be written to the file the command line names, which is left as it was.",
+                "template": "The model could not be written to {given}, given as {parameter}; the file is as it was.",
                 "remedies": [],
             },
             {

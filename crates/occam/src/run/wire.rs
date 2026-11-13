@@ -68,8 +68,8 @@ struct FailedWire {
     reports: Vec<Value>,
 }
 
-/// A report in its JSON form, as a value to place in the run's.
-fn report(report: &Report, units: DisplayUnits) -> Value {
+/// A report in its JSON form, as a value to place in a result's.
+pub(crate) fn report_value(report: &Report, units: DisplayUnits) -> Value {
     match report.to_json(units) {
         Ok(text) => serde_json::from_str(&text).unwrap_or(Value::String(text)),
         Err(failed) => Value::String(failed.code.text().to_string()),
@@ -119,7 +119,7 @@ fn done(done: &Done, units: DisplayUnits) -> DoneWire<'_> {
 }
 
 fn failed(failed: &Failed, units: DisplayUnits) -> FailedWire {
-    FailedWire { step: failed.step, reports: failed.reports.iter().map(|r| report(r, units)).collect() }
+    FailedWire { step: failed.step, reports: failed.reports.iter().map(|r| report_value(r, units)).collect() }
 }
 
 /// The run's one JSON form.
@@ -141,7 +141,7 @@ pub fn ran_json(ran: &Ran) -> String {
         tolerance,
         steps: ran.done.iter().map(|d| done(d, ran.units)).collect(),
         failed: ran.failed.as_ref().map(|f| failed(f, ran.units)),
-        diagnostics: used.iter().map(|r| report(r, ran.units)).collect(),
+        diagnostics: used.iter().map(|r| report_value(r, ran.units)).collect(),
     };
     serde_json::to_string(&wire).unwrap_or_default()
 }

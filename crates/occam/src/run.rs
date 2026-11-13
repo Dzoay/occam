@@ -18,6 +18,7 @@ use occam_units::Tolerance;
 use crate::describe::{self, Source, Steps};
 
 pub use wire::ran_json;
+pub(crate) use wire::report_value;
 
 /// Where a model's tolerance came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,6 +85,15 @@ pub struct Ran {
     pub done: Vec<Done>,
     /// Why it stopped short, if it did.
     pub failed: Option<Failed>,
+}
+
+impl Ran {
+    /// A run refused before any step ran, for `reports`: what a command line gives when the request or the model it
+    /// names cannot be read. Its model is `model`, unchanged.
+    #[must_use]
+    pub fn refused(model: Option<&Snapshot>, reports: Vec<Report>) -> Self {
+        refused(model, DisplayUnits::default(), reports)
+    }
 }
 
 /// Runs the request written `request` on `model`, or on a new model if there is none.

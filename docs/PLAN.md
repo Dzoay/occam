@@ -136,7 +136,7 @@ O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
 
 | Id | Decision | Recommendation | Needed by |
 |---|---|---|---|
-| O5 | Cargo dependencies, asked one at a time when their step arrives. Answered: [`gungraun`](decisions/2026-11-09-gungraun.md) (test only, `bedrock.perf`), [`wasm-bindgen`](decisions/2026-11-09-wasm-bindgen.md) (`bedrock.thread`), [`fearless_simd`](decisions/2026-11-10-fearless-simd.md), [`rayon`](decisions/2026-11-10-rayon.md) and [`postcard`](decisions/2026-11-12-binary-twin.md) (`construction`, the native format's binary twin). Still expected: a property-test crate (test only) | Decide each on the evidence | when reached |
+| O5 | Cargo dependencies, asked one at a time when their step arrives. Answered: [`gungraun`](decisions/2026-11-09-gungraun.md) (test only, `bedrock.perf`), [`wasm-bindgen`](decisions/2026-11-09-wasm-bindgen.md) (`bedrock.thread`), [`fearless_simd`](decisions/2026-11-10-fearless-simd.md), [`rayon`](decisions/2026-11-10-rayon.md), [`postcard`](decisions/2026-11-12-binary-twin.md) (`construction`, the native format's binary twin) and [`clap`](decisions/2026-11-13-clap.md) (`construction.commands`, the command line). Still expected: a property-test crate (test only) | Decide each on the evidence | when reached |
 | O6 | A lawyer's view of the provenance policy and oracle outputs | Worth having before the first public release | first release |
 | O7 | Reserve `occam` on crates.io and an npm scope | Reserve once there is something real to publish | first release |
 | O8 | The framework for the viewer's page | No framework for the viewer; decide again for the full web application | `view` |
