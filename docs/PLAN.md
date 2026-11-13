@@ -129,7 +129,8 @@ Named, not numbered. They run in this order.
 | `construction` | An agent builds and inspects a solid from JSON alone: requests, wires, faces, primitives, sweeps, copies, mass properties, the native format and the `occam` command | [plan/construction.md](plan/construction.md) |
 | `view` | A person prompts an agent and watches the model live: shared edges first, then faces, the watertight check on every output, the worker pool and the renderer contract; `occam view` redrawing on every run; faces and edges selected by the person and read by the agent | [plan/view.md](plan/view.md) |
 | `intersection` | Where two surfaces meet and where a curve crosses a surface: closed forms, then the hybrid; failures in the result; loops below resolution reported; coincidence detected | [plan/intersection.md](plan/intersection.md) |
-| first release | `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
+| `booleans` | Fuse, cut and common as pure phases over the sections; coincident faces answered; which input faces made which output faces; point classification; every failing pair reported, the model unchanged | [plan/booleans.md](plan/booleans.md) |
+| first release | `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 
 **After the first release**, in no fixed order and each needing the user's go-ahead: the 2D sketch solver; the document
@@ -156,5 +157,6 @@ O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
 | O13 | A stored per-entity accuracy for imported geometry, fixed at import and never grown (S2). Foreign geometry was not measured | Decide when import is in scope | when import is in scope |
 | O17 | x86-64-v3 code paths (S3/P3), and whether [`DETERMINISM.md`](DETERMINISM.md) rule 5, "No `target-cpu`", stays as written (P4). The NURBS gain exists only there. Having it means hand-written detection, a new dependency, or a build that excludes older CPUs | Leave this until a real kernel profile shows NURBS evaluation is worth it. Rule 5 needs no change if `dispatch!` is taken under O5 | when a kernel profile asks for it |
 | O27 | Whether P1's comparison with OCCT should reach `main`. It holds family medians of the time ratio and counts of the cases where the prototype was faster, with no per-case OCCT number. [Kept out for now](decisions/2026-11-09-p1-occt-comparison.md) | Decide with O6's answer, because the figures are derived from oracle outputs | when O6 is answered |
+| O32 | Whether a boolean takes an object and one tool, or many tools in one operation | One tool in the first release: many tools are a sequence, and a general fuse of many operands comes later. P2 and S1 measured only the binary case | `booleans.pipeline` |
 
 O11 onward come from the spike findings named in each row, which give the detail.
