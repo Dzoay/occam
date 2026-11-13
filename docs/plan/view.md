@@ -44,8 +44,11 @@ never in a digest, a mesh, a pick, the watertight check, or a test that holds th
 crack test compares two faces' GPU positions with each other, in one frame. No Rust dependency is expected beyond the
 allowed [`wasm-bindgen`](../decisions/2026-11-09-wasm-bindgen.md); `js-sys` or `web-sys`, if needed, is the user's call.
 `web/` is built with [Preact and signals](../decisions/2026-11-13-preact-with-signals.md), which the full web
-application grows from. `view.renderer` adds them and esbuild at pinned versions, asking for each again under the
-dependency rule. `web/`'s tests use the Playwright `gates perf` already runs. Each face is meshed once: [view-dependent
+application grows from, and is written in
+[TypeScript, typed against WebGPU](../decisions/2026-11-13-typescript-with-webgpu-types.md): esbuild builds it and
+`tsc --noEmit` checks it in the gates. `view.renderer` adds them, esbuild, `typescript` and `@webgpu/types` at pinned
+versions, asking for each again under the dependency rule. `web/`'s tests use the Playwright `gates perf` already
+runs. Each face is meshed once: [view-dependent
 detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes after the release. The sketch's `mesh.rs`,
 then `compose.rs`'s `Session`, are deleted as they become real.
 
@@ -183,5 +186,6 @@ None is open. The six of [the plan's §7](../PLAN.md#7-decisions-the-user-still-
 [O20](../decisions/2026-11-13-write-through-in-the-first-release.md),
 [O28](../decisions/2026-11-13-picking-in-the-first-release.md),
 [O29](../decisions/2026-11-13-continuous-edits-rerun-the-request.md) and
-[O30](../decisions/2026-11-13-gpu-figures-are-goals.md). `view.renderer`'s PR still asks for its npm packages and
-esbuild under the dependency rule.
+[O30](../decisions/2026-11-13-gpu-figures-are-goals.md). `view.renderer`'s PR still asks for its npm packages,
+esbuild and the [TypeScript checker](../decisions/2026-11-13-typescript-with-webgpu-types.md) under the
+dependency rule.
