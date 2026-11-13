@@ -94,8 +94,16 @@ pub struct ListArgs {
     #[command(flatten)]
     pub model: ModelArgs,
     /// The kinds to list: one or more, given again or separated by commas.
-    #[arg(long, required = true, value_delimiter = ',', value_parser = PossibleValuesParser::new(LISTED.map(EntityKind::text)))]
+    #[arg(
+        long,
+        required_unless_present = "stray",
+        value_delimiter = ',',
+        value_parser = PossibleValuesParser::new(LISTED.map(EntityKind::text))
+    )]
     pub kind: Vec<String>,
+    /// Kinds written without `--kind`, which are refused with the flag to use, as the blind run's agents wrote them.
+    #[arg(hide = true, value_name = "KIND")]
+    pub stray: Vec<String>,
 }
 
 /// What the commands that take ids take.

@@ -312,3 +312,21 @@ fn help_lists_every_command() {
         assert!(stdout(&help).contains(&format!("  {command} ")), "{command} in {}", stdout(&help));
     }
 }
+
+#[test]
+fn a_kind_given_to_list_without_its_flag_is_answered_with_the_flag_to_use() {
+    // The blind run's c2 and c3 each wrote `list body`, and were told only that `body` was unexpected.
+    let words = occam(&["list", "--model", "m.occam", "body"]);
+    assert_eq!(words.status.code(), Some(2));
+    let said = String::from_utf8(words.stderr).unwrap();
+    assert!(said.contains("--kind body"), "the flag to use: {said}");
+    let json = occam(&["list", "--model", "m.occam", "body,face", "--json"]);
+    assert_eq!(json.status.code(), Some(2));
+    let report = Report::from_json(stdout(&json).trim()).unwrap();
+    let input = report.input.clone().unwrap();
+    assert_eq!(
+        (report.code, input.parameter.as_str(), input.given.as_deref()),
+        (Code::BadArgument, "KIND", Some("body,face"))
+    );
+    assert_eq!(input.expected.as_deref(), Some("--kind body,face"));
+}

@@ -141,11 +141,25 @@ fn answer(answered: &Answered, json: bool) -> Said {
 
 /// `occam list`.
 fn list(args: &ListArgs, json: bool) -> Said {
+    if !args.stray.is_empty() {
+        return stray_kinds(&args.stray.join(","), json);
+    }
     let answered = match open(&args.model.model, &exec()) {
         Ok(session) => Answered::Listed(session.list(&args.kind.iter().filter_map(|k| kind(k)).collect::<Vec<_>>())),
         Err(reports) => Answered::Refused(reports),
     };
     answer(&answered, json)
+}
+
+/// Kinds given to `list` without `--kind`, refused as a wrong command line with the flag to use.
+fn stray_kinds(given: &str, json: bool) -> Said {
+    let wanted = format!("--kind {given}");
+    if json {
+        let input = Input::at("KIND").given(given).expected(&wanted);
+        let report = Report::new(Code::BadArgument, Fault::InvalidInput).with_input(input);
+        return Said::one(true, report.to_json(DisplayUnits::default()).unwrap_or_default(), 2);
+    }
+    Said::one(false, format!("error: list takes its kinds after --kind: write {wanted}"), 2)
 }
 
 /// `occam describe` and `occam adjacent`: each id asked of the model by `ask`, its answers made into `answered`.
