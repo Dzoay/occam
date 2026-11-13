@@ -31,8 +31,10 @@ fn legendre(x: f64) -> (f64, f64) {
 }
 
 /// The rule's nodes on `[-1, 1]` and their weights: the roots of the Legendre polynomial, each refined by Newton's
-/// method from `cos(pi (i - 1/4) / (n + 1/2))` until its step no longer moves it, and `2 / ((1 - x^2) P'(x)^2)`.
-pub(crate) fn rule() -> [(f64, f64); POINTS] {
+/// method from `cos(pi (i - 1/4) / (n + 1/2))` until its step no longer moves it, and `2 / ((1 - x^2) P'(x)^2)`. Ten
+/// points, so a polynomial of degree below twenty is integrated exactly; the nodes run from near 1 down to near -1.
+#[must_use]
+pub fn rule() -> [(f64, f64); POINTS] {
     let n = f64::from(u32::try_from(POINTS).unwrap_or(0));
     std::array::from_fn(|i| {
         let i = f64::from(u32::try_from(i).unwrap_or(0)) + 1.0;

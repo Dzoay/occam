@@ -5,7 +5,7 @@
 //! vertices.
 
 use occam_ops::{Args, Operation, Request, Step, Units};
-use occam_report::{AngleUnit, EntityKind, Input, LengthUnit, Reason, followed_remedy};
+use occam_report::{AngleUnit, DisplayUnits, EntityKind, Input, LengthUnit, Reason, followed_remedy};
 use occam_topo::{Derivation, Lineage, Vertex, VertexRecord};
 use occam_units::{Angle, Length, Point};
 use serde_json::{Map, Value, json};
@@ -217,6 +217,49 @@ fn a_run_has_one_json_form_with_each_steps_changes_and_the_failure_in_the_reques
     );
     assert_eq!(refused["failed"].get("step"), None);
     assert_eq!(refused["failed"]["reports"][0]["code"], json!("request.malformed"));
+}
+
+#[test]
+fn a_measure_changes_nothing_and_gives_its_values_in_millimetres_shown_in_the_requests_units() {
+    let request = r#"{"schema": 1, "units": {"length": "cm", "angle": "rad"}, "steps": [
+        {"op": "box", "label": "block", "size": [1, 2, 3]},
+        {"op": "measure", "target": "block", "what": ["volume", "bounds"]}
+    ]}"#;
+    let ran = run(None, request);
+    assert_eq!(ran.failed, None);
+    let measure = &ran.done[1];
+    assert_eq!((measure.made, &measure.changes), (None, &Changes::default()));
+    assert_eq!(ran.model.as_ref().map(Snapshot::step), Some(1), "the box's step, and no other");
+    let measured = measure.measured.as_ref().unwrap();
+    assert_eq!(Some(measured.target), ran.done[0].made);
+    let volume = measured.values[0].number().unwrap();
+    assert!((volume - 6000.0).abs() <= 6000.0 * occam_ops::RELATIVE, "{volume}");
+    let value: Value = serde_json::from_str(&ran_json(&ran)).unwrap();
+    let step = &value["steps"][1];
+    assert_eq!(
+        (step["operation"].clone(), step["created"].clone(), step.get("made")),
+        (json!("measure"), json!([]), None)
+    );
+    assert_eq!(step["measured"]["target"], json!(measured.target.text()));
+    let shown = measured.values[0].shown(DisplayUnits { length: LengthUnit::Centimetre, angle: AngleUnit::Radian });
+    assert_eq!(
+        step["measured"]["values"][0],
+        json!({"name": "volume", "quantity": "volume", "value": volume, "shown": shown})
+    );
+    // The box holds the block, rounding included: each corner a few roundings out, and shown in centimetres.
+    let high = &measured.values[2];
+    let occam_report::Value::Point(corner) = high.value else { panic!("{high:?}") };
+    assert!(corner.iter().zip([10.0, 20.0, 30.0]).all(|(c, w)| *c >= w && *c - w < 1e-12), "{corner:?}");
+    let shown = high.shown(DisplayUnits { length: LengthUnit::Centimetre, angle: AngleUnit::Radian });
+    assert!(shown.starts_with("(1") && shown.ends_with(") cm"), "{shown}");
+    let want = json!({"name": "bounds-high", "quantity": "length", "value": corner, "shown": shown});
+    assert_eq!(step["measured"]["values"][2], want);
+    assert_eq!(value["steps"][0].get("measured"), None, "a step that measures nothing says nothing of it");
+    // A measure that fails stops the run there, as any step does, the model as the step before it left it.
+    let refused = run(None, &request.replace("\"target\": \"block\"", "\"target\": \"plate\""));
+    let failed = refused.failed.as_ref().map(|f| (f.step, f.reports[0].code));
+    assert_eq!((failed, refused.done.len()), (Some((Some(1), Code::InputUnknownLabel)), 1));
+    assert_eq!(refused.model.as_ref().map(Snapshot::step), Some(1));
 }
 
 #[test]

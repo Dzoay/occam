@@ -316,5 +316,33 @@ fn construct_sweeps() -> bool {
     made
 }
 
-library_benchmark_group!(name = construction, benchmarks = [construct_primitives, construct_sweeps]);
+/// Each primitive of [`PRIMITIVES`] made: setup, which the counts leave out.
+fn primitives() -> occam_topo::Snapshot {
+    occam::run(None, PRIMITIVES).model.unwrap()
+}
+
+/// A request measuring everything each primitive has, by its body's id.
+const MEASURES: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+    {"op": "measure", "target": "body:0/1"},
+    {"op": "measure", "target": "body:1/1"},
+    {"op": "measure", "target": "body:2/1"},
+    {"op": "measure", "target": "body:3/1"},
+    {"op": "measure", "target": "body:4/1"},
+    {"op": "measure", "target": "body:5/1"}
+]}"#;
+
+// Measuring each primitive's volume, area, centre of mass and box, on one thread.
+#[library_benchmark]
+#[bench::primitives(primitives())]
+fn measure_primitives(model: occam_topo::Snapshot) -> bool {
+    let ran = occam::run(Some(&model), black_box(MEASURES));
+    let measured = ran.failed.is_none() && ran.done.iter().all(|d| d.measured.is_some());
+    core::mem::forget((ran, model));
+    measured
+}
+
+library_benchmark_group!(
+    name = construction,
+    benchmarks = [construct_primitives, construct_sweeps, measure_primitives]
+);
 main!(library_benchmark_groups = operations, kernels, topology, construction);

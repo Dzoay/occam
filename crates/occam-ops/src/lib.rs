@@ -6,6 +6,7 @@
 mod args;
 mod construct;
 mod execute;
+mod measure;
 mod operand;
 mod operation;
 mod primitive;
@@ -16,6 +17,7 @@ mod sweep;
 pub use args::Args;
 pub use construct::given::{FaceArgs, Piece, WireArgs, WireRef};
 pub use execute::execute;
+pub use measure::{MeasureArgs, Measured, Measurement, RELATIVE, measure};
 pub use operand::{Labels, Operand};
 pub use operation::{Operation, listing};
 pub use primitive::{Pose, PrimitiveArgs, Shape};

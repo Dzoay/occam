@@ -39,6 +39,8 @@ pub fn execute(edit: &mut Edit, step: &Step, labels: &Labels) -> Result<Option<E
         ) => primitive::make(edit, args),
         (Operation::Extrude, Args::Extrude(args)) => sweep::extrude(edit, args, labels),
         (Operation::Revolve, Args::Revolve(args)) => sweep::revolve(edit, args, labels),
+        // A measure changes nothing: the runner asks for its values with `measure` instead.
+        (Operation::Measure, Args::Measure(_)) => Ok(None),
         (operation, _) if operation.supported() => {
             Err(Report::new(Code::InputMissing, Fault::InvalidInput).with_input(place("")))
         }

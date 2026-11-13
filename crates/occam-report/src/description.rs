@@ -64,7 +64,7 @@ impl Description {
         Shown {
             entity: self.entity,
             form: &self.form,
-            values: self.values.iter().map(|value| ValueShown { value, shown: value.shown(units) }).collect(),
+            values: self.values.iter().map(|value| ValueShown::new(value, units)).collect(),
             origin: self.origin.as_ref(),
             adjacent: &self.adjacent,
         }
@@ -83,12 +83,20 @@ pub struct Shown<'a> {
     adjacent: &'a [EntityRef],
 }
 
-/// A value as a description writes it.
+/// A value as a result writes it: in occam's own units, and shown in the caller's (L9).
 #[derive(Debug, Serialize)]
-struct ValueShown<'a> {
+pub struct ValueShown<'a> {
     #[serde(flatten)]
     value: &'a NamedValue,
     shown: String,
+}
+
+impl<'a> ValueShown<'a> {
+    /// `value` as it is written, shown in `units`.
+    #[must_use]
+    pub fn new(value: &'a NamedValue, units: DisplayUnits) -> Self {
+        Self { value, shown: value.shown(units) }
+    }
 }
 
 #[cfg(test)]

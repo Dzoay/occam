@@ -222,4 +222,22 @@ exclude_re = [
     # By line. A profile point exactly the band out of the axis's plane, or beyond the axis: the band is the least
     # distance occam tells apart, so refusing it and taking it are both within the tolerance.
     "revolve\\.rs:64:21: replace > with >= in axes$",
+    # The measure step's (construction.measure). Ties, which give the same value either way: the smaller and the larger
+    # of two numbers, and a loop whose region in its parameters has no area, which counts nothing either way round.
+    "occam-ops/src/measure\\.rs:\\d+:\\d+: replace > with >= in larger$",
+    "measure/extent\\.rs:\\d+:\\d+: replace < with <= in smaller$",
+    "measure/extent\\.rs:\\d+:\\d+: replace > with >= in larger$",
+    "measure/mass\\.rs:205:49: replace < with <= in sums$",
+    # Where each `G` starts along `u`: any start gives the same integral round a closed loop, as `dv` adds up to nothing
+    # round it, so the least `u` the face reaches, which keeps each `G` within the surface's domain, is a choice.
+    "measure/mass\\.rs:\\d+:\\d+: replace least -> f64 with ",
+    "measure/mass\\.rs:\\d+:\\d+: replace < with <= in least$",
+    # A direction exactly at the threshold of lying along a torus's axis, which reaches as far round whole circles.
+    "measure/extent\\.rs:\\d+:\\d+: replace > with >= in turning$",
+    # By line. A period from a range's start and end: every analytic family's angle runs from 0, as `turn()` gives it,
+    # where its end less its start is its end plus its start.
+    "measure/extent\\.rs:112:100: replace - with \\+ in interior$",
+    # By line. The rule's nodes come in pairs either side of the middle, each pair with one weight, so taking each node
+    # the other side of the middle sums the same evaluations in another order.
+    "measure/quadrature\\.rs:73:37: replace \\+ with - in rule$",
 ]

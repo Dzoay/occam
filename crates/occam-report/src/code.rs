@@ -498,6 +498,21 @@ catalogue! {
         "A revolution's profile lies on both sides of its axis.",
         "The profile reaches {point}, {distance} beyond {parameter} from its farthest point, more than the band of {band}.",
     }
+
+    /// A measure is asked of something that does not have it: a volume or a centre of mass of anything but a solid, or
+    /// an area of something with no faces.
+    MeasureNotDefined = "measure.not-defined" {
+        Error, [],
+        "A measure is asked of something that does not have it.",
+        "{parameter} is {given}, which what the step measures does not have: it has {expected}.",
+    }
+
+    /// A face's edge has no curve in the face's parameters, which its area, and its solid's volume, are measured by.
+    NoParameterCurve = "measure.no-parameter-curve" {
+        Error, [],
+        "A face's edge has no curve in the face's parameters, which measuring the face needs.",
+        "The edge named has no curve in the parameters of the face named, which its area and volume are measured by.",
+    }
 }
 
 text_enum! {
@@ -1184,6 +1199,27 @@ mod tests {
         ])
     }
 
+    fn measure_step_codes() -> Value {
+        json!([
+            {
+                "name": "MeasureNotDefined",
+                "code": "measure.not-defined",
+                "severity": "error",
+                "summary": "A measure is asked of something that does not have it.",
+                "template": "{parameter} is {given}, which what the step measures does not have: it has {expected}.",
+                "remedies": []
+            },
+            {
+                "name": "NoParameterCurve",
+                "code": "measure.no-parameter-curve",
+                "severity": "error",
+                "summary": "A face's edge has no curve in the face's parameters, which measuring the face needs.",
+                "template": "The edge named has no curve in the parameters of the face named, which its area and volume are measured by.",
+                "remedies": []
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -1232,6 +1268,7 @@ mod tests {
             io_codes(),
             primitive_codes(),
             sweep_codes(),
+            measure_step_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())

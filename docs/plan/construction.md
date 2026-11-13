@@ -41,14 +41,6 @@ Rigid and scaling transforms of a body, and a copy whose ids are new and distinc
 *Failing test first:* a copied box moved by a vector has new ids, the same counts, and its lineage names the original;
 a scale that is not positive is refused.
 
-### `construction.measure`
-
-Volume, surface area and centre of mass of a solid by the divergence theorem over its faces, with adaptive quadrature
-(row 1.8), and the tight axis-aligned box of any body (row 2.7).
-
-*Failing test first:* the closed forms of each primitive and of the extruded and revolved solids, within the
-quadrature's stated tolerance; the box of a rotated cylinder is tight, not its bounding box's box.
-
 ### `construction.commands`
 
 `occam run`, `list`, `adjacent`, `describe` and `check`, each with `--json`, many ids and one result per id; `run`

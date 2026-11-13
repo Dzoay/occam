@@ -53,10 +53,6 @@ impl Labels {
 ///
 /// [`Code::InputUnknownLabel`] for a label no earlier step has, and [`Code::StaleId`] for an id that names no live
 /// entity, each saying where the operand is in the request.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the operations of the later steps resolve their operands through it")
-)]
 pub(crate) fn resolve(at: &At, operand: &Operand, labels: &Labels, model: &Snapshot) -> Result<EntityRef, Report> {
     match operand {
         Operand::Label(label) => labels.get(label).ok_or_else(|| {

@@ -76,7 +76,7 @@ mod uv_curve;
 pub mod workloads;
 
 pub use analytic::Analytic;
-pub use arc::length;
+pub use arc::{length, rule as gauss_legendre};
 pub use batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
 pub use bspline::{BsplineCurve, BsplineSurface};
 pub use circle::Circle;

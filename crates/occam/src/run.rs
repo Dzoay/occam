@@ -8,7 +8,7 @@
 mod wire;
 
 use occam_math::Exec;
-use occam_ops::{Labels, Operation, Request, Step, default_tolerance};
+use occam_ops::{Labels, Measured, Operation, Request, Step, default_tolerance};
 use occam_report::{
     Code, Description, DisplayUnits, EntityRef, Fault, Input, NamedValue, Quantity, Remedy, RemedyKind, Report,
 };
@@ -45,15 +45,19 @@ pub struct Done {
     pub changes: Changes,
     /// What each entity it names is: as the run left it, or as it last was if it is gone (O26).
     pub described: Vec<Description>,
+    /// What it measured, if it was a measure, which changes nothing.
+    pub measured: Option<Measured>,
 }
 
 impl Done {
-    /// Every entity it names: what it made, created, changed and deleted, and both ends of each lineage.
+    /// Every entity it names: what it made, created, changed and deleted, both ends of each lineage, and what it
+    /// measured.
     pub(crate) fn named(&self) -> impl Iterator<Item = EntityRef> + '_ {
         let changes = &self.changes;
         let lineage = changes.lineage.iter().flat_map(|l| [l.new, l.old]);
         let listed = changes.created.iter().chain(&changes.changed).chain(&changes.deleted).copied();
-        self.made.into_iter().chain(listed).chain(lineage)
+        let measured = self.measured.as_ref().map(|m| m.target);
+        self.made.into_iter().chain(measured).chain(listed).chain(lineage)
     }
 }
 
@@ -99,8 +103,8 @@ fn refused(model: Option<&Snapshot>, units: DisplayUnits, reports: Vec<Report>) 
     Ran { model: model.cloned(), units, tolerance: None, done: Vec::new(), failed }
 }
 
-/// What a step that ran gives: the model it left, what it made, and what it changed.
-type Stepped = (Snapshot, Option<EntityRef>, Changes);
+/// What a step that ran gives: the model it left, what it made, what it changed, and what it measured.
+type Stepped = (Snapshot, Option<EntityRef>, Changes, Option<Measured>);
 
 /// What a step that failed gives: its reports, and its edit as it stood when it was refused.
 type Stopped = (Vec<Report>, Box<Edit>);
@@ -126,13 +130,14 @@ pub(crate) fn run_request(
     for step in &request.steps {
         steps.insert(current.step().saturating_add(1), (step.index, step.operation));
         match one(&current, step, &labels, &mut execute) {
-            Ok((next, made, changes)) => {
+            Ok((next, made, changes, measured)) => {
                 if let (Some(label), Some(made)) = (&step.label, made) {
                     labels.insert(label, made);
                 }
                 let label = step.label.clone();
                 let operation = step.operation;
-                done.push(Done { step: step.index, label, operation, made, changes, described: Vec::new() });
+                let described = Vec::new();
+                done.push(Done { step: step.index, label, operation, made, changes, described, measured });
                 models.push(next.clone());
                 current = next;
             }
@@ -146,20 +151,27 @@ pub(crate) fn run_request(
     Ran { model: Some(current), units, tolerance: Some(tolerance), done, failed }
 }
 
-/// Does `step` on `model` and commits it; if it fails, gives its reports and its edit as it stood.
+/// Does `step` on `model` and commits it, or, for a measure, which changes nothing, measures `model`; if it fails, gives
+/// its reports and its edit as it stood.
 fn one(
     model: &Snapshot,
     step: &Step,
     labels: &Labels,
     execute: &mut impl FnMut(&mut Edit, &Step, &Labels) -> Result<Option<EntityRef>, Report>,
 ) -> Result<Stepped, Stopped> {
+    if step.operation == Operation::Measure {
+        return match occam_ops::measure(model, step, labels) {
+            Ok(measured) => Ok((model.clone(), None, Changes::default(), Some(measured))),
+            Err(report) => Err((vec![report], Box::new(model.edit()))),
+        };
+    }
     let mut edit = model.edit();
     let made = match execute(&mut edit, step, labels) {
         Ok(made) => made,
         Err(report) => return Err((vec![report], Box::new(edit))),
     };
     let (next, changes) = edit.try_commit(&Exec::serial())?;
-    Ok((next, made, changes))
+    Ok((next, made, changes, None))
 }
 
 /// The model the run starts from, and its tolerance: `model`'s own, or a new model's, the request's or the default.

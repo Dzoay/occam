@@ -45,19 +45,11 @@ pub struct EdgeRadius {
     pub radius: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Measurement {
-    Volume,
-    Area,
-    CentreOfMass,
-    Bounds,
-}
-
 /// The parameters each operation reads from its step's other fields (`occam_ops::Step::parameters`), as its step will
 /// make them real. The request, its steps and its operands are in `occam-ops` since `construction.request`, and the
 /// wire and the planar face, as `occam_ops::Args`, since `construction.wires`, the primitives since
-/// `construction.primitives`, and extrude and revolve since `construction.sweeps`.
+/// `construction.primitives`, extrude and revolve since `construction.sweeps`, and the measure, with
+/// `occam_ops::measure`, since `construction.measure`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
     Boolean {
@@ -73,10 +65,6 @@ pub enum Op {
         target: Operand,
         frame: Frame3,
         copy: bool,
-    },
-    Measure {
-        target: Operand,
-        what: Vec<Measurement>,
     },
 }
 
@@ -187,23 +175,5 @@ pub fn fillet(
     edges: &[(Id<Edge>, Length)],
     commit: Commit,
 ) -> Result<(Snapshot, Batch<Changes>), Failure> {
-    unimplemented!()
-}
-
-/// Volume, area and centre of mass, by the divergence theorem over the faces with adaptive quadrature (PARITY 1.8): the
-/// bracket test's oracle compares the volume.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Mass {
-    /// Cubic millimetres.
-    pub volume: f64,
-    /// Square millimetres.
-    pub area: f64,
-    pub centre: Point<World>,
-}
-
-/// # Errors
-///
-/// `check.invariant-failed` if the body is not closed.
-pub fn mass(exec: &Exec, model: &Snapshot, body: Id<Body>) -> Result<Mass, Report> {
     unimplemented!()
 }

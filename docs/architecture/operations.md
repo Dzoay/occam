@@ -56,8 +56,15 @@ sequenceDiagram
 
 ## Measure
 
-Volume, area and centre of mass by the divergence theorem over the faces, with adaptive quadrature. The bracket test's
-oracle compares the volume.
+Volume, area and centre of mass by the divergence theorem over the faces, with adaptive quadrature, and the tight box of
+anything. The bracket test's oracle compares the volume. A measure changes nothing.
+
+- **Each face is integrated in its own parameters,** turned by Green's theorem into its loops' curves there, so trimmed
+  and holed faces need no mesh.
+- **Volume and area to a part in 10⁹** of their values, and the centre of mass to a part in 10⁹ of the body's size, as
+  the quadrature estimates its error.
+- **The box holds the body, rounding included,** and is tight where its geometry is analytic: each edge gives its
+  curve's own box, and an analytic face adds only the points where it reaches further than its edges.
 
 <details>
 <summary>Evidence</summary>

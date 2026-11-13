@@ -1,10 +1,11 @@
 //! Source: original
 //! A run's one JSON form (L4): whether it went through, the tolerance in force and where it came from, each step that ran
-//! with what it created, changed and deleted and what each entity it names is, why it stopped if it did, and the notes.
-//! Numbers are in millimetres and radians, as every result gives them; the reports' wording, and each value a
-//! description shows, are in the request's units.
+//! with what it created, changed and deleted, what it measured, and what each entity it names is, why it stopped if it
+//! did, and the notes. Numbers are in millimetres and radians, as every result gives them; the reports' wording, and
+//! each value a description or a measure shows, are in the request's units.
 
-use occam_report::{Code, DisplayUnits, EntityRef, NamedValue, Quantity, Report, SCHEMA, Shown};
+use occam_ops::Measured;
+use occam_report::{Code, DisplayUnits, EntityRef, NamedValue, Quantity, Report, SCHEMA, Shown, ValueShown};
 use occam_topo::Derivation;
 use serde::Serialize;
 use serde_json::Value;
@@ -42,7 +43,15 @@ struct DoneWire<'a> {
     changed: &'a [EntityRef],
     deleted: &'a [EntityRef],
     lineage: Vec<LineageWire>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    measured: Option<MeasuredWire<'a>>,
     described: Vec<Shown<'a>>,
+}
+
+#[derive(Serialize)]
+struct MeasuredWire<'a> {
+    target: EntityRef,
+    values: Vec<ValueShown<'a>>,
 }
 
 #[derive(Serialize)]
@@ -85,6 +94,13 @@ pub(super) const fn how(how: Derivation) -> &'static str {
     }
 }
 
+fn measured(measured: &Measured, units: DisplayUnits) -> MeasuredWire<'_> {
+    MeasuredWire {
+        target: measured.target,
+        values: measured.values.iter().map(|v| ValueShown::new(v, units)).collect(),
+    }
+}
+
 fn done(done: &Done, units: DisplayUnits) -> DoneWire<'_> {
     let changes = &done.changes;
     let lineage = changes.lineage.iter().map(|l| LineageWire { new: l.new, old: l.old, how: how(l.how) }).collect();
@@ -97,6 +113,7 @@ fn done(done: &Done, units: DisplayUnits) -> DoneWire<'_> {
         changed: &changes.changed,
         deleted: &changes.deleted,
         lineage,
+        measured: done.measured.as_ref().map(|m| measured(m, units)),
         described: done.described.iter().map(|description| description.shown(units)).collect(),
     }
 }

@@ -6,6 +6,7 @@ use occam_report::Report;
 use serde_json::{Map, Value};
 
 use crate::construct::given::{self, FaceArgs, WireArgs};
+use crate::measure::{self, MeasureArgs};
 use crate::operation::Operation;
 use crate::primitive::{self, PrimitiveArgs};
 use crate::read::At;
@@ -28,6 +29,8 @@ pub enum Args {
     Extrude(ExtrudeArgs),
     /// A revolution's profile, axis and angle.
     Revolve(RevolveArgs),
+    /// What a measure measures, and what it wants of it.
+    Measure(MeasureArgs),
 }
 
 /// What the step at `at`, asking for `operation`, gives in `fields`, its fields other than `op` and `label`, with every
@@ -50,11 +53,9 @@ pub(crate) fn read(
         | Operation::Cone
         | Operation::Torus
         | Operation::Wedge => primitive::read(at, operation, fields, units, out).map_or(Args::None, Args::Primitive),
-        Operation::Transform
-        | Operation::Copy
-        | Operation::Measure
-        | Operation::Boolean
-        | Operation::Fillet
-        | Operation::Chamfer => Args::None,
+        Operation::Measure => measure::measure_step(at, fields, out).map_or(Args::None, Args::Measure),
+        Operation::Transform | Operation::Copy | Operation::Boolean | Operation::Fillet | Operation::Chamfer => {
+            Args::None
+        }
     }
 }

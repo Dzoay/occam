@@ -108,8 +108,9 @@ impl Operation {
             | Self::Sphere
             | Self::Cone
             | Self::Torus
-            | Self::Wedge => true,
-            Self::Transform | Self::Copy | Self::Measure | Self::Boolean | Self::Fillet | Self::Chamfer => false,
+            | Self::Wedge
+            | Self::Measure => true,
+            Self::Transform | Self::Copy | Self::Boolean | Self::Fillet | Self::Chamfer => false,
         }
     }
 
@@ -186,7 +187,8 @@ mod tests {
             let listed = if operation.supported() { &supported } else { &refused };
             assert!(listed.contains(&operation.name().to_string()), "{operation:?}");
         }
-        let made = ["box", "cylinder", "sphere", "cone", "torus", "wedge", "wire", "face", "extrude", "revolve"];
+        let made =
+            ["box", "cylinder", "sphere", "cone", "torus", "wedge", "wire", "face", "extrude", "revolve", "measure"];
         assert_eq!(supported, made);
         assert_eq!(refused.first().map(String::as_str), Some("transform"));
         assert_eq!(refused.last().map(String::as_str), Some("chamfer"));

@@ -50,7 +50,7 @@ mod report;
 mod value;
 
 pub use code::{Code, Entry, RemedyKind, Severity, catalogue_json};
-pub use description::{Description, Origin, Shown};
+pub use description::{Description, Origin, Shown, ValueShown};
 pub use display::{AngleUnit, DisplayUnits, LengthUnit};
 pub use fault::{Fault, Reason, Stage};
 pub use follow::follow_remedy;
