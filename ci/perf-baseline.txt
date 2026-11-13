@@ -12,8 +12,8 @@ maths_lanes4 87330348
 maths_lanes8 81902677
 maths_scalar 108976059
 measure_distance 3031
-offset_curves 1567285
-offset_surfaces 4470309
+offset_curves 978195
+offset_surfaces 3796686
 sines_w1 775021
 sines_w4 556907
 splines_w1 12732590

@@ -85,13 +85,13 @@ impl<S: Parametric> OffsetSurface<S> {
         Ok(Self { base, distance, lines })
     }
 
-    /// The point and its partials to `order` at `uv` as numbers, from the base's `derivatives`: NaN where the base
-    /// has none.
-    fn jets(&self, uv: UvPoint, order: u8) -> [Vec3; 6] {
-        let (mut rates, mut scratch) = (Vec::with_capacity(9), Scratch::default());
+    /// The point and its partials to `order` at `uv` as numbers, from the base's `derivatives` in the caller's
+    /// `rates` and `scratch`, so that a call's lanes share one workspace: NaN where the base has none.
+    fn jets(&self, uv: UvPoint, order: u8, (rates, scratch): (&mut Vec<Tangent<World>>, &mut Scratch)) -> [Vec3; 6] {
+        rates.clear();
         let nan = Vec3::new(f64::NAN, f64::NAN, f64::NAN);
         let mut base = [nan; 10];
-        if Parametric::derivatives(&self.base, uv, order.saturating_add(1), &mut rates, &mut scratch).is_ok() {
+        if Parametric::derivatives(&self.base, uv, order.saturating_add(1), rates, scratch).is_ok() {
             let point = std::iter::once(self.base.eval_point(uv).to_vec3());
             for (slot, value) in base.iter_mut().zip(point.chain(rates.iter().map(|t| t.rate()))) {
                 *slot = value;
@@ -130,13 +130,14 @@ impl<S: Parametric> Parametric for OffsetSurface<S> {
         Jet1 { point: Point::from_vec3(point), du: Tangent::new(du), dv: Tangent::new(dv) }
     }
 
-    /// A lane at a time: the second partials need the base's third, which no rung gives.
+    /// A lane at a time, in one workspace: the second partials need the base's third, which no rung gives.
     fn eval_second<R: Real>(&self, uv: UvPoint<R>) -> Jet2<R> {
         const { assert!(R::LANES <= MAX_LANES, "more lanes than a lane-at-a-time evaluation holds") };
         let (us, vs) = (lanes(uv.u()), lanes(uv.v()));
         let nan = Vec3::new(f64::NAN, f64::NAN, f64::NAN);
+        let (mut rates, mut scratch) = (Vec::with_capacity(9), Scratch::default());
         let each: [[Vec3; 6]; MAX_LANES] = std::array::from_fn(|k| match (us.get(k), vs.get(k)) {
-            (Some(&u), Some(&v)) if k < R::LANES => self.jets(UvPoint::new(u, v), 2),
+            (Some(&u), Some(&v)) if k < R::LANES => self.jets(UvPoint::new(u, v), 2, (&mut rates, &mut scratch)),
             _ => [nan; 6],
         });
         let at = |slot: usize| from_lanes::<R>(|k| each.get(k).and_then(|e| e.get(slot)).copied().unwrap_or(nan));
