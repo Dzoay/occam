@@ -19,7 +19,7 @@ hold.
 | `geometry` | [Detailed in its own file](geometry.md) | 1.2 to 1.5, 2.1 to 2.4, 2.8 | [Detailed in its own file](geometry.md) |
 | `topology` | [Detailed in its own file](topology.md) | 1.1, 1.10 | [Detailed in its own file](topology.md) |
 | `construction` | [Detailed in its own file](construction.md) | 1.6, 1.8, 1.12, 1.13, 2.7, 2.11, 2.13, 2.15, 2.17 | [Detailed in its own file](construction.md) |
-| `view` | P9's mesher, with its limits and the watertight check on every output; P10's worker pool; P12's renderer contract | 1.7 | Mesh buffers asserted; watertight; timed in the browser |
+| `view` | [Detailed in its own file](view.md) | 1.7 | [Detailed in its own file](view.md) |
 | `intersection` | The method list, closed forms then the hybrid; failures in the result; `BelowResolution`; coincidence detected; edge box tests checked by digest | none | Oracle and closed-form agreement across the corpus (goal) |
 | `booleans` | P2's phases with frozen outputs; only touched faces prepared; a sort-and-sweep broad phase; every failing pair reported; coincident surfaces (O25); point classification; the decisions tally | 1.11, 2.14 | Invariants on all returned results (gate); randomised sequences nightly; S6's blind control rerun on boolean failures (goal) |
 | `exchange` | STEP read and write; the table of [names and colours](../architecture/topology.md#names-and-colours) | 1.9, 2.9 | Round trip through the OCCT oracle, names and colours included; losses reported |

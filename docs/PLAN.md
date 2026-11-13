@@ -127,7 +127,8 @@ Named, not numbered. They run in this order.
 | `geometry` | Every curve and surface family through the two-layer seam, the new unit types, and report schema 2 | [plan/geometry.md](plan/geometry.md) |
 | `topology` | The B-rep: records in copy-on-write chunks, stable ids, the edit whose commit runs the checker, and what changed | [plan/topology.md](plan/topology.md) |
 | `construction` | An agent builds and inspects a solid from JSON alone: requests, wires, faces, primitives, sweeps, copies, mass properties, the native format and the `occam` command | [plan/construction.md](plan/construction.md) |
-| first release | `view`, `intersection`, `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
+| `view` | A model meshed and drawn in the browser: shared edges first, then faces, the watertight check on every output, the worker pool and the renderer contract | [plan/view.md](plan/view.md) |
+| first release | `intersection`, `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 
 **After the first release**, in no fixed order and each needing the user's go-ahead: the 2D sketch solver; the document
@@ -151,8 +152,9 @@ O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md).
 | O10 | A nightly toolchain for wasm threads, which need `-Zbuild-std`. [Spikes may use one already](decisions/2026-11-09-early-spikes.md) | P10 recommends keeping this open and not taking on nightly for real use. Nothing in the first release needs it. Reopen it if a real kernel has a model large enough that a copy per worker hurts, or tasks fine-grained enough that message passing dominates, or when `-Zbuild-std` stabilises | when one of those happens |
 | O13 | A stored per-entity accuracy for imported geometry, fixed at import and never grown (S2). Foreign geometry was not measured | Decide when import is in scope | when import is in scope |
 | O17 | x86-64-v3 code paths (S3/P3), and whether [`DETERMINISM.md`](DETERMINISM.md) rule 5, "No `target-cpu`", stays as written (P4). The NURBS gain exists only there. Having it means hand-written detection, a new dependency, or a build that excludes older CPUs | Leave this until a real kernel profile shows NURBS evaluation is worth it. Rule 5 needs no change if `dispatch!` is taken under O5 | when a kernel profile asks for it |
-| O19 | Which browsers the first release must support (P10, P12). Safari was not measured, and P12 measured only Firefox on two GPUs. [This also picks the renderer's API](decisions/2026-11-09-gpu-drawing.md) | Measure Safari before any release that claims to support it | `view` |
+| O19 | Which browsers the first release must support (P10, P12). Safari was not measured, and P12 measured only Firefox on two GPUs. [This also picks the renderer's API](decisions/2026-11-09-gpu-drawing.md) | WebGPU on current Chromium and Firefox: it is the API P12 measured, and the renderer contract's storage binding needs it. Measure Safari before any release that claims to support it | `view` |
 | O20 | Whether the first release must serve continuous whole-surface editing of very large faces (P12) | No: draw the CPU mesh with local updates, and add write-through if a real workload asks for it | `view` |
 | O27 | Whether P1's comparison with OCCT should reach `main`. It holds family medians of the time ratio and counts of the cases where the prototype was faster, with no per-case OCCT number. [Kept out for now](decisions/2026-11-09-p1-occt-comparison.md) | Decide with O6's answer, because the figures are derived from oracle outputs | when O6 is answered |
+| O28 | Whether the first release's viewer picks a face or edge, to hand its id to an agent | No: the bracket test does not need it. Add it with the full web application, picking against the CPU mesh and never against GPU output | `view` |
 
 O11 onward come from the spike findings named in each row, which give the detail.
