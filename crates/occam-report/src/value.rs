@@ -189,10 +189,22 @@ impl NamedValue {
             Quantity::Count | Quantity::Ratio => String::new(),
         };
         let text = match self.value {
-            Value::Scalar(value) => format!("{}", number(value)),
-            Value::Point([x, y, z]) => format!("({}, {}, {})", number(x), number(y), number(z)),
+            Value::Scalar(value) => figure(number(value)),
+            Value::Point([x, y, z]) => format!("({}, {}, {})", figure(number(x)), figure(number(y)), figure(number(z))),
         };
         if unit.is_empty() { text } else { format!("{text} {unit}") }
+    }
+}
+
+/// A number as a person reads it: the shortest text that reads back, as Rust writes it, but in powers of ten below 1e-4
+/// and from 1e15 up, where that text runs to hundreds of digits (a box's rounding outward from 0 is 5e-324).
+#[must_use]
+pub fn figure(value: f64) -> String {
+    let size = value.abs();
+    if size > 0.0 && size.is_finite() && !(1e-4..1e15).contains(&size) {
+        format!("{value:e}")
+    } else {
+        format!("{value}")
     }
 }
 
@@ -258,6 +270,18 @@ mod tests {
 
     fn value(quantity: Quantity, value: f64) -> NamedValue {
         NamedValue::new("v", quantity, value)
+    }
+
+    #[test]
+    fn a_figure_is_the_shortest_text_that_reads_back_with_powers_of_ten_at_the_ends() {
+        let figures = [5e-324, -5.4e-323, 1e-7, 0.000_099_9, 1e-4, 0.0, -0.0, 2.5, 1e15 - 1.0, 1e15, 2.5e20];
+        let want =
+            ["5e-324", "-5.4e-323", "1e-7", "9.99e-5", "0.0001", "0", "-0", "2.5", "999999999999999", "1e15", "2.5e20"];
+        assert_eq!(figures.map(figure), want);
+        assert_eq!([f64::INFINITY, f64::NEG_INFINITY, f64::NAN].map(figure), ["inf", "-inf", "NaN"]);
+        for value in figures {
+            assert_eq!(figure(value).parse::<f64>().map(f64::to_bits), Ok(value.to_bits()), "{value} reads back");
+        }
     }
 
     #[test]

@@ -33,12 +33,4 @@ for the native format's binary twin. Each step moves what it makes real out of [
 
 ## Steps
 
-### `construction.agent`
-
-The exit test: a solid built from JSON alone through the `occam` command, the bracket test's plate with its cylinder
-beside it, then listed, described, measured and checked. A blind run by an agent given only the command and its
-reports is recorded as a goal, as S6's were. The time to load 10⁵ faces is measured, parsing and checking apart, from
-the binary twin and from JSON.
-
-*Failing test first:* the test drives the built binary with JSON files only, and fails until every command it uses
-exists.
+Every step is done; the exit gate above is checked on the milestone's PR.

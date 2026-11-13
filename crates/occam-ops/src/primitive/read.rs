@@ -71,19 +71,6 @@ pub struct PrimitiveArgs {
     pub pose: Pose,
 }
 
-/// The fields each primitive takes.
-const fn fields(operation: Operation) -> &'static [&'static str] {
-    match operation {
-        Operation::Box => &["size", "frame"],
-        Operation::Cylinder => &["radius", "height", "frame"],
-        Operation::Sphere => &["radius", "frame"],
-        Operation::Cone => &["radius1", "radius2", "height", "frame"],
-        Operation::Torus => &["major", "minor", "frame"],
-        Operation::Wedge => &["size", "top", "frame"],
-        _ => &[],
-    }
-}
-
 /// Keeps `result`'s value, or its report in `out`.
 fn keep<T>(result: Result<T, Report>, out: &mut Vec<Report>) -> Option<T> {
     result.map_err(|report| out.push(report)).ok()
@@ -277,7 +264,7 @@ pub(crate) fn read(
     out: &mut Vec<Report>,
 ) -> Option<PrimitiveArgs> {
     let all = Value::Object(parameters.clone());
-    let fields = object(at, &all, self::fields(operation), out)?;
+    let fields = object(at, &all, operation.fields(), out)?;
     let shape = shape(at, operation, fields, units.length, out);
     let pose = pose(&at.field("frame"), fields.get("frame"), units.length, out);
     Some(PrimitiveArgs { shape: shape?, pose: pose? })

@@ -26,6 +26,7 @@ use serde_json::{Map, Value};
 
 use crate::args::Args;
 use crate::operand::{Labels, Operand, resolve};
+use crate::operation::Operation;
 use crate::read::{At, missing, name, object, text, wrong_type};
 use crate::request::Step;
 use extent::Inside;
@@ -93,7 +94,7 @@ pub struct Measured {
 /// The measure step whose fields other than `op` and `label` are `fields`, at `at`, with every bad input in `out`.
 pub(crate) fn measure_step(at: &At, fields: &Map<String, Value>, out: &mut Vec<Report>) -> Option<MeasureArgs> {
     let all = Value::Object(fields.clone());
-    let fields = object(at, &all, &["target", "what"], out)?;
+    let fields = object(at, &all, Operation::Measure.fields(), out)?;
     let target = fields.get("target").ok_or_else(|| missing(&at.field("target")));
     let target =
         target.and_then(|value| text(&at.field("target"), value)).map(Operand::read).map_err(|r| out.push(r)).ok();

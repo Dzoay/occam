@@ -59,4 +59,4 @@ pub use number::Number;
 pub use origin::StepRole;
 pub use outcome::{Batch, Outcome};
 pub use report::{Details, Input, Partial, Remedy, Report};
-pub use value::{EntityKind, EntityRef, NamedValue, Quantity, Value};
+pub use value::{EntityKind, EntityRef, NamedValue, Quantity, Value, figure};

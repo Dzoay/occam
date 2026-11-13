@@ -11,6 +11,7 @@ use occam_units::{Affine, Local, Placement, World};
 use serde_json::{Map, Value};
 
 use crate::construct::given::gather;
+use crate::operation::Operation;
 use crate::primitive::{pose, three};
 use crate::read::{At, number, object, wrong_type};
 use crate::request::Units;
@@ -59,7 +60,7 @@ pub(crate) fn transform_step(
     out: &mut Vec<Report>,
 ) -> Option<TransformArgs> {
     let value = Value::Object(fields.clone());
-    let fields = object(at, &value, &["target", "scale", "about", "frame"], out)?;
+    let fields = object(at, &value, Operation::Transform.fields(), out)?;
     let target = gather(named(at, fields, "target"), out);
     let scale_at = at.field("scale");
     let factors = fields.get("scale").map_or(Some([1.0; 3]), |value| factors(&scale_at, value, out));

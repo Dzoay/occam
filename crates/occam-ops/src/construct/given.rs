@@ -10,6 +10,7 @@ use occam_units::{Length, Vec3};
 use serde_json::{Map, Value};
 
 use crate::operand::Operand;
+use crate::operation::Operation;
 use crate::read::{At, missing, needed, number, object, wrong_type};
 use crate::request::Units;
 
@@ -241,7 +242,7 @@ fn wire_ref(at: &At, value: &Value, units: Units, out: &mut Vec<Report>) -> Opti
     match value {
         Value::String(name) => Some(WireRef::Named(Operand::read(name), at.input())),
         Value::Object(_) => {
-            let fields = object(at, value, &["points", "closed", "edges"], out)?;
+            let fields = object(at, value, Operation::Wire.fields(), out)?;
             wire(at, fields, units, out).map(WireRef::Given)
         }
         _ => {
@@ -269,13 +270,13 @@ pub(crate) fn face(at: &At, fields: &Map<String, Value>, units: Units, out: &mut
 /// The fields of a `wire` step, at `at`, checking that it takes them.
 pub(crate) fn wire_step(at: &At, fields: &Map<String, Value>, units: Units, out: &mut Vec<Report>) -> Option<WireArgs> {
     let value = Value::Object(fields.clone());
-    let fields = object(at, &value, &["points", "closed", "edges"], out)?;
+    let fields = object(at, &value, Operation::Wire.fields(), out)?;
     wire(at, fields, units, out)
 }
 
 /// The fields of a `face` step, at `at`, checking that it takes them.
 pub(crate) fn face_step(at: &At, fields: &Map<String, Value>, units: Units, out: &mut Vec<Report>) -> Option<FaceArgs> {
     let value = Value::Object(fields.clone());
-    let fields = object(at, &value, &["outer", "holes"], out)?;
+    let fields = object(at, &value, Operation::Face.fields(), out)?;
     face(at, fields, units, out)
 }

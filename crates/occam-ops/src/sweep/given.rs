@@ -13,6 +13,7 @@ use serde_json::{Map, Value};
 use crate::construct::given::{direction, gather, point};
 use crate::construct::space::unit;
 use crate::operand::Operand;
+use crate::operation::Operation;
 use crate::read::{At, needed, number, object, text};
 use crate::request::Units;
 
@@ -85,7 +86,7 @@ pub(crate) fn extrude_step(
     out: &mut Vec<Report>,
 ) -> Option<ExtrudeArgs> {
     let value = Value::Object(fields.clone());
-    let fields = object(at, &value, &["face", "vector"], out)?;
+    let fields = object(at, &value, Operation::Extrude.fields(), out)?;
     let face = gather(named(at, fields, "face"), out);
     let vector_at = at.field("vector");
     let vector = gather(needed(at, fields, "vector").and_then(|v| point(&vector_at, v, units)), out);
@@ -100,7 +101,7 @@ pub(crate) fn revolve_step(
     out: &mut Vec<Report>,
 ) -> Option<RevolveArgs> {
     let value = Value::Object(fields.clone());
-    let fields = object(at, &value, &["profile", "origin", "axis", "angle"], out)?;
+    let fields = object(at, &value, Operation::Revolve.fields(), out)?;
     let profile = gather(named(at, fields, "profile"), out);
     let origin = gather(needed(at, fields, "origin").and_then(|v| point(&at.field("origin"), v, units)), out);
     let axis_at = at.field("axis");

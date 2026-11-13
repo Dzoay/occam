@@ -6,6 +6,7 @@
 mod args;
 mod construct;
 mod execute;
+mod guide;
 mod measure;
 mod operand;
 mod operation;
@@ -18,6 +19,7 @@ mod transform;
 pub use args::Args;
 pub use construct::given::{FaceArgs, Piece, WireArgs, WireRef};
 pub use execute::execute;
+pub use guide::guide;
 pub use measure::{MeasureArgs, Measured, Measurement, RELATIVE, measure};
 pub use operand::{Labels, Operand};
 pub use operation::{Operation, listing};

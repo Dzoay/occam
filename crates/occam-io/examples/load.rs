@@ -3,7 +3,7 @@
 //! exit asks and the files risk watches: the binary twin speeds up only the parsing. A goal, not a gate (L46).
 //! In release:
 //!
-//! `cargo run --release -p occam-io --example load -- [squares across] [repetitions]`
+//! `just load [squares across] [repetitions]`
 //!
 //! The model is occam-topo's plate, `2k² + 4k` faces for `k` squares across (223 gives 100,350). Parsing is timed for
 //! the readable file as saved, which is compact, for the same JSON pretty-printed, as it was first written, and for the

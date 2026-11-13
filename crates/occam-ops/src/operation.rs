@@ -89,6 +89,58 @@ impl Operation {
         }
     }
 
+    /// The fields its step takes beside `op` and `label`: the one list its reader checks a step against, and the guide
+    /// names each. An operation this build does not do takes none yet.
+    #[must_use]
+    pub const fn fields(self) -> &'static [&'static str] {
+        match self {
+            Self::Box => &["size", "frame"],
+            Self::Cylinder => &["radius", "height", "frame"],
+            Self::Sphere => &["radius", "frame"],
+            Self::Cone => &["radius1", "radius2", "height", "frame"],
+            Self::Torus => &["major", "minor", "frame"],
+            Self::Wedge => &["size", "top", "frame"],
+            Self::Wire => &["points", "closed", "edges"],
+            Self::Face => &["outer", "holes"],
+            Self::Extrude => &["face", "vector"],
+            Self::Revolve => &["profile", "origin", "axis", "angle"],
+            Self::Transform | Self::Copy => &["target", "scale", "about", "frame"],
+            Self::Measure => &["target", "what"],
+            Self::Boolean | Self::Fillet | Self::Chamfer => &[],
+        }
+    }
+
+    /// What its step's fields hold, as the guide gives it: each of [`Self::fields`], by name.
+    #[must_use]
+    pub const fn takes(self) -> &'static str {
+        match self {
+            Self::Box => "size [x, y, z]; frame",
+            Self::Cylinder => "radius; height, along the frame's z; frame",
+            Self::Sphere => "radius; frame",
+            Self::Cone => "radius1 at the base and radius2 at the top, either but not both 0; height; frame",
+            Self::Torus => "major, the radius its tube's centre runs round; minor, the tube's, less than major; frame",
+            Self::Wedge => r#"size [x, y, z]; top {"start": where it begins along x, "width": along x}; frame"#,
+            Self::Wire => concat!(
+                "points [point, ...], with straight edges between, and closed: true to join the last to the first; ",
+                r#"or edges [{"line": [from, to]} or {"arc": [from, through, to]} or "#,
+                r#"{"circle": {"centre": point, "radius": length, "normal": direction}}, ...]"#,
+            ),
+            Self::Face => {
+                "outer, a closed planar wire, and holes [wire, ...] inside it, if any; a wire is a label, an id \
+                           or a wire written in place"
+            }
+            Self::Extrude => "face, a planar face; vector [x, y, z], the way and length it is swept",
+            Self::Revolve => "profile, a face or a wire; origin, a point on the axis; axis, a direction; angle",
+            Self::Transform => {
+                "target, a body; scale, a number or three along about's axes, if any; about, a frame; \
+                                frame, where the world's frame goes, after the scale. The body keeps its ids"
+            }
+            Self::Copy => "target, scale, about and frame, as for transform; the copy has new ids",
+            Self::Measure => "target, an entity; what [measurement, ...], or all the target has if left out",
+            Self::Boolean | Self::Fillet | Self::Chamfer => "",
+        }
+    }
+
     /// The operation a request names `name`, if occam has one.
     #[must_use]
     pub fn named(name: &str) -> Option<Self> {

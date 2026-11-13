@@ -32,6 +32,8 @@ pub const ID_FORM: &str = "an id as kind:slot/generation, such as edge:41/1";
 /// ids answers each one apart: an id that names nothing is refused alone, and the others are answered. The exit status is
 /// 0 when everything asked was answered, 1 when anything was refused, and 2 when the command line is wrong. Lengths are
 /// in millimetres and angles in radians.
+///
+/// A model is built by `occam run`; `occam run --help` shows how to write the request it runs.
 #[derive(Debug, Parser)]
 #[command(name = "occam", version, max_term_width = 100)]
 pub struct Cli {
@@ -47,6 +49,9 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Run a request on a model, and write the model back if the whole request went through.
+    ///
+    /// --help shows how to write a request.
+    #[command(after_long_help = occam::guide())]
     Run(RunArgs),
     /// List every live entity of each kind given, in slot order.
     List(ListArgs),

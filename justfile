@@ -181,6 +181,12 @@ advisories:
 workflows:
     actionlint
 
+# Time loading a model of about 10⁵ faces from the native format, parsing and checking apart: `construction`'s goal
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+load *args:
+    cargo run --quiet --release -p occam-io --example load -- "$@"
+
 # Raise ci/test-counts.txt's minimums to this tree's
 [env("CARGO_TARGET_DIR", target)]
 [group('tools')]

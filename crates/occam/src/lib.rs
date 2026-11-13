@@ -15,7 +15,7 @@ pub use model::Model;
 pub use occam_geom::workloads as spline_workloads;
 pub use occam_geom::{Jets, SplineSurface};
 pub use occam_math::{Exec, Lanes, Real, width, workloads};
-pub use occam_ops::{Operation, listing};
+pub use occam_ops::{Operation, guide, listing};
 pub use occam_report::{
     Code, Description, DisplayUnits, EntityKind, EntityRef, Fault, Input, NamedValue, Origin, Outcome, Remedy,
     RemedyKind, Report,

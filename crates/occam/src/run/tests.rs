@@ -180,7 +180,7 @@ fn a_run_has_one_json_form_with_each_steps_changes_and_the_failure_in_the_reques
     let value: Value = serde_json::from_str(&ran_json(&ran)).unwrap();
     let note = json!({
         "schema": 2, "code": "measure.tolerance-used", "severity": "note",
-        "message": "The operation worked to a tolerance of 0.00000001 cm.",
+        "message": "The operation worked to a tolerance of 1e-8 cm.",
         "entities": [], "remedies": [],
         "values": [{"name": "tolerance", "quantity": "length", "value": 1e-7}, {"name": "angle", "quantity": "angle", "value": 1e-9}],
     });
