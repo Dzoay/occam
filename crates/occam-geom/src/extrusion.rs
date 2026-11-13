@@ -7,13 +7,13 @@
 
 use occam_math::Real;
 use occam_report::{Code, Fault, Report};
-use occam_units::{Bounds, Direction, Length, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Affine, Bounds, Direction, Length, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::axes::direction;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
 use crate::curve::ParametricCurve;
-use crate::domain::{Domain, ParamRange, UvBox};
+use crate::domain::{Domain, ParamMap, ParamRange, UvBox, UvMap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::nearest::nearest_by;
@@ -50,9 +50,9 @@ impl<C: ParametricCurve> Extrusion<C> {
         Ok(Self { range: curve.range(), curve, direction: along, along: along.get() })
     }
 
-    /// `point` moved `v` along the direction.
+    /// `point` shifted `v` along the direction.
     #[inline(always)]
-    fn moved<R: Real>(&self, point: Point<World, R>, v: R) -> Point<World, R> {
+    fn shifted<R: Real>(&self, point: Point<World, R>, v: R) -> Point<World, R> {
         Point::from_vec3(point.to_vec3() + splat(self.along) * v)
     }
 
@@ -67,19 +67,19 @@ impl<C: ParametricCurve> Extrusion<C> {
 impl<C: ParametricCurve> Parametric for Extrusion<C> {
     #[inline(always)]
     fn eval_point<R: Real>(&self, uv: UvPoint<R>) -> Point<World, R> {
-        self.moved(self.curve.eval_point(uv.u()), uv.v())
+        self.shifted(self.curve.eval_point(uv.u()), uv.v())
     }
 
     #[inline(always)]
     fn eval_first<R: Real>(&self, uv: UvPoint<R>) -> Jet1<R> {
         let (point, rate) = self.curve.eval_first(uv.u());
-        Jet1 { point: self.moved(point, uv.v()), du: rate, dv: Tangent::new(splat(self.along)) }
+        Jet1 { point: self.shifted(point, uv.v()), du: rate, dv: Tangent::new(splat(self.along)) }
     }
 
     #[inline(always)]
     fn eval_second<R: Real>(&self, uv: UvPoint<R>) -> Jet2<R> {
         let (point, rate, change) = self.curve.eval_second(uv.u());
-        let first = Jet1 { point: self.moved(point, uv.v()), du: rate, dv: Tangent::new(splat(self.along)) };
+        let first = Jet1 { point: self.shifted(point, uv.v()), du: rate, dv: Tangent::new(splat(self.along)) };
         let zero = Tangent::new(splat(Vec3::new(0.0, 0.0, 0.0)));
         Jet2 { first, duu: change, duv: zero, dvv: zero }
     }
@@ -167,6 +167,19 @@ impl<C: ParametricCurve> Parametric for Extrusion<C> {
     fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
         let (u, v) = exact::part(Parametric::domain(self), patch)?;
         Some(exact::extruded(self.curve.to_bspline(u.lo, u.hi)?, self.along, (v.lo, v.hi)))
+    }
+
+    /// A map keeps an extrusion where it keeps its curve: the direction moved with it, and `v`, a length along the
+    /// direction, scaled by how much the map stretches it.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let (curve, params) = self.curve.moved(map)?;
+        let (along, scale) = if let Some(similar) = map.similar() {
+            (similar.placement.direction(self.direction), similar.scale)
+        } else {
+            let v = map.vector(self.along);
+            (Direction::normalised(v), v.norm())
+        };
+        Some((Self::new(curve, along).ok()?, UvMap::apart(params, ParamMap::scaled(scale))))
     }
 }
 

@@ -4,7 +4,7 @@
 //! then from all `u` to all `v`; and how many functions of the basis an evaluation on the stack makes room for.
 
 use occam_math::Real;
-use occam_units::Vec3;
+use occam_units::{Affine, Point, Vec3};
 
 use crate::basis::binomial;
 
@@ -29,6 +29,14 @@ pub(crate) const fn triangle(order: usize) -> usize {
 #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 fn divided<R: Real>(v: Vec3<R>, w: R) -> Vec3<R> {
     Vec3::new(v.x / w, v.y / w, v.z / w)
+}
+
+/// The homogeneous pole `(w x, w y, w z, w)` moved by `map`: the map's linear part on `(w x, w y, w z)`, and its shift
+/// times `w`, so that no weight is divided out and the rational form stays exact.
+pub(crate) fn moved_pole(map: &Affine, [x, y, z, w]: [f64; 4]) -> [f64; 4] {
+    let shift = map.point(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0))).to_vec3();
+    let moved = map.vector(Vec3::new(x, y, z)) + shift * w;
+    [moved.x, moved.y, moved.z, w]
 }
 
 /// Replaces the derivatives of a curve's weighted form, `out[k]` for order `k` from 0 to `order`, with the curve's, given

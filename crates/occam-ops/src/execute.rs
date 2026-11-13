@@ -14,6 +14,7 @@ use crate::operation::Operation;
 use crate::primitive;
 use crate::request::Step;
 use crate::sweep;
+use crate::transform;
 
 /// Does `step` in `edit`, with `labels` naming what earlier steps made, and gives what it made, if it made one thing a
 /// later step can name by its label.
@@ -39,6 +40,8 @@ pub fn execute(edit: &mut Edit, step: &Step, labels: &Labels) -> Result<Option<E
         ) => primitive::make(edit, args),
         (Operation::Extrude, Args::Extrude(args)) => sweep::extrude(edit, args, labels),
         (Operation::Revolve, Args::Revolve(args)) => sweep::revolve(edit, args, labels),
+        (Operation::Transform, Args::Transform(args)) => transform::transform(edit, args, labels),
+        (Operation::Copy, Args::Transform(args)) => transform::copy(edit, args, labels),
         // A measure changes nothing: the runner asks for its values with `measure` instead.
         (Operation::Measure, Args::Measure(_)) => Ok(None),
         (operation, _) if operation.supported() => {

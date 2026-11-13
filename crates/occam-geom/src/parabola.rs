@@ -4,13 +4,13 @@
 
 use occam_math::Real;
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Direction, Length, Local, ParamKind, Placement, Point, Tangent, Vec3, World};
+use occam_units::{Affine, Bounds, Direction, Length, Local, ParamKind, Placement, Point, Tangent, Vec3, World};
 
 use crate::axes::Axes;
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
 use crate::curve::{ParametricCurve, holding};
-use crate::domain::ParamRange;
+use crate::domain::{ParamMap, ParamRange};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::restore::Numbers;
@@ -181,6 +181,14 @@ impl ParametricCurve for Parabola {
         let middle = start.to_vec3() + rate.rate() * (0.5 * (part.hi - part.lo));
         let poles = vec![start.to_vec3(), middle, end.to_vec3()];
         Some(exact::curve(2, exact::span(2, (part.lo, part.hi), poles), false))
+    }
+
+    /// A similarity keeps a parabola, its focal length and its parameter, a length across its axis, scaled.
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        let similar = map.similar()?;
+        let params = ParamMap::scaled(similar.scale);
+        let focal = Length::from_millimetres(self.focal * similar.scale);
+        Some((Self::on(self.axes.moved(&similar), focal, params.of_range(self.range)).ok()?, params))
     }
 }
 

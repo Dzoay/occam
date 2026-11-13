@@ -33,14 +33,6 @@ for the native format's binary twin. Each step moves what it makes real out of [
 
 ## Steps
 
-### `construction.transform`
-
-Rigid and scaling transforms of a body, and a copy whose ids are new and distinct, with lineage to what it copied
-(row 2.11).
-
-*Failing test first:* a copied box moved by a vector has new ids, the same counts, and its lineage names the original;
-a scale that is not positive is refused.
-
 ### `construction.commands`
 
 `occam run`, `list`, `adjacent`, `describe` and `check`, each with `--json`, many ids and one result per id; `run`

@@ -57,7 +57,7 @@ pub struct RevolveArgs {
 }
 
 /// The profile named by the field `name` of `fields`, at `at`.
-fn named(at: &At, fields: &Map<String, Value>, name: &str) -> Result<Named, Report> {
+pub(crate) fn named(at: &At, fields: &Map<String, Value>, name: &str) -> Result<Named, Report> {
     let at = at.field(name);
     let given = fields.get(name).ok_or_else(|| crate::read::missing(&at))?;
     Ok(Named { operand: Operand::read(text(&at, given)?), at: at.input() })

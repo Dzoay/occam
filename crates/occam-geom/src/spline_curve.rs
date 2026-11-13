@@ -6,18 +6,18 @@
 
 use occam_math::Real;
 use occam_report::{NamedValue, Quantity, Report};
-use occam_units::{Bounds, ParamKind, Point, Tangent, Vec3, World};
+use occam_units::{Affine, Bounds, ParamKind, Point, Tangent, Vec3, World};
 
 use crate::basis::{basis, rows_len, span};
 use crate::batch::Scratch;
 use crate::bspline::{BsplineCurve, MAX_DEGREE, bezier_knots, cartesian, checked_knots, checked_poles, homogeneous};
 use crate::curve::ParametricCurve;
-use crate::domain::{ParamRange, Wrap};
+use crate::domain::{ParamMap, ParamRange, Wrap};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::knots::{Rows, canonical};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
 use crate::restore::{Numbers, knots as saved_knots, poles as saved_poles};
-use crate::spline::{CAPACITIES, curve_quotient};
+use crate::spline::{CAPACITIES, curve_quotient, moved_pole};
 use crate::support::{everything, padded};
 
 /// A B-spline or Bézier curve, rational or not.
@@ -253,6 +253,12 @@ impl ParametricCurve for SplineCurve {
         let (poles, weights) = cartesian(&cut.poles.concat(), self.rational);
         let degree = u16::try_from(self.degree).unwrap_or(u16::MAX);
         Some(BsplineCurve { degree, knots: cut.knots, poles, weights })
+    }
+
+    /// Any map keeps a B-spline: its poles moved, its weights and knots kept, and so its parameter.
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        let poles = self.poles.iter().map(|pole| moved_pole(map, *pole)).collect();
+        Some((Self { poles, ..self.clone() }, ParamMap::IDENTITY))
     }
 }
 

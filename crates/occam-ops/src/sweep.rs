@@ -16,7 +16,7 @@ use occam_report::{EntityRef, Report};
 use occam_topo::Edit;
 
 pub use given::{ExtrudeArgs, Named, RevolveArgs};
-pub(crate) use given::{extrude_step, revolve_step};
+pub(crate) use given::{extrude_step, named, revolve_step};
 use profile::Takes;
 
 use crate::construct::band;

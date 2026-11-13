@@ -12,6 +12,7 @@ use crate::primitive::{self, PrimitiveArgs};
 use crate::read::At;
 use crate::request::Units;
 use crate::sweep::{self, ExtrudeArgs, RevolveArgs};
+use crate::transform::{self, TransformArgs};
 
 /// What a step gives for its operation, checked and converted.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -31,6 +32,8 @@ pub enum Args {
     Revolve(RevolveArgs),
     /// What a measure measures, and what it wants of it.
     Measure(MeasureArgs),
+    /// The body a transform or a copy moves, and the map.
+    Transform(TransformArgs),
 }
 
 /// What the step at `at`, asking for `operation`, gives in `fields`, its fields other than `op` and `label`, with every
@@ -54,8 +57,9 @@ pub(crate) fn read(
         | Operation::Torus
         | Operation::Wedge => primitive::read(at, operation, fields, units, out).map_or(Args::None, Args::Primitive),
         Operation::Measure => measure::measure_step(at, fields, out).map_or(Args::None, Args::Measure),
-        Operation::Transform | Operation::Copy | Operation::Boolean | Operation::Fillet | Operation::Chamfer => {
-            Args::None
+        Operation::Transform | Operation::Copy => {
+            transform::transform_step(at, fields, units, out).map_or(Args::None, Args::Transform)
         }
+        Operation::Boolean | Operation::Fillet | Operation::Chamfer => Args::None,
     }
 }

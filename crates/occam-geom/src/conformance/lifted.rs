@@ -3,12 +3,14 @@
 //! suite's curve checks run over a parameter curve unchanged, each through the parameter curve's own answer. A point
 //! off the plane has, as its foot, the foot of its shadow on it, and its distance takes in its height.
 
-use occam_report::Report;
-use occam_units::{Bounds, Length, Point, Tangent, Tolerance, UvPoint, UvVector, Vec3, World};
+use std::sync::Arc;
 
-use super::{Failure, curve};
+use occam_report::Report;
+use occam_units::{Affine, Bounds, Length, Point, Tangent, Tolerance, UvPoint, UvVector, Vec3, World};
+
+use super::{Failure, Findings};
 use crate::support::{everything, finite};
-use crate::{BsplineCurve, Closest, Content, Curve, FamilyName, ParamCurve, ParamRange, Scratch, Shape};
+use crate::{BsplineCurve, Closest, Content, Curve, FamilyName, ParamCurve, ParamMap, ParamRange, Scratch, Shape};
 
 /// A parameter curve read as a curve in the plane `z = 0`.
 struct Lifted<'a>(&'a dyn ParamCurve);
@@ -110,10 +112,19 @@ impl Curve for Lifted<'_> {
     fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
         self.0.to_bspline(lo, hi)
     }
+
+    /// Moved in space it would leave its plane: a parameter curve moves with its face's parameters, which
+    /// [`super::moves::param_curve`] checks.
+    fn moved(&self, _map: &Affine) -> Option<(Arc<dyn Curve>, ParamMap)> {
+        None
+    }
 }
 
 /// Every check of the parameter curve `c` from `lo` to `hi`, which must lie in its range, through the curve suite: what
 /// failed, or nothing.
 pub(crate) fn param_curve(c: &dyn ParamCurve, lo: f64, hi: f64) -> Vec<Failure> {
-    curve(&Lifted(c), lo, hi)
+    let mut found = Findings::default();
+    super::curves::checked(&Lifted(c), lo, hi, &mut found);
+    super::moves::param_curve(c, (lo, hi), &mut found);
+    found.0
 }

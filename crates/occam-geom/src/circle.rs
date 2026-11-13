@@ -4,13 +4,13 @@
 
 use occam_math::{Real, atan2};
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Length, Local, Placement, Point, Tangent, Tolerance, World};
+use occam_units::{Affine, Bounds, Length, Local, Placement, Point, Tangent, Tolerance, World};
 
 use crate::axes::Axes;
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
 use crate::curve::ParametricCurve;
-use crate::domain::ParamRange;
+use crate::domain::{ParamMap, ParamRange};
 use crate::exact::{self, Conic};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::restore::Numbers;
@@ -146,6 +146,13 @@ impl ParametricCurve for Circle {
 
     fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
         exact::conic_curve(Conic::Elliptic, (&self.axes, (self.radius, self.radius)), self.range, (lo, hi))
+    }
+
+    /// A similarity keeps a circle, its radius scaled and its angle kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        let similar = map.similar()?;
+        let moved = Self { axes: self.axes.moved(&similar), radius: self.radius * similar.scale, range: self.range };
+        Some((moved, ParamMap::IDENTITY))
     }
 }
 

@@ -15,13 +15,6 @@ use occam_topo::{Body, Changes, Edge, Face, Id, Snapshot};
 
 use crate::report::Describe;
 
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct Frame3 {
-    pub origin: [f64; 3],
-    pub z: [f64; 3],
-    pub x: [f64; 3],
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum BooleanKind {
@@ -48,8 +41,8 @@ pub struct EdgeRadius {
 /// The parameters each operation reads from its step's other fields (`occam_ops::Step::parameters`), as its step will
 /// make them real. The request, its steps and its operands are in `occam-ops` since `construction.request`, and the
 /// wire and the planar face, as `occam_ops::Args`, since `construction.wires`, the primitives since
-/// `construction.primitives`, extrude and revolve since `construction.sweeps`, and the measure, with
-/// `occam_ops::measure`, since `construction.measure`.
+/// `construction.primitives`, extrude and revolve since `construction.sweeps`, the measure, with
+/// `occam_ops::measure`, since `construction.measure`, and transform and copy since `construction.transform`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
     Boolean {
@@ -60,11 +53,6 @@ pub enum Op {
     Fillet {
         edges: Vec<EdgeRadius>,
         commit: Commit,
-    },
-    Transform {
-        target: Operand,
-        frame: Frame3,
-        copy: bool,
     },
 }
 

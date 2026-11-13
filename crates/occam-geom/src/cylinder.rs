@@ -4,13 +4,13 @@
 
 use occam_math::Real;
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{Affine, Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Domain, ParamRange, UvBox};
+use crate::domain::{Domain, ParamMap, ParamRange, UvBox, UvMap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
@@ -125,6 +125,13 @@ impl Parametric for Cylinder {
             Parametric::domain(self),
             patch,
         )
+    }
+
+    /// A similarity keeps a cylinder, its radius and `v` scaled; a stretch across its axis would make it elliptic.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let moved = Self { axes: self.axes.moved(&similar), radius: self.radius * similar.scale };
+        Some((moved, UvMap::apart(ParamMap::IDENTITY, ParamMap::scaled(similar.scale))))
     }
 }
 

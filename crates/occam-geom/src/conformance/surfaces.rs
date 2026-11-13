@@ -21,6 +21,7 @@ pub(crate) fn surface(s: &dyn Surface, window: UvBox) -> Vec<Failure> {
     normals(s, window, &mut found);
     presents(s, window, &mut found);
     identity(s, &mut found);
+    super::moves::surface(s, window, &mut found);
     found.0
 }
 

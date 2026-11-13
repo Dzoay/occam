@@ -316,6 +316,25 @@ fn construct_sweeps() -> bool {
     made
 }
 
+/// The plan's tests for transforms, as one request: a box copied and moved, a cylinder scaled alike, and one stretched
+/// along a tilted frame, which makes its side exact B-splines.
+const TRANSFORMS: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+    {"op": "box", "label": "box", "size": [10, 20, 30]},
+    {"op": "copy", "target": "box", "frame": {"origin": [100, 0, 0]}},
+    {"op": "cylinder", "label": "round", "radius": 5, "height": 10},
+    {"op": "transform", "target": "round", "scale": 2.5, "about": {"origin": [1, 2, 3]}},
+    {"op": "copy", "target": "round", "scale": [2, 1, 0.5], "about": {"origin": [1, -2, 3], "z": [1, 2, 2], "x": [2, -1, 0]}}
+]}"#;
+
+// The request read and checked, and each step made and committed, which checks it; what it made is leaked, as above.
+#[library_benchmark]
+fn construct_transforms() -> bool {
+    let ran = occam::run(None, black_box(TRANSFORMS));
+    let made = ran.failed.is_none() && ran.done.len() == 5;
+    core::mem::forget(ran);
+    made
+}
+
 /// Each primitive of [`PRIMITIVES`] made: setup, which the counts leave out.
 fn primitives() -> occam_topo::Snapshot {
     occam::run(None, PRIMITIVES).model.unwrap()
@@ -343,6 +362,6 @@ fn measure_primitives(model: occam_topo::Snapshot) -> bool {
 
 library_benchmark_group!(
     name = construction,
-    benchmarks = [construct_primitives, construct_sweeps, measure_primitives]
+    benchmarks = [construct_primitives, construct_sweeps, construct_transforms, measure_primitives]
 );
 main!(library_benchmark_groups = operations, kernels, topology, construction);

@@ -3,13 +3,13 @@
 
 use occam_math::{Interval, Real};
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Direction, ParamKind, Point, Tangent, Tolerance, Vec3, World};
+use occam_units::{Affine, Bounds, Direction, ParamKind, Point, Tangent, Tolerance, Vec3, World};
 
 use crate::axes::direction;
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
 use crate::curve::ParametricCurve;
-use crate::domain::ParamRange;
+use crate::domain::{ParamMap, ParamRange};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::restore::Numbers;
@@ -157,6 +157,19 @@ impl ParametricCurve for Line {
         let part = self.range.trimmed(lo, hi).ok()?;
         let at = |t: f64| self.origin + self.direction * t;
         Some(exact::curve(1, exact::span(1, (part.lo, part.hi), vec![at(part.lo), at(part.hi)]), false))
+    }
+
+    /// Any map keeps a line, its parameter, a distance, scaled by how much the map stretches its direction.
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        let origin = map.point(Point::from_vec3(self.origin)).to_vec3();
+        let (direction, scale) = if let Some(similar) = map.similar() {
+            (similar.placement.direction(Direction::normalised(self.direction)).get(), similar.scale)
+        } else {
+            let along = map.vector(self.direction);
+            (Direction::<World>::normalised(along).get(), along.norm())
+        };
+        let params = ParamMap::scaled(scale);
+        Some((Self { origin, direction, range: params.of_range(self.range) }, params))
     }
 }
 

@@ -240,4 +240,10 @@ exclude_re = [
     # By line. The rule's nodes come in pairs either side of the middle, each pair with one weight, so taking each node
     # the other side of the middle sums the same evaluations in another order.
     "measure/quadrature\\.rs:73:37: replace \\+ with - in rule$",
+    # The transform's. Ties, which give the same value either way: the lower and the higher of two equal numbers, a
+    # patch's end at its range's end or a period from its start, and the largest of three factors where two are equal.
+    "transform/moved\\.rs:\\d+:\\d+: replace < with <= in spread$",
+    "transform/moved\\.rs:\\d+:\\d+: replace < with <= in within$",
+    "transform/moved\\.rs:\\d+:\\d+: replace > with >= in within$",
+    "affine\\.rs:85:67: replace > with >= in Affine::stretch$",
 ]

@@ -22,6 +22,7 @@ use parts::Parts;
 
 pub use pose::Pose;
 pub use read::{PrimitiveArgs, Shape};
+pub(crate) use read::{pose, three};
 
 /// The primitive the step at `at`, making `operation`, one of the six, asks for with `parameters` in `units`, if every
 /// input is good; every bad input in `out`.

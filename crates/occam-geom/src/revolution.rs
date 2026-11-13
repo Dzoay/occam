@@ -9,13 +9,13 @@
 
 use occam_math::{Real, atan2, sin_cos};
 use occam_report::Report;
-use occam_units::{Bounds, Direction, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Affine, Bounds, Direction, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
 use crate::curve::ParametricCurve;
-use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox};
+use crate::domain::{Degeneracy, Domain, Param, ParamMap, ParamRange, UvBox, UvMap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::nearest::nearest_by;
@@ -245,6 +245,16 @@ impl<C: ParametricCurve> Parametric for Revolution<C> {
         let (u, v) = exact::part(Parametric::domain(self), patch)?;
         let form = self.curve.to_bspline(v.lo, v.hi)?;
         exact::revolved(&self.axes, (u.lo, u.hi), exact::profile(&self.axes, form))
+    }
+
+    /// A similarity keeps a revolution where it keeps its meridian: the axis and the meridian moved together, and the
+    /// turn about the axis, which no choice of axes within it changes, kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let (curve, params) = self.curve.moved(map)?;
+        let origin = map.point(Point::from_vec3(self.axes.origin));
+        let along = similar.placement.direction(self.axes.normal);
+        Some((Self::new(origin, along, curve), UvMap::apart(ParamMap::IDENTITY, params)))
     }
 }
 

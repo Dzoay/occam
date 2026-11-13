@@ -7,13 +7,13 @@ use std::f64::consts::FRAC_PI_2;
 
 use occam_math::{Real, atan2};
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{Affine, Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
+use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox, UvMap, Wrap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
@@ -142,6 +142,13 @@ impl Parametric for Sphere {
 
     fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
         exact::turned(&self.axes, Meridian::Round { centre: 0.0, radius: self.radius }, Parametric::domain(self), patch)
+    }
+
+    /// A similarity keeps a sphere, its radius scaled and its angles kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let moved = Self::on(self.axes.moved(&similar), Length::from_millimetres(self.radius * similar.scale)).ok()?;
+        Some((moved, UvMap::IDENTITY))
     }
 }
 

@@ -8,13 +8,15 @@ use std::f64::consts::FRAC_PI_2;
 
 use occam_math::{Real, sin_cos};
 use occam_report::{NamedValue, Quantity, Report};
-use occam_units::{Angle, Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{
+    Affine, Angle, Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World,
+};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox};
+use crate::domain::{Degeneracy, Domain, Param, ParamMap, ParamRange, UvBox, UvMap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, opposite, turned_box};
@@ -163,6 +165,14 @@ impl Parametric for Cone {
             Parametric::domain(self),
             patch,
         )
+    }
+
+    /// A similarity keeps a cone, its radius and `v`, a length along the surface, scaled and its half-angle kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let radius = Length::from_millimetres(self.radius * similar.scale);
+        let moved = Self::on(self.axes.moved(&similar), radius, Angle::from_radians(self.half_angle)).ok()?;
+        Some((moved, UvMap::apart(ParamMap::IDENTITY, ParamMap::scaled(similar.scale))))
     }
 }
 

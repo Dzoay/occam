@@ -4,9 +4,9 @@
 
 use occam_math::{Interval, Real};
 use occam_report::{Code, Fault, NamedValue, Quantity, Report, Value};
-use occam_units::{Direction, Local, Placement, Point, Vec3, World};
+use occam_units::{Affine, Direction, Local, Placement, Point, Similar, Vec3, Vector, World};
 
-use crate::domain::ParamRange;
+use crate::domain::{ParamRange, UvMap};
 use crate::identity::Content;
 use crate::restore::{Numbers, wrap_code};
 use crate::support::{exact, finite, splat};
@@ -48,6 +48,33 @@ impl Axes {
         let across = least.0 - n * least.0.dot(n);
         let x = across * (1.0 / across.norm());
         Self { origin, x, y: n.cross(x), normal }
+    }
+
+    /// These axes moved by the similarity `similar`: the origin placed after the scale, and the axes turned, then made
+    /// square again, so that axes moved over and over keep within what [`Axes::restore`] reads back.
+    pub(crate) fn moved(&self, similar: &Similar) -> Self {
+        let Similar { placement, scale } = *similar;
+        let origin = placement.point(Point::from_vec3(self.origin * scale)).to_vec3();
+        let turned = |v: Vec3| placement.vector(Vector::from_vec3(v)).to_vec3();
+        let normal = Direction::<World>::normalised(turned(self.normal.get()));
+        let n = normal.get();
+        let x = turned(self.x);
+        let x = Direction::<World>::normalised(x - n * x.dot(n)).get();
+        Self { origin, x, y: n.cross(x), normal }
+    }
+
+    /// The axes of the plane through these that `map` makes, and how the plane's parameters move, which are lengths
+    /// along the axes: the origin goes where `map` takes it, `x` along where it takes `x`, and the normal across where it
+    /// takes `x` and `y`. A point `u` along `x` and `v` along `y` goes to one `|M x| u + (M y . x') v` along the new `x`
+    /// and `(M y . y') v` along the new `y`, where `M` is the map's linear part.
+    pub(crate) fn stretched(&self, map: &Affine) -> (Self, UvMap) {
+        let origin = map.point(Point::from_vec3(self.origin)).to_vec3();
+        let (mx, my) = (map.vector(self.x), map.vector(self.y));
+        let normal = Direction::<World>::normalised(mx.cross(my));
+        let n = normal.get();
+        let x = Direction::<World>::normalised(mx).get();
+        let y = n.cross(x);
+        (Self { origin, x, y, normal }, UvMap { u: [mx.norm(), my.dot(x), 0.0], v: [0.0, my.dot(y), 0.0] })
     }
 
     /// `a x + b y`.
@@ -157,7 +184,27 @@ pub(crate) fn direction(name: &str, d: Vec3) -> NamedValue {
 
 #[cfg(test)]
 mod tests {
+    use occam_units::Angle;
+
     use super::*;
+
+    #[test]
+    fn axes_moved_over_and_over_stay_square_enough_to_be_read_back() {
+        // A turn about a skew axis and a scale, eighty times: rounding left square to the axes would double each time.
+        let turn = Placement::rotation(Direction::normalised(Vec3::new(1.0, -2.0, 0.5)), Angle::from_radians(0.3));
+        let similar = Similar { placement: turn, scale: 1.1 };
+        let mut axes = Axes::about(Vec3::new(1.0, 2.0, 3.0), Direction::normalised(Vec3::new(0.3, 0.4, 0.9)));
+        for _ in 0..80 {
+            axes = axes.moved(&similar);
+        }
+        let n = axes.normal.get();
+        let square = [axes.x.dot(n), axes.y.dot(n), axes.x.dot(axes.y)].map(f64::abs);
+        assert!(square.iter().all(|d| *d <= 4.0 * f64::EPSILON), "{square:?}");
+        let mut content = Content::default();
+        axes.push(&mut content);
+        let numbers: Vec<f64> = content.words().iter().map(|w| f64::from_bits(*w)).collect();
+        assert_eq!(Axes::restore(&mut Numbers::new(&numbers)).map(|a| a == axes), Ok(true));
+    }
 
     #[test]
     fn axes_about_a_normal_start_from_the_first_world_axis_least_along_it() {

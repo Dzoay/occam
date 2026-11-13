@@ -3,13 +3,13 @@
 occam 31
 occam-cli::bin/occam 7
 occam-cli::cli 4
-occam-geom 362
+occam-geom 367
 occam-io 27
 occam-math 117
-occam-ops 117
+occam-ops 137
 occam-report 50
 occam-topo 132
-occam-units 49
+occam-units 54
 occam-verify 30
 occam-wasm 3
 occam-xtask::bin/occam-xtask 250

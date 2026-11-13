@@ -11,15 +11,22 @@ use crate::{Content, Curve, Scratch, SplineCurve, Wrap};
 /// Every check of `c` from `lo` to `hi`, which must lie in its range. What failed, or nothing.
 pub(crate) fn curve(c: &dyn Curve, lo: f64, hi: f64) -> Vec<Failure> {
     let mut found = Findings::default();
-    let params: Vec<f64> = fractions(9).map(|f| lerp(lo, hi, f)).collect();
-    orders(c, &params, &mut found);
-    differences(c, &params, 1e-5 * (hi - lo), &mut found);
-    closest(c, lo, hi, &mut found);
-    bounds(c, lo, hi, &mut found);
-    seams(c, &mut found);
-    presents(c, lo, hi, &mut found);
-    identity(c, &mut found);
+    checked(c, lo, hi, &mut found);
+    super::moves::curve(c, (lo, hi), &mut found);
     found.0
+}
+
+/// The checks a curve and a parameter curve share, of `c` from `lo` to `hi`, into `found`: every check but how it moves,
+/// which a parameter curve does in its own parameters.
+pub(super) fn checked(c: &dyn Curve, lo: f64, hi: f64, found: &mut Findings) {
+    let params: Vec<f64> = fractions(9).map(|f| lerp(lo, hi, f)).collect();
+    orders(c, &params, found);
+    differences(c, &params, 1e-5 * (hi - lo), found);
+    closest(c, lo, hi, found);
+    bounds(c, lo, hi, found);
+    seams(c, found);
+    presents(c, lo, hi, found);
+    identity(c, found);
 }
 
 /// The [`Check::Presents`] check of `c` from `lo` to `hi` alone: what failed, or nothing.

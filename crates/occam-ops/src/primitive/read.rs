@@ -124,7 +124,7 @@ fn size(at: &At, fields: &Map<String, Value>, name: &str, unit: LengthUnit) -> R
 }
 
 /// The three numbers of the list at `at`.
-fn three(at: &At, value: &Value) -> Result<[(At, f64); 3], Report> {
+pub(crate) fn three(at: &At, value: &Value) -> Result<[(At, f64); 3], Report> {
     let Value::Array(items) = value else { return Err(wrong_type(at, value, "list")) };
     let [a, b, c] = items.as_slice() else {
         let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
@@ -168,7 +168,7 @@ fn across(x: Vec3, z: Vec3) -> Option<Vec3> {
 }
 
 /// The frame at `at`, if the step gives one, or the world's.
-fn pose(at: &At, given: Option<&Value>, unit: LengthUnit, out: &mut Vec<Report>) -> Option<Pose> {
+pub(crate) fn pose(at: &At, given: Option<&Value>, unit: LengthUnit, out: &mut Vec<Report>) -> Option<Pose> {
     let Some(given) = given else { return Some(Pose::STANDARD) };
     let fields = object(at, given, &["origin", "z", "x"], out)?;
     let read = |name: &str, f: &dyn Fn(&At, &Value) -> Result<Vec3, Report>, default: Vec3| {

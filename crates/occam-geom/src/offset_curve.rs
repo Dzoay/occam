@@ -7,13 +7,13 @@
 
 use occam_math::Real;
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Direction, Length, Point, Tangent, Vec3, World};
+use occam_units::{Affine, Bounds, Direction, Length, Point, Tangent, Vec3, World};
 
 use crate::axes::direction;
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
 use crate::curve::ParametricCurve;
-use crate::domain::ParamRange;
+use crate::domain::{ParamMap, ParamRange};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
 use crate::normal;
@@ -189,6 +189,16 @@ impl<C: ParametricCurve> ParametricCurve for OffsetCurve<C> {
         let finite = shift.x.is_finite() && shift.y.is_finite() && shift.z.is_finite();
         form.poles = vec![moved(from), moved(to)];
         finite.then_some(form)
+    }
+
+    /// A similarity keeps an offset where it keeps its base: the distance scaled and the reference turned. A stretch
+    /// does not: the offset of a stretched curve is not the stretched offset.
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        let similar = map.similar()?;
+        let (base, params) = self.base.moved(map)?;
+        let reference = similar.placement.direction(Direction::normalised(self.reference));
+        let distance = Length::from_millimetres(self.distance * similar.scale);
+        Some((Self::new(base, distance, reference).ok()?, params))
     }
 }
 

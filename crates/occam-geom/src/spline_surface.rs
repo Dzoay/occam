@@ -7,20 +7,20 @@
 
 use occam_math::{Level, Real, width};
 use occam_report::{NamedValue, Quantity, Report};
-use occam_units::{Bounds, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Affine, Bounds, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::basis::{basis, rows_len, span};
 use crate::batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
 use crate::bspline::{
     BsplineSurface, MAX_DEGREE, bezier_knots, cartesian, checked_knots, checked_poles, homogeneous, wrong_count,
 };
-use crate::domain::{Domain, ParamRange, UvBox, Wrap};
+use crate::domain::{Domain, ParamRange, UvBox, UvMap, Wrap};
 use crate::foot::foot;
 use crate::identity::{BatchKey, Content, FamilyName, Shape};
 use crate::knots::{Rows, canonical, transposed};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
 use crate::restore::{Numbers, knots as saved_knots, poles as saved_poles};
-use crate::spline::{CAPACITIES, index, surface_quotient, triangle};
+use crate::spline::{CAPACITIES, index, moved_pole, surface_quotient, triangle};
 use crate::support::{everything, padded};
 use crate::surface::Parametric;
 
@@ -387,6 +387,12 @@ impl Parametric for SplineSurface {
         let degree = |d: usize| u16::try_from(d).unwrap_or(u16::MAX);
         let degree = (degree(self.degree.0), degree(self.degree.1));
         Some(BsplineSurface { degree, count, knots_u: in_u.knots, knots_v: in_v.knots, poles, weights })
+    }
+
+    /// Any map keeps a B-spline surface: its poles moved, its weights and knots kept, and so its parameters.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let poles = self.poles.iter().map(|pole| moved_pole(map, *pole)).collect();
+        Some((Self { poles, ..self.clone() }, UvMap::IDENTITY))
     }
 }
 

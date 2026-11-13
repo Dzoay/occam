@@ -5,13 +5,13 @@
 
 use occam_math::{Real, atan2};
 use occam_report::{NamedValue, Quantity, Report};
-use occam_units::{Bounds, Length, Local, Placement, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{Affine, Bounds, Length, Local, Placement, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Domain, UvBox};
+use crate::domain::{Domain, UvBox, UvMap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
@@ -137,6 +137,14 @@ impl Parametric for Torus {
             Parametric::domain(self),
             patch,
         )
+    }
+
+    /// A similarity keeps a torus, both radii scaled and its angles kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let scaled = |r: f64| Length::from_millimetres(r * similar.scale);
+        let moved = Self::on(self.axes.moved(&similar), scaled(self.major), scaled(self.minor)).ok()?;
+        Some((moved, UvMap::IDENTITY))
     }
 }
 

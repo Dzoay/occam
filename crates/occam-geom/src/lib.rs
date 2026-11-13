@@ -84,7 +84,7 @@ pub use cone::Cone;
 pub use continuity::{Continuity, Smoothness, curve_join, require_curve_join, require_surface_join, surface_join};
 pub use curve::{Curve, ParametricCurve};
 pub use cylinder::Cylinder;
-pub use domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
+pub use domain::{Degeneracy, Domain, Param, ParamMap, ParamRange, UvBox, UvMap, Wrap};
 pub use ellipse::Ellipse;
 pub use extrusion::Extrusion;
 pub use hyperbola::Hyperbola;

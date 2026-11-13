@@ -6,6 +6,7 @@
 mod curves;
 pub(crate) mod forms;
 mod lifted;
+mod moves;
 mod profiles;
 mod seeded;
 mod surfaces;
@@ -47,6 +48,9 @@ pub(crate) enum Check {
     Presents,
     /// The content leads with the family's name and is the same each time, and so is the batch key's family.
     Identity,
+    /// Moved rigidly, or scaled alike in every direction, it keeps its form, and every point goes where the map takes
+    /// it; under a stretch, what it keeps is as exact.
+    Moves,
 }
 
 /// One thing a check found wrong.

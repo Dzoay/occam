@@ -4,11 +4,13 @@
 
 use occam_math::Real;
 use occam_report::Report;
-use occam_units::{Bounds, Direction, Length, Point, Tangent, Tolerance, World};
+use std::sync::Arc;
+
+use occam_units::{Affine, Bounds, Direction, Length, Point, Tangent, Tolerance, World};
 
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
-use crate::domain::ParamRange;
+use crate::domain::{ParamMap, ParamRange};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::nearest::nearest;
 use crate::support::{finite, foot_at};
@@ -108,6 +110,13 @@ pub trait ParametricCurve: Sized + Send + Sync + 'static {
     fn to_bspline(&self, _lo: f64, _hi: f64) -> Option<BsplineCurve> {
         None
     }
+
+    /// Itself moved by `map`, as its own family, and where its parameter goes: the point at `t` goes to the moved curve's
+    /// point at `params.of(t)`. `None` where the family does not keep its form under `map`, as for a surface
+    /// ([`crate::Parametric::moved`]).
+    fn moved(&self, _map: &Affine) -> Option<(Self, ParamMap)> {
+        None
+    }
 }
 
 /// `window`, or where there is none, nothing, widened to hold `t`.
@@ -180,6 +189,9 @@ pub trait Curve: Send + Sync {
 
     /// As [`ParametricCurve::to_bspline`].
     fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve>;
+
+    /// As [`ParametricCurve::moved`], the moved curve shared.
+    fn moved(&self, map: &Affine) -> Option<(Arc<dyn Curve>, ParamMap)>;
 }
 
 impl<C: ParametricCurve> Curve for C {
@@ -250,6 +262,10 @@ impl<C: ParametricCurve> Curve for C {
 
     fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
         ParametricCurve::to_bspline(self, lo, hi)
+    }
+
+    fn moved(&self, map: &Affine) -> Option<(Arc<dyn Curve>, ParamMap)> {
+        ParametricCurve::moved(self, map).map(|(moved, params)| (Arc::new(moved) as Arc<dyn Curve>, params))
     }
 }
 

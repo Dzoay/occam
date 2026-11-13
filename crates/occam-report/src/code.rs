@@ -520,6 +520,30 @@ catalogue! {
         "A face's edge has no curve in the face's parameters, which measuring the face needs.",
         "The edge named has no curve in the parameters of the face named, which its area and volume are measured by.",
     }
+
+    /// A scale factor is not greater than zero: a scale grows or shrinks a body, and never turns it inside out.
+    InputScaleNotPositive = "input.scale-not-positive" {
+        Error, [],
+        "A scale factor is not greater than zero.",
+        "{parameter} is {value}, which is not greater than zero: a scale grows or shrinks, and never turns inside out.",
+    }
+
+    /// A transform or a copy names something that is not a body, nor the only face of a sheet or the only wire of a wire
+    /// body, which stand for theirs.
+    NotABody = "construct.not-a-body" {
+        Error, [],
+        "A transform or a copy names something that is not a body.",
+        "{parameter} names {given}, which is not a body.",
+    }
+
+    /// A curve or surface of the body has no exact form under a scale that differs along its axes, and nothing is
+    /// approximated yet: an offset, or a curve in a face's parameters that is not a line of constant parameter where the
+    /// face becomes a B-spline.
+    NoExactForm = "construct.no-exact-form" {
+        Error, [],
+        "A curve or surface has no exact form under a scale that differs along its axes.",
+        "The geometry named has no exact form under the scale {parameter} gives, which differs along its axes, and occam does not approximate it.",
+    }
 }
 
 text_enum! {
@@ -1235,6 +1259,35 @@ mod tests {
         ])
     }
 
+    fn transform_codes() -> Value {
+        json!([
+            {
+                "name": "InputScaleNotPositive",
+                "code": "input.scale-not-positive",
+                "severity": "error",
+                "summary": "A scale factor is not greater than zero.",
+                "template": "{parameter} is {value}, which is not greater than zero: a scale grows or shrinks, and never turns inside out.",
+                "remedies": []
+            },
+            {
+                "name": "NotABody",
+                "code": "construct.not-a-body",
+                "severity": "error",
+                "summary": "A transform or a copy names something that is not a body.",
+                "template": "{parameter} names {given}, which is not a body.",
+                "remedies": []
+            },
+            {
+                "name": "NoExactForm",
+                "code": "construct.no-exact-form",
+                "severity": "error",
+                "summary": "A curve or surface has no exact form under a scale that differs along its axes.",
+                "template": "The geometry named has no exact form under the scale {parameter} gives, which differs along its axes, and occam does not approximate it.",
+                "remedies": []
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -1284,6 +1337,7 @@ mod tests {
             primitive_codes(),
             sweep_codes(),
             measure_step_codes(),
+            transform_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())
