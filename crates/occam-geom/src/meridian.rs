@@ -265,14 +265,17 @@ mod tests {
 
     #[test]
     fn a_round_box_past_where_the_meridian_crosses_the_axis_still_holds_it() {
-        // A sphere's latitude past either pole, where the meridian is on the far side of the axis.
-        let (axes, round) = (moved(Vec3::new(0.0, 0.0, 0.0)), Meridian::Round { centre: 0.0, radius: 2.0 });
-        for (lo, hi) in [(0.0, 3.0), (-3.0, 0.0)] {
-            let b = turned_box(&axes, round, UvBox::new(UvPoint::new(0.0, lo), UvPoint::new(1.0, hi)));
-            for i in 0..=40 {
-                for j in 0..=40 {
-                    let uv = UvPoint::new(f64::from(i) / 40.0, lo + (hi - lo) * f64::from(j) / 40.0);
-                    assert!(b.contains(point(&axes, round, uv)), "{uv:?}: {b:?}");
+        // A sphere's latitude past either pole, where the meridian is on the far side of the axis, and a circle off the
+        // axis that crosses it, as a spindle torus's, which reaches its centre's distance and its radius beyond the axis.
+        let axes = moved(Vec3::new(0.0, 0.0, 0.0));
+        for round in [Meridian::Round { centre: 0.0, radius: 2.0 }, Meridian::Round { centre: 0.5, radius: 2.0 }] {
+            for (lo, hi) in [(0.0, 3.0), (-3.0, 0.0)] {
+                let b = turned_box(&axes, round, UvBox::new(UvPoint::new(0.0, lo), UvPoint::new(1.0, hi)));
+                for i in 0..=40 {
+                    for j in 0..=40 {
+                        let uv = UvPoint::new(f64::from(i) / 40.0, lo + (hi - lo) * f64::from(j) / 40.0);
+                        assert!(b.contains(point(&axes, round, uv)), "{round:?} {uv:?}: {b:?}");
+                    }
                 }
             }
         }
