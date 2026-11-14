@@ -95,7 +95,7 @@ the same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 | `gates complexity` | Function and file length, duplication, with a shrink-only exemption list (L20) | `bedrock.gates` |
 | `gates provenance` | Rust identifiers in `crates/` and `web/` against `ci/forbidden-identifiers.txt`, with `tools/oracle/` exempt. Every file in a kernel crate carries `//! Source: <key>` resolving in `docs/SOURCES.md`, or `//! Source: original`. Derived files are declared in `REUSE.toml` (L36) | `bedrock.gates` |
 | `gates mutants` | Mutation testing on the PR's diff, zero survivors. Runs the unmutated suite first; the timeout floor exceeds a full suite (L13, L14) | `bedrock.gates` |
-| `gates counts` | Test-count ratchet, with a merge driver (L44) | `bedrock.gates` |
+| `gates counts` | No test binary has fewer tests than on the PR's base, or is gone, unless a commit's `Tests-Removed: <binary> <reason>` footer names it (L44, [measured, not stored](decisions/2026-11-14-test-counts-measured-not-stored.md)). CI gives the base, `--base origin/main`, and the gate builds it a second time; a run without one says it compared nothing | `bedrock.gates` |
 | `gates plan` | A step PR carries its `Plan-Step:` footers, and `just next` agrees (L40) | `bedrock.gates` |
 | `gates seam` | occam-geom's seam matches `ci/seam.txt`, every public signature of its modules; a change needs a newer decision, named in the record (L21) | `geometry.freeze` |
 | `gates docs` | Links resolve, step and decision ids are unique, files in `docs/evidence/` are unchanged once merged (L41, L45) | `bedrock.gates` |

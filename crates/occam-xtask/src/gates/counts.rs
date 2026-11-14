@@ -1,42 +1,30 @@
-//! `gates counts`: tests cannot silently disappear (L44). Each test binary has a minimum in `ci/test-counts.txt`, and
-//! the file merges by construction through `scripts/merge-counts.sh`.
+//! `gates counts`: tests cannot silently disappear (L44). Given `--base <rev>`, it lists the tests of the merge base with
+//! `<rev>` from a worktree of its own and fails when a test binary has fewer tests than there, or is gone, unless a
+//! commit since the base names the binary in a `Tests-Removed:` footer with its reason
+//! (`docs/decisions/2026-11-14-test-counts-measured-not-stored.md`). Listing the base is a second build, so CI passes the
+//! base, and a run without one counts this tree's tests and says it compared nothing.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::repo::Repo;
 use crate::verdict::{Finding, Verdict, verdict};
 
-pub const MANIFEST: &str = "ci/test-counts.txt";
+/// The footer that names a deliberate removal: `Tests-Removed: <binary> <reason>`.
+const FOOTER: &str = "Tests-Removed:";
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
-    let listing = repo.test_listing().map_err(|e| vec![e])?;
-    let text = repo.read(MANIFEST).map_err(|e| vec![e])?;
-    match args {
-        [] => check(&text, &listing),
-        [flag] if flag == "--update" => {
-            repo.write(MANIFEST, &update(&text, &listing)).map_err(|e| vec![e])?;
-            Ok(format!("{MANIFEST} updated"))
-        }
-        _ => Err(vec![Finding::new(
-            "counts.usage",
-            "",
-            format!("unexpected arguments: {}", args.join(" ")),
-            "pass --update or nothing",
-        )]),
+    let rev = base_arg(args)?;
+    let head = repo.test_listing().map_err(|e| vec![e])?;
+    let Some(rev) = rev else {
+        return alone(&head, "no --base given, as CI gives (`just gate counts --base origin/main`)");
+    };
+    let base = repo.merge_base(rev).map_err(|e| vec![e])?;
+    if base == repo.head().map_err(|e| vec![e])? {
+        return alone(&head, &format!("HEAD is on {rev}, so there is no change to compare"));
     }
-}
-
-fn is_entry(line: &str) -> bool {
-    !line.trim().is_empty() && !line.starts_with('#')
-}
-
-fn entry(line: &str) -> Option<(String, usize)> {
-    let mut words = line.split_whitespace();
-    let (binary, minimum) = (words.next()?, words.next()?);
-    if words.next().is_some() {
-        return None;
-    }
-    Some((binary.to_string(), minimum.parse().ok()?))
+    let listing = repo.test_listing_at(&base).map_err(|e| vec![e])?;
+    let log = repo.messages(&format!("{base}..HEAD")).map_err(|e| vec![e])?;
+    compare(&listing, &head, &log)
 }
 
 /// The tests each binary has.
@@ -49,99 +37,85 @@ fn counted(listing: &str) -> BTreeMap<&str, usize> {
     counts
 }
 
-fn check(manifest: &str, listing: &str) -> Verdict {
-    let found = counted(listing);
+fn total(counts: &BTreeMap<&str, usize>) -> usize {
+    counts.values().sum()
+}
+
+fn base_arg(args: &[String]) -> Result<Option<&String>, Vec<Finding>> {
+    match args {
+        [] => Ok(None),
+        [flag, rev] if flag == "--base" => Ok(Some(rev)),
+        _ => Err(vec![Finding::new(
+            "counts.usage",
+            "",
+            format!("unexpected arguments: {}", args.join(" ")),
+            "pass --base <rev>, such as origin/main, or nothing",
+        )]),
+    }
+}
+
+/// The binaries a log's footers name, each with its reason: `Tests-Removed: <binary> <reason>`, a line of its own. A
+/// footer with no reason names none.
+fn removals(log: &str) -> BTreeSet<&str> {
+    log.lines()
+        .filter_map(|line| line.trim().strip_prefix(FOOTER)?.trim().split_once(char::is_whitespace))
+        .map(|(binary, _)| binary)
+        .collect()
+}
+
+fn no_tests(whose: &str) -> Finding {
+    Finding::new("counts.no-tests", "", format!("{whose} lists no tests"), "check that it builds and lists its tests")
+}
+
+/// This tree's tests alone, where there is no base to compare them with, and `why`.
+fn alone(head: &str, why: &str) -> Verdict {
+    let found = counted(head);
+    let findings = if found.is_empty() { vec![no_tests("this tree")] } else { Vec::new() };
+    verdict(format!("{} tests in {} binaries, not compared: {why}", total(&found), found.len()), findings)
+}
+
+/// A binary with `was` tests on the base and `now` here, `None` where it is gone.
+fn lost(binary: &str, was: usize, now: Option<usize>) -> Finding {
+    let remedy = format!(
+        "restore the tests, or name the removal and its reason in a commit footer: `{FOOTER} {binary} <reason>`"
+    );
+    match now {
+        Some(count) => {
+            Finding::new("counts.fewer", "", format!("{binary} has {count} tests, {was} on the base"), remedy)
+        }
+        None => Finding::new("counts.gone", "", format!("{binary} is gone, with its {was} tests on the base"), remedy),
+    }
+}
+
+/// The base's listing against this tree's: every binary keeps at least its tests, unless `log`, the messages of the
+/// commits since the base, names it in a footer.
+fn compare(base: &str, head: &str, log: &str) -> Verdict {
+    let (before, after) = (counted(base), counted(head));
+    let named = removals(log);
     let mut findings = Vec::new();
-    let mut minimums = BTreeMap::new();
-    for (line, n) in manifest.lines().zip(1..).filter(|(line, _)| is_entry(line)) {
-        match entry(line) {
-            Some((binary, minimum)) => {
-                minimums.insert(binary, minimum);
-            }
-            None => findings
-                .push(Finding::new("counts.malformed", MANIFEST, "not `<binary> <minimum>`", "correct the line").at(n)),
+    if before.is_empty() {
+        findings.push(no_tests("the base"));
+    }
+    if after.is_empty() {
+        findings.push(no_tests("this tree"));
+    }
+    let mut excused = Vec::new();
+    for (binary, &was) in &before {
+        let now = after.get(binary).copied();
+        if now.is_some_and(|count| count >= was) {
+            continue;
+        }
+        if named.contains(binary) {
+            excused.push(*binary);
+        } else {
+            findings.push(lost(binary, was, now));
         }
     }
-    if found.is_empty() {
-        findings.push(Finding::new("counts.no-tests", MANIFEST, "the listing has no tests", "fix the build"));
-    }
-    for (binary, minimum) in &minimums {
-        match found.get(binary.as_str()) {
-            None => findings.push(Finding::new(
-                "counts.gone",
-                MANIFEST,
-                format!("{binary} no longer exists"),
-                "restore its tests, or remove its line and say why in the PR",
-            )),
-            Some(count) if count < minimum => {
-                findings.push(Finding::new(
-                    "counts.fewer",
-                    MANIFEST,
-                    format!("{binary} has {count} tests, under its minimum of {minimum}"),
-                    "restore the tests",
-                ));
-            }
-            Some(_) => {}
-        }
-    }
-    for binary in found.keys().filter(|binary| !minimums.contains_key(**binary)) {
-        findings.push(Finding::new(
-            "counts.unlisted",
-            MANIFEST,
-            format!("{binary} has no minimum"),
-            "run `just counts`",
-        ));
-    }
-    verdict(format!("{} tests in {} binaries", found.values().sum::<usize>(), found.len()), findings)
-}
-
-fn comments(text: &str) -> impl Iterator<Item = &str> {
-    text.lines().filter(|line| line.starts_with('#'))
-}
-
-fn render<'a>(header: impl Iterator<Item = &'a str>, entries: &BTreeMap<String, usize>) -> String {
-    let rows = entries.iter().map(|(binary, minimum)| format!("{binary} {minimum}"));
-    let lines: Vec<String> = header.map(str::to_string).chain(rows).map(|line| line + "\n").collect();
-    lines.concat()
-}
-
-/// Raises minimums and adds binaries; it never lowers one or removes one.
-fn update(manifest: &str, listing: &str) -> String {
-    let mut entries: BTreeMap<String, usize> = manifest.lines().filter_map(entry).collect();
-    for (binary, count) in counted(listing) {
-        let minimum = entries.entry(binary.to_string()).or_insert(0);
-        *minimum = (*minimum).max(count);
-    }
-    render(comments(manifest), &entries)
-}
-
-fn strict(text: &str) -> Option<BTreeMap<String, usize>> {
-    text.lines().filter(|line| is_entry(line)).map(entry).collect()
-}
-
-/// The three-way merge of the minimums, or `None` where it does not decide: the larger minimum wins, an addition stays,
-/// and a removal stands only if the other side left the line alone.
-pub fn merge(base: &str, ours: &str, theirs: &str) -> Option<String> {
-    let (old, mine, other) = (strict(base)?, strict(ours)?, strict(theirs)?);
-    let mut merged = BTreeMap::new();
-    for key in mine.keys().chain(other.keys()) {
-        match (mine.get(key), other.get(key)) {
-            (Some(a), Some(b)) => {
-                merged.insert(key.clone(), *a.max(b));
-            }
-            (a, b) => {
-                let only = a.or(b)?;
-                match old.get(key) {
-                    None => {
-                        merged.insert(key.clone(), *only);
-                    }
-                    Some(value) if value == only => {}
-                    Some(_) => return None,
-                }
-            }
-        }
-    }
-    Some(render(comments(ours), &merged))
+    let note = if excused.is_empty() { String::new() } else { format!("; removals named for {}", excused.join(", ")) };
+    verdict(
+        format!("{} tests in {} binaries, {} on the base{note}", total(&after), after.len(), total(&before)),
+        findings,
+    )
 }
 
 #[cfg(test)]
@@ -151,89 +125,99 @@ mod tests {
 
     const LISTING: &str = "a::lib t1\na::lib t2\nb::bin/b t1\n";
 
-    #[test]
-    fn minimums_met_pass() {
-        assert_eq!(check("# c\n\na::lib 2\nb::bin/b 1\n", LISTING), Ok("3 tests in 2 binaries".to_string()));
+    fn owned(args: &[&str]) -> Vec<String> {
+        args.iter().map(ToString::to_string).collect()
     }
 
     #[test]
-    fn more_tests_than_the_minimum_pass() {
-        assert!(check("a::lib 1\nb::bin/b 1\n", LISTING).is_ok());
+    fn the_same_tests_pass() {
+        assert_eq!(compare(LISTING, LISTING, ""), Ok("3 tests in 2 binaries, 3 on the base".to_string()));
     }
 
     #[test]
-    fn fewer_tests_than_the_minimum_fail() {
-        let found = check("a::lib 3\nb::bin/b 1\n", LISTING).unwrap_err();
-        assert_eq!(found[0].code, "counts.fewer");
-        assert_eq!(found[0].file, MANIFEST);
-        assert!(
-            found[0].message.contains("a::lib") && found[0].message.contains('2') && found[0].message.contains('3'),
-            "{found:?}"
+    fn more_tests_and_new_binaries_pass() {
+        let head = "a::lib t1\na::lib t2\na::lib t3\nb::bin/b t1\nc::lib t1\n";
+        assert_eq!(compare(LISTING, head, ""), Ok("5 tests in 3 binaries, 3 on the base".to_string()));
+    }
+
+    #[test]
+    fn fewer_tests_than_on_the_base_fail() {
+        let found = compare(LISTING, "a::lib t1\nb::bin/b t1\n", "").unwrap_err();
+        assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["counts.fewer"]);
+        assert_eq!(found[0].message, "a::lib has 1 tests, 2 on the base");
+        assert!(found[0].remedy.contains("`Tests-Removed: a::lib <reason>`"), "{found:?}");
+    }
+
+    #[test]
+    fn a_binary_gone_since_the_base_fails() {
+        let found = compare(LISTING, "a::lib t1\na::lib t2\n", "").unwrap_err();
+        assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["counts.gone"]);
+        assert_eq!(found[0].message, "b::bin/b is gone, with its 1 tests on the base");
+        assert!(found[0].remedy.contains("`Tests-Removed: b::bin/b <reason>`"), "{found:?}");
+    }
+
+    #[test]
+    fn a_footer_with_its_reason_allows_the_removal() {
+        let log = "test(x): one table\n\nTests-Removed: a::lib two cases are one table test now\n\nfeat: y\n\n\
+                   Tests-Removed: b::bin/b gone with the old command\n";
+        assert_eq!(
+            compare(LISTING, "a::lib t1\n", log),
+            Ok("1 tests in 1 binaries, 3 on the base; removals named for a::lib, b::bin/b".to_string())
+        );
+        assert_eq!(
+            compare(LISTING, "a::lib t1\nb::bin/b t1\n", log),
+            Ok("2 tests in 2 binaries, 3 on the base; removals named for a::lib".to_string())
         );
     }
 
     #[test]
-    fn a_vanished_binary_fails() {
-        assert_eq!(codes(&check("a::lib 2\nb::bin/b 1\nc::lib 1\n", LISTING)), ["counts.gone"]);
+    fn a_footer_without_its_reason_or_for_another_binary_does_not() {
+        let fewer = "a::lib t1\nb::bin/b t1\n";
+        for log in ["Tests-Removed: a::lib\n", "Tests-Removed: a::lib   \n", "Tests-Removed: b::bin/b why\n"] {
+            assert_eq!(codes(&compare(LISTING, fewer, log)), ["counts.fewer"], "{log:?}");
+        }
+        assert_eq!(codes(&compare(LISTING, fewer, "not Tests-Removed: a::lib why\n")), ["counts.fewer"]);
     }
 
     #[test]
-    fn a_binary_with_no_minimum_fails() {
-        let found = check("a::lib 2\n", LISTING).unwrap_err();
-        assert_eq!(found[0].code, "counts.unlisted");
-        assert!(found[0].message.contains("b::bin/b"), "{found:?}");
+    fn footers_name_each_binary_with_a_reason() {
+        let log = "s\n\nTests-Removed: a::lib why\n  Tests-Removed:  b::bin/b  because  \nTests-Removed: c\nx Tests-Removed: d e\n";
+        assert_eq!(removals(log), BTreeSet::from(["a::lib", "b::bin/b"]));
+        assert_eq!(removals("Tests-Removed:a::lib why\n"), BTreeSet::from(["a::lib"]));
     }
 
     #[test]
-    fn a_malformed_line_fails() {
-        assert_eq!(codes(&check("a::lib 2\nb::bin/b 1\nbad\n", LISTING)), ["counts.malformed"]);
-        assert_eq!(codes(&check("a::lib 2\nb::bin/b x\n", LISTING)), ["counts.malformed", "counts.unlisted"]);
+    fn no_tests_on_either_side_fails_closed() {
+        assert_eq!(codes(&compare("", LISTING, "")), ["counts.no-tests"]);
+        assert_eq!(codes(&compare(LISTING, "", "")), ["counts.no-tests", "counts.gone", "counts.gone"]);
+        let found = compare("", LISTING, "").unwrap_err();
+        assert!(found[0].message.contains("the base"), "{found:?}");
+        let found = compare(LISTING, "", "").unwrap_err();
+        assert!(found[0].message.contains("this tree"), "{found:?}");
     }
 
     #[test]
-    fn no_tests_at_all_fails_closed() {
-        assert_eq!(codes(&check("a::lib 2\n", "")), ["counts.no-tests", "counts.gone"]);
+    fn without_a_base_the_listing_alone_is_counted_and_says_so() {
+        assert_eq!(alone(LISTING, "why"), Ok("3 tests in 2 binaries, not compared: why".to_string()));
+        assert_eq!(codes(&alone("", "why")), ["counts.no-tests"]);
+        assert_eq!(codes(&alone("junk\n", "why")), ["counts.no-tests"]);
     }
 
     #[test]
     fn a_listing_line_without_a_test_name_is_not_a_test() {
-        assert_eq!(check("a::lib 1\n", "a::lib t\njunk\n"), Ok("1 tests in 1 binaries".to_string()));
+        assert_eq!(
+            compare("a::lib t\n", "a::lib t\njunk\n", ""),
+            Ok("1 tests in 1 binaries, 1 on the base".to_string())
+        );
     }
 
     #[test]
-    fn update_raises_and_adds_and_never_lowers() {
-        let got = update("# header\na::lib 1\nb::bin/b 5\nkeep::lib 1\n", LISTING);
-        assert_eq!(got, "# header\na::lib 2\nb::bin/b 5\nkeep::lib 1\n");
-        assert_eq!(update("", "new::lib t\n"), "new::lib 1\n");
-    }
-
-    #[test]
-    fn merge_takes_the_larger_minimum() {
-        assert_eq!(merge("a 1\n", "a 2\n", "a 3\n").as_deref(), Some("a 3\n"));
-        assert_eq!(merge("a 1\n", "a 3\n", "a 2\n").as_deref(), Some("a 3\n"));
-    }
-
-    #[test]
-    fn merge_keeps_binaries_added_on_either_side() {
-        assert_eq!(merge("", "# c\na 1\n", "b 2\n").as_deref(), Some("# c\na 1\nb 2\n"));
-    }
-
-    #[test]
-    fn merge_keeps_a_removal_the_other_side_left_alone() {
-        assert_eq!(merge("a 1\nb 1\n", "a 1\n", "a 1\nb 1\n").as_deref(), Some("a 1\n"));
-        assert_eq!(merge("a 1\nb 1\n", "a 1\nb 1\n", "a 1\n").as_deref(), Some("a 1\n"));
-    }
-
-    #[test]
-    fn merge_does_not_decide_a_removal_against_a_change() {
-        assert_eq!(merge("a 1\nb 1\n", "a 1\n", "a 1\nb 2\n"), None);
-        assert_eq!(merge("a 1\nb 1\n", "a 1\nb 2\n", "a 1\n"), None);
-    }
-
-    #[test]
-    fn merge_does_not_decide_malformed_input() {
-        assert_eq!(merge("bad\n", "a 1\n", "a 1\n"), None);
-        assert_eq!(merge("a 1\n", "bad\n", "a 1\n"), None);
-        assert_eq!(merge("a 1\n", "a 1\n", "bad\n"), None);
+    fn the_base_flag_is_parsed() {
+        assert_eq!(base_arg(&[]), Ok(None));
+        assert_eq!(base_arg(&owned(&["--base", "origin/main"])), Ok(Some(&"origin/main".to_string())));
+        for bad in [&["--base"][..], &["--update"], &["--base", "a", "b"], &["--other", "a"]] {
+            let found = base_arg(&owned(bad)).unwrap_err();
+            assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["counts.usage"], "{bad:?}");
+        }
     }
 }

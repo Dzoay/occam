@@ -45,7 +45,7 @@ impl Repo {
         fs::write(self.root.join(rel), text).map_err(|e| io(rel, &e))
     }
 
-    /// Reads a file wherever it is, such as a PR body or a merge driver's temporary file.
+    /// Reads a file wherever it is, such as a PR body.
     pub fn read_outside(path: &str) -> Result<String, Finding> {
         fs::read_to_string(path).map_err(|e| io(path, &e))
     }
@@ -53,7 +53,12 @@ impl Repo {
     /// Runs a program from the root, returning whether it succeeded, its stdout and its stderr. A caller that parses the
     /// output wants stdout alone, because stderr carries the compiler's warnings.
     pub fn capture(&self, program: &str, args: &[&str]) -> Result<(bool, String, String), Finding> {
-        let output = Command::new(program).args(args).current_dir(&self.root).output().map_err(|e| {
+        self.captured(Command::new(program).args(args), program)
+    }
+
+    /// Runs `command` from the root, as [`Repo::capture`] does `program`.
+    fn captured(&self, command: &mut Command, program: &str) -> Result<(bool, String, String), Finding> {
+        let output = command.current_dir(&self.root).output().map_err(|e| {
             Finding::new("repo.no-tool", program, e.to_string(), "run `just setup` to install the gate tools")
         })?;
         let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
@@ -116,7 +121,17 @@ impl Repo {
 
     /// The merge base with `origin/main`.
     pub fn base(&self) -> Result<String, Finding> {
-        Ok(self.git(&["merge-base", "HEAD", BASE])?.trim().to_string())
+        self.merge_base(BASE)
+    }
+
+    /// The merge base of `HEAD` and `rev`.
+    pub fn merge_base(&self, rev: &str) -> Result<String, Finding> {
+        Ok(self.git(&["merge-base", "HEAD", rev])?.trim().to_string())
+    }
+
+    /// The commit `HEAD` names.
+    pub fn head(&self) -> Result<String, Finding> {
+        Ok(self.git(&["rev-parse", "HEAD"])?.trim().to_string())
     }
 
     /// A file as it was at `rev`, if it existed.
@@ -126,19 +141,52 @@ impl Repo {
 
     /// Every commit message on `origin/main`.
     pub fn main_log(&self) -> Result<String, Finding> {
-        self.git(&["log", BASE, "--format=%B"])
+        self.messages(BASE)
+    }
+
+    /// Every commit message in `range`, as `git log` takes it.
+    pub fn messages(&self, range: &str) -> Result<String, Finding> {
+        self.git(&["log", range, "--format=%B"])
     }
 
     /// One line per test: `<binary> <test>`.
     pub fn test_listing(&self) -> Result<String, Finding> {
+        self.listing(None, |errors| Finding::new("counts.listing-failed", "", errors, "fix the build"))
+    }
+
+    /// The test listing of commit `rev`, from a worktree of it built in a target directory of its own: a second build,
+    /// whose dependencies stay built there for the next. The worktree is removed afterwards.
+    pub fn test_listing_at(&self, rev: &str) -> Result<String, Finding> {
+        let tree = self.nested_target("counts-base-tree");
+        self.remove_worktree(&tree);
+        self.git(&["worktree", "add", "--detach", "--quiet", &tree, rev])?;
+        let listed = Self { root: PathBuf::from(&tree) }.listing(Some(&self.nested_target("counts-base")), |errors| {
+            let remedy = format!("check that the base, {rev}, builds and lists its tests");
+            Finding::new("counts.base-listing-failed", "", errors, remedy)
+        });
+        self.remove_worktree(&tree);
+        listed
+    }
+
+    /// Removes the worktree at `tree`, and what is left of it if git no longer knows it.
+    fn remove_worktree(&self, tree: &str) {
+        drop(self.git(&["worktree", "remove", "--force", tree]));
+        drop(fs::remove_dir_all(tree));
+        drop(self.git(&["worktree", "prune"]));
+    }
+
+    /// Lists the tests from the root, built in `target` if one is given; `failed` turns the build's errors into a
+    /// finding.
+    fn listing(&self, target: Option<&str>, failed: impl FnOnce(String) -> Finding) -> Result<String, Finding> {
         let args =
             ["nextest", "list", "--workspace", "--message-format", "oneline", "--color", "never", "--cargo-quiet"];
-        let (ok, listing, errors) = self.capture(env!("CARGO"), &args)?;
-        if ok {
-            Ok(listing)
-        } else {
-            Err(Finding::new("counts.listing-failed", "", errors, "fix the build, then run `just counts`"))
+        let mut command = Command::new(env!("CARGO"));
+        command.args(args);
+        if let Some(target) = target {
+            command.env("CARGO_TARGET_DIR", target);
         }
+        let (ok, listing, errors) = self.captured(&mut command, env!("CARGO"))?;
+        if ok { Ok(listing) } else { Err(failed(errors)) }
     }
 
     pub fn cargo_mutants(&self, pass: &str, diff: &str, args: &[&str]) -> Result<MutantsRun, Finding> {

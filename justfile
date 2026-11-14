@@ -17,12 +17,10 @@ oracle_venv := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-oracle" / 
 default:
     @just --list --unsorted
 
-# Install whichever gate tools are missing and set up the test counts' merge driver, safe to repeat
+# Install whichever gate tools are missing, safe to repeat
 [group('setup')]
 setup:
     scripts/toolchain.sh install
-    git config merge.occam-counts.name "ci/test-counts.txt, per test binary"
-    git config merge.occam-counts.driver "scripts/merge-counts.sh %O %A %B"
 
 # Check that the gate tools are installed, changing nothing
 [group('setup')]
@@ -98,7 +96,7 @@ wasm:
     CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo check --workspace --exclude occam-xtask --target wasm32-unknown-unknown
     cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
 
-# One gate, or `all`: `just gate docs`, `just gate all --except counts`, `just gate plan --json`
+# One gate, or `all`: `just gate docs`, `just gate counts --base origin/main`, `just gate all --except counts`
 [env("CARGO_TARGET_DIR", target)]
 [group('gates')]
 gate *args="all":
@@ -186,12 +184,6 @@ workflows:
 [group('tools')]
 load *args:
     cargo run --quiet --release -p occam-io --example load -- "$@"
-
-# Raise ci/test-counts.txt's minimums to this tree's
-[env("CARGO_TARGET_DIR", target)]
-[group('tools')]
-counts:
-    cargo xtask gates counts --update
 
 # The determinism stream's record, from its separate implementation; `--check` compares it with ci/determinism-hashes.txt
 [group('tools')]
