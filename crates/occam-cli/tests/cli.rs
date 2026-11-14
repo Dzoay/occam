@@ -102,7 +102,8 @@ const BOX: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "s
     {"op": "box", "label": "box", "size": [10, 20, 30]}
 ]}"#;
 
-/// A directory of the test's own, empty.
+/// A directory of the test's own, empty. Every test file of this crate makes its directories in the one temporary
+/// directory cargo gives the crate, and the files' tests run at once, so no two tests anywhere here share a `name`.
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _ = std::fs::remove_dir_all(&dir);

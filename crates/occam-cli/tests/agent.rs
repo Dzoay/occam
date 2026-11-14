@@ -35,7 +35,8 @@ fn words(arguments: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-/// A directory of the test's own, empty.
+/// A directory of the test's own, empty. Every test file of this crate makes its directories in the one temporary
+/// directory cargo gives the crate, and the files' tests run at once, so no two tests anywhere here share a `name`.
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _ = std::fs::remove_dir_all(&dir);
@@ -202,7 +203,7 @@ fn ran_alone(name: &str, request: &str) -> Value {
 
 #[test]
 fn every_number_said_in_words_is_short_enough_to_read() {
-    let dir = scratch("words");
+    let dir = scratch("numbers-in-words");
     let model = dir.join("bracket.occam");
     let (plate, bolt, _) = built(&dir, &model);
     let listed = listed(&model);
