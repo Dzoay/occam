@@ -129,7 +129,7 @@ Named, not numbered. They run in this order.
 | `construction` | An agent builds and inspects a solid from JSON alone: requests, wires, faces, primitives, sweeps, copies, mass properties, the native format and the `occam` command | [plan/construction.md](plan/construction.md) |
 | `view` | A person prompts an agent and watches the model live: shared edges first, then faces, the watertight check on every output, the worker pool and the renderer contract; `occam view` redrawing on every run; faces and edges selected by the person and read by the agent | [plan/view.md](plan/view.md) |
 | `intersection` | Where two surfaces meet and where a curve crosses a surface: closed forms, then the hybrid; failures in the result; loops below resolution reported; coincidence detected | [plan/intersection.md](plan/intersection.md) |
-| `booleans` | Fuse, cut and common as pure phases over the sections; coincident faces answered; which input faces made which output faces; point classification; every failing pair reported, the model unchanged | [plan/booleans.md](plan/booleans.md) |
+| `booleans` | Fuse, cut and common of an object and many tools in one pass, as pure phases over the sections; coincident faces answered; which input faces made which output faces; point classification; every failing pair reported, the model unchanged | [plan/booleans.md](plan/booleans.md) |
 | first release | `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 
