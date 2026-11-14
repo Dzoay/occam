@@ -3,7 +3,8 @@
 //! an edit touched, and this checks everything. Each task checks one chunk of one table, so the tasks follow the
 //! storage and their results come back in task order through `Exec::map`: entity by entity, kind by kind in the order
 //! [`EntityKind::ALL`] lists them, slot by slot, then body by body, the faces that name each shell found first by one
-//! scan. The reports are the same at any thread count.
+//! scan; then, of a model that passes all of that, whether each solid faces out. The reports are the same at any thread
+//! count.
 
 use core::num::NonZeroU32;
 use std::sync::Arc;
@@ -96,21 +97,25 @@ fn run(model: &Model, members: &Members, task: Task, per: NonZeroU32) -> Vec<Rep
     out
 }
 
-/// Every report of `model`, `per` slots a task, on `exec`.
+/// Every report of `model`, `per` slots a task, on `exec`; and if there is none, each solid that faces in.
 fn checked(model: Model, exec: &Exec, per: NonZeroU32) -> Vec<Report> {
     let members = Arc::new(check::members(&model));
     let model = Arc::new(model);
+    let whole = Arc::clone(&model);
     let tasks = Arc::new(tasks(&model, per));
     let count = tasks.len();
     let run = move |index: usize| tasks.get(index).map(|&task| run(&model, &members, task, per)).unwrap_or_default();
-    let found = exec.map(count, Grain::Each, run);
-    found.into_iter().flatten().collect()
+    let mut found: Vec<Report> = exec.map(count, Grain::Each, run).into_iter().flatten().collect();
+    if found.is_empty() {
+        check::solids(&whole, &mut found);
+    }
+    found
 }
 
 impl Snapshot {
     /// The whole model against every invariant: for loading, importing and tests (PARITY 1.10). One report per failure,
     /// each naming its entities, entity by entity in the order of [`EntityKind::ALL`] and then of the slots, then body
-    /// by body; the same list at any thread count.
+    /// by body, and, only if none of those failed, each solid that faces in; the same list at any thread count.
     #[must_use]
     pub fn check_all(&self, exec: &Exec) -> Vec<Report> {
         checked(self.model.clone(), exec, TASK)

@@ -88,6 +88,12 @@ text_enum! {
         /// A loop could not be traced in its face's parameters: no point of the surface was found near one of its
         /// edge's points.
         LoopNotTraced = "loop-not-traced",
+        /// A loop winds about its witness against the way its face faces: an outer loop must run anticlockwise about
+        /// the face's outward normal and a hole clockwise, so that the face lies on the left of every use.
+        LoopAgainstFace = "loop-against-face",
+        /// A solid's faces point into the volume it bounds rather than out of it, as seen where it reaches furthest
+        /// along an axis.
+        ShellInsideOut = "shell-inside-out",
     }
 }
 

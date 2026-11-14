@@ -8,8 +8,9 @@ use occam_math::{Exec, Real};
 use occam_report::{Code, Fault, Report, Value};
 use occam_units::{Angle, Bounds, Direction, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
-use crate::kind::{Id, Kind};
-use crate::records::{CurveRecord, VertexRecord};
+use crate::edit::Edit;
+use crate::kind::{Face, Id, Kind, Loop};
+use crate::records::{CurveRecord, EdgeUseRecord, FaceRecord, VertexRecord};
 use crate::snapshot::Snapshot;
 
 /// The model tolerance the tests work to.
@@ -100,4 +101,29 @@ impl Parametric for Unfindable {
     fn shape(&self) -> Shape {
         self.0.shape()
     }
+}
+
+/// Turns loop `l` round in `edit`: each use runs the other way, and they come round in the other order.
+pub(crate) fn turn_loop(edit: &mut Edit, l: Id<Loop>) {
+    let uses = edit.view(l).unwrap().uses();
+    let mut befores = uses.clone();
+    befores.rotate_right(1);
+    for (u, before) in uses.into_iter().zip(befores) {
+        let record = edit.record(u).unwrap();
+        edit.set(u, EdgeUseRecord { next: Some(before), reversed: !record.reversed, ..record }).unwrap();
+    }
+}
+
+/// Turns `face` over in `edit`, its outward normal reversed.
+pub(crate) fn turn_over(edit: &mut Edit, face: Id<Face>) {
+    let record = edit.record(face).unwrap();
+    edit.set(face, FaceRecord { reversed: !record.reversed, ..record }).unwrap();
+}
+
+/// Turns `face` inside out in `edit`: over, and each of its loops round, so they still agree.
+pub(crate) fn turn_inside_out(edit: &mut Edit, face: Id<Face>) {
+    for l in edit.view(face).unwrap().loops() {
+        turn_loop(edit, l);
+    }
+    turn_over(edit, face);
 }

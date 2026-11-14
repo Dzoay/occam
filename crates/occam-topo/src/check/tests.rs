@@ -39,7 +39,8 @@ fn all<K: Kind>(model: &Model) -> Vec<Id<K>> {
     K::table(model).records().map(|(slot, generation, _)| Id::new(slot, generation)).collect()
 }
 
-/// What the whole-model checks find: [`entity`] over every live entity, then [`body`] over every body.
+/// What the whole-model checks find: [`entity`] over every live entity, then [`body`] over every body, then, if nothing
+/// failed, [`solids`].
 pub(super) fn whole(m: &Model) -> Vec<Report> {
     let mut out = Vec::new();
     let entities = [
@@ -58,6 +59,9 @@ pub(super) fn whole(m: &Model) -> Vec<Report> {
     let members = members(m);
     for b in all::<Body>(m) {
         body(m, &members, b, &mut out);
+    }
+    if out.is_empty() {
+        solids(m, &mut out);
     }
     out
 }
@@ -243,6 +247,8 @@ fn a_face_turned_round_leaves_each_of_its_edges_with_uses_running_the_same_way()
             let named = [e.entity()].into_iter().chain(ring(edit, e).into_iter().map(Id::entity)).collect();
             expected.push((Reason::UsesNotOpposed, named));
         }
+        // Its loop now runs clockwise about the outward normal its face still has.
+        expected.push((Reason::LoopAgainstFace, vec![built.loops[0].entity(), built.faces[0].entity()]));
         expected.sort();
     });
     assert_eq!(found, (expected.clone(), expected.clone()));

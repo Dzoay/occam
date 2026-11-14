@@ -10,12 +10,15 @@
 //! deviation, at even steps along each edge it created or changed or whose uses it did, and stores it, so no caller
 //! asserts it.
 
+mod outward;
 #[cfg(test)]
 mod reach;
 #[cfg(test)]
 mod refused;
 mod trace;
 mod winding;
+
+pub(crate) use outward::inside_out;
 
 /// The winding number the checks use to decide that a loop's witness is strictly inside it, so that what builds a face
 /// finds witnesses by the same count. See [`winding::number`].
@@ -36,7 +39,7 @@ use crate::kind::{Edge, EdgeUse, Face, Id, Kind, Loop, Vertex};
 use crate::records::{Around, End, UseOwner};
 use crate::snapshot::Model;
 use crate::view::{View, most, view, walk};
-use trace::{Off, Trace, Untraced};
+use trace::{Off, Place, Trace, Untraced};
 
 /// How many even steps an edge's deviation is measured at, its ends included: as many as a parameter curve is
 /// joined to its edge at.
@@ -226,7 +229,21 @@ fn bounding(model: &Model, l: View<'_, Loop>, out: &mut Vec<Report>) {
             report = report.with_value(NamedValue::new("winding", Quantity::Count, f64::from(winding)));
         }
         out.push(report.with_tolerance_in_force(band));
+        return;
     }
+    out.extend(against(model, l, place));
+}
+
+/// The report of loop `l`, whose witness is inside it at `place`, if it winds about the witness against the way its face
+/// faces: an outer loop must wind anticlockwise in the surface's parameters, and a hole clockwise, where the face is not
+/// reversed, and each the other way where it is. So each face lies on the left of its uses seen from outside, and with
+/// each edge's uses opposed, a face faces the way each neighbour does across their edge.
+fn against(model: &Model, l: View<'_, Loop>, place: Place) -> Option<Report> {
+    let (face, winding) = (view(model, l.face())?, place.winding?);
+    let anticlockwise = (face.outer() == l.id()) != face.reversed();
+    let report = failed(Reason::LoopAgainstFace, &[l.id().entity(), face.id().entity()]);
+    (winding.is_positive() != anticlockwise)
+        .then(|| report.with_value(NamedValue::new("winding", Quantity::Count, f64::from(winding))))
 }
 
 /// Whether each of `l`'s uses ends at the vertex the next begins at, round to the first. Where one does not, the

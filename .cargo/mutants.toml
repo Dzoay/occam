@@ -246,4 +246,7 @@ exclude_re = [
     "transform/moved\\.rs:\\d+:\\d+: replace < with <= in within$",
     "transform/moved\\.rs:\\d+:\\d+: replace > with >= in within$",
     "affine\\.rs:85:67: replace > with >= in Affine::stretch$",
+    # The orientation check's (the construction review's first finding). By line. A corner that turns by exactly
+    # nought, of either sign, is a cusp taken either way: as no angle or as a whole turn, each within the cusp's band.
+    "geometric/outward\\.rs:444:25: replace > with >= in spanned$",
 ]

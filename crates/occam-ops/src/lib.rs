@@ -6,6 +6,8 @@
 mod args;
 mod construct;
 mod execute;
+#[cfg(test)]
+mod facing;
 mod guide;
 mod measure;
 mod operand;

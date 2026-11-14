@@ -250,7 +250,7 @@ fn segment(a: Point<World>, b: Point<World>, ends: (usize, usize)) -> EdgeSpec {
 }
 
 /// The placement whose XY plane passes through `p` and faces along `normal`, which is along an axis.
-fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
+pub(crate) fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
     let axis = |x, y, z| Direction::<Local>::normalised(Vec3::new(x, y, z));
     let (about, angle) = if normal.x != 0.0 {
         (axis(0.0, 1.0, 0.0), FRAC_PI_2.copysign(normal.x))

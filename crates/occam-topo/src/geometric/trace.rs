@@ -234,7 +234,7 @@ impl<'a> Trace<'a> {
     }
 
     /// `uv` with each parameter that comes round placed in its chart.
-    fn placed(&self, uv: UvPoint) -> UvPoint {
+    pub(super) fn placed(&self, uv: UvPoint) -> UvPoint {
         UvPoint::new(self.charts[0].placed(uv.u()), self.charts[1].placed(uv.v()))
     }
 

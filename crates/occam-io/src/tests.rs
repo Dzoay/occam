@@ -171,6 +171,55 @@ fn a_file_with_one_record_wrong_is_refused_naming_it() {
     assert_eq!(thin[0].entities, [EntityRef::new(occam_report::EntityKind::Surface, u32::try_from(slot).unwrap(), 1)]);
 }
 
+/// Each report's reason, sorted.
+fn reasons(reports: &[Report]) -> Vec<Reason> {
+    assert!(reports.iter().all(|r| r.code == Code::InvariantFailed), "{reports:#?}");
+    let mut found: Vec<Reason> = reports.iter().filter_map(|r| r.reason).collect();
+    found.sort();
+    found
+}
+
+/// Turns every face of the model `json` holds inside out: over, and each of its loops round, each use running the other
+/// way and coming after the use that came after it.
+fn turned_inside_out(json: &mut Value) {
+    for face in json["faces"].as_array_mut().unwrap() {
+        let over = !face["record"]["reversed"].as_bool().unwrap();
+        face["record"]["reversed"] = serde_json::json!(over);
+    }
+    let uses = json["uses"].as_array_mut().unwrap();
+    let ids: Vec<String> = uses.iter().enumerate().map(|(k, u)| format!("edge-use:{k}/{}", u["generation"])).collect();
+    let nexts: Vec<String> = uses.iter().map(|u| u["record"]["next"].as_str().unwrap().to_string()).collect();
+    for (k, next) in nexts.iter().enumerate() {
+        let after = ids.iter().position(|id| id == next).unwrap();
+        uses[after]["record"]["next"] = serde_json::json!(ids[k]);
+    }
+    for u in uses {
+        let back = !u["record"]["reversed"].as_bool().unwrap();
+        u["record"]["reversed"] = serde_json::json!(back);
+    }
+}
+
+#[test]
+fn a_file_with_a_face_turned_over_or_a_solid_turned_inside_out_is_refused() {
+    // The review's flip1 and flip: a box with one face, or every face, turned over against its loops, which measured
+    // volumes of 4 and -6 where 6 was right; and the box turned inside out whole, every face with its loops.
+    let (_, cube) = models(&serial()).swap_remove(0);
+    let one = changed(&cube, |json| json["faces"][0]["record"]["reversed"] = serde_json::json!(true));
+    assert_eq!(reasons(&one), [Reason::LoopAgainstFace]);
+    let face = EntityRef::new(occam_report::EntityKind::Face, 0, 1);
+    assert_eq!(one[0].entities.get(1), Some(&face), "the loop, then its face");
+    let every = changed(&cube, |json| {
+        for face in json["faces"].as_array_mut().unwrap() {
+            face["record"]["reversed"] = serde_json::json!(true);
+        }
+    });
+    assert_eq!(reasons(&every), [Reason::LoopAgainstFace; 6]);
+    let inside_out = changed(&cube, turned_inside_out);
+    assert_eq!(reasons(&inside_out), [Reason::ShellInsideOut]);
+    let binary = load(&transcoded(&changed_file(&cube, turned_inside_out)), &serial()).unwrap_err();
+    assert_eq!(binary, inside_out, "the binary twin alike");
+}
+
 #[test]
 fn what_is_not_the_format_is_refused_where_it_is_written() {
     let (_, cube) = models(&serial()).swap_remove(0);

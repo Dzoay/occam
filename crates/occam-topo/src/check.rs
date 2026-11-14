@@ -2,11 +2,13 @@
 //! The checker (PARITY 1.10). [`entity`] holds what one entity's record and its neighbours' must satisfy, and [`body`]
 //! what a whole body must, shell by shell, against the faces that name each shell, which [`members`] finds. `Edit::commit`
 //! runs [`edit`], which checks what the edit touched and its neighbours (P1): [`entity`] over that scope, then the
-//! answers [`body`] would give, reached from what changed rather than by walking the model. Each failure is one `check.invariant-failed`
+//! answers [`body`] would give, reached from what changed rather than by walking the model. Last, of a model that passes
+//! all of that, [`solids`] and [`edit`] ask whether each solid faces out. Each failure is one `check.invariant-failed`
 //! report naming its entities, with its reason from the closed list.
 
 mod incremental;
 mod local;
+mod outward;
 pub(crate) mod read;
 mod scope;
 mod shell;
@@ -73,7 +75,8 @@ pub(crate) fn body(model: &Model, members: &Members, body: Id<Body>, out: &mut V
 }
 
 /// Every failure of `edit`, in a fixed order: full tables, reserved ids never written, then the invariants of what it
-/// touched and its neighbours, then the genus and the joining of the shells it changed.
+/// touched and its neighbours, then the genus and the joining of the shells it changed; and if there is none, whether
+/// each solid it rebuilt faces out.
 pub(crate) fn edit(edit: &Edit) -> Vec<Report> {
     let mut found: Vec<Report> = edit.full.iter().map(|_| failed(Reason::TableFull, &[])).collect();
     let unwritten = edit.created.iter().filter(|&&entity| edit.next.holds(entity) == Holds::Reserved);
@@ -89,9 +92,20 @@ pub(crate) fn edit(edit: &Edit) -> Vec<Report> {
     let cut: Vec<EntityRef> = apart.iter().filter_map(|report| report.entities.first().copied()).collect();
     found.extend(counted.into_iter().filter(|report| report.entities.first().is_none_or(|shell| !cut.contains(shell))));
     found.extend(apart);
+    if found.is_empty() {
+        outward::edit(edit, &mut found);
+    }
     found
 }
 
+/// Each solid of the whole model that faces in, by slot: the last question the whole-model check asks, and only of a
+/// model that passes every other check, as [`outward`] says.
+pub(crate) fn solids(model: &Model, out: &mut Vec<Report>) {
+    outward::whole(model, out);
+}
+
+#[cfg(test)]
+mod facing;
 #[cfg(test)]
 mod membership;
 #[cfg(test)]
