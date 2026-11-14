@@ -190,6 +190,9 @@ impl ParametricCurve for SplineCurve {
         (Point::from_vec3(point), Tangent::new(rate), Tangent::new(change))
     }
 
+    /// Inlined into each caller, as the rungs are: an offset calls it a lane at a time at a constant order, which a
+    /// copy shared with the dyn trait's callers cannot use.
+    #[inline(always)]
     fn derivatives(
         &self,
         t: f64,
