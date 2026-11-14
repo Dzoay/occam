@@ -361,18 +361,20 @@ pub(crate) fn measure_all(model: &mut Model, exec: &Exec) -> Vec<Report> {
     failures
 }
 
-/// The edges on a curve, or of a face on a surface, that the edit replaced in place. Finding them reads every edge or
-/// face, which only an edit replacing geometry in place pays.
+/// The edges on a curve, or of a face on a surface, that the edit replaced in place. Finding them reads every edge and
+/// face once, however many curves and surfaces it replaced, which only an edit replacing geometry in place pays.
 fn on_replaced(edit: &Edit) -> Vec<Id<Edge>> {
     let next = &edit.next;
-    let mut found = Vec::new();
-    for &g in edit.changed.iter().filter(|g| matches!(g.kind, EntityKind::Curve | EntityKind::Surface)) {
-        let on_curve = Edge::table(next).records().filter(|(_, _, r)| r.curve.entity() == g);
-        found.extend(on_curve.map(|(slot, generation, _)| Id::<Edge>::new(slot, generation)));
-        let faces = Face::table(next).records().filter(|(_, _, r)| r.surface.entity() == g);
-        let faces: Vec<Id<Face>> = faces.map(|(slot, generation, _)| Id::new(slot, generation)).collect();
-        found.extend(faces.into_iter().filter_map(|f| view(next, f)).flat_map(View::<Face>::edges));
+    let replaced: BTreeSet<EntityRef> =
+        edit.changed.iter().copied().filter(|g| matches!(g.kind, EntityKind::Curve | EntityKind::Surface)).collect();
+    if replaced.is_empty() {
+        return Vec::new();
     }
+    let on_curve = Edge::table(next).records().filter(|(_, _, r)| replaced.contains(&r.curve.entity()));
+    let mut found: Vec<Id<Edge>> = on_curve.map(|(slot, generation, _)| Id::new(slot, generation)).collect();
+    let faces = Face::table(next).records().filter(|(_, _, r)| replaced.contains(&r.surface.entity()));
+    let faces: Vec<Id<Face>> = faces.map(|(slot, generation, _)| Id::new(slot, generation)).collect();
+    found.extend(faces.into_iter().filter_map(|f| view(next, f)).flat_map(View::<Face>::edges));
     found
 }
 

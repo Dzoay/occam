@@ -1,7 +1,7 @@
 //! Source: original
-//! The checker (PARITY 1.10). [`entity`] holds what one entity's record and its neighbours' must satisfy, and [`body`]
+//! The checker (PARITY 1.10). [`entities`] holds what each entity's record and its neighbours' must satisfy, and [`body`]
 //! what a whole body must, shell by shell, against the faces that name each shell, which [`members`] finds. `Edit::commit`
-//! runs [`edit`], which checks what the edit touched and its neighbours (P1): [`entity`] over that scope, then the
+//! runs [`edit`], which checks what the edit touched and its neighbours (P1): [`entities`] over that scope, then the
 //! answers [`body`] would give, reached from what changed rather than by walking the model. Last, of a model that passes
 //! all of that, [`solids`] and [`edit`] ask whether each solid faces out. Each failure is one `check.invariant-failed`
 //! report naming its entities, with its reason from the closed list.
@@ -58,9 +58,19 @@ fn holds<K: Kind>(
 
 /// Every invariant of one entity that reads its record and its neighbours' records, then those that read their
 /// geometry, in a fixed order.
+#[cfg(test)]
 pub(crate) fn entity(model: &Model, entity: EntityRef, out: &mut Vec<Report>) {
-    local::check(model, entity, out);
-    crate::geometric::entity(model, entity, out);
+    entities(model, [entity], out);
+}
+
+/// Every invariant of each of `entities` in turn, as for one entity, each list or ring they sit in walked once for them
+/// all.
+pub(crate) fn entities(model: &Model, entities: impl IntoIterator<Item = EntityRef>, out: &mut Vec<Report>) {
+    let mut walked = local::Walked::default();
+    for entity in entities {
+        local::check(model, &mut walked, entity, out);
+        crate::geometric::entity(model, entity, out);
+    }
 }
 
 /// The faces that name each shell, for [`body`]: one scan of every face.
@@ -81,9 +91,7 @@ pub(crate) fn edit(edit: &Edit) -> Vec<Report> {
     let mut found: Vec<Report> = edit.full.iter().map(|_| failed(Reason::TableFull, &[])).collect();
     let unwritten = edit.created.iter().filter(|&&entity| edit.next.holds(entity) == Holds::Reserved);
     found.extend(unwritten.map(|&entity| failed(Reason::ReservedNotSet, &[entity])));
-    for touched in scope::scope(edit) {
-        entity(&edit.next, touched, &mut found);
-    }
+    entities(&edit.next, scope::scope(edit), &mut found);
     let touched = incremental::Touched::of(edit);
     let (mut counted, mut apart) = (Vec::new(), Vec::new());
     incremental::genus(&touched, &mut counted);
@@ -106,6 +114,8 @@ pub(crate) fn solids(model: &Model, out: &mut Vec<Report>) {
 
 #[cfg(test)]
 mod facing;
+#[cfg(test)]
+mod linear;
 #[cfg(test)]
 mod membership;
 #[cfg(test)]

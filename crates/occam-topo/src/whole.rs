@@ -81,9 +81,7 @@ fn run(model: &Model, members: &Members, task: Task, per: NonZeroU32) -> Vec<Rep
     match task {
         Task::Entities(kind, from) => {
             let live = Live { model, from, to: from.saturating_add(per.get()) };
-            for entity in dispatch(kind, live).unwrap_or_default() {
-                check::entity(model, entity, &mut out);
-            }
+            check::entities(model, dispatch(kind, live).unwrap_or_default(), &mut out);
         }
         Task::Bodies(from) => {
             let live = Live { model, from, to: from.saturating_add(per.get()) };

@@ -3,9 +3,10 @@
 //! round and wires end or come round, each use beginning where the one before ends; owners and what they list name each
 //! other; the uses round an edge and the edges round a vertex form rings; and an edge has the uses its body's kind
 //! allows, in opposite directions. Each failure is reported once, by the entity whose list or ring it is: a member checks
-//! only that it is listed, and only when the list is sound.
+//! only that it is listed, and only when the list is sound. A run of checks walks each list or ring once, however many of
+//! its members it checks.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use occam_report::{EntityKind, EntityRef, NamedValue, Quantity, Reason, Report};
 
@@ -18,20 +19,51 @@ use crate::kind::{Body, Edge, EdgeUse, Face, Id, Loop, Shell, Vertex, Wire};
 use crate::records::{Around, BodyKind, End, UseOwner};
 use crate::snapshot::Model;
 
-/// Every invariant of `entity`. If any of its links is not live, that alone is reported, as the rest would follow from
-/// it.
-pub(crate) fn check(model: &Model, entity: EntityRef, out: &mut Vec<Report>) {
+/// What a sound list or ring holds, or `None` for one that is not sound.
+type Held<T> = Option<BTreeSet<T>>;
+
+/// The lists and rings a run of checks on one model has walked, each by what holds it, so that each member of a long
+/// list finds itself in the list walked once. The model does not change during the run, so the list walked once is the
+/// one each member would walk.
+#[derive(Default)]
+pub(crate) struct Walked {
+    /// Each body's list of shells.
+    shells: BTreeMap<Id<Body>, Held<Id<Shell>>>,
+    /// Each body's list of wires.
+    wires: BTreeMap<Id<Body>, Held<Id<Wire>>>,
+    /// Each face's list of loops.
+    loops: BTreeMap<Id<Face>, Held<Id<Loop>>>,
+    /// Each loop's or wire's list of uses, by the loop or wire.
+    uses: BTreeMap<EntityRef, Held<Id<EdgeUse>>>,
+    /// Each edge's ring of uses.
+    radial: BTreeMap<Id<Edge>, Held<Id<EdgeUse>>>,
+    /// Each vertex's star, `None` for a vertex with none.
+    stars: BTreeMap<Id<Vertex>, Option<Held<Around>>>,
+}
+
+/// What the list `key` names holds, walked by `walk` unless `walked` has it.
+fn held<K: Ord, T: Ord + Copy>(
+    walked: &mut BTreeMap<K, Held<T>>,
+    key: K,
+    walk: impl FnOnce() -> Option<Vec<T>>,
+) -> Option<&BTreeSet<T>> {
+    walked.entry(key).or_insert_with(|| walk().map(BTreeSet::from_iter)).as_ref()
+}
+
+/// Every invariant of `entity`, each list or ring it sits in found in `walked` or walked and kept there. If any of its
+/// links is not live, that alone is reported, as the rest would follow from it.
+pub(crate) fn check(model: &Model, walked: &mut Walked, entity: EntityRef, out: &mut Vec<Report>) {
     if dead_links(model, entity, out) {
         return;
     }
     match entity.kind {
         EntityKind::Body => typed(entity).into_iter().for_each(|id| body(model, id, out)),
-        EntityKind::Shell => typed(entity).into_iter().for_each(|id| shell(model, id, out)),
+        EntityKind::Shell => typed(entity).into_iter().for_each(|id| shell(model, walked, id, out)),
         EntityKind::Face => typed(entity).into_iter().for_each(|id| face(model, id, out)),
-        EntityKind::Loop => typed(entity).into_iter().for_each(|id| a_loop(model, id, out)),
-        EntityKind::Wire => typed(entity).into_iter().for_each(|id| wire(model, id, out)),
-        EntityKind::EdgeUse => typed(entity).into_iter().for_each(|id| a_use(model, id, out)),
-        EntityKind::Edge => typed(entity).into_iter().for_each(|id| edge(model, id, out)),
+        EntityKind::Loop => typed(entity).into_iter().for_each(|id| a_loop(model, walked, id, out)),
+        EntityKind::Wire => typed(entity).into_iter().for_each(|id| wire(model, walked, id, out)),
+        EntityKind::EdgeUse => typed(entity).into_iter().for_each(|id| a_use(model, walked, id, out)),
+        EntityKind::Edge => typed(entity).into_iter().for_each(|id| edge(model, walked, id, out)),
         EntityKind::Vertex => typed(entity).into_iter().for_each(|id| vertex(model, id, out)),
         EntityKind::Surface
         | EntityKind::Curve
@@ -53,7 +85,7 @@ fn dead_links(model: &Model, entity: EntityRef, out: &mut Vec<Report>) -> bool {
 }
 
 /// Reports `id` if `listed`, a sound list of its owner's, does not hold it.
-fn listed<K: crate::kind::Kind>(out: &mut Vec<Report>, id: Id<K>, owner: EntityRef, listed: Option<&[Id<K>]>) {
+fn listed<K: crate::kind::Kind>(out: &mut Vec<Report>, id: Id<K>, owner: EntityRef, listed: Option<&BTreeSet<Id<K>>>) {
     if listed.is_some_and(|items| !items.contains(&id)) {
         out.push(failed(Reason::NotListed, &[id.entity(), owner]));
     }
@@ -77,10 +109,12 @@ fn body(model: &Model, id: Id<Body>, out: &mut Vec<Report>) {
 
 /// A shell: its body lists it, and the face it begins from names it. Which faces it holds, those that name it and are
 /// joined to that one, is a whole-shell matter.
-fn shell(model: &Model, id: Id<Shell>, out: &mut Vec<Report>) {
+fn shell(model: &Model, walked: &mut Walked, id: Id<Shell>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
-    let shells = list(model, get(model, record.body).and_then(|b| b.first_shell), |s| s.next);
-    listed(out, id, record.body.entity(), shells.sound(false));
+    let shells = held(&mut walked.shells, record.body, || {
+        list(model, get(model, record.body).and_then(|b| b.first_shell), |s| s.next).sound(false).map(<[_]>::to_vec)
+    });
+    listed(out, id, record.body.entity(), shells);
     if get(model, record.face).map(|f| f.shell) != Some(id) {
         out.push(failed(Reason::ListedElsewhere, &[id.entity(), record.face.entity()]));
     }
@@ -94,10 +128,12 @@ fn face(model: &Model, id: Id<Face>, out: &mut Vec<Report>) {
 }
 
 /// A loop: its face lists it, and its uses come round, name it, and meet.
-fn a_loop(model: &Model, id: Id<Loop>, out: &mut Vec<Report>) {
+fn a_loop(model: &Model, walked: &mut Walked, id: Id<Loop>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
-    let loops = list(model, get(model, record.face).map(|f| f.outer), |l| l.next);
-    listed(out, id, record.face.entity(), loops.sound(false));
+    let loops = held(&mut walked.loops, record.face, || {
+        list(model, get(model, record.face).map(|f| f.outer), |l| l.next).sound(false).map(<[_]>::to_vec)
+    });
+    listed(out, id, record.face.entity(), loops);
     let uses = uses_from(model, record.first);
     let owner = UseOwner::Loop(id);
     let named = |u: Id<EdgeUse>| get(model, u).map(|r| r.owner) == Some(owner);
@@ -107,10 +143,12 @@ fn a_loop(model: &Model, id: Id<Loop>, out: &mut Vec<Report>) {
 }
 
 /// A wire: its body lists it, and its uses end or come round, name it, and meet.
-fn wire(model: &Model, id: Id<Wire>, out: &mut Vec<Report>) {
+fn wire(model: &Model, walked: &mut Walked, id: Id<Wire>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
-    let wires = list(model, get(model, record.body).and_then(|b| b.first_wire), |w| w.next);
-    listed(out, id, record.body.entity(), wires.sound(false));
+    let wires = held(&mut walked.wires, record.body, || {
+        list(model, get(model, record.body).and_then(|b| b.first_wire), |w| w.next).sound(false).map(<[_]>::to_vec)
+    });
+    listed(out, id, record.body.entity(), wires);
     let uses = uses_from(model, record.first);
     let ring = matches!(uses, Walk::Ring(_));
     let owner = UseOwner::Wire(id);
@@ -141,34 +179,40 @@ const fn owner_entity(owner: UseOwner) -> EntityRef {
 }
 
 /// A use: its owner lists it, and it is in the ring of its edge's uses.
-fn a_use(model: &Model, id: Id<EdgeUse>, out: &mut Vec<Report>) {
+fn a_use(model: &Model, walked: &mut Walked, id: Id<EdgeUse>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
-    if let Some(first) = first_use(model, record.owner) {
-        let uses = uses_from(model, first);
+    let owner = owner_entity(record.owner);
+    let sound = held(&mut walked.uses, owner, || {
+        let uses = uses_from(model, first_use(model, record.owner)?);
         let sound = match record.owner {
             UseOwner::Loop(_) => uses.sound(true),
             UseOwner::Wire(_) => uses.sound(false).or_else(|| uses.sound(true)),
         };
-        listed(out, id, owner_entity(record.owner), sound);
-    }
+        sound.map(<[_]>::to_vec)
+    });
+    listed(out, id, owner, sound);
     let Some(edge) = get(model, record.edge) else { return };
     if edge.first_use.is_none() {
         out.push(failed(Reason::NotListed, &[id.entity(), record.edge.entity()]));
     } else {
-        listed(out, id, record.edge.entity(), radial(model, edge).sound(true));
+        let ring = held(&mut walked.radial, record.edge, || radial(model, edge).sound(true).map(<[_]>::to_vec));
+        listed(out, id, record.edge.entity(), ring);
     }
 }
 
 /// An edge: each end is in its vertex's star, its uses form a ring that names it, and they are as many, in such
 /// directions, as its body's kind allows.
-fn edge(model: &Model, id: Id<Edge>, out: &mut Vec<Report>) {
+fn edge(model: &Model, walked: &mut Walked, id: Id<Edge>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
     let mut unlisted = BTreeSet::new();
     for end in [End::Start, End::Finish] {
         let vertex = end_vertex(record, end);
         let place = Around { edge: id, end };
-        let start = get(model, vertex).and_then(|v| v.star);
-        let missing = start.is_none_or(|start| star(model, start).sound(true).is_some_and(|ps| !ps.contains(&place)));
+        let ring = walked.stars.entry(vertex).or_insert_with(|| {
+            let start = get(model, vertex).and_then(|v| v.star)?;
+            Some(star(model, start).sound(true).map(|places| places.iter().copied().collect()))
+        });
+        let missing = ring.as_ref().is_none_or(|ring| ring.as_ref().is_some_and(|places| !places.contains(&place)));
         if missing {
             unlisted.insert(vertex);
         }

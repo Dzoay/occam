@@ -10,7 +10,9 @@ use super::read::reads;
 use super::*;
 use crate::edit::Changes;
 use crate::kind::{CurveGeom, Edge, EdgeUse, Face, Loop, Record, Shell, Vertex};
-use crate::models::{Built, Spec, build, cube, cylinder, frame, pinched, plate, point, sheet, split, top_square, wire};
+use crate::models::{
+    Built, Spec, apart, build, cube, cylinder, frame, pinched, plate, point, sheet, split, top_square, wire,
+};
 use crate::records::{
     Around, BodyKind, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, ShellRecord, UseOwner,
     VertexRecord,
@@ -388,6 +390,28 @@ fn an_edge_between_faces_of_two_shells_is_shared_and_neither_shell_closes() {
         expected.sort();
     });
     assert_eq!(found, (expected.clone(), expected.clone()));
+}
+
+#[test]
+fn shells_left_out_of_their_bodys_list_are_found_however_far_down_it() {
+    // Three unit cubes apart, one body, a shell each, listed first to third. Ending the list at the first leaves out
+    // the second, which the first named, and the third, which only the body's list reaches.
+    let mut edit = Snapshot::empty(tolerance()).edit();
+    let built = build(&mut edit, &apart(3));
+    let third = second_shell(&mut edit, &built, &[12, 13, 14, 15, 16, 17]);
+    let second = second_shell(&mut edit, &built, &[6, 7, 8, 9, 10, 11]);
+    change(&mut edit, second, |r: &mut ShellRecord| r.next = Some(third));
+    let (snapshot, _) = edit.commit(&serial()).unwrap();
+    assert_eq!(failures(&whole(&snapshot.model)), []);
+    let mut edit = snapshot.edit();
+    change(&mut edit, built.shell.unwrap(), |r: &mut ShellRecord| r.next = None);
+    let next = edit.next.clone();
+    let body = built.body.entity();
+    let mut expected =
+        vec![(Reason::NotListed, vec![second.entity(), body]), (Reason::NotListed, vec![third.entity(), body])];
+    expected.sort();
+    assert_eq!(failures(&edit.commit(&serial()).unwrap_err()), expected);
+    assert_eq!(failures(&whole(&next)), expected);
 }
 
 #[test]
