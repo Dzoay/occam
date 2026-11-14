@@ -6,15 +6,19 @@
 //! Its loops may not touch or cross, each hole lies inside the outer wire and outside the other holes, and every loop
 //! has a witness: a point strictly inside it, and for the outer loop outside every hole, clear of every edge.
 
+use std::collections::BTreeSet;
+
 use occam_report::{Code, EntityKind, EntityRef, Fault, Input, NamedValue, Remedy, RemedyKind, Report};
 use occam_topo::{Body, Edge, EdgeUse, Edit, Id, Snapshot, Vertex, Wire};
 use occam_units::{UvPoint, Vec3};
 
 use super::build::{self, Ring, refused, shown};
-use super::flat::{Flat, area, first_touch, inside, witness};
+use super::flat::{Flat, area};
 use super::given::{FaceArgs, WireRef};
+use super::loops::Loops;
 use super::outline::{Run, not_a_wire, off_plane, plane_through};
 use super::space::Flatland;
+use super::touch::first_touch;
 use super::wire::{band, crosses_itself, made};
 use crate::operand::{Labels, Operand};
 use crate::read::count;
@@ -36,11 +40,13 @@ pub(crate) fn face(edit: &mut Edit, args: &FaceArgs, labels: &Labels) -> Result<
     }
     let (plane, runs) = planar(runs, band)?;
     let flats: Vec<Vec<Flat>> = runs.iter().map(|(run, _)| run.flats(&plane)).collect();
-    apart(&plane, &runs, &flats, band)?;
+    let loops = Loops::new(&flats);
+    apart(&plane, &runs, (&flats, &loops), band)?;
     let mut rings = Vec::new();
     for (k, (run, at)) in runs.iter().enumerate() {
         let clear = CLEAR * band;
-        let (uv, _) = witness(&flats, k, clear)
+        let (uv, _) = loops
+            .witness(k, clear)
             .ok_or_else(|| refused(Code::NoInterior, at, band).with_value(NamedValue::length("clearance", clear)))?;
         rings.push(Ring { edges: run.edges.clone(), witness: UvPoint::new(uv[0], uv[1]) });
     }
@@ -87,7 +93,12 @@ fn turning(run: &Run, plane: &Flatland) -> f64 {
 /// # Errors
 ///
 /// [`Code::WireCrossesItself`], [`Code::WiresCross`], [`Code::HoleOutside`] or [`Code::HolesNested`].
-fn apart(plane: &Flatland, runs: &[(Run, Input)], flats: &[Vec<Flat>], band: f64) -> Result<(), Report> {
+fn apart(
+    plane: &Flatland,
+    runs: &[(Run, Input)],
+    (flats, loops): (&[Vec<Flat>], &Loops<'_>),
+    band: f64,
+) -> Result<(), Report> {
     let at = |k: usize| runs.get(k).map_or_else(|| Input::at("outer"), |(_, at)| at.clone());
     let closed: Vec<(&[Flat], bool)> = flats.iter().map(|f| (f.as_slice(), true)).collect();
     if let Some(touch) = first_touch(&closed, band) {
@@ -99,13 +110,12 @@ fn apart(plane: &Flatland, runs: &[(Run, Input)], flats: &[Vec<Flat>], band: f64
             .with_value(shown("point", plane.point(touch.at)))
             .with_value(count("other", first)));
     }
-    let Some(outer) = flats.first() else { return Ok(()) };
     for (k, hole) in flats.iter().enumerate().skip(1) {
         let start = hole.first().map_or([0.0, 0.0], |piece| piece.start());
-        if !inside(outer, hole) {
+        if !loops.inside(0, k) {
             return Err(refused(Code::HoleOutside, &at(k), band).with_value(shown("point", plane.point(start))));
         }
-        if let Some((j, _)) = flats.iter().enumerate().skip(1).find(|&(j, other)| j != k && inside(other, hole)) {
+        if let Some(j) = loops.nested(k) {
             return Err(refused(Code::HolesNested, &at(k), band).with_value(count("other", j)));
         }
     }
@@ -184,8 +194,8 @@ fn take(edit: &mut Edit, id: Id<Wire>, at: &Input, band: f64) -> Result<Vec<(Id<
     let gone =
         |entity: EntityRef| Report::new(Code::StaleId, Fault::InvalidInput).with_entity(entity).with_input(at.clone());
     let wire = edit.record(id).ok_or_else(|| gone(id.entity()))?;
-    let (mut uses, mut at_use) = (Vec::<Id<EdgeUse>>::new(), Some(wire.first));
-    while let Some(u) = at_use.filter(|u| !uses.contains(u)) {
+    let (mut uses, mut seen, mut at_use) = (Vec::<Id<EdgeUse>>::new(), BTreeSet::new(), Some(wire.first));
+    while let Some(u) = at_use.filter(|&u| seen.insert(u)) {
         uses.push(u);
         at_use = edit.record(u).ok_or_else(|| gone(u.entity()))?.next;
     }

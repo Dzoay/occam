@@ -249,4 +249,11 @@ exclude_re = [
     # The orientation check's (the construction review's first finding). By line. A corner that turns by exactly
     # nought, of either sign, is a cusp taken either way: as no angle or as a whole turn, each within the cusp's band.
     "geometric/outward\\.rs:444:25: replace > with >= in spanned$",
+    # A face's loops. By line. The remainder of a clearance by 4 for its quarter, as the sag a winding cuts arcs to.
+    # Below 4 that is the whole clearance, and a chord strays from its arc by less than the sag (1 - cos x < x^2 / 2),
+    # so it still never reaches the point, which is at least that far from the loop; from 4 up the arcs are cut finer.
+    # The same winding from more or fewer samples. Not a tie: the quarter keeps a margin well above rounding, which
+    # without it falls to a double's resolution only where the cut is as coarse as the sag allows and the point faces a
+    # chord's middle, which no test can place, as a sine's last bit there differs by platform.
+    "loops\\.rs:81:92: replace / with % in Loops<'a>::winding$",
 ]

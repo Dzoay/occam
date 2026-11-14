@@ -102,6 +102,17 @@ fn rings(groups: &[Vec<usize>], count: usize) -> Vec<usize> {
     next
 }
 
+/// The uses of each edge of the solid, in the order of `uses`, found in one pass over them.
+fn by_edge(solid: &Solid, uses: &[(usize, &UseSpec)]) -> Vec<Vec<usize>> {
+    let mut by_edge: Vec<Vec<usize>> = vec![Vec::new(); solid.edges.len()];
+    for (k, (_, u)) in uses.iter().enumerate() {
+        if let Some(members) = by_edge.get_mut(u.edge) {
+            members.push(k);
+        }
+    }
+    by_edge
+}
+
 /// Every use of the solid, loop by loop and face by face, as its loop's index and its place in that loop.
 fn uses_of(solid: &Solid) -> Vec<(usize, &UseSpec)> {
     solid
@@ -178,9 +189,7 @@ fn at<T: Copy>(ids: &[T], index: usize) -> Result<T, Report> {
 
 /// Writes every use: its edge, its loop, the next round the loop, the next round its edge, and its curve.
 fn write_uses(edit: &mut Edit, solid: &Solid, ids: &Ids, uses: &[(usize, &UseSpec)]) -> Result<(), Report> {
-    let by_edge: Vec<Vec<usize>> = (0..solid.edges.len())
-        .map(|e| uses.iter().enumerate().filter(|(_, (_, u))| u.edge == e).map(|(k, _)| k).collect())
-        .collect();
+    let by_edge = by_edge(solid, uses);
     let mut by_loop: Vec<Vec<usize>> = vec![Vec::new(); ids.loops.len()];
     for (k, (l, _)) in uses.iter().enumerate() {
         if let Some(members) = by_loop.get_mut(*l) {
@@ -227,11 +236,13 @@ fn write_edges(
         }
     }
     let round = rings(&stars, solid.edges.len().saturating_mul(2));
+    let by_edge = by_edge(solid, uses);
     let born = edit.provenance(role);
     for (k, e) in solid.edges.iter().enumerate() {
         let n = k.saturating_mul(2);
         let curve = edit.add(CurveRecord(Arc::clone(&e.curve)));
-        let first_use = uses.iter().position(|(_, u)| u.edge == k).map(|u| at(&ids.uses, u)).transpose()?;
+        let first = by_edge.get(k).and_then(|members| members.first());
+        let first_use = first.map(|&u| at(&ids.uses, u)).transpose()?;
         let record = EdgeRecord {
             curve,
             range: e.range,

@@ -7,10 +7,10 @@ use occam_topo::Edit;
 use occam_units::Vec3;
 
 use super::build::{self, Chain, Made, refused, shown};
-use super::flat::{Touch, first_touch};
 use super::given::{Piece, WireArgs};
 use super::outline::{Run, off_plane, plane_through};
 use super::space::Flatland;
+use super::touch::{Touch, first_touch};
 use crate::read::count;
 
 /// The band of the model `edit` changes, in millimetres.

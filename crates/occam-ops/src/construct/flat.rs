@@ -1,16 +1,21 @@
 //! Source: original
 //! A face's loops in its plane's parameters, which are lengths: straight pieces and arcs, how far apart two pieces come,
-//! whether a point is inside a loop, and a point clear of every loop that is strictly inside one.
+//! and the chain of segments a loop is drawn with, which says whether a point is inside it.
 //!
 //! How far apart two pieces come is the least distance between them, found among the places it can be: where they cross,
 //! an end of one against the other, and where both curves share a normal (for a segment and an arc, the arc's points
 //! square to the segment; for two arcs, their points on the line through both centres). A distance no greater than the
 //! band is a touch (DETERMINISM.md rule 6); whether two segments cross is decided exactly on their numbers.
+//!
+//! Each piece has a box that holds it, and gives its segments to its loop's chain alone, so that the searches of
+//! [`super::touch`] and [`super::loops`] can read only the pieces near what they ask about.
 
-use core::f64::consts::TAU;
+use core::f64::consts::{FRAC_PI_2, PI, TAU};
 
 use occam_math::{Predicate, Ring, Side, Verdict, atan2, decide_stored, sin_cos};
 use occam_units::UvPoint;
+
+use super::boxes::{Bounds, EMPTY, with};
 
 /// The most steps an arc is cut into for a winding number.
 const MOST_STEPS: u32 = 1 << 16;
@@ -27,15 +32,15 @@ pub(crate) enum Flat {
     Arc { c: P2, r: f64, from: f64, sweep: f64 },
 }
 
-fn sub(a: P2, b: P2) -> P2 {
+pub(super) fn sub(a: P2, b: P2) -> P2 {
     [a[0] - b[0], a[1] - b[1]]
 }
 
-fn add(a: P2, b: P2) -> P2 {
+pub(super) fn add(a: P2, b: P2) -> P2 {
     [a[0] + b[0], a[1] + b[1]]
 }
 
-fn scale(a: P2, k: f64) -> P2 {
+pub(super) fn scale(a: P2, k: f64) -> P2 {
     [a[0] * k, a[1] * k]
 }
 
@@ -123,6 +128,25 @@ impl Flat {
         match self {
             Self::Seg { .. } => false,
             Self::Arc { from, sweep, .. } => (sweep.signum() * (angle - from)).rem_euclid(TAU) <= sweep.abs(),
+        }
+    }
+
+    /// A box that holds every point of it: its ends, and each point of an arc's circle furthest along an axis that the
+    /// arc reaches.
+    pub(crate) fn bounds(self) -> Bounds {
+        let ends = with(with(EMPTY, self.start()), self.end());
+        let Self::Arc { c, r, .. } = self else { return ends };
+        let extremes = [(0.0, [c[0] + r, c[1]]), (FRAC_PI_2, [c[0], c[1] + r]), (PI, [c[0] - r, c[1]])];
+        let extremes = extremes.into_iter().chain([(-FRAC_PI_2, [c[0], c[1] - r])]);
+        extremes.filter(|&(angle, _)| self.spans(angle)).fold(ends, |b, (_, p)| with(b, p))
+    }
+
+    /// Its first and last points as [`Flat::samples`] gives them, whatever the sag: an arc's first is at nought of its
+    /// sweep past `from`, which differs from its start only in the sign of a nought.
+    pub(super) fn sampled_ends(self) -> (P2, P2) {
+        match self {
+            Self::Seg { a, b } => (a, b),
+            Self::Arc { c, r, from, sweep } => (on_circle(c, r, from + sweep * 0.0), self.end()),
         }
     }
 
@@ -319,67 +343,28 @@ pub(crate) fn meet_elsewhere(x: Flat, y: Flat, shared: &[P2], band: f64) -> Opti
     x_ends.chain(y_ends).next()
 }
 
-/// The closed chain of segments through `pieces`, its arcs cut so their chords stray by at most `sag`; each piece begins
-/// where the one before it ends, and the last ends where the first begins.
-fn chain(pieces: &[Flat], sag: f64) -> Vec<[UvPoint; 2]> {
-    let mut points: Vec<P2> = Vec::new();
-    for (k, piece) in pieces.iter().enumerate() {
-        let samples = piece.samples(sag);
-        points.extend(samples.into_iter().skip(usize::from(k > 0)));
+/// The segments piece `k` of the closed chain through `pieces` gives it, its arcs cut so their chords stray by at most
+/// `sag`: from where the piece before it ends, or the first piece's start, through its points, the last piece's last
+/// point being the first piece's start, so that each piece begins where the one before it ends.
+pub(super) fn chain_of(pieces: &[Flat], k: usize, sag: f64) -> Vec<[UvPoint; 2]> {
+    let Some(piece) = pieces.get(k) else { return Vec::new() };
+    let mut points = piece.samples(sag);
+    let before = k.checked_sub(1).and_then(|j| pieces.get(j)).map(|p| p.sampled_ends().1);
+    if let (Some(first), Some(end)) = (points.first_mut(), before) {
+        *first = end;
     }
-    if let Some(&first) = points.first() {
-        points.pop();
-        points.push(first);
+    let closing = (k.saturating_add(1) == pieces.len()).then(|| pieces.first().map(|p| p.sampled_ends().0)).flatten();
+    if let (Some(last), Some(start)) = (points.last_mut(), closing) {
+        *last = start;
     }
     let uv = |p: &P2| UvPoint::new(p[0], p[1]);
     points.windows(2).filter_map(|pair| Some([uv(pair.first()?), uv(pair.get(1)?)])).collect()
 }
 
-/// The winding number of the closed loop `pieces` about `q`, which is further than `clear` from it.
-pub(crate) fn winding(pieces: &[Flat], q: P2, clear: f64) -> Option<i32> {
-    occam_topo::winding_number(&chain(pieces, clear / 4.0), UvPoint::new(q[0], q[1]))
-}
-
-/// How far `q` is from every piece of every loop of `face`.
-fn clearance(face: &[Vec<Flat>], q: P2) -> f64 {
-    face.iter().flatten().fold(f64::INFINITY, |so_far, piece| least(so_far, piece.distance(q)))
-}
-
-/// Whether `q`, further than `clear` from every loop of `face`, is a witness for its loop `k`: strictly inside it, and,
-/// for the outer loop, outside every hole.
-fn witnesses(face: &[Vec<Flat>], k: usize, q: P2, clear: f64) -> bool {
-    let inside = |pieces: &[Flat]| winding(pieces, q, clear).is_some_and(|w| w != 0);
-    let Some(own) = face.get(k) else { return false };
-    inside(own) && (k > 0 || face.iter().skip(1).all(|hole| winding(hole, q, clear) == Some(0)))
-}
-
-/// A witness for loop `k` of `face` (the outer loop first): a point strictly inside it and, for the outer loop, outside
-/// every hole, further than `clear` from every loop. The clearest of the points a quarter, a half and three quarters of
-/// the way along each piece, moved off it either way by a half, an eighth and a thirty-second of its length.
-pub(crate) fn witness(face: &[Vec<Flat>], k: usize, clear: f64) -> Option<(P2, f64)> {
-    let mut best: Option<(P2, f64)> = None;
-    for piece in face.get(k).into_iter().flatten() {
-        for f in [0.5, 0.25, 0.75] {
-            let (p, n) = piece.at(f);
-            for d in [0.5, 0.125, 0.031_25].map(|share| share * piece.length()) {
-                for q in [add(p, scale(n, d)), sub(p, scale(n, d))] {
-                    let room = clearance(face, q);
-                    let better = best.is_none_or(|(_, so_far)| room > so_far);
-                    if room > clear && better && witnesses(face, k, q, room) {
-                        best = Some((q, room));
-                    }
-                }
-            }
-        }
-    }
-    best
-}
-
-/// Whether the loop `inner`, which neither touches nor crosses `outer`, lies inside it: whether its start does.
-pub(crate) fn inside(outer: &[Flat], inner: &[Flat]) -> bool {
-    let Some(q) = inner.first().map(|piece| piece.start()) else { return false };
-    let room = outer.iter().fold(f64::INFINITY, |so_far, piece| least(so_far, piece.distance(q)));
-    winding(outer, q, room).is_some_and(|w| w != 0)
+/// The closed chain of segments through `pieces`, its arcs cut so their chords stray by at most `sag`; each piece begins
+/// where the one before it ends, and the last ends where the first begins.
+fn chain(pieces: &[Flat], sag: f64) -> Vec<[UvPoint; 2]> {
+    (0..pieces.len()).flat_map(|k| chain_of(pieces, k, sag)).collect()
 }
 
 /// Twice the signed area the closed loop `pieces` bounds, anticlockwise positive, measured from its first point.
@@ -390,83 +375,50 @@ pub(crate) fn area(pieces: &[Flat], sag: f64) -> f64 {
     segments.iter().map(|&[a, b]| cross(at(a), at(b))).sum()
 }
 
-/// Two pieces that touch or cross, each as its run and its place in it, and a place where they do.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Touch {
-    /// The first piece's run and place.
-    pub first: (usize, usize),
-    /// The second's.
-    pub second: (usize, usize),
-    /// Where.
-    pub at: P2,
-}
-
-/// The points where pieces `i` and `j > i` of a run of `n` meet end to end: after `i` if `j` follows it, and where the
-/// run comes round if it is `closed` and they are its last and first.
-fn shared(pieces: &[Flat], i: usize, j: usize, closed: bool) -> Vec<P2> {
-    let (Some(x), Some(y)) = (pieces.get(i), pieces.get(j)) else { return Vec::new() };
-    let mut found = Vec::new();
-    if j == i.saturating_add(1) {
-        found.push(x.end());
-    }
-    if closed && i == 0 && j.saturating_add(1) == pieces.len() {
-        found.push(y.end());
-    }
-    found
-}
-
-/// The first two pieces of `runs`, each a run of pieces and whether it comes round, that touch or cross within `band`
-/// other than where consecutive pieces of one run meet end to end: run by run, piece by piece.
-pub(crate) fn first_touch(runs: &[(&[Flat], bool)], band: f64) -> Option<Touch> {
-    for (r, &(pieces, closed)) in runs.iter().enumerate() {
-        for (i, &x) in pieces.iter().enumerate() {
-            for (j, &y) in pieces.iter().enumerate().skip(i.saturating_add(1)) {
-                let meets = shared(pieces, i, j, closed);
-                let at = if meets.is_empty() {
-                    Some(closest(x, y)).filter(|&(d, _)| d <= band).map(|(_, p)| p)
-                } else {
-                    meet_elsewhere(x, y, &meets, band)
-                };
-                if let Some(at) = at {
-                    return Some(Touch { first: (r, i), second: (r, j), at });
-                }
-            }
-            for (s, &(others, _)) in runs.iter().enumerate().skip(r.saturating_add(1)) {
-                for (j, &y) in others.iter().enumerate() {
-                    if let Some((_, at)) = Some(closest(x, y)).filter(|&(d, _)| d <= band) {
-                        return Some(Touch { first: (r, i), second: (s, j), at });
-                    }
-                }
-            }
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 #[expect(clippy::arithmetic_side_effects, reason = "small indices in tests")]
-mod tests {
+pub(super) mod tests {
     use core::f64::consts::{FRAC_PI_2, PI};
 
     use super::*;
+    use crate::construct::boxes::meet;
 
-    fn seg(a: P2, b: P2) -> Flat {
+    pub(in crate::construct) fn seg(a: P2, b: P2) -> Flat {
         Flat::Seg { a, b }
     }
 
     /// The anticlockwise circle about `c` of radius `r`, from angle 0.
-    fn circle(c: P2, r: f64) -> Flat {
+    pub(in crate::construct) fn circle(c: P2, r: f64) -> Flat {
         Flat::Arc { c, r, from: 0.0, sweep: TAU }
     }
 
+    /// The closed run of segments through `corners`.
+    pub(in crate::construct) fn polygon(corners: &[P2]) -> Vec<Flat> {
+        (0..corners.len()).map(|k| seg(corners[k], corners[(k + 1) % corners.len()])).collect()
+    }
+
+    /// The regular polygon of `n` corners on the circle about `c` of radius `r`, anticlockwise, turned by `turn`.
+    pub(in crate::construct) fn regular(n: usize, c: P2, r: f64, turn: f64) -> Vec<Flat> {
+        let n_f = f64::from(u32::try_from(n).unwrap());
+        let corners: Vec<P2> =
+            (0..n).map(|k| on_circle(c, r, turn + TAU * f64::from(u32::try_from(k).unwrap()) / n_f)).collect();
+        polygon(&corners)
+    }
+
     /// The square with corners `lo` and `hi`, anticlockwise.
-    fn square(lo: f64, hi: f64) -> Vec<Flat> {
+    pub(in crate::construct) fn square(lo: f64, hi: f64) -> Vec<Flat> {
         let corners = [[lo, lo], [hi, lo], [hi, hi], [lo, hi]];
         (0..4).map(|k| seg(corners[k], corners[(k + 1) % 4])).collect()
     }
 
-    fn near(a: P2, b: P2) -> bool {
+    pub(in crate::construct) fn near(a: P2, b: P2) -> bool {
         apart(a, b) < 1e-12
+    }
+
+    /// The winding number of the closed loop `pieces` about `q`, which is further than `clear` from it, read from every
+    /// segment of its chain.
+    pub(in crate::construct) fn winding(pieces: &[Flat], q: P2, clear: f64) -> Option<i32> {
+        occam_topo::winding_number(&chain(pieces, clear / 4.0), UvPoint::new(q[0], q[1]))
     }
 
     #[test]
@@ -569,24 +521,39 @@ mod tests {
     }
 
     #[test]
-    fn the_first_touch_is_found_within_a_run_and_between_runs() {
-        let band = 1e-7;
-        let bow = [[0.0, 0.0], [2.0, 2.0], [2.0, 0.0], [0.0, 2.0]];
-        let bow: Vec<Flat> = (0..4).map(|k| seg(bow[k], bow[(k + 1) % 4])).collect();
-        let touch = first_touch(&[(&bow, true)], band).unwrap();
-        assert_eq!((touch.first, touch.second), ((0, 0), (0, 2)));
-        assert!(near(touch.at, [1.0, 1.0]));
-        let square = square(0.0, 4.0);
-        assert_eq!(first_touch(&[(&square, true)], band), None);
-        let open: Vec<Flat> = square.iter().take(3).copied().collect();
-        assert_eq!(first_touch(&[(&open, false)], band), None, "an open run does not come round");
-        let ring = vec![circle([2.0, 2.0], 1.0)];
-        assert_eq!(first_touch(&[(&square, true), (&ring, true)], band), None);
-        let touching = vec![circle([3.0, 2.0], 1.0)];
-        let found = first_touch(&[(&square, true), (&touching, true)], band).unwrap();
-        assert_eq!((found.first, found.second), ((0, 1), (1, 0)));
-        let two = [seg([0.0, 0.0], [2.0, 0.0]), Flat::Arc { c: [1.0, 0.0], r: 1.0, from: 0.0, sweep: PI }];
-        assert_eq!(first_touch(&[(&two, true)], band), None, "two pieces that meet at both ends");
+    fn a_box_holds_its_piece_and_the_chain_is_drawn_piece_by_piece() {
+        let s = seg([3.0, -1.0], [1.0, 2.0]);
+        assert_eq!(s.bounds(), [1.0, -1.0, 3.0, 2.0]);
+        let arc = Flat::Arc { c: [1.0, 1.0], r: 2.0, from: -0.5, sweep: 2.5 };
+        let b = arc.bounds();
+        assert_eq!((b[2], b[3]), (3.0, 3.0), "it reaches the right and the top of its circle");
+        assert!(b[0] > -1.0 && b[1] > -1.0, "and not the left or the bottom: {b:?}");
+        let short = Flat::Arc { c: [1.0, 1.0], r: 2.0, from: -0.5, sweep: 2.0 };
+        assert!(short.bounds()[3] < 3.0, "one that stops short of the top: {:?}", short.bounds());
+        let mut signs_differ = false;
+        assert_eq!(circle([0.0, 0.0], 1.0).bounds(), [-1.0, -1.0, 1.0, 1.0]);
+        for arc in
+            [arc, arc.reversed(), Flat::Arc { c: [0.0, -0.0], r: 1.0, from: -0.0, sweep: 1.0 }, circle([2.0, 2.0], 1.0)]
+        {
+            let points = arc.samples(1e-3);
+            let bits = |p: P2| p.map(f64::to_bits);
+            let (first, last) = arc.sampled_ends();
+            assert_eq!([bits(first), bits(last)], [bits(points[0]), bits(*points.last().unwrap())], "{arc:?}");
+            if arc.start()[1].to_bits() != first[1].to_bits() {
+                assert_eq!((arc.start()[1], first[1]), (-0.0, 0.0), "only a nought's sign tells them apart");
+                signs_differ = true;
+            }
+            for p in points {
+                assert!(meet(arc.bounds(), [p[0], p[1], p[0], p[1]]) || apart(p, arc.start()) < 1e-12, "{p:?}");
+            }
+        }
+        assert!(signs_differ, "the arc from -0 begins at +0 of its sweep");
+        let pieces = vec![seg([0.0, 0.0], [2.0, 0.0]), Flat::Arc { c: [1.0, 0.0], r: 1.0, from: 0.0, sweep: PI }];
+        let drawn: Vec<Vec<[UvPoint; 2]>> = (0..2).map(|k| chain_of(&pieces, k, 1e-2)).collect();
+        assert_eq!(drawn[1][0][0], drawn[0].last().unwrap()[1], "the arc begins where the segment ends");
+        assert_eq!(drawn[1].last().unwrap()[1], drawn[0][0][0], "and comes round to where it begins");
+        assert_eq!(chain(&pieces, 1e-2), drawn.concat());
+        assert_eq!(chain_of(&pieces, 2, 1e-2), Vec::<[UvPoint; 2]>::new());
     }
 
     #[test]
@@ -599,25 +566,5 @@ mod tests {
         assert_eq!(winding(&backwards, [0.0, 0.0], 1.0), Some(-1));
         assert!(area(&disc, 1e-3) > 0.0 && area(&backwards, 1e-3) < 0.0);
         assert!((area(&square(0.0, 2.0), 1.0) - 8.0).abs() < 1e-12, "twice the area");
-    }
-
-    #[test]
-    fn a_witness_is_strictly_inside_its_loop_outside_every_hole_and_clear_of_them_all() {
-        let ell: Vec<Flat> = {
-            let corners = [[0.0, 0.0], [4.0, 0.0], [4.0, 1.0], [1.0, 1.0], [1.0, 4.0], [0.0, 4.0]];
-            (0..6).map(|k| seg(corners[k], corners[(k + 1) % 6])).collect()
-        };
-        let (q, room) = witness(std::slice::from_ref(&ell), 0, 1e-6).unwrap();
-        assert!(winding(&ell, q, room) == Some(1) && room >= 0.25, "{q:?} {room}");
-        let hole: Vec<Flat> = vec![circle([2.0, 2.0], 1.0).reversed()];
-        let face = vec![square(0.0, 4.0), hole.clone()];
-        let (outer, room) = witness(&face, 0, 1e-6).unwrap();
-        assert_eq!((winding(&face[0], outer, room), winding(&hole, outer, room)), (Some(1), Some(0)));
-        let (inner, room) = witness(&face, 1, 1e-6).unwrap();
-        assert_eq!(winding(&hole, inner, room), Some(-1));
-        assert_eq!(witness(&face, 0, 10.0), None, "nothing is that clear");
-        assert_eq!(witness(&face, 2, 1e-6), None, "no such loop");
-        assert!(inside(&face[0], &hole) && !inside(&hole, &face[0]));
-        assert!(!inside(&square(10.0, 11.0), &hole));
     }
 }

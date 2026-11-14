@@ -4,12 +4,15 @@
 //! [`wire`] and [`face`], checked first in the plane's parameters ([`flat`]) and in space ([`space`], [`outline`]), and
 //! written into the edit by [`build`].
 
+mod boxes;
 mod build;
 mod face;
 mod flat;
 pub(crate) mod given;
+mod loops;
 mod outline;
 pub(crate) mod space;
+mod touch;
 mod wire;
 
 pub(crate) use build::{refused, shown};
