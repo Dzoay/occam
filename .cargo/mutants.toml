@@ -221,9 +221,13 @@ exclude_re = [
     "around\\.rs:136:33: replace / with \\* in seams$",
     # By line. A profile point exactly the band out of the axis's plane, or beyond the axis: the band is the least
     # distance occam tells apart, so refusing it and taking it are both within the tolerance.
-    "revolve\\.rs:95:21: replace > with >= in axes$",
+    "revolve\\.rs:98:21: replace > with >= in axes$",
     # A tie: where an arc turns at its high end, that end is the point, which is taken anyway.
     "revolve\\.rs:\\d+:\\d+: replace < with <= in furthest_on$",
+    # A spot exactly the band from the axis, or a piece that comes exactly the band from it: on the axis or not, as for
+    # `axes`, both are within the tolerance.
+    "revolve\\.rs:\\d+:\\d+: replace <= with < in pinch$",
+    "revolve\\.rs:\\d+:\\d+: replace >= with > in pinch$",
     # The measure step's (construction.measure). Ties, which give the same value either way: the smaller and the larger
     # of two numbers, and a loop whose region in its parameters has no area, which counts nothing either way round.
     "occam-ops/src/measure\\.rs:\\d+:\\d+: replace > with >= in larger$",

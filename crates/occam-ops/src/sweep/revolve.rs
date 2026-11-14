@@ -2,7 +2,10 @@
 //! The `revolve` operation (PARITY 2.15): a face or a wire turned about an axis in its plane, into a solid or a sheet.
 //! The turn is cut into patches of at most half a turn. Each piece of the profile sweeps one face a patch, on the surface
 //! [`around`](super::around) finds for it; each point off the axis sweeps an arc a patch, and a point on it stays where
-//! it is, a pole where the faces meet. A face turned less than a whole turn is closed by its copies at each end.
+//! it is, a pole where the faces meet. A face turned less than a whole turn is closed by its copies at each end; a piece
+//! on the axis sweeps nothing, and keeps an edge only for those ends. A face with holes turned a whole turn is a solid
+//! with a void for each. A profile that touches the axis where what it makes would pinch, so that two pieces of it meet
+//! at a point alone, is refused: inside a piece, or at a vertex of a wire or of a face turned a whole turn.
 
 use core::f64::consts::{PI, TAU};
 
@@ -100,13 +103,41 @@ fn axes(profile: &Profile, args: &RevolveArgs, band: f64) -> Result<(Axes, f64),
     Ok((Axes { origin, axis, x }, reach))
 }
 
+/// Where `profile`, its pieces' meridians `meridians`, touches the axis at a point at which what it makes would pinch,
+/// if anywhere: inside a piece not on the axis, or at a spot two such pieces leave the axis from, unless the profile is a
+/// face turned less than a whole turn (`full` false), whose ends close round that spot. A spot is on the axis, and a
+/// piece touches it, within `band`.
+fn pinch(profile: &Profile, meridians: &[Meridian], axes: Axes, (band, full): (f64, bool)) -> Option<Vec3> {
+    let near = |p: Vec3| axes.local(p).0.abs() <= band;
+    let spot = |k: usize| profile.spots.get(k).is_some_and(|s| near(s.at));
+    let mut leaving = vec![0_u32; profile.spots.len()];
+    for (piece, meridian) in profile.pieces().zip(meridians) {
+        if matches!(meridian.family, Family::Axis) {
+            continue;
+        }
+        // The arc's point nearest the axis, if neither end is on it; a line is nearest at an end.
+        let (p, beyond) = furthest_on(piece, axes.origin, axes.x * -1.0);
+        if beyond >= -band && !spot(piece.ends.0) && !spot(piece.ends.1) {
+            return Some(p);
+        }
+        for end in [piece.ends.0, piece.ends.1] {
+            leaving.get_mut(end).into_iter().for_each(|n| *n = n.saturating_add(1));
+        }
+    }
+    if profile.normal.is_some() && !full {
+        return None;
+    }
+    profile.spots.iter().zip(leaving).find(|&(s, n)| n > 1 && near(s.at)).map(|(s, _)| s.at)
+}
+
 /// Lays out `profile` turned as `args` asks: a whole turn where the profile's farthest point would end within `band` of
 /// where it began.
 ///
 /// # Errors
 ///
-/// What [`axes`] reports, [`Code::NoLength`] for a turn whose farthest point moves no more than `band`, and what a
-/// family reports, which no piece of a profile on one side of the axis gives.
+/// What [`axes`] reports, [`Code::NoLength`] for a turn whose farthest point moves no more than `band`,
+/// [`Code::ProfileTouchesAxis`] for one that would [`pinch`], and what a family reports, which no piece of a profile on
+/// one side of the axis gives.
 pub(super) fn revolve(profile: Profile, args: &RevolveArgs, band: f64) -> Result<Shape, Report> {
     let (axes, reach) = axes(&profile, args, band)?;
     if args.angle * reach <= band {
@@ -121,6 +152,9 @@ pub(super) fn revolve(profile: Profile, args: &RevolveArgs, band: f64) -> Result
     let patches: u32 = if angle <= PI + HALF { 1 } else { 2 };
     let angles: Vec<f64> = (0..=patches).map(|j| angle * f64::from(j) / f64::from(patches)).collect();
     let meridians: Vec<Meridian> = profile.pieces().map(|piece| meridian(piece, axes, band)).collect();
+    if let Some(p) = pinch(&profile, &meridians, axes, (band, full)) {
+        return Err(refused(Code::ProfileTouchesAxis, &args.axis_at, band).with_value(shown("point", p)));
+    }
     let kind = if profile.normal.is_some() { BodyKind::Solid } else { BodyKind::Sheet };
     let mut sweep =
         Sweep { profile: &profile, axes, band, full, angles, meridians, shape: Shape::new(kind, profile.body) };
@@ -128,7 +162,7 @@ pub(super) fn revolve(profile: Profile, args: &RevolveArgs, band: f64) -> Result
     let meridian_edges = sweep.meridian_edges(&points)?;
     let rims = sweep.arcs(&points)?;
     sweep.sides(&meridian_edges, &rims)?;
-    if !full && profile.normal.is_some() {
+    if sweep.capped() {
         sweep.caps(&meridian_edges)?;
     }
     Ok(sweep.shape)
@@ -171,12 +205,32 @@ impl Sweep<'_> {
         self.axes.local(p).0.abs() <= self.band
     }
 
-    /// Each spot's point at each angle: one point for all of them on the axis.
+    /// Whether the turn is closed by the profile's copies at its ends: a face's, turned less than a whole turn. Only then
+    /// does a piece on the axis keep its edge, which bounds those ends and nothing else.
+    fn capped(&self) -> bool {
+        !self.full && self.profile.normal.is_some()
+    }
+
+    /// For each spot, whether an edge ends there: one of a piece not on the axis, or of any piece where the turn is
+    /// [`capped`](Self::capped).
+    fn ends(&self) -> Vec<bool> {
+        let mut ends = vec![false; self.profile.spots.len()];
+        for (piece, meridian) in self.profile.pieces().zip(&self.meridians) {
+            if self.capped() || !matches!(meridian.family, Family::Axis) {
+                for end in [piece.ends.0, piece.ends.1] {
+                    ends.get_mut(end).into_iter().for_each(|e| *e = true);
+                }
+            }
+        }
+        ends
+    }
+
+    /// Each spot's point at each angle, for a spot an edge ends at: one point for all of them on the axis.
     fn points(&mut self) -> Columns {
         let mut columns = Vec::new();
-        for spot in &self.profile.spots {
+        for (spot, ends) in self.profile.spots.iter().zip(self.ends()) {
             let mut column: Vec<Option<usize>> = Vec::new();
-            for j in 0..self.angles.len() {
+            for j in (0..self.angles.len()).filter(|_| ends) {
                 let first = column.first().copied().flatten();
                 let point = match (self.on_axis(spot.at), first) {
                     (true, Some(pole)) => pole,
@@ -193,7 +247,7 @@ impl Sweep<'_> {
         columns
     }
 
-    /// Each piece's edge at each angle; a piece on the axis has one edge, which a whole turn does not keep.
+    /// Each piece's edge at each angle; a piece on the axis has one edge, where the turn is [`capped`](Self::capped).
     fn meridian_edges(&mut self, points: &Columns) -> Result<Columns, Report> {
         let mut columns = Vec::new();
         let pieces: Vec<Piece> = self.profile.pieces().copied().collect();
@@ -203,7 +257,7 @@ impl Sweep<'_> {
                 let first = column.first().copied().flatten();
                 let on_axis = matches!(meridian.family, Family::Axis);
                 let edge = match (on_axis, first) {
-                    (true, _) if self.full => None,
+                    (true, _) if !self.capped() => None,
                     (true, Some(only)) => Some(only),
                     _ if self.column(j) != j => first,
                     _ => {

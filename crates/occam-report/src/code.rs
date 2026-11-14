@@ -526,6 +526,14 @@ catalogue! {
         "The profile reaches {point}, {distance} beyond {parameter} from its farthest point, more than the band of {band}.",
     }
 
+    /// A revolution's profile touches its axis at a point where what it makes would pinch: inside a piece, or at a vertex
+    /// two pieces leave the axis from, where a wire turns or a face turns a whole turn.
+    ProfileTouchesAxis = "construct.profile-touches-axis" {
+        Error, [],
+        "A revolution's profile touches its axis at a point where what it makes would pinch.",
+        "The profile touches {parameter} at {point}, within the band of {band}, where what it makes would pinch: a profile may meet its axis only along a piece on it, at a wire's end, or at a vertex of a face turned less than a whole turn.",
+    }
+
     /// A measure is asked of something that does not have it: a volume or a centre of mass of anything but a solid, or
     /// an area of something with no faces.
     MeasureNotDefined = "measure.not-defined" {
@@ -1277,6 +1285,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A revolution's profile lies on both sides of its axis.",
                 "template": "The profile reaches {point}, {distance} beyond {parameter} from its farthest point, more than the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "ProfileTouchesAxis",
+                "code": "construct.profile-touches-axis",
+                "severity": "error",
+                "summary": "A revolution's profile touches its axis at a point where what it makes would pinch.",
+                "template": "The profile touches {parameter} at {point}, within the band of {band}, where what it makes would pinch: a profile may meet its axis only along a piece on it, at a wire's end, or at a vertex of a face turned less than a whole turn.",
                 "remedies": []
             }
         ])

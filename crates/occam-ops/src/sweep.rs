@@ -40,7 +40,8 @@ pub(crate) fn extrude(edit: &mut Edit, args: &ExtrudeArgs, labels: &Labels) -> R
 /// # Errors
 ///
 /// What taking the profile reports, and what the revolution refuses: a profile that does not lie in one plane with the
-/// axis or lies on both sides of it, and a turn that moves it no more than the band.
+/// axis, lies on both sides of it or touches it where what it makes would pinch, and a turn that moves it no more than
+/// the band.
 pub(crate) fn revolve(edit: &mut Edit, args: &RevolveArgs, labels: &Labels) -> Result<Option<EntityRef>, Report> {
     let band = band(edit);
     let profile = profile::take(edit, &args.profile, labels, Takes::FaceOrWire)?;

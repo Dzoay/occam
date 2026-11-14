@@ -1,8 +1,9 @@
 //! Source: original
-//! A body of one shell as a primitive or a sweep lays it out, and its writing through the edit: its points, its edges,
-//! each a piece of a curve between two of them, and its faces, each a piece of a surface bounded by loops of uses of the
-//! edges, every use with its curve in the face's parameters. Each edge's uses form its ring, and each point's edge ends
-//! its star, in the order they are given; `commit` then checks the whole and measures how far each edge strays from its
+//! A body as a primitive or a sweep lays it out, and its writing through the edit: its points, its edges, each a piece
+//! of a curve between two of them, and its faces, each a piece of a surface bounded by loops of uses of the edges,
+//! every use with its curve in the face's parameters. Faces that share an edge share a shell, so a solid with a void,
+//! or a sheet in pieces, is a shell for each piece. Each edge's uses form its ring, and each point's edge ends its
+//! star, in the order they are given; `commit` then checks the whole and measures how far each edge strays from its
 //! faces. Whether a face's outward normal is its surface's is read from the way its outer loop winds about its witness
 //! in the surface's parameters, as the checker counts it, so each loop need only run anticlockwise about the outward
 //! normal. What a primitive writes is made by its step from nothing; what a sweep writes is the profile's, each point,
@@ -80,7 +81,9 @@ pub(crate) struct Sources {
 /// The ids the writing gives, in the solid's order.
 struct Ids {
     body: Id<Body>,
-    shell: Id<Shell>,
+    shells: Vec<Id<Shell>>,
+    /// The shell of each face, as its place in `shells`.
+    shell_of: Vec<usize>,
     vertices: Vec<Id<Vertex>>,
     edges: Vec<Id<Edge>>,
     faces: Vec<Id<Face>>,
@@ -133,7 +136,8 @@ pub(crate) fn write(edit: &mut Edit, solid: &Solid) -> Result<Id<Body>, Report> 
     write_from(edit, solid, &Origin::MADE)
 }
 
-/// Writes `solid` in `edit` as one body of one shell, as `origin` says it came about, and gives the body.
+/// Writes `solid` in `edit` as one body, a shell for each piece of it its edges join, as `origin` says it came about,
+/// and gives the body.
 ///
 /// # Errors
 ///
@@ -141,9 +145,11 @@ pub(crate) fn write(edit: &mut Edit, solid: &Solid) -> Result<Id<Body>, Report> 
 /// is not live in the snapshot the edit began from.
 pub(crate) fn write_from(edit: &mut Edit, solid: &Solid, origin: &Origin) -> Result<Id<Body>, Report> {
     let uses = uses_of(solid);
+    let shells = shells(solid);
     let ids = Ids {
         body: edit.reserve(),
-        shell: edit.reserve(),
+        shells: shells.first.iter().map(|_| edit.reserve()).collect(),
+        shell_of: shells.of,
         vertices: solid.points.iter().map(|_| edit.reserve()).collect(),
         edges: solid.edges.iter().map(|_| edit.reserve()).collect(),
         faces: solid.faces.iter().map(|_| edit.reserve()).collect(),
@@ -154,8 +160,11 @@ pub(crate) fn write_from(edit: &mut Edit, solid: &Solid, origin: &Origin) -> Res
     write_edges(edit, solid, &ids, (&uses, origin.role))?;
     write_faces(edit, solid, &ids, origin.role)?;
     let born = edit.provenance(origin.role);
-    edit.set(ids.shell, ShellRecord { body: ids.body, face: first(&ids.faces)?, next: None })?;
-    let body = BodyRecord { kind: origin.kind, first_shell: Some(ids.shell), first_wire: None, born };
+    for (k, (&shell, &face)) in ids.shells.iter().zip(&shells.first).enumerate() {
+        let next = ids.shells.get(k.saturating_add(1)).copied();
+        edit.set(shell, ShellRecord { body: ids.body, face: at(&ids.faces, face)?, next })?;
+    }
+    let body = BodyRecord { kind: origin.kind, first_shell: Some(first(&ids.shells)?), first_wire: None, born };
     edit.set(ids.body, body)?;
     if let Some(from) = &origin.from {
         derive(edit, &ids, from)?;
@@ -173,6 +182,40 @@ fn derive(edit: &mut Edit, ids: &Ids, from: &Sources) -> Result<(), Report> {
         edit.derive(new, old, from.how)?;
     }
     Ok(())
+}
+
+/// The shells of a solid's faces: each face's, as a number from 0, and each shell's first face, from which a walk of
+/// it begins.
+struct Shells {
+    of: Vec<usize>,
+    first: Vec<usize>,
+}
+
+/// The shells of `solid`: faces that share an edge share a shell, each numbered in the order of its first face.
+fn shells(solid: &Solid) -> Shells {
+    let mut by_edge: Vec<Vec<usize>> = vec![Vec::new(); solid.edges.len()];
+    let edges = |face: &FaceSpec| face.loops.iter().flat_map(|l| &l.uses).map(|u| u.edge).collect::<Vec<_>>();
+    for (f, face) in solid.faces.iter().enumerate() {
+        for e in edges(face) {
+            by_edge.get_mut(e).into_iter().for_each(|faces| faces.push(f));
+        }
+    }
+    let (mut of, mut first) = (vec![None; solid.faces.len()], Vec::new());
+    for start in 0..solid.faces.len() {
+        let mut walk = vec![start];
+        while let Some(f) = walk.pop() {
+            match of.get_mut(f) {
+                Some(slot) if slot.is_none() => *slot = Some(first.len()),
+                _ => continue,
+            }
+            let faces = solid.faces.get(f).map(edges).unwrap_or_default();
+            walk.extend(faces.into_iter().flat_map(|e| by_edge.get(e).into_iter().flatten().copied()));
+        }
+        if of.get(start).copied().flatten() == Some(first.len()) {
+            first.push(start);
+        }
+    }
+    Shells { of: of.into_iter().map(|s| s.unwrap_or(0)).collect(), first }
 }
 
 /// The first of `ids`, which a solid always has.
@@ -284,7 +327,7 @@ fn write_faces(edit: &mut Edit, solid: &Solid, ids: &Ids, role: StepRole) -> Res
         next_loop = next_loop.saturating_add(f.loops.len());
         let surface = edit.add(SurfaceRecord(Arc::clone(&f.surface)));
         let record = FaceRecord {
-            shell: ids.shell,
+            shell: at(&ids.shells, at(&ids.shell_of, k)?)?,
             surface,
             sheet: Sheet::default(),
             reversed: f.loops.first().is_some_and(|outer| clockwise(solid, outer)),
