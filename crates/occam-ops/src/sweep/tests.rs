@@ -3,7 +3,9 @@
 //! plate extruded and a rectangle turned a whole turn off its axis are solids of genus 1; a half disc turned about its
 //! diameter is a sphere with its poles as vertices; a wire turned is a sheet. Every face lies on an analytic surface
 //! where one fits. An extrusion along the face's plane, and a profile that leaves the plane of its axis or crosses it,
-//! are refused before any model is changed.
+//! are refused before any model is changed; [`axis`] holds a profile to its axis piece by piece.
+
+mod axis;
 
 use std::sync::Arc;
 

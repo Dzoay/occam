@@ -7,7 +7,7 @@ occam-cli::cli 16
 occam-geom 369
 occam-io 28
 occam-math 117
-occam-ops 143
+occam-ops 147
 occam-report 51
 occam-topo 143
 occam-units 54

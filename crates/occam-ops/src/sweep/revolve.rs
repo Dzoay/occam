@@ -6,6 +6,7 @@
 
 use core::f64::consts::{PI, TAU};
 
+use occam_math::atan2;
 use occam_report::{Code, NamedValue, Report};
 use occam_topo::BodyKind;
 use occam_units::{UvPoint, Vec3};
@@ -19,30 +20,51 @@ use crate::construct::{refused, shown};
 use crate::primitive::parts::uv_line;
 use crate::primitive::solid::{LoopSpec, UseSpec};
 
-/// Points along a circle's piece at which the profile is held to its plane and to one side of the axis.
-const STEPS: u32 = 16;
-
 /// How far past half a turn a revolution may go in one patch, in radians.
 const HALF: f64 = 1e-9;
 
-/// The first of `points` at which `measure` is greatest, and that greatest measure.
-fn furthest(points: &[Vec3], measure: impl Fn(Vec3) -> f64) -> (Vec3, f64) {
+/// The first of `found` whose measure is greatest, and that greatest measure.
+fn first_greatest(found: impl Iterator<Item = (Vec3, f64)>) -> (Vec3, f64) {
     let start = (Vec3::new(f64::NAN, f64::NAN, f64::NAN), f64::NEG_INFINITY);
-    points.iter().map(|&p| (p, measure(p))).fold(start, |best, next| if next.1 > best.1 { next } else { best })
+    found.fold(start, |best, next| if next.1 > best.1 { next } else { best })
 }
 
-/// Points along every piece of `profile`, the ends and, along an arc, between them.
-fn samples(profile: &Profile) -> Vec<Vec3> {
-    let mut points = Vec::new();
-    for piece in profile.pieces() {
-        let steps = if matches!(piece.bent, Bent::Line { .. }) { 1 } else { STEPS };
-        let (lo, hi) = piece.range;
-        points.extend((0..=steps).map(|k| piece.bent.point(lo + (hi - lo) * f64::from(k) / f64::from(steps))));
+/// Where along `piece` the reach `(p − origin)·along` is greatest, and that reach: at an end of a line, and of an arc
+/// also where it turns, once a turn, at the angle `along` makes in the arc's plane. The first such point from the piece's
+/// low end is given.
+pub(super) fn furthest_on(piece: &Piece, origin: Vec3, along: Vec3) -> (Vec3, f64) {
+    let (lo, hi) = piece.range;
+    let mut at = vec![lo];
+    if let Bent::Circle { x, y, .. } = piece.bent {
+        // The arc's reach is `r (cos t x + sin t y)·along` and a constant, so greatest at `top` and every turn from it:
+        // the first of those from `lo` on, if the arc gets there.
+        let top = atan2(y.dot(along), x.dot(along));
+        let turned = top - ((top - lo) / TAU).floor() * TAU;
+        if turned < hi {
+            at.push(turned);
+        }
     }
-    points
+    at.push(hi);
+    first_greatest(at.into_iter().map(|t| piece.bent.point(t)).map(|p| (p, (p - origin).dot(along))))
 }
 
-/// The axis `args` gives, with the direction across it to the profile's farthest point, and how far that is.
+/// The first point of `profile` along its pieces at which `reach`, each piece's furthest point and how far, is greatest.
+fn furthest(profile: &Profile, reach: impl Fn(&Piece) -> (Vec3, f64)) -> (Vec3, f64) {
+    first_greatest(profile.pieces().map(reach))
+}
+
+/// A first look at where `profile` lies about the axis: the ends of each piece, and the points a quarter, a half and
+/// three quarters along an arc, no more than two of which lie on any one line.
+fn landmarks(profile: &Profile) -> impl Iterator<Item = Vec3> + '_ {
+    profile.pieces().flat_map(|piece| {
+        let (quarters, (lo, hi)) = (if matches!(piece.bent, Bent::Line { .. }) { 1 } else { 4 }, piece.range);
+        (0..=quarters).map(move |k| piece.bent.point(lo + (hi - lo) * f64::from(k) / f64::from(quarters)))
+    })
+}
+
+/// The axis `args` gives, with the direction across it to the profile's farthest point, and how far that is. The
+/// direction is first taken to the furthest of the profile's [`landmarks`]; the farthest point is then where the profile
+/// reaches furthest that way, at an end of a piece or where an arc turns, and every test is exact on each piece.
 ///
 /// # Errors
 ///
@@ -51,14 +73,23 @@ fn samples(profile: &Profile) -> Vec<Vec3> {
 /// the profile's point furthest out.
 fn axes(profile: &Profile, args: &RevolveArgs, band: f64) -> Result<(Axes, f64), Report> {
     let (origin, axis) = (args.origin, args.axis);
-    let points = samples(profile);
-    let (far, reach) = furthest(&points, |p| ((p - origin) - axis * (p - origin).dot(axis)).norm());
-    // A profile on the axis has no direction across it; it moves nothing, and is refused as such once read.
-    let x = ((far - origin) - axis * (far - origin).dot(axis)) * (1.0 / reach);
+    let across = |p: Vec3| (p - origin) - axis * (p - origin).dot(axis);
+    let (near, first) = first_greatest(landmarks(profile).map(|p| (p, across(p).norm())));
+    if first <= 0.0 {
+        // A profile on the axis has no direction across it; it moves nothing, and is refused as such once read.
+        return Ok((Axes { origin, axis, x: across(near) }, 0.0));
+    }
+    let toward = across(near) * (1.0 / first);
+    let (far, _) = furthest(profile, |piece| furthest_on(piece, origin, toward));
+    let reach = across(far).norm();
+    let x = across(far) * (1.0 / reach);
     let (normal, at) = (axis.cross(x), &args.axis_at);
+    let off = |piece: &Piece| {
+        first_greatest([normal, normal * -1.0].into_iter().map(|side| furthest_on(piece, origin, side)))
+    };
     let checks = [
-        (Code::AxisOffPlane, furthest(&points, |p| (p - origin).dot(normal).abs())),
-        (Code::ProfileCrossesAxis, furthest(&points, |p| -(p - origin).dot(x))),
+        (Code::AxisOffPlane, furthest(profile, off)),
+        (Code::ProfileCrossesAxis, furthest(profile, |piece| furthest_on(piece, origin, x * -1.0))),
     ];
     for (code, (p, distance)) in checks {
         if distance > band {
