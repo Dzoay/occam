@@ -127,7 +127,7 @@ Named, not numbered. They run in this order.
 | `geometry` | Every curve and surface family through the two-layer seam, the new unit types, and report schema 2 | [plan/geometry.md](plan/geometry.md) |
 | `topology` | The B-rep: records in copy-on-write chunks, stable ids, the edit whose commit runs the checker, and what changed | [plan/topology.md](plan/topology.md) |
 | `construction` | An agent builds and inspects a solid from JSON alone: requests, wires, faces, primitives, sweeps, copies, mass properties, the native format and the `occam` command | [plan/construction.md](plan/construction.md) |
-| `view` | A model meshed and drawn in the browser: shared edges first, then faces, the watertight check on every output, the worker pool and the renderer contract; faces and edges picked by id; very large faces edited continuously through GPU write-through | [plan/view.md](plan/view.md) |
+| `view` | A person prompts an agent and watches the model live: shared edges first, then faces, the watertight check on every output, the worker pool and the renderer contract; `occam view` redrawing on every run; faces and edges selected by the person and read by the agent | [plan/view.md](plan/view.md) |
 | first release | `intersection`, `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 
@@ -135,12 +135,15 @@ Named, not numbered. They run in this order.
 layer (feature tree, persistent naming, incremental recompute);
 [assemblies](decisions/2026-11-11-assemblies-after-release.md);
 [view-dependent detail](decisions/2026-11-11-view-dependent-detail-after-release.md); shell, offset and draft; sweep
-and loft; hidden-line drawings; the full web application; server-side rendering; a C ABI and a side-by-side shim at
+and loft; hidden-line drawings; the full web application; [the editing tools, GPU write-through
+included](decisions/2026-11-14-write-through-after-the-first-release.md); [an in-memory session server, the in-page chat
+and a web service with the prompt in the browser](decisions/2026-11-14-prompt-driven-building-shown-live.md);
+server-side rendering; a C ABI and a side-by-side shim at
 FreeCAD's `Part` layer (L39); an MCP server.
 
 ## 7. Decisions the user still owns
 
-O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md). O21, whether anything needs an exact derivative above the second, is answered by [the approved parity list](PARITY.md): rows 2.1 and 2.2 ask for evaluation to any derivative in `geometry`. O11, O12, O14, O16, O18 and O22 to O26 are [answered with the architecture](decisions/2026-11-11-the-architecture-and-its-answers.md), and [its decisions page](architecture/open-decisions.md) keeps the reasoning. O15 is [answered](decisions/2026-11-11-own-coefficients.md): occam fits its own coefficients. O8, O19, O20 and O28 to O30 are answered for `view`. As recommended: [WebGPU on current Chromium and Firefox](decisions/2026-11-13-webgpu-on-chromium-and-firefox.md), [continuous edits that re-run their request](decisions/2026-11-13-continuous-edits-rerun-the-request.md), and [the figures on real GPUs as goals](decisions/2026-11-13-gpu-figures-are-goals.md). Against the recommendations: [GPU write-through](decisions/2026-11-13-write-through-in-the-first-release.md) and [picking](decisions/2026-11-13-picking-in-the-first-release.md) in the first release, and [Preact with signals](decisions/2026-11-13-preact-with-signals.md) for the page now, which the full web application grows from.
+O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md). O21, whether anything needs an exact derivative above the second, is answered by [the approved parity list](PARITY.md): rows 2.1 and 2.2 ask for evaluation to any derivative in `geometry`. O11, O12, O14, O16, O18 and O22 to O26 are [answered with the architecture](decisions/2026-11-11-the-architecture-and-its-answers.md), and [its decisions page](architecture/open-decisions.md) keeps the reasoning. O15 is [answered](decisions/2026-11-11-own-coefficients.md): occam fits its own coefficients. O8, O19, O20 and O28 to O30 are answered for `view`. As recommended: [WebGPU on current Chromium and Firefox](decisions/2026-11-13-webgpu-on-chromium-and-firefox.md), [continuous edits that re-run their request](decisions/2026-11-13-continuous-edits-rerun-the-request.md), and [the figures on real GPUs as goals](decisions/2026-11-13-gpu-figures-are-goals.md). Against the recommendations: [picking](decisions/2026-11-13-picking-in-the-first-release.md) in the first release, and [Preact with signals](decisions/2026-11-13-preact-with-signals.md) for the page now, which the full web application grows from. [GPU write-through](decisions/2026-11-13-write-through-in-the-first-release.md) was put in the first release against the recommendation, then [moved after it](decisions/2026-11-14-write-through-after-the-first-release.md), and continuous edits go with it.
 
 | Id | Decision | Recommendation | Needed by |
 |---|---|---|---|
