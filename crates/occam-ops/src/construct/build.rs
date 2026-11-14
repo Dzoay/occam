@@ -7,7 +7,7 @@ use core::f64::consts::TAU;
 use std::sync::Arc;
 
 use occam_geom::{Circle, Line, Plane};
-use occam_report::{Code, Fault, Input, NamedValue, Remedy, RemedyKind, Report, StepRole};
+use occam_report::{Code, Fault, Input, NamedValue, Quantity, Remedy, RemedyKind, Report, StepRole, Value};
 use occam_topo::{
     Around, Body, BodyKind, BodyRecord, CurveRecord, Edge, EdgeRecord, EdgeRole, EdgeUse, EdgeUseRecord, Edit, End,
     Face, FaceRecord, Id, Loop, LoopRecord, Sheet, Shell, ShellRecord, SurfaceRecord, UseOwner, Vertex, VertexRecord,
@@ -16,7 +16,7 @@ use occam_topo::{
 use occam_units::{Direction, Length, Local, Point, UvPoint, Vec3};
 
 use super::given::Piece;
-use super::space::{Bent, Flatland, frame, through, unit};
+use super::space::{Bent, Flatland, NoCircle, frame, through, unit};
 
 /// An edge to make: its curve, the part of it the edge covers, and where it begins and ends.
 pub(crate) struct Made {
@@ -45,8 +45,8 @@ pub(crate) fn refused(code: Code, at: &Input, band: f64) -> Report {
 ///
 /// # Errors
 ///
-/// [`Code::NoLength`] for a line or circle no longer than `band`, and [`Code::PointsInLine`] for an arc whose points
-/// are in line within it.
+/// [`Code::NoLength`] for a line or circle no longer than `band`, and for an arc, what [`no_circle`] reports where its
+/// points fix no circle.
 pub(crate) fn made(piece: Piece, at: &Input, band: f64) -> Result<Made, Report> {
     let short = |length: f64| refused(Code::NoLength, at, band).with_value(NamedValue::length("length", length));
     match piece {
@@ -59,8 +59,7 @@ pub(crate) fn made(piece: Piece, at: &Input, band: f64) -> Result<Made, Report> 
             Ok(Made { curve, range: (0.0, length), start: from, end: to })
         }
         Piece::Arc { from, through: middle, to } => {
-            let arc = through(from, middle, to, band)
-                .map_err(|off| refused(Code::PointsInLine, at, band).with_value(NamedValue::length("offset", off)))?;
+            let arc = through(from, middle, to, band).map_err(|no| no_circle(no, (from, middle), at, band))?;
             let placement = frame(arc.centre, arc.normal, Some(unit(from - arc.centre)));
             let circle = Circle::placed(&placement, Length::from_millimetres(arc.radius))?;
             Ok(Made { curve: CurveRecord(Arc::new(circle)), range: (0.0, arc.sweep), start: from, end: to })
@@ -75,6 +74,42 @@ pub(crate) fn made(piece: Piece, at: &Input, band: f64) -> Result<Made, Report> 
             Ok(Made { curve: CurveRecord(Arc::new(circle)), range: (0.0, TAU), start, end: start })
         }
     }
+}
+
+/// The report that the arc at `at` from `from` through `middle` fixes no circle, for the reason `no`.
+///
+/// [`Code::PointsInLine`] where its points are in line within `band`, with how far the middle one is from the line
+/// through its ends. [`Code::ArcEndsMeet`] where its ends are within `band` of each other, with how far apart they are,
+/// and the whole circle to write instead, if its radius is longer than the band: the one with `from` and `middle` at the
+/// ends of a diameter, square to the world's axis furthest from lying along that diameter.
+fn no_circle(no: NoCircle, (from, middle): (Vec3, Vec3), at: &Input, band: f64) -> Report {
+    match no {
+        NoCircle::InLine(off) => refused(Code::PointsInLine, at, band).with_value(NamedValue::length("offset", off)),
+        NoCircle::EndsMeet(gap) => {
+            let report = refused(Code::ArcEndsMeet, at, band).with_value(NamedValue::length("gap", gap));
+            let radius = (middle - from).norm() * 0.5;
+            if radius <= band {
+                return report;
+            }
+            let normal = square_to(unit(middle - from));
+            let remedy = Remedy::new(RemedyKind::UseCircle)
+                .with_value(shown("centre", (from + middle) * 0.5))
+                .with_value(NamedValue::length("radius", radius))
+                .with_value(NamedValue { name: "normal".to_string(), quantity: Quantity::Ratio, value: normal });
+            report.with_remedy(remedy)
+        }
+    }
+}
+
+/// A unit vector square to the unit vector `along`: the world's axis furthest from lying along it, the first of x, y and
+/// z where two are as far, less its part along it, as coordinates.
+fn square_to(along: Vec3) -> Value {
+    let lean = |axis: Vec3| axis.dot(along).abs();
+    let axes = [Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 1.0)];
+    let furthest =
+        axes.into_iter().fold(Vec3::new(1.0, 0.0, 0.0), |best, axis| if lean(axis) < lean(best) { axis } else { best });
+    let square = unit(furthest - along * furthest.dot(along));
+    Value::Point([square.x, square.y, square.z])
 }
 
 /// The edges of a wire, made from `pieces` in order, each with where it is in the request, and whether the wire closes.

@@ -37,6 +37,56 @@ macro_rules! text_enum {
     };
 }
 
+/// Declares the closed list of codes with everything the catalogue says about each, so each code is written once and the
+/// catalogue's matches, generated here, name every code (L4).
+macro_rules! catalogue {
+    ($(
+        $(#[$meta:meta])*
+        $variant:ident = $text:literal {
+            $severity:ident, [$($remedy:ident),*],
+            $summary:literal,
+            $template:literal $(,)?
+        }
+    )*) => {
+        text_enum! {
+            /// A stable identifier for everything occam can report.
+            Code {
+                $($(#[$meta])* $variant = $text,)*
+            }
+        }
+
+        impl Code {
+            /// How serious it is.
+            const fn severity(self) -> Severity {
+                match self {
+                    $(Self::$variant => Severity::$severity,)*
+                }
+            }
+
+            /// One sentence on what it means.
+            const fn summary(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $summary,)*
+                }
+            }
+
+            /// The wording, with `{name}` for each value it shows.
+            const fn template(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $template,)*
+                }
+            }
+
+            /// The kinds of fix it can suggest.
+            const fn remedies(self) -> &'static [RemedyKind] {
+                match self {
+                    $(Self::$variant => &[$(RemedyKind::$remedy),*],)*
+                }
+            }
+        }
+    };
+}
+
 mod code;
 mod description;
 mod display;

@@ -66,16 +66,28 @@ pub(crate) struct Through {
     pub sweep: f64,
 }
 
-/// The circle through `a`, `m` and `b`, or how far `m` is from the line through `a` and `b` if that is no more than
-/// `band`, or `a` and `b` are no further apart than it.
+/// Why an arc's three points fix no circle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum NoCircle {
+    /// Its ends are no further apart than the band: how far apart they are.
+    EndsMeet(f64),
+    /// Its middle point is no further than the band from the line through its ends: how far it is.
+    InLine(f64),
+}
+
+/// The circle through `a`, `m` and `b`, or why there is none: `a` and `b` are no further apart than `band`, or `m` is no
+/// further than it from the line through them.
 #[expect(clippy::many_single_char_names, reason = "the three points and the triangle's sides, as geometry names them")]
-pub(crate) fn through(a: Vec3, m: Vec3, b: Vec3, band: f64) -> Result<Through, f64> {
+pub(crate) fn through(a: Vec3, m: Vec3, b: Vec3, band: f64) -> Result<Through, NoCircle> {
     let (u, v) = (m - a, b - a);
     let w = u.cross(v);
     let (chord, normal_length) = (v.norm(), w.norm());
-    let off = if chord > 0.0 { normal_length / chord } else { (m - a).norm() };
-    if chord <= band || off <= band {
-        return Err(off);
+    if chord <= band {
+        return Err(NoCircle::EndsMeet(chord));
+    }
+    let off = normal_length / chord;
+    if off <= band {
+        return Err(NoCircle::InLine(off));
     }
     let centre = a + (v.cross(w) * u.dot(u) + w.cross(u) * v.dot(v)) * (1.0 / (2.0 * w.dot(w)));
     let normal = unit(w);
@@ -239,8 +251,13 @@ mod tests {
             through(Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, -1.0, 0.0), Vec3::new(0.0, 1.0, 0.0), 1e-7).unwrap();
         assert!(close(long.normal, Vec3::new(0.0, 0.0, -1.0)) && (long.sweep - 3.0 * FRAC_PI_2).abs() < 1e-12);
         let flat = through(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 1e-9, 0.0), Vec3::new(2.0, 0.0, 0.0), 1e-7);
-        assert!(flat.is_err_and(|off| (off - 1e-9).abs() < 1e-15));
-        assert!(through(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 0.0), 1e-7).is_err());
+        assert!(matches!(flat, Err(NoCircle::InLine(off)) if (off - 1e-9).abs() < 1e-15));
+        let back = through(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 5e-8), 1e-7);
+        assert!(matches!(back, Err(NoCircle::EndsMeet(gap)) if gap.to_bits() == 5e-8_f64.to_bits()));
+        // At the band itself, ends meet and a middle point is in line.
+        let at_band = |m: Vec3, b: Vec3| through(Vec3::new(0.0, 0.0, 0.0), m, b, 0.5).err();
+        assert_eq!(at_band(Vec3::new(1.0, 1.0, 0.0), Vec3::new(0.5, 0.0, 0.0)), Some(NoCircle::EndsMeet(0.5)));
+        assert_eq!(at_band(Vec3::new(1.0, 0.5, 0.0), Vec3::new(2.0, 0.0, 0.0)), Some(NoCircle::InLine(0.5)));
     }
 
     #[test]

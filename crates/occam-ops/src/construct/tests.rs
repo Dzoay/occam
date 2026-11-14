@@ -4,8 +4,9 @@
 //! gap, a wire that crosses itself, a hole outside its face and the rest are refused before any model is changed.
 
 use occam_math::Exec;
-use occam_report::{Code, EntityKind, EntityRef, Input, RemedyKind, Report, followed_remedy};
+use occam_report::{Code, EntityKind, EntityRef, Input, Remedy, RemedyKind, Report, followed_remedy};
 use occam_topo::{Body, BodyKind, Edge, Face, Loop, Snapshot, Vertex, Wire};
+use occam_units::Vec3;
 use serde_json::{Value, json};
 
 use crate::{Labels, Request, default_tolerance, execute};
@@ -242,6 +243,74 @@ fn edges_with_no_length_and_arcs_through_points_in_line_are_refused() {
         json!([{"op": "wire", "edges": [{"circle": {"centre": [0, 0, 0], "radius": 1e-9, "normal": [0, 0, 1]}}]}]),
     );
     assert_eq!(tiny.code, Code::NoLength);
+}
+
+/// The wire step of one arc through `points`.
+fn arc(points: [[f64; 3]; 3]) -> Value {
+    json!([{"op": "wire", "edges": [{"arc": points}]}])
+}
+
+/// The centre, radius and normal of the whole circle `remedy` writes.
+fn circle_of(remedy: &Remedy) -> Option<([f64; 3], f64, [f64; 3])> {
+    use occam_report::Value::{Point, Scalar};
+    let value = |name: &str| remedy.value(name).map(|v| v.value);
+    match (value("centre")?, value("radius")?, value("normal")?) {
+        (Point(centre), Scalar(radius), Point(normal)) => Some((centre, radius, normal)),
+        _ => None,
+    }
+}
+
+/// The centre, radius and normal of the whole circle `report`'s remedy writes instead, if it offers one.
+fn circle_instead(report: &Report) -> Option<([f64; 3], f64, [f64; 3])> {
+    report.remedy(RemedyKind::UseCircle).and_then(circle_of)
+}
+
+#[test]
+fn an_arc_whose_ends_meet_is_refused_and_writing_the_whole_circle_instead_follows_the_remedy() {
+    let report = refused(arc([[0.0; 3], [1.0, 1.0, 0.0], [0.0; 3]]));
+    assert_eq!((report.code, number(&report, "gap")), (Code::ArcEndsMeet, 0.0));
+    assert_eq!(report.input, Some(Input::at("steps[0].edges[0]").in_step(0, Some("wire"))));
+    assert_eq!(
+        report.message(occam_report::DisplayUnits::default()),
+        "steps[0].edges[0] gives an arc whose ends are 0 mm apart, no more than the band of 1e-7 mm: a whole circle is \
+         written as a circle, by its centre, radius and normal."
+    );
+    let (centre, radius, normal) = circle_instead(&report).unwrap();
+    assert_eq!((centre, normal), ([0.5, 0.5, 0.0], [0.0, 0.0, 1.0]));
+    assert!((radius - 0.5_f64.sqrt()).abs() < 1e-15, "{radius}");
+    followed_remedy!(report, Code::ArcEndsMeet, RemedyKind::UseCircle, |remedy| {
+        let Some((centre, radius, normal)) = circle_of(remedy) else {
+            return Err(Report::new(Code::InputMissing, occam_report::Fault::InvalidInput));
+        };
+        let circle = json!({"centre": centre, "radius": radius, "normal": normal});
+        build(&request(json!([{"op": "wire", "edges": [{"circle": circle}]}])))
+            .map(|_| ())
+            .map_err(|reports| reports.into_iter().next().unwrap())
+    });
+}
+
+#[test]
+fn the_whole_circle_offered_for_an_arc_whose_ends_meet_passes_through_its_points_and_is_longer_than_the_band() {
+    // Along z, x and y are as far from the diameter: x is taken.
+    let upright = circle_instead(&refused(arc([[0.0; 3], [0.0, 0.0, 2.0], [0.0; 3]]))).unwrap();
+    assert_eq!(upright, ([0.0, 0.0, 1.0], 1.0, [1.0, 0.0, 0.0]));
+    let near = refused(arc([[1.0, 0.0, 0.0], [2.0, 2.0, 3.0], [1.0, 0.0, 5e-8]]));
+    assert_eq!((near.code, number(&near, "gap")), (Code::ArcEndsMeet, 5e-8));
+    let (centre, radius, normal) = circle_instead(&near).unwrap();
+    let [cx, cy, cz] = centre;
+    let to_start = Vec3::new(1.0 - cx, -cy, -cz);
+    let normal = Vec3::new(normal[0], normal[1], normal[2]);
+    assert!((to_start.norm() - radius).abs() < 1e-12 && to_start.dot(normal).abs() < 1e-12, "{near:?}");
+    assert!((normal.norm() - 1.0).abs() < 1e-12 && (radius - 14.0_f64.sqrt() / 2.0).abs() < 1e-12, "{near:?}");
+    // Three points that meet would make a circle of no length, so none is offered; nor one no longer than the band.
+    let point = refused(arc([[0.0; 3]; 3]));
+    assert_eq!((point.code, circle_instead(&point)), (Code::ArcEndsMeet, None));
+    let coarse = |middle: f64| {
+        let mut text = request(arc([[0.0; 3], [middle, 0.0, 0.0], [0.0; 3]]));
+        text["tolerance"] = json!({"length": 0.5, "angle": 1e-6});
+        build(&text).map(|_| ()).unwrap_err().into_iter().next().map(|report| circle_instead(&report).map(|c| c.1))
+    };
+    assert_eq!((coarse(1.0), coarse(1.5)), (Some(None), Some(Some(0.75))));
 }
 
 #[test]

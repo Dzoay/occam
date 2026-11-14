@@ -20,56 +20,6 @@ text_enum! {
     }
 }
 
-/// Declares the closed list of codes with everything the catalogue says about each, so each code is written once and the
-/// catalogue's matches, generated here, name every code (L4).
-macro_rules! catalogue {
-    ($(
-        $(#[$meta:meta])*
-        $variant:ident = $text:literal {
-            $severity:ident, [$($remedy:ident),*],
-            $summary:literal,
-            $template:literal $(,)?
-        }
-    )*) => {
-        text_enum! {
-            /// A stable identifier for everything occam can report.
-            Code {
-                $($(#[$meta])* $variant = $text,)*
-            }
-        }
-
-        impl Code {
-            /// How serious it is.
-            const fn severity(self) -> Severity {
-                match self {
-                    $(Self::$variant => Severity::$severity,)*
-                }
-            }
-
-            /// One sentence on what it means.
-            const fn summary(self) -> &'static str {
-                match self {
-                    $(Self::$variant => $summary,)*
-                }
-            }
-
-            /// The wording, with `{name}` for each value it shows.
-            const fn template(self) -> &'static str {
-                match self {
-                    $(Self::$variant => $template,)*
-                }
-            }
-
-            /// The kinds of fix it can suggest.
-            const fn remedies(self) -> &'static [RemedyKind] {
-                match self {
-                    $(Self::$variant => &[$(RemedyKind::$remedy),*],)*
-                }
-            }
-        }
-    };
-}
-
 catalogue! {
     /// The text given to [`Report::from_json`] is not a report.
     Malformed = "report.malformed" {
@@ -379,6 +329,14 @@ catalogue! {
         "{parameter} gives an arc whose middle point is {offset} from the line through its ends, no more than the band of {band}.",
     }
 
+    /// An arc's two ends are within the band of each other, so its three points fix no circle: a whole circle is
+    /// written as a circle.
+    ArcEndsMeet = "construct.arc-ends-meet" {
+        Error, [UseCircle],
+        "An arc's two ends meet, so its three points fix no circle; a whole circle is written as a circle.",
+        "{parameter} gives an arc whose ends are {gap} apart, no more than the band of {band}: a whole circle is written as a circle, by its centre, radius and normal.",
+    }
+
     /// An edge of a wire begins further than the band from where the edge before it ends.
     WireGap = "construct.wire-gap" {
         Error, [MeetAt],
@@ -593,6 +551,9 @@ text_enum! {
         UseThreads = "use-threads",
         /// Move the end the report names to the point in the `point` parameter, so that two ends meet.
         MeetAt = "meet-at",
+        /// Write the edge the report names as a whole circle about the `centre` parameter, of the `radius` parameter,
+        /// facing the `normal` parameter.
+        UseCircle = "use-circle",
     }
 }
 
@@ -633,6 +594,9 @@ impl RemedyKind {
                 "Run on the number of threads given. One thread needs none started, so it always works."
             }
             Self::MeetAt => "Move the end the report names to the point given, so that the two ends meet.",
+            Self::UseCircle => {
+                "Write the edge the report names as a whole circle with the centre, radius and normal given."
+            }
         }
     }
 
@@ -644,6 +608,7 @@ impl RemedyKind {
             Self::UseModelTolerance => &["tolerance"],
             Self::UseThreads => &["threads"],
             Self::MeetAt => &["point"],
+            Self::UseCircle => &["centre", "radius", "normal"],
         }
     }
 }
@@ -1108,6 +1073,14 @@ mod tests {
                 "remedies": []
             },
             {
+                "name": "ArcEndsMeet",
+                "code": "construct.arc-ends-meet",
+                "severity": "error",
+                "summary": "An arc's two ends meet, so its three points fix no circle; a whole circle is written as a circle.",
+                "template": "{parameter} gives an arc whose ends are {gap} apart, no more than the band of {band}: a whole circle is written as a circle, by its centre, radius and normal.",
+                "remedies": ["use-circle"]
+            },
+            {
                 "name": "WireGap",
                 "code": "construct.wire-gap",
                 "severity": "error",
@@ -1389,6 +1362,12 @@ mod tests {
                 "kind": "meet-at",
                 "summary": "Move the end the report names to the point given, so that the two ends meet.",
                 "parameters": ["point"],
+            },
+            {
+                "name": "UseCircle",
+                "kind": "use-circle",
+                "summary": "Write the edge the report names as a whole circle with the centre, radius and normal given.",
+                "parameters": ["centre", "radius", "normal"],
             },
         ])
     }
