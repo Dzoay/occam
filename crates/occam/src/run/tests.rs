@@ -168,6 +168,26 @@ fn a_request_refused_when_it_is_read_runs_nothing_and_changes_nothing() {
 }
 
 #[test]
+fn a_request_refused_when_it_is_read_is_worded_in_its_own_units_once_they_are_read() {
+    let words = |units: &str| {
+        let text = format!(
+            r#"{{"schema": 1, "units": {units}, "steps": [{{"op": "box", "size": [-1, 1, 1]}},
+                {{"op": "revolve", "profile": "p", "origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 400}}]}}"#
+        );
+        let ran = run(None, &text);
+        let reports = ran.failed.map(|failed| failed.reports).unwrap_or_default();
+        (ran.units, reports.iter().map(|report| report.message(ran.units)).collect::<Vec<String>>())
+    };
+    let inch = DisplayUnits { length: LengthUnit::Inch, angle: AngleUnit::Degree };
+    let size = |shown: &str| format!("The size given, {shown}, is not a finite number greater than zero.");
+    let angle = "steps[1].angle is 400 deg, outside the range allowed: more than 0 deg and at most 360 deg.";
+    assert_eq!(words(r#"{"length": "in", "angle": "deg"}"#), (inch, vec![size("-1 in"), angle.to_string()]));
+    // Units that cannot be read leave every number in millimetres and radians, as it was read and as it is worded.
+    let (units, unread) = words(r#"{"length": "in", "angle": "turns"}"#);
+    assert_eq!((units, unread.get(1)), (DisplayUnits::default(), Some(&size("-1 mm"))));
+}
+
+#[test]
 fn a_run_has_one_json_form_with_each_steps_changes_and_the_failure_in_the_requests_units() {
     let execute = |edit: &mut Edit, step: &Step, labels: &Labels| {
         let made = adds_vertices(Some(2))(edit, step, labels)?;

@@ -326,8 +326,8 @@ fn a_sweep_step_with_bad_fields_is_refused_with_each_one_in_place() {
         (Code::InputWrongType, "steps[0].face"),
         (Code::InputWrongType, "steps[0].vector"),
         (Code::DegenerateDirection, "steps[1].axis"),
-        (Code::OutOfRange, "steps[1].angle"),
-        (Code::OutOfRange, "steps[2].angle"),
+        (Code::InputAngleOutOfRange, "steps[1].angle"),
+        (Code::InputAngleOutOfRange, "steps[2].angle"),
     ];
     assert_eq!(found, want.map(|(code, at)| (code, at.to_string())));
 }

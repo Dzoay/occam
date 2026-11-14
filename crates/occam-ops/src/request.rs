@@ -75,13 +75,23 @@ impl Request {
     /// missing or not this build's. Otherwise every bad input, each with its own code and its place in the request, field
     /// by field: fields the request does not take, then its units, its tolerance, and its steps in order.
     pub fn parse(text: &str) -> Result<Self, Vec<Report>> {
-        let value: Value = serde_json::from_str(text).map_err(|error| vec![malformed(&error)])?;
+        Self::read(text).map_err(|unread| unread.reports)
+    }
+
+    /// The request written as `text`, checked whole as [`Self::parse`] checks it.
+    ///
+    /// # Errors
+    ///
+    /// What [`Self::parse`] reports, with the units the request's numbers are in if its `units` could be read.
+    pub fn read(text: &str) -> Result<Self, Unread> {
+        let alone = |report: Report| Unread { units: None, reports: vec![report] };
+        let value: Value = serde_json::from_str(text).map_err(|error| alone(malformed(&error)))?;
         let mut out = Vec::new();
         let root = At::root();
         let Some(fields) = object(&root, &value, &["schema", "units", "tolerance", "steps"], &mut out) else {
-            return Err(out);
+            return Err(Unread { units: None, reports: out });
         };
-        schema(&root, fields).map_err(|report| vec![report])?;
+        schema(&root, fields).map_err(alone)?;
         let units = units(&root, fields, &mut out);
         let tolerance = match (units, fields.get("tolerance")) {
             (Some(units), Some(given)) => tolerance(&root.field("tolerance"), given, units, &mut out),
@@ -91,9 +101,19 @@ impl Request {
         let steps = steps(&root, fields, read_in, &mut out);
         match (out.is_empty(), units, steps) {
             (true, Some(units), Some(steps)) => Ok(Self { units, tolerance, steps }),
-            _ => Err(without_knock_ons(out)),
+            _ => Err(Unread { units, reports: without_knock_ons(out) }),
         }
     }
+}
+
+/// A request refused when it was read: what was wrong, and the units its numbers are in if its `units` could be read,
+/// which the reports are worded in.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Unread {
+    /// The units, if they could be read.
+    pub units: Option<Units>,
+    /// Every bad input, each with its own code and its place in the request.
+    pub reports: Vec<Report>,
 }
 
 /// The value of `result`, or nothing with its report kept.

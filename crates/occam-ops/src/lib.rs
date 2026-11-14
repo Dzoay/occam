@@ -26,6 +26,6 @@ pub use measure::{MeasureArgs, Measured, Measurement, RELATIVE, face_bounds, mea
 pub use operand::{Labels, Operand};
 pub use operation::{Operation, listing};
 pub use primitive::{Pose, PrimitiveArgs, Shape};
-pub use request::{Request, SCHEMA, Step, Units, default_tolerance};
+pub use request::{Request, SCHEMA, Step, Units, Unread, default_tolerance};
 pub use sweep::{ExtrudeArgs, Named, RevolveArgs};
 pub use transform::TransformArgs;

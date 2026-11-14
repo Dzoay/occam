@@ -72,7 +72,7 @@ fn angle(at: &At, value: &Value, units: Units) -> Result<f64, Report> {
         return Ok(radians);
     }
     Err(at
-        .report(Code::OutOfRange)
+        .report(Code::InputAngleOutOfRange)
         .with_value(NamedValue::new("value", Quantity::Angle, radians))
         .with_value(NamedValue::new("low", Quantity::Angle, 0.0))
         .with_value(NamedValue::new("high", Quantity::Angle, TAU)))

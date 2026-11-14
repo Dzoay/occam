@@ -498,6 +498,14 @@ catalogue! {
         "{parameter} lies along the frame's z axis, so it gives no x direction across it.",
     }
 
+    /// An angle a request gives is outside the range its step allows, which takes more than the low end and up to the high
+    /// end itself: a revolution turns through more than none and at most a whole turn.
+    InputAngleOutOfRange = "input.angle-out-of-range" {
+        Error, [],
+        "A request gives an angle outside the range its step allows.",
+        "{parameter} is {value}, outside the range allowed: more than {low} and at most {high}.",
+    }
+
     /// An extrusion's vector lies in its face's plane within the band, so it would sweep no volume.
     VectorInPlane = "construct.vector-in-plane" {
         Error, [],
@@ -1255,6 +1263,14 @@ mod tests {
 
     fn sweep_codes() -> Value {
         json!([
+            {
+                "name": "InputAngleOutOfRange",
+                "code": "input.angle-out-of-range",
+                "severity": "error",
+                "summary": "A request gives an angle outside the range its step allows.",
+                "template": "{parameter} is {value}, outside the range allowed: more than {low} and at most {high}.",
+                "remedies": []
+            },
             {
                 "name": "VectorInPlane",
                 "code": "construct.vector-in-plane",

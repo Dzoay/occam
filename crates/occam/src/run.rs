@@ -8,7 +8,7 @@
 mod wire;
 
 use occam_math::Exec;
-use occam_ops::{Labels, Measured, Operation, Request, Step, default_tolerance};
+use occam_ops::{Labels, Measured, Operation, Request, Step, Units, default_tolerance};
 use occam_report::{
     Code, Description, DisplayUnits, EntityRef, Fault, Input, NamedValue, Quantity, Remedy, RemedyKind, Report,
 };
@@ -99,10 +99,15 @@ impl Ran {
 /// Runs the request written `request` on `model`, or on a new model if there is none.
 #[must_use]
 pub fn run(model: Option<&Snapshot>, request: &str) -> Ran {
-    match Request::parse(request) {
+    match Request::read(request) {
         Ok(request) => run_request(model, &request, occam_ops::execute),
-        Err(reports) => refused(model, DisplayUnits::default(), reports),
+        Err(unread) => refused(model, unread.units.map_or_else(DisplayUnits::default, shown_in), unread.reports),
     }
+}
+
+/// A request's `units`, as its wording shows numbers.
+const fn shown_in(units: Units) -> DisplayUnits {
+    DisplayUnits { length: units.length, angle: units.angle }
 }
 
 /// What a request refused before any step ran did: nothing.
@@ -128,7 +133,7 @@ pub(crate) fn run_request(
     request: &Request,
     mut execute: impl FnMut(&mut Edit, &Step, &Labels) -> Result<Option<EntityRef>, Report>,
 ) -> Ran {
-    let units = DisplayUnits { length: request.units.length, angle: request.units.angle };
+    let units = shown_in(request.units);
     let (first, tolerance) = match start(model, request) {
         Ok(started) => started,
         Err(report) => return refused(model, units, vec![report]),
