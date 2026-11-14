@@ -54,12 +54,13 @@ impl<C: ParametricCurve> OffsetCurve<C> {
         Ok(Self { base, distance: finite_size(distance)?, reference: reference.get() })
     }
 
-    /// The point and its derivatives to `order` at `t` as numbers, from the base's `derivatives`.
-    fn jets(&self, t: f64, order: u8) -> [Vec3; 3] {
-        let (mut rates, mut scratch) = (Vec::with_capacity(3), Scratch::default());
+    /// The point and its derivatives to `order` at `t` as numbers, from the base's `derivatives` in the caller's
+    /// `rates` and `scratch`, so that a call's lanes share one workspace.
+    fn jets(&self, t: f64, order: u8, (rates, scratch): (&mut Vec<Tangent<World>>, &mut Scratch)) -> [Vec3; 3] {
+        rates.clear();
         let nan = Vec3::new(f64::NAN, f64::NAN, f64::NAN);
         let mut base = [nan; 4];
-        if ParametricCurve::derivatives(&self.base, t, order.saturating_add(1), &mut rates, &mut scratch).is_ok() {
+        if ParametricCurve::derivatives(&self.base, t, order.saturating_add(1), rates, scratch).is_ok() {
             let point = std::iter::once(self.base.eval_point(t).to_vec3());
             for (slot, value) in base.iter_mut().zip(point.chain(rates.iter().map(|r| r.rate()))) {
                 *slot = value;
@@ -102,13 +103,14 @@ impl<C: ParametricCurve> ParametricCurve for OffsetCurve<C> {
         (Point::from_vec3(at), Tangent::new(along))
     }
 
-    /// A lane at a time: the second derivative needs the base's third, which no rung gives.
+    /// A lane at a time, in one workspace: the second derivative needs the base's third, which no rung gives.
     fn eval_second<R: Real>(&self, t: R) -> (Point<World, R>, Tangent<World, R>, Tangent<World, R>) {
         const { assert!(R::LANES <= MAX_LANES, "more lanes than a lane-at-a-time evaluation holds") };
         let ts = lanes(t);
         let nan = Vec3::new(f64::NAN, f64::NAN, f64::NAN);
+        let (mut rates, mut scratch) = (Vec::with_capacity(3), Scratch::default());
         let each: [[Vec3; 3]; MAX_LANES] = std::array::from_fn(|k| match ts.get(k) {
-            Some(&t) if k < R::LANES => self.jets(t, 2),
+            Some(&t) if k < R::LANES => self.jets(t, 2, (&mut rates, &mut scratch)),
             _ => [nan; 3],
         });
         let at = |slot: usize| from_lanes::<R>(|k| each.get(k).and_then(|e| e.get(slot)).copied().unwrap_or(nan));

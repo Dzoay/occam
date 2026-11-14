@@ -10,9 +10,11 @@ use std::hint::black_box;
 use gungraun::{library_benchmark, library_benchmark_group, main};
 use occam::spline_workloads as splines;
 use occam::{Angle, Jets, Lanes, Length, Model, Point, Real, SplineSurface, Tolerance, UvPoint, World, distance};
+use occam_geom::{OffsetCurve, OffsetSurface, SplineCurve};
 use occam_math::{Exec, Level, stream, width, workloads};
 use occam_topo::Edit;
 use occam_topo::workloads::Plate;
+use occam_units::{Direction, Vec3};
 
 fn mm(value: f64) -> Length {
     Length::from_millimetres(value)
@@ -58,9 +60,42 @@ fn maths_lanes8() -> stream::Hashes {
     maths::<Lanes<8>>()
 }
 
+/// How far the offsets move their bases, in millimetres.
+const OFFSET: f64 = 0.3;
+
+/// A planar cubic B-spline curve moved within its plane, at 256 parameters, at the spline width. Its second derivative
+/// needs the base's third, which no rung gives, so it runs a lane at a time.
+fn offset_curve_items() -> (OffsetCurve<SplineCurve>, Vec<f64>) {
+    let base = SplineCurve::new(&splines::spline_curve()).unwrap();
+    let up = Direction::normalised(Vec3::new(0.0, 0.0, 1.0));
+    (OffsetCurve::new(base, mm(OFFSET), up).unwrap(), splines::params(256))
+}
+
+#[library_benchmark]
+#[bench::items(offset_curve_items())]
+fn offset_curves((curve, ts): (OffsetCurve<SplineCurve>, Vec<f64>)) -> f64 {
+    black_box(splines::curve_seconds::<Lanes<{ width::SPLINE }>, _>(black_box(&curve), black_box(&ts)))
+}
+
+/// The measured B-spline surface moved along its normal, at a 16 by 16 grid, at the spline width, a lane at a time as
+/// the curve's.
+fn offset_surface_items() -> (OffsetSurface<SplineSurface>, Vec<UvPoint>) {
+    let base = SplineSurface::new(&splines::spline()).unwrap();
+    (OffsetSurface::new(base, mm(OFFSET)).unwrap(), splines::grid(16))
+}
+
+#[library_benchmark]
+#[bench::items(offset_surface_items())]
+fn offset_surfaces((surface, uv): (OffsetSurface<SplineSurface>, Vec<UvPoint>)) -> Jets {
+    let mut out = Jets::default();
+    splines::seconds::<{ width::SPLINE }, _>(black_box(&surface), black_box(&uv), &mut out);
+    black_box(out)
+}
+
 library_benchmark_group!(
     name = operations,
-    benchmarks = [measure_distance, maths_scalar, maths_lanes2, maths_lanes4, maths_lanes8]
+    benchmarks =
+        [measure_distance, maths_scalar, maths_lanes2, maths_lanes4, maths_lanes8, offset_curves, offset_surfaces]
 );
 
 // The benchmarks' names carry each kernel's width, so they must change with it.
