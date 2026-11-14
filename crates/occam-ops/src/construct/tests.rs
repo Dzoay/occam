@@ -154,6 +154,26 @@ fn a_wire_that_crosses_itself_is_refused_where_it_crosses() {
 }
 
 #[test]
+fn an_open_wire_is_judged_with_its_last_point_which_no_edge_begins_at() {
+    // Each leaves the plane of every point before its last, so it lies in no plane and crosses nothing.
+    let out_of_plane = [
+        json!({"points": [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 5]]}),
+        json!({"points": [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 1, 0]]}),
+        json!({"edges": [{"arc": [[1, 0, 0], [0, 1, 0], [-1, 0, 0]]}, {"line": [[-1, 0, 0], [1, 0, 1]]}]}),
+    ];
+    for mut wire in out_of_plane {
+        wire["op"] = json!("wire");
+        let (model, made) = built(json!([wire]));
+        let body = model.resolve::<Body>(made[0].unwrap()).unwrap();
+        assert_eq!(model.view(body).unwrap().kind(), BodyKind::Wire, "{wire}");
+    }
+    // Every point before its last is in line, its second edge running back along its first, and its last gives the
+    // plane in which they do.
+    let folded = refused(json!([{"op": "wire", "points": [[0, 0, 0], [3, 0, 0], [2, 0, 0], [2, 1, 0]]}]));
+    assert_eq!((folded.code, number(&folded, "first"), number(&folded, "second")), (Code::WireCrossesItself, 0.0, 1.0));
+}
+
+#[test]
 fn a_hole_crossing_the_outer_wire_or_inside_another_hole_is_refused() {
     let circle =
         |x: f64, r: f64| json!({"edges": [{"circle": {"centre": [x, 10, 0], "radius": r, "normal": [0, 0, 1]}}]});

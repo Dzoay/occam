@@ -46,12 +46,14 @@ impl Run {
         self.bents.iter().zip(&self.ranges).zip(&self.edges).map(|((&b, &r), &(_, back))| (b, r, back))
     }
 
-    /// Points along the run in its order: each edge's start, and points between for a circle's part.
+    /// Points along the run in its order: each edge's start, points between for a circle's part, and the last edge's
+    /// end, which no edge begins at if the run is open.
     pub(crate) fn samples(&self) -> Vec<Vec3> {
         let mut points = Vec::new();
-        for (bent, (lo, hi), back) in self.parts() {
+        let last = self.edges.len().saturating_sub(1);
+        for (place, (bent, (lo, hi), back)) in self.parts().enumerate() {
             let steps = if matches!(bent, Bent::Line { .. }) { 1 } else { STEPS };
-            for k in 0..steps {
+            for k in 0..steps.saturating_add(u32::from(place == last)) {
                 let f = f64::from(k) / f64::from(steps);
                 let t = if back { hi + (lo - hi) * f } else { lo + (hi - lo) * f };
                 points.push(bent.point(t));
