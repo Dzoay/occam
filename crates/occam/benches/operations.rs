@@ -8,7 +8,7 @@
 use std::hint::black_box;
 
 use gungraun::{library_benchmark, library_benchmark_group, main};
-use occam::operation_workloads::{MEASURES, PRIMITIVES, SWEEPS, TRANSFORMS};
+use occam::operation_workloads::{MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded};
 use occam::spline_workloads as splines;
 use occam::{
     Angle, Encoding, EntityKind, EntityRef, Jets, Lanes, Length, Model, Point, Real, Session, SplineSurface, Tolerance,
@@ -309,6 +309,18 @@ fn construct_transforms() -> bool {
     made
 }
 
+// A closed polygon of 1,000 edges made, a face of it, and the face extruded, each step committed, which checks it: work
+// that grows with the edges, where a cost growing with their square, which the checker and the face once had, would
+// stand far above the rest. The request is setup, and what it made is leaked, as above.
+#[library_benchmark]
+#[bench::corners(polygon_extruded(POLYGON_CORNERS))]
+fn construct_polygon_extrude(request: String) -> bool {
+    let ran = occam::run(None, black_box(&request));
+    let made = ran.failed.is_none() && ran.done.len() == 3;
+    core::mem::forget((ran, request));
+    made
+}
+
 /// Each primitive of [`PRIMITIVES`] made: setup, which the counts leave out.
 fn primitives() -> occam_topo::Snapshot {
     occam::run(None, PRIMITIVES).model.unwrap()
@@ -367,6 +379,7 @@ library_benchmark_group!(
         construct_primitives,
         construct_sweeps,
         construct_transforms,
+        construct_polygon_extrude,
         measure_primitives,
         commands_open,
         commands_describe

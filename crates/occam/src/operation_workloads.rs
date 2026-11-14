@@ -1,6 +1,11 @@
 //! Source: original
 //! The construction operations' requests that `gates perf` times, in instruction counts natively and in milliseconds in
-//! the browser, so that both measure the same work. Each is the plan's tests for its step, as one request.
+//! the browser, so that both measure the same work. Each is the plan's tests for its step, as one request, but for
+//! [`polygon_extruded`], counted natively alone, whose size is the point.
+
+use core::f64::consts::TAU;
+
+use occam_math::sin_cos;
 
 /// A request making each primitive once, in millimetres.
 pub const PRIMITIVES: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
@@ -42,3 +47,47 @@ pub const MEASURES: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "
     {"op": "measure", "target": "body:4/1"},
     {"op": "measure", "target": "body:5/1"}
 ]}"#;
+
+/// How many corners the polygon `gates perf` counts has: enough that a cost growing with the square of its edges would
+/// stand far above the cost of the edges themselves.
+pub const POLYGON_CORNERS: u32 = 1000;
+
+/// A request making a closed polygon of `corners` straight edges round the circle of radius 10 about the origin, a face
+/// of it, and that face extruded 1 up, each step committed: work that should grow with the edges, and once grew with
+/// their square.
+#[must_use]
+pub fn polygon_extruded(corners: u32) -> String {
+    let count = f64::from(corners);
+    let corner = |k: u32| {
+        let (sin, cos) = sin_cos(TAU * f64::from(k) / count);
+        format!("[{}, {}, 0]", 10.0 * cos, 10.0 * sin)
+    };
+    let points: Vec<String> = (0..corners).map(corner).collect();
+    format!(
+        r#"{{"schema": 1, "units": {{"length": "mm", "angle": "deg"}}, "steps": [
+    {{"op": "wire", "label": "outline", "points": [{}], "closed": true}},
+    {{"op": "face", "label": "polygon", "outer": "outline"}},
+    {{"op": "extrude", "face": "polygon", "vector": [0, 0, 1]}}
+]}}"#,
+        points.join(", ")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use occam_topo::{Body, BodyKind, Edge, Face};
+
+    use super::*;
+
+    #[test]
+    fn the_polygon_extruded_is_a_solid_prism_with_a_side_for_each_corner() {
+        let ran = crate::run(None, &polygon_extruded(12));
+        assert!(ran.failed.is_none(), "{:?}", ran.failed);
+        assert_eq!(ran.done.len(), 3);
+        let model = ran.model.unwrap();
+        let bodies = model.ids::<Body>();
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(model.view(bodies[0]).unwrap().kind(), BodyKind::Solid);
+        assert_eq!((model.ids::<Face>().len(), model.ids::<Edge>().len()), (14, 36));
+    }
+}
