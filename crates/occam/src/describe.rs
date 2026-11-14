@@ -141,12 +141,14 @@ struct Said {
     values: Vec<NamedValue>,
     born: Option<Provenance>,
     adjacent: Vec<EntityRef>,
+    /// The neighbours in `adjacent`, to find one in as many steps as the logarithm of their count.
+    named: BTreeSet<EntityRef>,
 }
 
 impl Said {
     /// Of the form `form`, with nothing more yet.
     fn new(form: &str) -> Self {
-        Self { form: form.to_string(), values: Vec::new(), born: None, adjacent: Vec::new() }
+        Self { form: form.to_string(), values: Vec::new(), born: None, adjacent: Vec::new(), named: BTreeSet::new() }
     }
 
     /// Of a geometry's form and with its parameters.
@@ -192,7 +194,7 @@ impl Said {
     /// With `ids` as neighbours, each once.
     fn near<K: Kind>(mut self, ids: impl IntoIterator<Item = Id<K>>) -> Self {
         for entity in ids.into_iter().map(Id::entity) {
-            if !self.adjacent.contains(&entity) {
+            if self.named.insert(entity) {
                 self.adjacent.push(entity);
             }
         }
