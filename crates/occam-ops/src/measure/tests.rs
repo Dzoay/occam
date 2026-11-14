@@ -379,7 +379,7 @@ fn a_step_is_read_whole_and_every_bad_input_reported_where_it_is() {
     assert_eq!(
         codes(&wrong),
         [
-            (Code::InputUnknownField, Some(at("steps[0].colour").given("colour"))),
+            (Code::InputUnknownField, Some(at("steps[0].colour").given("colour").expected("target, what"))),
             (Code::InputWrongType, Some(at("steps[0].target").given("number").expected("text"))),
             (Code::InputWrongType, Some(at("steps[0].what").given("text").expected("list"))),
         ]

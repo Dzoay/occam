@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 
 use crate::args::{self, Args};
 use crate::operation::Operation;
-use crate::read::{At, count, name, needed, number, object, text, whole, wrong_type};
+use crate::read::{At, count, name, needed, number, object, text, whole, without_knock_ons, wrong_type};
 
 /// The version of the request's JSON form this build reads.
 pub const SCHEMA: u32 = 1;
@@ -91,7 +91,7 @@ impl Request {
         let steps = steps(&root, fields, read_in, &mut out);
         match (out.is_empty(), units, steps) {
             (true, Some(units), Some(steps)) => Ok(Self { units, tolerance, steps }),
-            _ => Err(out),
+            _ => Err(without_knock_ons(out)),
         }
     }
 }
@@ -129,10 +129,50 @@ fn units(root: &At, fields: &Map<String, Value>, out: &mut Vec<Report>) -> Optio
     let given = gather(needed(root, fields, "units"), out)?;
     let given = object(&at, given, &["length", "angle"], out)?;
     let (lengths, angles) = (names(LengthUnit::ALL, LengthUnit::text), names(AngleUnit::ALL, AngleUnit::text));
-    let length = needed(&at, given, "length").and_then(|value| name(&at.field("length"), value, &lengths));
-    let angle = needed(&at, given, "angle").and_then(|value| name(&at.field("angle"), value, &angles));
+    let (length, angle) = (unit(&at, given, "length", &lengths), unit(&at, given, "angle", &angles));
     let (length, angle) = (gather(length, out), gather(angle, out));
     Some(Units { length: length?, angle: angle? })
+}
+
+/// The unit the field `field` of `given`, at `at`, names: one of `units`, by its short name.
+fn unit<T: Copy>(at: &At, given: &Map<String, Value>, field: &str, units: &[(&str, T)]) -> Result<T, Report> {
+    let value = needed(at, given, field)?;
+    written_out(&at.field(field), value)?;
+    name(&at.field(field), value, units)
+}
+
+/// Units written out in full, as people write them, in either spelling and either number, each with the short name a
+/// request writes it by.
+const WRITTEN_OUT: [(&str, &str); 18] = [
+    ("millimetre", "mm"),
+    ("millimetres", "mm"),
+    ("millimeter", "mm"),
+    ("millimeters", "mm"),
+    ("centimetre", "cm"),
+    ("centimetres", "cm"),
+    ("centimeter", "cm"),
+    ("centimeters", "cm"),
+    ("metre", "m"),
+    ("metres", "m"),
+    ("meter", "m"),
+    ("meters", "m"),
+    ("inch", "in"),
+    ("inches", "in"),
+    ("degree", "deg"),
+    ("degrees", "deg"),
+    ("radian", "rad"),
+    ("radians", "rad"),
+];
+
+/// Nothing, or `input.unit-written-out` where the unit at `at` is written out in full, in any case, with the short
+/// name to write instead.
+fn written_out(at: &At, value: &Value) -> Result<(), Report> {
+    let Some(given) = value.as_str() else { return Ok(()) };
+    let lower = given.to_lowercase();
+    WRITTEN_OUT.iter().find(|(full, _)| *full == lower).map_or(Ok(()), |&(_, short)| {
+        let input = at.input().given(given).expected(short);
+        Err(Report::new(Code::InputUnitWrittenOut, Fault::InvalidInput).with_input(input))
+    })
 }
 
 /// The tolerance at `at`, in `units`, for a new model, with every bad input in `out`.

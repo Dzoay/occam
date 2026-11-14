@@ -79,7 +79,7 @@ pub(crate) fn missing(at: &At) -> Report {
     at.report(Code::InputMissing)
 }
 
-/// The fields of the object at `at`, every one not in `known` reported as a field it does not take.
+/// The fields of the object at `at`, every one not in `known` reported as a field it does not take, with those it does.
 pub(crate) fn object<'a>(
     at: &At,
     value: &'a Value,
@@ -91,8 +91,10 @@ pub(crate) fn object<'a>(
         return None;
     };
     let unknown = fields.keys().filter(|name| !known.contains(&name.as_str()));
+    let taken = known.join(", ");
     let report = |name: &String| {
-        Report::new(Code::InputUnknownField, Fault::InvalidInput).with_input(at.field(name).input().given(name))
+        let input = at.field(name).input().given(name).expected(&taken);
+        Report::new(Code::InputUnknownField, Fault::InvalidInput).with_input(input)
     };
     out.extend(unknown.map(report));
     Some(fields)
@@ -126,6 +128,53 @@ pub(crate) fn name<T: Copy>(at: &At, value: &Value, names: &[(&str, T)]) -> Resu
         let input = at.input().given(given).expected(&allowed.join(", "));
         Report::new(Code::InputUnknownName, Fault::InvalidInput).with_input(input)
     })
+}
+
+/// `reports` without each `input.missing` that an `input.unknown-field` beside it explains: a field missing where an
+/// unknown one is within two letters of its name, which is that field misspelt, so the one report says it all.
+pub(crate) fn without_knock_ons(reports: Vec<Report>) -> Vec<Report> {
+    let unknown: Vec<(&str, &str)> = reports
+        .iter()
+        .filter(|r| r.code == Code::InputUnknownField)
+        .filter_map(|r| r.input.as_ref())
+        .map(|input| split(&input.parameter))
+        .collect();
+    let explained = |report: &Report| {
+        report.code == Code::InputMissing
+            && report.input.as_ref().is_some_and(|input| {
+                let (place, name) = split(&input.parameter);
+                unknown.iter().any(|&(at, given)| at == place && within_two(given, name))
+            })
+    };
+    let keep: Vec<bool> = reports.iter().map(|r| !explained(r)).collect();
+    reports.into_iter().zip(keep).filter_map(|(report, kept)| kept.then_some(report)).collect()
+}
+
+/// The place a field is in and its name: `steps[0]` and `radius` from `steps[0].radius`.
+fn split(parameter: &str) -> (&str, &str) {
+    parameter.rsplit_once('.').unwrap_or(("", parameter))
+}
+
+/// Whether `a` becomes `b` by at most two letters added, dropped or changed (Levenshtein's distance), and is not it.
+fn within_two(a: &str, b: &str) -> bool {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    if a == b || a.len().abs_diff(b.len()) > 2 {
+        return false;
+    }
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, x) in a.iter().enumerate() {
+        let mut diagonal = i;
+        let mut next = vec![i.saturating_add(1)];
+        for (j, y) in b.iter().enumerate() {
+            let changed = diagonal.saturating_add(usize::from(x != y));
+            let dropped = row.get(j.saturating_add(1)).copied().unwrap_or(usize::MAX).saturating_add(1);
+            let added = next.last().copied().unwrap_or(usize::MAX).saturating_add(1);
+            diagonal = row.get(j.saturating_add(1)).copied().unwrap_or(usize::MAX);
+            next.push(changed.min(dropped).min(added));
+        }
+        row = next;
+    }
+    row.last().is_some_and(|&distance| distance <= 2)
 }
 
 /// A count as a report's value.
@@ -183,16 +232,33 @@ mod tests {
     }
 
     #[test]
+    fn a_name_is_within_two_of_another_by_two_letters_added_dropped_or_changed_and_not_by_three() {
+        let pairs = [
+            ("radious", "radius", true),
+            ("radus", "radius", true),
+            ("step", "steps", true),
+            ("hieght", "height", true),
+            ("abc", "abcde", true),
+            ("abc", "abcdef", false),
+            ("colour", "radius", false),
+            ("kitten", "sitting", false),
+            ("same", "same", false),
+            ("", "ab", true),
+        ];
+        for (a, b, near) in pairs {
+            assert_eq!((within_two(a, b), within_two(b, a)), (near, near), "{a} and {b}");
+        }
+    }
+
+    #[test]
     fn an_object_reports_each_field_it_does_not_take_and_a_missing_one_is_named() {
         let at = At::root().field("units");
         let mut out = Vec::new();
         let value = json!({"length": "mm", "lenght": "mm", "colour": 1});
         let fields = object(&at, &value, &["length", "angle"], &mut out).unwrap();
         let unknown: Vec<Option<Input>> = out.iter().map(|r| r.input.clone()).collect();
-        assert_eq!(
-            unknown,
-            [Some(Input::at("units.colour").given("colour")), Some(Input::at("units.lenght").given("lenght"))]
-        );
+        let taken = |at: &str, given: &str| Some(Input::at(at).given(given).expected("length, angle"));
+        assert_eq!(unknown, [taken("units.colour", "colour"), taken("units.lenght", "lenght")]);
         assert!(out.iter().all(|r| r.code == Code::InputUnknownField && r.fault == Some(Fault::InvalidInput)));
         assert_eq!(needed(&at, fields, "length"), Ok(&json!("mm")));
         assert_eq!(needed(&at, fields, "angle").unwrap_err().input, Some(Input::at("units.angle")));

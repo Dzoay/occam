@@ -58,12 +58,19 @@ fn each_kind_of_bad_input_in_the_requests_own_fields_gets_its_code_and_its_place
             vec![bad(Code::InputUnknownName, Input::at("units.length").given("furlong").expected("mm, cm, m, in"))],
         ),
         (
+            request(&units_with(r#""length": "centimetres", "angle": "Degrees""#), r#""steps": []"#),
+            vec![
+                bad(Code::InputUnitWrittenOut, Input::at("units.length").given("centimetres").expected("cm")),
+                bad(Code::InputUnitWrittenOut, Input::at("units.angle").given("Degrees").expected("deg")),
+            ],
+        ),
+        (
             request(&units_with(r#""length": "mm""#), r#""steps": []"#),
             vec![bad(Code::InputMissing, Input::at("units.angle"))],
         ),
         (
             request(&units_with(r#""length": "mm", "angle": "rad", "colour": 1"#), r#""steps": []"#),
-            vec![bad(Code::InputUnknownField, Input::at("units.colour").given("colour"))],
+            vec![bad(Code::InputUnknownField, Input::at("units.colour").given("colour").expected("length, angle"))],
         ),
         (
             request(UNITS, r#""tolerance": {"length": "1e-7", "angle": 1e-3}, "steps": []"#),
@@ -84,10 +91,10 @@ fn each_kind_of_bad_input_in_the_requests_own_fields_gets_its_code_and_its_place
         ),
         (
             request(UNITS, r#""step": []"#),
-            vec![
-                bad(Code::InputUnknownField, Input::at("step").given("step")),
-                bad(Code::InputMissing, Input::at("steps")),
-            ],
+            vec![bad(
+                Code::InputUnknownField,
+                Input::at("step").given("step").expected("schema, units, tolerance, steps"),
+            )],
         ),
     ];
     for (text, want) in cases {
@@ -201,4 +208,22 @@ fn another_schema_version_is_refused_alone_with_the_version_to_use() {
 fn the_default_tolerance_is_o12s() {
     let tolerance = default_tolerance().unwrap();
     assert_eq!((tolerance.length(), tolerance.angle()), (Length::from_millimetres(1e-7), Angle::from_radians(1e-9)));
+}
+
+#[test]
+fn a_misspelt_field_is_named_with_those_taken_there_and_not_also_as_the_one_it_misses() {
+    // The blind run's c7: `radious` was unknown, then `radius` missing, which read as the same mistake twice.
+    let text = request(UNITS, r#""steps": [{"op": "cylinder", "radious": 4, "height": 10}]"#);
+    let reports = Request::parse(&text).unwrap_err();
+    let codes: Vec<Code> = reports.iter().map(|r| r.code).collect();
+    assert_eq!(codes, [Code::InputUnknownField], "{reports:#?}");
+    let input = reports[0].input.clone().unwrap();
+    assert_eq!((input.parameter.as_str(), input.given.as_deref()), ("steps[0].radious", Some("radious")));
+    assert!(input.expected.as_deref().unwrap_or_default().contains("radius"), "{input:?}");
+    let message = reports[0].message(DisplayUnits::default());
+    assert!(message.ends_with(&format!("it takes {}.", input.expected.unwrap())), "{message}");
+    // A field that is unknown and like nothing missing leaves what is missing reported.
+    let text = request(UNITS, r#""steps": [{"op": "cylinder", "colour": "red", "height": 10}]"#);
+    let codes: Vec<Code> = Request::parse(&text).unwrap_err().iter().map(|r| r.code).collect();
+    assert_eq!(codes, [Code::InputUnknownField, Code::InputMissing]);
 }

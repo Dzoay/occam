@@ -327,7 +327,14 @@ catalogue! {
     InputUnknownField = "input.unknown-field" {
         Error, [],
         "A request gives a field that is not taken there.",
-        "{parameter} is not a field the request takes there.",
+        "{parameter} is not a field the request takes there; it takes {expected}.",
+    }
+
+    /// A request names a unit in full where its short name is wanted, as `centimetres` for `cm`.
+    InputUnitWrittenOut = "input.unit-written-out" {
+        Error, [],
+        "A request names a unit in full where its short name is wanted.",
+        "{parameter} is {given}, which a request writes {expected}.",
     }
 
     /// Two steps of a request have the same label, so a later step could not tell them apart.
@@ -1015,7 +1022,15 @@ mod tests {
                 "code": "input.unknown-field",
                 "severity": "error",
                 "summary": "A request gives a field that is not taken there.",
-                "template": "{parameter} is not a field the request takes there.",
+                "template": "{parameter} is not a field the request takes there; it takes {expected}.",
+                "remedies": []
+            },
+            {
+                "name": "InputUnitWrittenOut",
+                "code": "input.unit-written-out",
+                "severity": "error",
+                "summary": "A request names a unit in full where its short name is wanted.",
+                "template": "{parameter} is {given}, which a request writes {expected}.",
                 "remedies": []
             }
         ])

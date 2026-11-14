@@ -275,7 +275,10 @@ fn every_bad_input_of_a_transform_is_reported_at_once() {
     assert_eq!(
         codes,
         [
-            (Code::InputUnknownField, Some(place("steps[1].turn", "transform").given("turn"))),
+            (
+                Code::InputUnknownField,
+                Some(place("steps[1].turn", "transform").given("turn").expected("target, scale, about, frame")),
+            ),
             (Code::InputMissing, Some(place("steps[1].target", "transform"))),
             (Code::InputScaleNotPositive, Some(place("steps[1].scale", "transform"))),
             (Code::InputNoDirection, Some(place("steps[1].about.z", "transform"))),

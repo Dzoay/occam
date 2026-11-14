@@ -197,7 +197,7 @@ fn a_frame_with_no_direction_or_an_x_along_its_z_is_refused_where_it_is() {
     assert_eq!(along, [(Code::InputAxesParallel, Some(place("steps[0].frame.x", "sphere")), vec![])]);
     let found = frame(json!({"origin": [1, 2], "y": [0, 1, 0]}));
     let codes: Vec<(Code, Option<Input>)> = found.into_iter().map(|(c, i, _)| (c, i)).collect();
-    let unknown = Input::at("steps[0].frame.y").in_step(0, Some("sphere")).given("y");
+    let unknown = Input::at("steps[0].frame.y").in_step(0, Some("sphere")).given("y").expected("origin, z, x");
     assert_eq!(
         codes,
         [(Code::InputUnknownField, Some(unknown)), (Code::WrongCount, Some(place("steps[0].frame.origin", "sphere")))]
@@ -220,13 +220,11 @@ fn every_bad_parameter_of_a_request_is_reported_at_once() {
     let found =
         refused(&json!([{"op": "cylinder", "radus": 1, "height": 2}, {"op": "torus", "major": "big", "minor": 1}]));
     let codes: Vec<(Code, Option<Input>)> = found.into_iter().map(|(c, i, _)| (c, i)).collect();
-    let unknown = Input::at("steps[0].radus").in_step(0, Some("cylinder")).given("radus");
+    let taken = "radius, height, frame";
+    let unknown = Input::at("steps[0].radus").in_step(0, Some("cylinder")).given("radus").expected(taken);
     let wrong = Input::at("steps[1].major").in_step(1, Some("torus")).given("text").expected("number");
-    let expected = [
-        (Code::InputUnknownField, Some(unknown)),
-        (Code::InputMissing, Some(place("steps[0].radius", "cylinder"))),
-        (Code::InputWrongType, Some(wrong)),
-    ];
+    // The radius `radus` misspells is not also reported missing: the unknown field's report says it.
+    let expected = [(Code::InputUnknownField, Some(unknown)), (Code::InputWrongType, Some(wrong))];
     assert_eq!(codes, expected);
 }
 
