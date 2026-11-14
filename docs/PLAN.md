@@ -82,8 +82,10 @@ web/                                                  the renderer; consumes dat
 ## 5. Gates
 
 The one definition. Every `gates` subcommand has `--json` (L8) and a test proving that a seeded violation fails it.
-`just gates` runs everything except mutants and perf, which are `just mutants` and `just perf`. CI runs all of them, with
-the same commands. Goal: a PR's CI finishes within 45 minutes (L47).
+`just gates` runs everything except mutants and perf, which are `just mutants` and `just perf`. It runs `just preflight`
+first: formatting and the gates that only read the repository (layers, complexity, provenance, docs, plan, seam), which
+take seconds, so that one of them failing does not wait for clippy, the tests and wasm. CI runs all of them, with the
+same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 
 | Gate | What it checks | Built by |
 |---|---|---|

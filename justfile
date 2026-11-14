@@ -109,9 +109,13 @@ tools-test: corpus-test
     python3 -B -m unittest discover -s tools/determinism/tests -t tools/determinism
     python3 -B -m unittest discover -s tools/coefficients/tests -t tools/coefficients
 
-# Everything except mutants and perf
+# What takes seconds and builds only occam-xtask: formatting and the gates that read the repository, which a worker runs before committing
 [group('gates')]
-gates: fmt-check clippy test-all wasm tools-test (gate "all" "--except" "mutants,perf")
+preflight: fmt-check (gate "all" "--except" "deps,errors,determinism,counts,mutants,perf")
+
+# Everything except mutants and perf, the quick checks first: `preflight`, then clippy, the tests, wasm and the gates that build or run something
+[group('gates')]
+gates: preflight clippy test-all wasm tools-test (gate "all" "--except" "layers,complexity,provenance,docs,plan,seam,mutants,perf")
 
 # occam-geom's frozen seam against ci/seam.txt; `just seam --update docs/decisions/<decision>.md`: re-record it under it
 [env("CARGO_TARGET_DIR", target)]
