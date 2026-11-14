@@ -125,6 +125,41 @@ fn a_face_from_an_open_wire_is_refused_and_ending_it_where_it_began_follows_the_
 }
 
 #[test]
+fn edges_that_are_closed_join_the_last_to_the_first_as_points_do() {
+    let corner = json!([{"line": [[0, 0, 0], [10, 0, 0]]}, {"line": [[10, 0, 0], [10, 10, 0]]}]);
+    let square = json!([[5, 5, 0], [15, 5, 0], [15, 15, 0], [5, 15, 0], [5, 5, 0]]);
+    let round = json!([{"arc": [[0, 0, 0], [5, 5, 0], [10, 0, 0]]}, {"line": [[10, 0, 0], [0, 0, 0]]}]);
+    let edges_of = |wire: Value| {
+        let (model, made) = built(json!([wire, {"op": "face", "label": "f", "outer": "w"}]));
+        assert_eq!(made[1].map(|face| face.kind), Some(EntityKind::Face), "{wire}");
+        model.ids::<Edge>().len()
+    };
+    let closed = |field: &str, given: &Value| json!({"op": "wire", "label": "w", field: given, "closed": true});
+    assert_eq!(edges_of(closed("edges", &corner)), 3, "a straight edge from the last end to the first start");
+    assert_eq!(edges_of(closed("points", &json!([[0, 0, 0], [10, 0, 0], [10, 10, 0]]))), 3, "as through points");
+    let square: Vec<Value> = square.as_array().unwrap().windows(2).map(|pair| json!({"line": pair})).collect();
+    assert_eq!(edges_of(closed("edges", &json!(square))), 4, "none where they already meet");
+    assert_eq!(edges_of(closed("edges", &round)), 2, "nor after an arc that comes back");
+    let open =
+        refused(json!([{"op": "wire", "label": "w", "edges": corner, "closed": false}, {"op": "face", "outer": "w"}]));
+    assert_eq!(open.code, Code::WireOpen);
+    // Ends the band apart meet, so nothing joins them: a joining edge would be no longer than the band.
+    let coarse = |gap: f64| {
+        let mut edges = corner.as_array().unwrap().clone();
+        edges.push(json!({"line": [[10, 10, 0], [0, gap, 0]]}));
+        let mut text = request(json!([{"op": "wire", "edges": edges, "closed": true}]));
+        text["tolerance"] = json!({"length": 0.5, "angle": 1e-6});
+        build(&text).map(|(model, _)| model.ids::<Edge>().len())
+    };
+    assert_eq!((coarse(0.5), coarse(0.75)), (Ok(3), Ok(4)));
+    let unread = refused(json!([{"op": "wire", "edges": corner, "closed": "yes"}]));
+    assert_eq!(
+        (unread.code, unread.input.as_ref().map(|input| input.parameter.as_str())),
+        (Code::InputWrongType, Some("steps[0].closed"))
+    );
+}
+
+#[test]
 fn a_hole_outside_its_face_is_refused() {
     let steps = json!([
         {"op": "wire", "label": "outline", "points": [[0, 0, 0], [40, 0, 0], [40, 20, 0], [0, 20, 0]], "closed": true},

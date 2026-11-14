@@ -1,9 +1,10 @@
 //! Source: original
 //! What a `wire` and a `face` step give, read and checked whole when the request is, and converted once to millimetres.
 //!
-//! A wire is straight edges through points, back to the first if it is `closed`, or edges one by one: a `line` between two
-//! points, an `arc` from a point through a second to a third, or a whole `circle` about a centre. A face names its outer
-//! wire and its holes, each an earlier `wire` step's label, a wire's id, or a wire written in place.
+//! A wire is straight edges through points, or edges one by one: a `line` between two points, an `arc` from a point
+//! through a second to a third, or a whole `circle` about a centre; either joined back to the first by a straight edge if
+//! it is `closed`. A face names its outer wire and its holes, each an earlier `wire` step's label, a wire's id, or a wire
+//! written in place.
 
 use occam_report::{Code, Fault, Input, NamedValue, Quantity, Report};
 use occam_units::{Length, Vec3};
@@ -56,10 +57,12 @@ pub enum WireArgs {
         /// Where the wire is in the request.
         at: Input,
     },
-    /// Edges one by one, each with where it is in the request.
+    /// Edges one by one, each with where it is in the request; the last joined to the first if `closed`.
     Edges {
         /// The edges.
         edges: Vec<(Piece, Input)>,
+        /// Whether the last joins the first.
+        closed: bool,
         /// Where the wire is in the request.
         at: Input,
     },
@@ -187,11 +190,12 @@ fn list<T>(at: &At, value: &Value, mut item: impl FnMut(&At, &Value) -> Option<T
     Ok(items.iter().enumerate().filter_map(|(k, v)| item(&at.item(k), v)).collect())
 }
 
-/// The wire whose fields are `fields`, at `at`: `points` and, optionally, `closed`, or `edges`.
+/// The wire whose fields are `fields`, at `at`: `points` or `edges`, and, optionally, `closed`.
 pub(crate) fn wire(at: &At, fields: &Map<String, Value>, units: Units, out: &mut Vec<Report>) -> Option<WireArgs> {
     let kinds: Vec<&String> = fields.keys().filter(|name| matches!(name.as_str(), "points" | "edges")).collect();
+    let closed = closed(at, fields, out);
     match kinds.as_slice() {
-        [kind] if kind.as_str() == "points" => through_points(at, fields, units, out),
+        [kind] if kind.as_str() == "points" => through_points(at, fields, closed, units, out),
         [_] => {
             let given = fields.get("edges")?;
             let edges = list(&at.field("edges"), given, |at, v| piece(at, v, units, out).map(|p| (p, at.input())));
@@ -199,7 +203,7 @@ pub(crate) fn wire(at: &At, fields: &Map<String, Value>, units: Units, out: &mut
             if given.as_array().is_some_and(Vec::is_empty) {
                 out.push(count_wrong(&at.field("edges"), 0, 1));
             }
-            Some(WireArgs::Edges { edges, at: at.input() })
+            Some(WireArgs::Edges { edges, closed, at: at.input() })
         }
         _ => {
             out.push(one_of(at, &kinds, "points, edges"));
@@ -208,16 +212,26 @@ pub(crate) fn wire(at: &At, fields: &Map<String, Value>, units: Units, out: &mut
     }
 }
 
-/// Straight edges through the points at `at`'s `points`, closed if its `closed` says so.
-fn through_points(at: &At, fields: &Map<String, Value>, units: Units, out: &mut Vec<Report>) -> Option<WireArgs> {
-    let closed = match fields.get("closed") {
+/// Whether the wire whose fields are `fields`, at `at`, is closed, as its `closed` says: not if it does not say.
+fn closed(at: &At, fields: &Map<String, Value>, out: &mut Vec<Report>) -> bool {
+    match fields.get("closed") {
         Some(Value::Bool(closed)) => *closed,
         Some(other) => {
             out.push(wrong_type(&at.field("closed"), other, "true or false"));
             false
         }
         None => false,
-    };
+    }
+}
+
+/// Straight edges through the points at `at`'s `points`, the last joined to the first if `closed`.
+fn through_points(
+    at: &At,
+    fields: &Map<String, Value>,
+    closed: bool,
+    units: Units,
+    out: &mut Vec<Report>,
+) -> Option<WireArgs> {
     let given = fields.get("points")?;
     let read = list(&at.field("points"), given, |at, v| gather(point(at, v, units), out).map(|p| (p, at.input())));
     let points = gather(read, out)?;

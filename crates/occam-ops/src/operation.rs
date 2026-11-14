@@ -121,9 +121,10 @@ impl Operation {
             Self::Torus => "major, the radius its tube's centre runs round; minor, the tube's, less than major; frame",
             Self::Wedge => r#"size [x, y, z]; top {"start": where it begins along x, "width": along x}; frame"#,
             Self::Wire => concat!(
-                "points [point, ...], with straight edges between, and closed: true to join the last to the first; ",
-                r#"or edges [{"line": [from, to]} or {"arc": [from, through, to]} or "#,
-                r#"{"circle": {"centre": point, "radius": length, "normal": direction}}, ...]"#,
+                "points [point, ...], with straight edges between, or edges [",
+                r#"{"line": [from, to]} or {"arc": [from, through, to]} or "#,
+                r#"{"circle": {"centre": point, "radius": length, "normal": direction}}, ...]; "#,
+                "and closed: true to join the last to the first by a straight edge, if they do not meet",
             ),
             Self::Face => {
                 "outer, a closed planar wire, and holes [wire, ...] inside it, if any; a wire is a label, an id \

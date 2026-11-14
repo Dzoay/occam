@@ -31,7 +31,8 @@ pub(crate) fn wire(edit: &mut Edit, args: &WireArgs) -> Result<Option<EntityRef>
 }
 
 /// The edges `args` asks for, in order, each with where it is in the request. Through points that are `closed`, a last
-/// point within `band` of the first is that point again, not another edge.
+/// point within `band` of the first is that point again, not another edge; edges that are `closed` are joined as
+/// [`close`] joins them.
 ///
 /// # Errors
 ///
@@ -54,7 +55,28 @@ pub(crate) fn made(args: &WireArgs, band: f64) -> Result<Vec<(Made, Input)>, Rep
             lines
         }
     };
-    pieces.into_iter().map(|(piece, at)| Ok((build::made(piece, at, band)?, at.clone()))).collect()
+    let mut made: Vec<(Made, Input)> = pieces
+        .into_iter()
+        .map(|(piece, at)| Ok((build::made(piece, at, band)?, at.clone())))
+        .collect::<Result<_, _>>()?;
+    if let WireArgs::Edges { closed: true, at, .. } = args {
+        close(&mut made, at, band)?;
+    }
+    Ok(made)
+}
+
+/// Joins the last of `made` to the first, as points that are `closed` are joined: by a straight edge, placed at `at`, the
+/// wire's place in the request, where the last ends further than `band` from where the first begins.
+///
+/// # Errors
+///
+/// None: an edge longer than the band is made.
+fn close(made: &mut Vec<(Made, Input)>, at: &Input, band: f64) -> Result<(), Report> {
+    let ends = made.first().map(|(m, _)| m.start).zip(made.last().map(|(m, _)| m.end));
+    if let Some((start, end)) = ends.filter(|&(start, end)| (end - start).norm() > band) {
+        made.push((build::made(Piece::Line { from: end, to: start }, at, band)?, at.clone()));
+    }
+    Ok(())
 }
 
 /// The straight edge from `from` to `to`, placed where `to` is in the request.
