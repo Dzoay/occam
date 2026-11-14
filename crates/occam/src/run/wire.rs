@@ -18,10 +18,21 @@ struct RanWire<'a> {
     ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     tolerance: Option<ToleranceWire>,
+    /// What each measure step measured, in order, first, so that it is not found only after every step's descriptions.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    measured: Vec<SummaryWire<'a>>,
     steps: Vec<DoneWire<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     failed: Option<FailedWire>,
     diagnostics: Vec<Value>,
+}
+
+/// A measure step's index in the request and what it measured.
+#[derive(Serialize)]
+struct SummaryWire<'a> {
+    step: u32,
+    #[serde(flatten)]
+    measured: MeasuredWire<'a>,
 }
 
 #[derive(Serialize)]
@@ -139,6 +150,11 @@ pub fn ran_json(ran: &Ran) -> String {
         schema: SCHEMA,
         ok: ran.failed.is_none(),
         tolerance,
+        measured: ran
+            .done
+            .iter()
+            .filter_map(|d| d.measured.as_ref().map(|m| SummaryWire { step: d.step, measured: measured(m, ran.units) }))
+            .collect(),
         steps: ran.done.iter().map(|d| done(d, ran.units)).collect(),
         failed: ran.failed.as_ref().map(|f| failed(f, ran.units)),
         diagnostics: used.iter().map(|r| report_value(r, ran.units)).collect(),

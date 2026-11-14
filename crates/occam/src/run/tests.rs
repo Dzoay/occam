@@ -269,3 +269,25 @@ fn every_way_a_lineage_is_made_has_its_name() {
     let froms = [ToleranceFrom::Request, ToleranceFrom::Default, ToleranceFrom::Model].map(wire::from);
     assert_eq!(froms, ["request", "default", "model"]);
 }
+
+#[test]
+fn a_runs_measurements_come_first_in_its_json_before_the_long_list_of_what_each_step_made() {
+    // The blind run's c4 and c7 found their measurements at the end of 75 to 93 KB, after every step's descriptions.
+    let text = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+        {"op": "box", "label": "block", "size": [40, 20, 10]},
+        {"op": "cylinder", "label": "pin", "radius": 4, "height": 30},
+        {"op": "measure", "target": "block", "what": ["volume"]},
+        {"op": "measure", "target": "pin", "what": ["volume", "area"]}
+    ]}"#;
+    let json = ran_json(&crate::run(None, text));
+    let value: Value = serde_json::from_str(&json).unwrap();
+    let first = |k: usize| {
+        let measured = &value["steps"][k]["measured"];
+        json!({"step": k, "target": measured["target"], "values": measured["values"]})
+    };
+    assert_eq!(value["measured"], json!([first(2), first(3)]), "each measure step's, in order: {json}");
+    let (summary, steps) = (json.find(r#""measured":[{"step""#), json.find(r#""steps":"#));
+    assert!(summary.is_some_and(|at| steps.is_some_and(|steps| at < steps)), "before the steps: {json}");
+    let none = ran_json(&crate::run(None, r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": []}"#));
+    assert!(!none.contains(r#""measured""#), "a run that measured nothing says nothing of it: {none}");
+}
