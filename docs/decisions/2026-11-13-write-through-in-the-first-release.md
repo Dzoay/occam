@@ -1,5 +1,8 @@
 # The first release serves continuous edits of very large faces, by GPU write-through
 
+**Reversed by the user on 2026-11-14:** [write-through moves after the first
+release](2026-11-14-write-through-after-the-first-release.md).
+
 **Decided by the user, 2026-11-13,** asked [O20](../PLAN.md#7-decisions-the-user-still-owns) while the
 [`view`](../plan/view.md) milestone was drafted: whether the first release must serve continuous whole-surface editing
 of very large faces ([P12](../evidence/2026-11-09-p12.md)). The recommendation was no: draw the CPU mesh with local
