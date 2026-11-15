@@ -1,6 +1,7 @@
 //! Source: original
 //! The `wire` operation (PARITY 1.6): straight edges through points, or lines, arcs and whole circles one by one, joined
-//! end to end within the band, as a wire body. A wire that lies in a plane may not touch or cross itself there.
+//! end to end within the band, as a wire body. A wire that lies in a plane, or in a line, may not touch or cross itself
+//! there.
 
 use occam_report::{Code, EntityRef, Input, Report};
 use occam_topo::Edit;
@@ -8,7 +9,7 @@ use occam_units::Vec3;
 
 use super::build::{self, Chain, Made, refused, shown};
 use super::given::{Piece, WireArgs};
-use super::outline::{Run, off_plane, plane_through};
+use super::outline::{Run, off_plane, plane_holding};
 use super::space::Flatland;
 use super::touch::{Touch, first_touch};
 use crate::read::count;
@@ -92,7 +93,8 @@ pub(crate) fn crosses_itself(plane: &Flatland, touch: Touch, at: &Input, band: f
         .with_value(count("second", touch.second.1))
 }
 
-/// That `chain`, if it lies in a plane, neither touches nor crosses itself there.
+/// That `chain`, if it lies in a plane, neither touches nor crosses itself there. A chain that lies in a line lies in
+/// every plane through it, and is judged in one.
 ///
 /// # Errors
 ///
@@ -101,7 +103,7 @@ pub(crate) fn crosses_itself(plane: &Flatland, touch: Touch, at: &Input, band: f
 fn crossing(edit: &Edit, chain: &Chain, at: &Input, band: f64) -> Result<(), Report> {
     let run = Run::read(edit, chain.edges.iter().map(|&e| (e, false)).collect(), at)?;
     let points = run.samples();
-    let Some(plane) = plane_through(&points, band) else { return Ok(()) };
+    let Some(plane) = plane_holding(&points, band) else { return Ok(()) };
     if off_plane(&plane, &points, band).is_some() {
         return Ok(());
     }
