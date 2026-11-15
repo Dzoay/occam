@@ -532,6 +532,14 @@ catalogue! {
         "A curve or surface has no exact form under a scale that differs along its axes.",
         "The geometry named has no exact form under the scale {parameter} gives, which differs along its axes, and occam does not approximate it.",
     }
+
+    /// A section of two surfaces stopped before it was complete: a method ran out of its budget, or no method handles
+    /// the pair. What it found is kept beside the report (L5), and more may be missing.
+    Incomplete = "intersect.incomplete" {
+        Error, [],
+        "A section of two surfaces stopped before it was complete; what it found is kept.",
+        "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
+    }
 }
 
 #[cfg(test)]
@@ -1203,6 +1211,19 @@ mod tests {
         ])
     }
 
+    fn intersect_codes() -> Value {
+        json!([
+            {
+                "name": "Incomplete",
+                "code": "intersect.incomplete",
+                "severity": "error",
+                "summary": "A section of two surfaces stopped before it was complete; what it found is kept.",
+                "template": "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
+                "remedies": []
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -1259,6 +1280,7 @@ mod tests {
             sweep_codes(),
             measure_step_codes(),
             transform_codes(),
+            intersect_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())

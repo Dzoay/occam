@@ -34,7 +34,6 @@ text_enum! {
     NewCode {
         InvalidParameter = "input.invalid-parameter",
         Undecided = "decide.undecided",
-        Incomplete = "intersect.incomplete",
         BelowResolution = "intersect.below-resolution",
         CoincidentSurfaces = "boolean.coincident-surfaces",
         DanglingSection = "boolean.dangling-section",

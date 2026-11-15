@@ -1,0 +1,16 @@
+[package]
+name = "occam-intersect"
+description = "Where two surfaces meet: an ordered list of methods, with what failed kept beside what was found"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+occam-geom = { path = "../occam-geom" }
+occam-math = { path = "../occam-math" }
+occam-report = { path = "../occam-report" }
+occam-units = { path = "../occam-units" }
+
+[lints]
+workspace = true

@@ -36,7 +36,7 @@ flowchart LR
 the way census records them, by case, invariant and verdict. A held-out set, generated after the code is frozen, is
 scored as P5 scored, since P5's counts are in-sample. P5's speed table is rerun on the real code.
 
-**PR grouping:** every step shares one PR, with a commit each, as for the milestones before it.
+**PR grouping:** a step merges in its own PR ([small PRs](../decisions/2026-11-14-steps-merge-in-small-prs.md)).
 
 **Throughout.** `occam-intersect` takes its place in [the layers](../PLAN.md#4-layers), between `occam-geom` and
 `occam-topo`. It is std-only, computes through `occam-math`, and runs in parallel only through `Exec`. It works on
@@ -54,17 +54,6 @@ method names its sources in [SOURCES.md](../SOURCES.md) when its code lands, fro
 source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted at the end.
 
 ## Steps
-
-### `intersection.section`
-
-`occam-intersect` and its result. A `Section` holds curves, each with its image on both surfaces, contacts, any
-coincidence, failures and the tally. A pair is first put in canonical order by family, batch key and content
-([S4](../evidence/2026-11-09-s4.md)). Methods form an ordered list: each asks the surfaces what they can present and
-declines when it does not apply. A `Budget` bounds each method's work, and running out of budget is a failure that
-keeps what was found. `sections` runs many pairs, one pair a task, with one result per pair in pair order.
-
-*Failing test first:* with a stub method list, a swapped pair gives the same section with its images swapped; a spent
-budget is reported and keeps the curves found before it; many pairs give one result each, in order, at 1 and N threads.
 
 ### `intersection.closed`
 
