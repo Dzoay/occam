@@ -75,12 +75,13 @@ pub fn polygon_extruded(corners: u32) -> String {
 
 #[cfg(test)]
 mod tests {
-    use occam_topo::{Body, BodyKind, Edge, Face};
+    use occam_topo::{Body, BodyKind, Edge, Face, Vertex};
+    use occam_units::Vec3;
 
     use super::*;
 
     #[test]
-    fn the_polygon_extruded_is_a_solid_prism_with_a_side_for_each_corner() {
+    fn the_polygon_extruded_is_a_solid_prism_with_a_side_for_each_corner_spaced_evenly_round_the_circle() {
         let ran = crate::run(None, &polygon_extruded(12));
         assert!(ran.failed.is_none(), "{:?}", ran.failed);
         assert_eq!(ran.done.len(), 3);
@@ -89,5 +90,14 @@ mod tests {
         assert_eq!(bodies.len(), 1);
         assert_eq!(model.view(bodies[0]).unwrap().kind(), BodyKind::Solid);
         assert_eq!((model.ids::<Face>().len(), model.ids::<Edge>().len()), (14, 36));
+        let points: Vec<Vec3> =
+            model.ids::<Vertex>().into_iter().map(|v| model.view(v).unwrap().point().to_vec3()).collect();
+        for k in 0..12 {
+            let (sin, cos) = sin_cos(TAU * f64::from(k) / 12.0);
+            for z in [0.0, 1.0] {
+                let corner = Vec3::new(10.0 * cos, 10.0 * sin, z);
+                assert!(points.iter().any(|p| (*p - corner).norm() < 1e-9), "corner {k} at height {z}: {points:?}");
+            }
+        }
     }
 }
