@@ -2,7 +2,6 @@
 //! glue only: the gates' own runs exercise it, and `.cargo/mutants.toml` excludes it.
 
 use std::num::NonZero;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::{env, fs, process, thread};
@@ -329,7 +328,7 @@ impl Repo {
         let held = fs::File::open(&home).map_err(|e| io(&shown, &e))?;
         held.try_lock().map_err(|e| Finding::new("repo.io", &shown, e.to_string(), "run `just mutants` again"))?;
         let mut janitor = Command::new("sh");
-        janitor.args(["-c", JANITOR, "sh"]).arg(&home).stdin(Stdio::piped()).process_group(0);
+        grouped(janitor.args(["-c", JANITOR, "sh"]).arg(&home).stdin(Stdio::piped()), 0);
         let janitor = janitor.spawn().map_err(|e| {
             drop(fs::remove_dir_all(&home));
             io("sh", &e)
@@ -354,7 +353,7 @@ impl Warm {
     fn command(&self, program: &str, tree: &Path) -> Command {
         let mut command = Command::new(program);
         command.current_dir(tree).env_remove("CARGO_TARGET_DIR").env("CARGO_INCREMENTAL", "1").stdin(Stdio::null());
-        command.process_group(i32::try_from(self.janitor.id()).unwrap_or(0));
+        grouped(&mut command, i32::try_from(self.janitor.id()).unwrap_or(0));
         command
     }
 
@@ -434,6 +433,16 @@ impl Drop for Warm {
         drop(self.janitor.wait());
     }
 }
+
+/// Puts `command` in process group `group`, or in a new one of its own for 0.
+#[cfg(unix)]
+fn grouped(command: &mut Command, group: i32) {
+    std::os::unix::process::CommandExt::process_group(command, group);
+}
+
+/// Off Unix there are no process groups, and the mutants gate, the one caller, refuses to run before it gets here.
+#[cfg(not(unix))]
+const fn grouped(_command: &mut Command, _group: i32) {}
 
 /// Runs `command`, returning whether it succeeded, its stdout and its stderr.
 fn captured(command: &mut Command, program: &str) -> Result<(bool, String, String), Finding> {

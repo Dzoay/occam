@@ -71,12 +71,25 @@ fn no_mutants() -> String {
     "no mutants to test in the changes since origin/main".to_string()
 }
 
+/// Refuses to run where there is no Unix (`unix` is whether there is): what the gate starts in the copies runs in a
+/// process group of its own, so that it can be stopped and the copies removed if the gate is killed, and the copies
+/// are made by `cp` and removed by `sh`.
+fn supported(unix: bool) -> Result<(), Vec<Finding>> {
+    if unix {
+        return Ok(());
+    }
+    let message =
+        "the mutants gate needs Unix process groups, `sh` and `cp`, to stop what it starts and remove its copies";
+    Err(vec![Finding::new("mutants.unix-only", "", message, "run `just mutants` on Linux or macOS, or leave it to CI")])
+}
+
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     let options = options(args)?;
     let exclusions = exclusions::run(repo)?;
     if options.exclusions {
         return Ok(exclusions);
     }
+    supported(cfg!(unix))?;
     let (setting, threads) = Repo::mutants_jobs();
     let jobs = jobs(setting.as_deref(), threads)?;
     let base = repo.base().map_err(|e| vec![e])?;
@@ -597,6 +610,17 @@ mod tests {
         for other in ["", "staging", "12a", "-12", "1.lock", " 12", "12/"] {
             assert!(!leftover(other), "{other:?}");
         }
+    }
+
+    #[test]
+    fn off_unix_the_gate_says_where_to_run_it_and_there_it_runs() {
+        let found = supported(false).unwrap_err();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].code, "mutants.unix-only");
+        assert!(found[0].message.contains("process groups"), "{found:?}");
+        // The remedy, followed: on Linux or macOS, which are Unix, the gate goes on.
+        assert!(found[0].remedy.contains("Linux or macOS"), "{found:?}");
+        assert_eq!(supported(true), Ok(()));
     }
 
     #[test]
