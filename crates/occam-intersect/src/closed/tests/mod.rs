@@ -4,6 +4,7 @@
 //! of the part's size of both surfaces. Each image is checked too: it maps onto its curve, and its rate carries the
 //! surface's derivatives onto the curve's.
 
+mod edges;
 mod more;
 mod p5;
 
@@ -38,9 +39,34 @@ fn rigid_by(axis: Vec3, angle: f64, by: Vec3) -> Placement<World, World> {
     spin.then(&Placement::translation(Vector::from_vec3(by)))
 }
 
-/// P5's rigid placement: a turn of 0.7 about (1, 2, 3), then a shift of (0.3, -0.2, 0.5).
+thread_local! {
+    /// Whether this thread's cases are built under P5's rigid placement, or as they are written, on the world's axes.
+    static PLACED: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// Builds this thread's cases on the world's axes until the guard it gives goes.
+fn unplaced() -> Unplaced {
+    PLACED.with(|placed| placed.set(false));
+    Unplaced
+}
+
+/// While it lasts, this thread's cases are unplaced.
+struct Unplaced;
+
+impl Drop for Unplaced {
+    fn drop(&mut self) {
+        PLACED.with(|placed| placed.set(true));
+    }
+}
+
+/// P5's rigid placement, a turn of 0.7 about (1, 2, 3) then a shift of (0.3, -0.2, 0.5), or none where this thread's
+/// cases are unplaced.
 fn rigid() -> Placement<World, World> {
-    rigid_by(v(1.0, 2.0, 3.0), 0.7, v(0.3, -0.2, 0.5))
+    if PLACED.with(std::cell::Cell::get) {
+        rigid_by(v(1.0, 2.0, 3.0), 0.7, v(0.3, -0.2, 0.5))
+    } else {
+        Placement::identity()
+    }
 }
 
 /// Where the rigid placement takes `p`.

@@ -144,3 +144,81 @@ fn circles(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use occam_units::{Angle, Length, Tolerance};
+
+    use super::*;
+
+    fn decide() -> Decide {
+        Decide::new(Tolerance::new(Length::from_millimetres(1e-9), Angle::from_radians(1e-9)).unwrap())
+    }
+
+    fn circle(x: f64, y: f64, r: f64) -> Shape {
+        Shape::Circle { centre: Flat::exact(x, y), radius: Interval::exact(r) }
+    }
+
+    fn line(at: (f64, f64), along: (f64, f64)) -> Shape {
+        let norm = (along.0 * along.0 + along.1 * along.1).sqrt();
+        Shape::Line { at: Flat::exact(at.0, at.1), along: Flat::exact(along.0 / norm, along.1 / norm) }
+    }
+
+    /// What `points` gives where the shapes do not meet.
+    const APART: Vec<((f64, f64), bool)> = Vec::new();
+
+    /// The points where `a` and `b` meet, each a point and whether it is a touch.
+    fn points(a: &Shape, b: &Shape) -> Vec<((f64, f64), bool)> {
+        match meet(a, b, &mut decide()).unwrap() {
+            Meeting::At(found) => found.into_iter().map(|(p, touch)| ((p.x.mid(), p.y.mid()), touch)).collect(),
+            Meeting::Apart => Vec::new(),
+            Meeting::Same => vec![((f64::NAN, f64::NAN), true)],
+        }
+    }
+
+    fn near(got: (f64, f64), want: (f64, f64)) -> bool {
+        (got.0 - want.0).abs() + (got.1 - want.1).abs() <= 1e-12
+    }
+
+    #[test]
+    fn circles_off_the_origin_meet_where_both_are_the_lesser_inside_touching_on_its_far_side() {
+        // The lesser circle first, inside the greater and touching it: the touch is on the far side of the lesser.
+        let found = points(&circle(1.0, 2.0, 0.5), &circle(1.5, 2.0, 1.0));
+        assert_eq!(found.len(), 1);
+        assert!(near(found[0].0, (0.5, 2.0)) && found[0].1, "{found:?}");
+        // The greater first, the same touch.
+        let found = points(&circle(1.5, 2.0, 1.0), &circle(1.0, 2.0, 0.5));
+        assert!(found.len() == 1 && near(found[0].0, (0.5, 2.0)), "{found:?}");
+        // The lesser well inside: no meeting, either way round.
+        assert_eq!(points(&circle(1.0, 2.0, 0.3), &circle(1.2, 2.0, 1.0)), APART);
+        assert_eq!(points(&circle(1.2, 2.0, 1.0), &circle(1.0, 2.0, 0.3)), APART);
+        // Crossing, off the origin: (1, 2) and (2, 2), both of radius 1, cross at x = 1.5.
+        let found = points(&circle(1.0, 2.0, 1.0), &circle(2.0, 2.0, 1.0));
+        let half = 0.75_f64.sqrt();
+        assert!(
+            found.len() == 2
+                && found
+                    .iter()
+                    .all(|(p, touch)| !touch && (near(*p, (1.5, 2.0 - half)) || near(*p, (1.5, 2.0 + half)))),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn lines_and_circles_off_the_origin_meet_where_both_are() {
+        // The line y = 3 against the circle about (1, 2) of radius 1: a touch at (1, 3); y = 2.5 crosses it twice.
+        let touch = points(&line((-4.0, 3.0), (1.0, 0.0)), &circle(1.0, 2.0, 1.0));
+        assert!(touch.len() == 1 && near(touch[0].0, (1.0, 3.0)) && touch[0].1, "{touch:?}");
+        let cross = points(&line((-4.0, 2.5), (1.0, 0.0)), &circle(1.0, 2.0, 1.0));
+        let half = 0.75_f64.sqrt();
+        assert!(cross.len() == 2 && cross.iter().any(|(p, _)| near(*p, (1.0 + half, 2.5))), "{cross:?}");
+        // Two lines off the origin: through (1, 2) along x, and through (3, -1) along y, meet at (3, 2).
+        let found = points(&line((1.0, 2.0), (1.0, 0.0)), &line((3.0, -1.0), (0.0, 1.0)));
+        assert!(found.len() == 1 && near(found[0].0, (3.0, 2.0)), "{found:?}");
+        // Parallel and apart, or the same line.
+        assert_eq!(points(&line((1.0, 2.0), (1.0, 1.0)), &line((1.0, 3.0), (1.0, 1.0))), APART);
+        let same = |a: &Shape, b: &Shape| matches!(meet(a, b, &mut decide()), Ok(Meeting::Same));
+        assert!(same(&line((1.0, 2.0), (1.0, 1.0)), &line((3.0, 4.0), (1.0, 1.0))), "a line is itself");
+        assert!(same(&circle(1.0, 2.0, 0.7), &circle(1.0, 2.0, 0.7)), "a circle is itself");
+    }
+}

@@ -139,6 +139,17 @@ fn p5s_closed_form_pairs_lie_on_both_surfaces_within_1e_12_of_the_parts_size() {
 }
 
 #[test]
+fn p5s_closed_form_pairs_lie_on_both_surfaces_on_the_worlds_own_axes_too() {
+    // Unplaced, normals and axes lie along the world's axes and the cases' points at its origin, so that their numbers
+    // are exact noughts and ones: what a rigid placement rounds away.
+    let _unplaced = super::unplaced();
+    let groups = [planes_and_spheres(), planes_and_cylinders(), planes_and_cones(), spheres(), cylinders(), coaxial()];
+    for (name, a, b, want) in groups.into_iter().flatten() {
+        check(&format!("{name}, unplaced"), a.as_ref(), b.as_ref(), &want);
+    }
+}
+
+#[test]
 fn p5s_near_tangent_sweep_is_told_from_a_tangency_down_to_a_gap_of_1e_12() {
     let gaps = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11, 1e-12];
     for eps in gaps {

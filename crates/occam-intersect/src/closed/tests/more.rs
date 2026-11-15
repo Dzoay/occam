@@ -173,6 +173,8 @@ fn a_gap_on_the_edge_of_the_band_is_reported_undecided_and_nothing_is_guessed() 
     assert_eq!((gap, value("band")), (Some(BAND), Some(BAND)), "the gap less the radius, signed, and the band");
     assert!(radius > 0.0 && radius < 1e-3 * BAND, "a rounding's radius: {radius}");
     assert!(report.remedies.is_empty(), "no remedy: {:?}", report.remedies);
+    let kind = report.value("quantity").map(|q| q.quantity);
+    assert_eq!(kind, Some(occam_report::Quantity::Length), "the gap is a length");
     assert!(got.tally.undecided >= 1, "{:?}", got.tally);
 }
 

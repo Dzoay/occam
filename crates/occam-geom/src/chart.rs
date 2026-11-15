@@ -270,7 +270,8 @@ mod tests {
         for s in surfaces() {
             let c = chart(s.as_ref()).unwrap_or_else(|| panic!("{:?} has a chart", s.family()));
             for (i, j) in (0..6).flat_map(|i| (0..5).map(move |j| (i, j))) {
-                let uv = UvPoint::new(0.3 + 0.5 * f64::from(i), -1.2 + 0.6 * f64::from(j));
+                // Down to v = -3, below the cone's apex at -1.28, where its parameters are read on the far side.
+                let uv = UvPoint::new(0.3 + 0.5 * f64::from(i), -3.0 + 0.9 * f64::from(j));
                 let p = s.point(uv);
                 let gap = (c.point(uv).to_vec3() - p.to_vec3()).norm();
                 assert!(gap <= 1e-12 * (1.0 + p.to_vec3().norm()), "{:?} at {uv:?}: {gap}", s.family());
@@ -317,5 +318,92 @@ mod tests {
         assert!((there - want).norm() <= 1e-12 * 8.0, "{apex:?}: {there:?} against {want:?}");
         let flat = chart(&Plane::placed(&placement())).unwrap();
         assert!(c.poles().is_empty() && flat.ruling(Direction::normalised(down)).is_none() && flat.poles().is_empty());
+    }
+
+    /// A quadratic Bézier plane patch about `(60, 80, 0)`, 20 along `u` and 2 along `v`, whose middle row is moved
+    /// `off` along `u`: its point strays from its chart by `2 off (u - 1/2)^2`, most at the probe at `u = 0.2`.
+    fn bowed(off: f64) -> SplineSurface {
+        let at = |x: f64, y: f64| Point::from_vec3(Vec3::new(50.0 + x, 79.0 + y, 0.0));
+        let poles =
+            vec![at(0.0, 0.0), at(10.0 + off, 0.0), at(20.0, 0.0), at(0.0, 2.0), at(10.0 + off, 2.0), at(20.0, 2.0)];
+        let (knots_u, knots_v) = (vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], vec![0.0, 0.0, 1.0, 1.0]);
+        SplineSurface::new(&BsplineSurface { degree: (2, 1), count: (3, 2), knots_u, knots_v, poles, weights: None })
+            .unwrap()
+    }
+
+    #[test]
+    fn a_chart_holds_its_surface_to_a_part_in_1e11_of_the_size_of_its_point_and_derivatives() {
+        // Read at (1/2, 1/2), where the point is 100 from the origin and the derivatives 20 and 2 long: a patch that strays
+        // by 0.99 of the band has a chart, and one by 1.01 has none.
+        let jet = Surface::first(&bowed(0.0), UvPoint::new(0.5, 0.5));
+        let size = jet.point.to_vec3().norm() + jet.du.rate().norm() + jet.dv.rate().norm();
+        assert!((size - 122.0).abs() < 1e-9, "{size}");
+        for (share, kept) in [(0.99, true), (1.01, false)] {
+            let off = share * 1e-11 * size / (2.0 * 0.09);
+            assert_eq!(chart(&bowed(off)).is_some(), kept, "strays by {share} of its band");
+        }
+    }
+
+    #[test]
+    fn a_part_of_a_surface_has_its_chart_read_away_from_its_turns_start_and_its_apex() {
+        use crate::{TrimmedSurface, UvBox};
+        let window = |u: (f64, f64), v: (f64, f64)| UvBox::new(UvPoint::new(u.0, v.0), UvPoint::new(u.1, v.1));
+        let cone = || Cone::placed(&placement(), mm(1.0), Angle::from_radians(0.5)).unwrap();
+        let apex = -1.0 / occam_math::sin(0.5);
+        let parts: Vec<Box<dyn Surface>> = vec![
+            Box::new(
+                TrimmedSurface::new(Cylinder::placed(&placement(), mm(0.8)).unwrap(), window((0.2, 1.4), (1.0, 3.0)))
+                    .unwrap(),
+            ),
+            Box::new(TrimmedSurface::new(cone(), window((0.2, 1.4), (apex - 1.0, apex + 1.0))).unwrap()),
+            Box::new(TrimmedSurface::new(cone(), window((4.0, 5.5), (apex - 3.0, apex - 1.0))).unwrap()),
+            Box::new(
+                TrimmedSurface::new(Sphere::placed(&placement(), mm(1.5)).unwrap(), window((0.2, 1.4), (0.2, 1.2)))
+                    .unwrap(),
+            ),
+            Box::new(
+                TrimmedSurface::new(
+                    Torus::placed(&placement(), mm(2.0), mm(0.5)).unwrap(),
+                    window((0.2, 1.4), (0.5, 2.5)),
+                )
+                .unwrap(),
+            ),
+        ];
+        for s in parts {
+            let c = chart(s.as_ref()).unwrap_or_else(|| panic!("{:?} has a chart", s.family()));
+            let d = s.domain();
+            for (fu, fv) in [(0.1, 0.1), (0.5, 0.9), (0.9, 0.4)] {
+                let uv = UvPoint::new(d.u.lo + fu * (d.u.hi - d.u.lo), d.v.lo + fv * (d.v.hi - d.v.lo));
+                let gap = (c.point(uv).to_vec3() - s.point(uv).to_vec3()).norm();
+                assert!(gap <= 1e-12 * 8.0, "{:?} at {uv:?}: {gap}", s.family());
+            }
+        }
+    }
+
+    #[test]
+    fn a_plane_whose_parameters_run_unevenly_on_a_domain_about_nought_has_no_chart() {
+        // Its `v` runs from -1 to 1, its middle row bunched towards its first: probed across `v`, it strays.
+        let at = |x: f64, y: f64| Point::from_vec3(Vec3::new(x, y, 0.0));
+        let poles = vec![at(-2.0, -2.0), at(2.0, -2.0), at(-2.0, -1.5), at(2.0, -1.5), at(-2.0, 2.0), at(2.0, 2.0)];
+        let (knots_u, knots_v) = (vec![0.0, 0.0, 1.0, 1.0], vec![-1.0, -1.0, -1.0, 1.0, 1.0, 1.0]);
+        let form = BsplineSurface { degree: (1, 2), count: (2, 3), knots_u, knots_v, poles, weights: None };
+        let bunched = SplineSurface::new(&form).unwrap();
+        assert!(Surface::analytic(&bunched, tolerance()).is_some());
+        assert_eq!(chart(&bunched), None);
+    }
+
+    #[test]
+    fn a_charts_content_is_its_numbers() {
+        let words = |c: Chart| {
+            let mut out = Content::default();
+            c.push(&mut out);
+            out.words().to_vec()
+        };
+        let charts = surfaces().iter().filter_map(|s| chart(s.as_ref())).map(words).collect::<Vec<_>>();
+        assert_eq!(charts.len(), 5);
+        for (i, one) in charts.iter().enumerate() {
+            assert!(one.len() > 4, "{one:?}");
+            assert!(charts.iter().skip(i + 1).all(|other| other != one), "every chart's numbers differ");
+        }
     }
 }

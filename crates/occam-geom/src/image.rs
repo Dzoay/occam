@@ -696,4 +696,528 @@ mod tests {
         .unwrap();
         assert!(Image::conic(branch, chart(&plane)).is_none());
     }
+
+    /// `centre + a cos t + b sin t + wobble sin 3t`: a conic in any two axes, square or not, off its form by the wobble.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    struct Sketch {
+        centre: Vec3,
+        a: Vec3,
+        b: Vec3,
+        wobble: Vec3,
+    }
+
+    impl Sketch {
+        /// Its rate of order `k`: `a cos(t + kπ/2) + b sin(t + kπ/2) + 3^k wobble sin(3t + kπ/2)`.
+        #[expect(
+            clippy::arithmetic_side_effects,
+            reason = "IEEE arithmetic over `Real`, which cannot panic or overflow"
+        )]
+        fn rate<R: Real>(&self, t: R, k: u8) -> Vec3<R> {
+            let quarter = R::splat(f64::from(k) * FRAC_PI_2);
+            let ((sin, cos), (sin3, _)) = (sin_cos(t + quarter), sin_cos(R::splat(3.0) * t + quarter));
+            let scale = (0..k).fold(1.0, |s, _| s * 3.0);
+            splat(self.a) * cos + splat(self.b) * sin + splat(self.wobble) * (sin3 * R::splat(scale))
+        }
+    }
+
+    impl ParametricCurve for Sketch {
+        fn eval_point<R: Real>(&self, t: R) -> Point<World, R> {
+            Point::from_vec3(splat(self.centre) + self.rate(t, 0))
+        }
+
+        fn eval_first<R: Real>(&self, t: R) -> (Point<World, R>, occam_units::Tangent<World, R>) {
+            (self.eval_point(t), occam_units::Tangent::new(self.rate(t, 1)))
+        }
+
+        fn eval_second<R: Real>(
+            &self,
+            t: R,
+        ) -> (Point<World, R>, occam_units::Tangent<World, R>, occam_units::Tangent<World, R>) {
+            let (point, first) = self.eval_first(t);
+            (point, first, occam_units::Tangent::new(self.rate(t, 2)))
+        }
+
+        fn derivatives(
+            &self,
+            t: f64,
+            order: u8,
+            out: &mut Vec<occam_units::Tangent<World>>,
+            _: &mut Scratch,
+        ) -> Result<(), Report> {
+            out.extend((1..=order).map(|k| occam_units::Tangent::new(self.rate(t, k))));
+            Ok(())
+        }
+
+        fn range(&self) -> ParamRange {
+            ParamRange { lo: 0.0, hi: TAU, wrap: Wrap::Periodic, kind: occam_units::ParamKind::Angle }
+        }
+
+        fn bounds(&self, _: f64, _: f64) -> occam_units::Bounds {
+            let reach = self.a.norm() + self.b.norm() + self.wobble.norm();
+            occam_units::Bounds::around(Point::from_vec3(self.centre), Length::from_millimetres(reach * (1.0 + 1e-9)))
+        }
+
+        fn family(&self) -> FamilyName {
+            FamilyName("sketch")
+        }
+
+        fn content(&self, out: &mut Content) {
+            for v in [self.centre, self.a, self.b, self.wobble] {
+                out.push_vec3(v);
+            }
+        }
+
+        fn shape(&self) -> Shape {
+            Shape { form: "sketch", values: Vec::new() }
+        }
+    }
+
+    #[test]
+    fn a_curve_is_a_conic_within_a_part_in_a_trillion_of_its_centre_and_axes() {
+        // About a centre 100 from the origin, on axes 20 and 2 long, wobbled across by `w sin 3t`: read at 0, π/2 and π,
+        // its form misses it by `w (sin 3t + sin t)` at 1, 2.5 and 4, most at 2.5, held to 1e-12 of 100 + 20 + 2.
+        let (centre, a, b) = (Vec3::new(60.0, -80.0, 0.0), Vec3::new(0.0, 0.0, 20.0), Vec3::new(1.2, 1.6, 0.0));
+        let most = [1.0, 2.5, 4.0_f64].into_iter().fold(0.0_f64, |m, t| {
+            let ((s1, _), (s3, _)) = (sin_cos(t), sin_cos(3.0 * t));
+            if (s1 + s3).abs() > m { (s1 + s3).abs() } else { m }
+        });
+        let band = 1e-12 * (100.0 + 20.0 + 2.0);
+        let plane = Plane::placed(&placement());
+        for (share, kept) in [(0.99, true), (1.01, false)] {
+            let wobble = Vec3::new(0.6, -0.8, 0.0) * (share * band / most);
+            let image = Image::conic(Sketch { centre, a, b, wobble }, chart(&plane));
+            assert_eq!(image.is_some(), kept, "off by {share} of its band");
+        }
+    }
+
+    #[test]
+    fn an_images_nearest_point_says_how_far_it_is_and_is_found_however_far_along_it() {
+        let plane = Plane::placed(&placement());
+        let start = at(0.5, 0.5, 0.0);
+        let line = Line::new(Point::from_vec3(start), Direction::normalised(along(0.6, 0.8, 0.0)));
+        let image = Image::beside(line, chart(&plane), Point::from_vec3(start));
+        // With no seed, and with one ten along from the nearest point, whose window must stretch back to it.
+        for (far, seed) in [0.4, 37.0, 1000.0].into_iter().flat_map(|far| [(far, None), (far, Some(far + 10.0))]) {
+            let on = image.eval_uv(far);
+            let off = UvPoint::new(on.u() - 0.8 * 0.3, on.v() + 0.6 * 0.3);
+            let found = ParametricParamCurve::closest(&image, off, seed, &mut Scratch::default()).unwrap();
+            let gap = (flat(found.uv) - flat(off)).norm();
+            assert!((found.at - far).abs() <= 1e-9 * (1.0 + far), "{far} from {seed:?}: found at {}", found.at);
+            assert!((found.distance - 0.3).abs() <= 1e-9 && (gap - found.distance).abs() <= 1e-12, "{found:?}");
+        }
+    }
+
+    /// Images of random curves on random surfaces, placed at random: each image's reference, side of a cone's apex and
+    /// tube angle are the ones the test works out itself, and each lies on its curve, keeps continuous, has the rates
+    /// its differences have, and is held by its box, which is no wider than its reference allows.
+    mod battery {
+        use std::f64::consts::{PI, TAU};
+
+        use occam_units::{Local, Placement, Vector};
+
+        use super::super::*;
+        use super::{Sketch, mm, numbers};
+        use crate::{Circle, Cone, Cylinder, Ellipse, Hyperbola, Line, Plane, Sphere, Surface, Torus};
+
+        /// A linear congruential generator, so that the cases are the same on every run.
+        pub(super) struct Dice(pub(super) u64);
+
+        impl Dice {
+            pub(super) fn next(&mut self) -> f64 {
+                self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+                f64::from(u32::try_from(self.0.wrapping_shr(40)).unwrap()) / 16_777_216.0
+            }
+
+            pub(super) fn within(&mut self, lo: f64, hi: f64) -> f64 {
+                lo + (hi - lo) * self.next()
+            }
+
+            pub(super) fn unit(&mut self) -> Vec3 {
+                let v = Vec3::new(self.within(-1.0, 1.0), self.within(-1.0, 1.0), self.within(-1.0, 1.0));
+                v * (1.0 / v.norm())
+            }
+
+            pub(super) fn placement(&mut self) -> Placement<Local, World> {
+                let axis = occam_units::Direction::normalised(self.unit());
+                let turn = Placement::rotation(axis, occam_units::Angle::from_radians(self.within(0.0, 3.0)));
+                let shift = Placement::translation(Vector::from_vec3(self.unit() * self.within(0.5, 6.0)));
+                Placement::identity().then(&turn).then(&shift)
+            }
+        }
+
+        /// A unit axis square to the unit `n`.
+        fn square(n: Vec3, dice: &mut Dice) -> Vec3 {
+            let a = n.cross(dice.unit());
+            a * (1.0 / a.norm())
+        }
+
+        /// What an image must hold besides its points.
+        struct Expect {
+            turn: Turn,
+            below: bool,
+            tube: f64,
+        }
+
+        fn frame(chart: &Chart) -> Option<(Vec3, Vec3, Vec3, Vec3, Meridian)> {
+            match chart.0 {
+                Form::Turned { origin, x, y, z, meridian } => Some((origin, x, y, z, meridian)),
+                Form::Flat { .. } => None,
+            }
+        }
+
+        /// What an image beside the axis toward `toward`, or a conic's whose start is `toward`, holds as its side of a
+        /// cone's apex and its tube angle.
+        fn sides(chart: &Chart, toward: Vec3) -> (bool, f64) {
+            let Some((origin, x, y, z, meridian)) = frame(chart) else { return (false, 0.0) };
+            let q = toward - origin;
+            match meridian {
+                Meridian::Slanted { .. } => (q.dot(z) < 0.0, 0.0),
+                Meridian::Tube { major, .. } => (false, atan2(q.dot(z), q.dot(x).hypot_free(q.dot(y)) - major)),
+                Meridian::Upright { .. } | Meridian::Centred { .. } => (false, 0.0),
+            }
+        }
+
+        trait Hypot {
+            fn hypot_free(self, other: f64) -> f64;
+        }
+
+        impl Hypot for f64 {
+            fn hypot_free(self, other: f64) -> f64 {
+                (self * self + other * other).sqrt()
+            }
+        }
+
+        /// The angle of `q` about a turned chart's axis, turned to its opposite below a cone's apex.
+        fn angle(chart: &Chart, q: Vec3, below: bool) -> f64 {
+            let Some((_, x, y, ..)) = frame(chart) else { return 0.0 };
+            let side = if below { -1.0 } else { 1.0 };
+            atan2(side * q.dot(y), side * q.dot(x))
+        }
+
+        fn beside_of(chart: &Chart, toward: Vec3) -> Expect {
+            let (below, tube) = sides(chart, toward);
+            let origin = frame(chart).map_or(Vec3::new(0.0, 0.0, 0.0), |f| f.0);
+            Expect { turn: Turn::Beside { at: angle(chart, toward - origin, below) }, below, tube }
+        }
+
+        /// What the image of `middle + a cos t + b sin t` holds, round the axis where `inside` says the axis passes
+        /// inside.
+        fn conic_of(chart: &Chart, (middle, a, b): (Vec3, Vec3, Vec3), inside: bool) -> Expect {
+            let (below, tube) = sides(chart, middle + a);
+            let Some((origin, x, y, ..)) = frame(chart) else {
+                return Expect { turn: Turn::Beside { at: 0.0 }, below, tube };
+            };
+            if !inside {
+                return Expect { turn: Turn::Beside { at: angle(chart, middle - origin, below) }, below, tube };
+            }
+            let side = if below { -1.0 } else { 1.0 };
+            let rate = if a.cross(b).dot(x.cross(y)) > 0.0 { 1.0 } else { -1.0 };
+            let centre = (side * (middle - origin).dot(x), side * (middle - origin).dot(y));
+            Expect { turn: Turn::Round { at: angle(chart, a, below), rate, centre }, below, tube }
+        }
+
+        fn same(a: f64, b: f64) -> bool {
+            (a - b).abs() <= 1e-11 * (1.0 + a.abs())
+        }
+
+        fn same_turn(got: Turn, want: Turn) -> bool {
+            match (got, want) {
+                (Turn::Beside { at }, Turn::Beside { at: want }) => same(at, want),
+                (Turn::Round { at, rate, centre }, Turn::Round { at: a, rate: r, centre: c }) => {
+                    same(at, a) && rate.to_bits() == r.to_bits() && same(centre.0, c.0) && same(centre.1, c.1)
+                }
+                _ => false,
+            }
+        }
+
+        fn flat(d: UvVector) -> Vec3 {
+            Vec3::new(d.u(), d.v(), 0.0)
+        }
+
+        /// The image's rates at `t` against central differences of the order below.
+        fn rates<C: ParametricCurve + Clone>(name: &str, image: &Image<C>, t: f64) {
+            let h = 1e-5;
+            let (_, d1, d2) = image.eval_second(t);
+            let point = |s: f64| super::super::flat(image.eval_uv(s));
+            let first = |s: f64| flat(image.eval_first(s).1);
+            let mut out = Vec::new();
+            image.derivatives(t, 3, &mut out, &mut Scratch::default()).unwrap();
+            let third = out.get(2).map_or(Vec3::new(f64::NAN, 0.0, 0.0), |d| flat(*d));
+            let second = |s: f64| flat(image.eval_second(s).2);
+            let pairs = [
+                (flat(d1), (point(t + h) - point(t - h)) * (0.5 / h)),
+                (flat(d2), (first(t + h) - first(t - h)) * (0.5 / h)),
+                (third, (second(t + h) - second(t - h)) * (0.5 / h)),
+            ];
+            for (k, (got, want)) in pairs.into_iter().enumerate() {
+                assert!(
+                    (got - want).norm() <= 1e-4 * (1.0 + want.norm()),
+                    "{name}: rate {k} at {t}: {got:?} not {want:?}"
+                );
+            }
+        }
+
+        /// The image's box over windows of `(lo, hi)` holds its points there, and is no wider than its reference allows.
+        fn boxes<C: ParametricCurve + Clone>(name: &str, image: &Image<C>, (lo, hi): (f64, f64)) {
+            let at = |f: f64| lo + (hi - lo) * f;
+            for (from, to) in
+                [(at(0.0), at(0.3)), (at(0.2), at(0.55)), (at(0.45), at(1.0)), (lo, hi), (at(0.6), at(0.6))]
+            {
+                let b = image.bounds(from, to);
+                for t in (0..=16).map(|i| from + (to - from) * f64::from(i) / 16.0) {
+                    let uv = image.eval_uv(t);
+                    let inside = b.lo.u() <= uv.u() && uv.u() <= b.hi.u() && b.lo.v() <= uv.v() && uv.v() <= b.hi.v();
+                    assert!(inside, "{name}: {uv:?} at {t} is outside {b:?}");
+                }
+                let Form::Turned { origin, z, meridian, .. } = image.chart.0 else { continue };
+                let reach = match image.turn {
+                    Turn::Beside { .. } => TAU,
+                    Turn::Round { .. } => (to - from).abs() + 2.0 * TAU,
+                };
+                let wide = b.hi.u() - b.lo.u();
+                assert!(wide <= reach + 1e-9 * (1.0 + b.hi.u().abs()), "{name}: {from} to {to} is {wide} wide in u");
+                // A height or a latitude is no further from its curve's than the curve's box is from the axis.
+                let space = image.curve.bounds(from, to);
+                let far = (space.high().to_vec3() - origin).norm() + (space.low().to_vec3() - origin).norm();
+                let tall = b.hi.v() - b.lo.v();
+                assert!(tall <= TAU + 4.0 * far, "{name}: {from} to {to} is {tall} tall in v");
+                // A height, or a distance along a cone's side, is as tall as the curve's box is along the axis allows.
+                let (l, h) = (space.low().to_vec3(), space.high().to_vec3());
+                let corners: Vec<f64> = (0..8_u8)
+                    .map(|i| {
+                        let pick = |bit: u8, a: f64, b: f64| if i & bit == 0 { a } else { b };
+                        (Vec3::new(pick(1, l.x, h.x), pick(2, l.y, h.y), pick(4, l.z, h.z)) - origin).dot(z)
+                    })
+                    .collect();
+                let reach = corners.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), c| {
+                    (if *c < lo { *c } else { lo }, if *c > hi { *c } else { hi })
+                });
+                let along = match meridian {
+                    Meridian::Upright { .. } => Some(1.0),
+                    Meridian::Slanted { slope, .. } => Some(1.0 / slope.1),
+                    Meridian::Centred { .. } | Meridian::Tube { .. } => None,
+                };
+                if let Some(per) = along {
+                    let most = (reach.1 - reach.0) * per;
+                    assert!(tall <= most * (1.0 + 1e-9) + 1e-9, "{name}: {from} to {to} is {tall} tall, over {most}");
+                }
+            }
+        }
+
+        fn check<C: ParametricCurve + Clone>(
+            name: &str,
+            image: &Image<C>,
+            want: &Expect,
+            s: &dyn Surface,
+            span: (f64, f64),
+        ) {
+            assert!(same_turn(image.turn, want.turn), "{name}: {:?} against {:?}", image.turn, want.turn);
+            assert_eq!(image.below, want.below, "{name}: below the apex");
+            assert!(same(image.tube, want.tube), "{name}: tube {} against {}", image.tube, want.tube);
+            let (lo, hi) = span;
+            let mut last: Option<UvPoint> = None;
+            for i in 0..=240_u32 {
+                let t = lo + (hi - lo) * f64::from(i) / 240.0;
+                let (uv, p) = (image.eval_uv(t), image.curve.eval_point(t).to_vec3());
+                let miss = (s.point(uv).to_vec3() - p).norm();
+                assert!(miss <= 1e-11 * (1.0 + p.norm()), "{name}: at {t} it maps {miss} from its curve");
+                if let Some(before) = last {
+                    // Only an angle can jump: the angle about the axis, and a torus's tube angle.
+                    let tube = matches!(image.chart.0, Form::Turned { meridian: Meridian::Tube { .. }, .. });
+                    let jump = (uv.u() - before.u()).abs() + if tube { (uv.v() - before.v()).abs() } else { 0.0 };
+                    assert!(jump < 1.5, "{name}: it jumps by {jump} at {t}");
+                }
+                last = Some(uv);
+                if i % 30 == 15 {
+                    rates(name, image, t);
+                }
+            }
+            boxes(name, image, span);
+        }
+
+        /// The placed point and direction of local ones.
+        fn put(place: &Placement<Local, World>, p: Vec3) -> Vec3 {
+            place.point(Point::from_vec3(p)).to_vec3()
+        }
+
+        fn turn(place: &Placement<Local, World>, v: Vec3) -> Vec3 {
+            place.direction(occam_units::Direction::normalised(v)).get()
+        }
+
+        /// A circle and an ellipse placed from local axes.
+        fn ring(place: &Placement<Local, World>, c: Vec3, (x, y): (Vec3, Vec3), r: f64) -> Circle {
+            Circle::restore(&numbers(put(place, c), turn(place, x), turn(place, y), &[r], true)).unwrap()
+        }
+
+        fn oval(place: &Placement<Local, World>, c: Vec3, (x, y): (Vec3, Vec3), radii: (f64, f64)) -> Ellipse {
+            Ellipse::restore(&numbers(put(place, c), turn(place, x), turn(place, y), &[radii.0, radii.1], true))
+                .unwrap()
+        }
+
+        fn conic<C: ParametricCurve + Clone>(name: &str, c: C, s: &dyn Surface, inside: bool) {
+            let chart = Chart::of(s, s.analytic(crate::conformance::tolerance()).unwrap()).unwrap();
+            let at = |t: f64| c.eval_point(t).to_vec3();
+            let (centre, a, b) = (
+                (at(0.0) + at(PI)) * 0.5,
+                at(0.0) - (at(0.0) + at(PI)) * 0.5,
+                at(FRAC_PI_2) - (at(0.0) + at(PI)) * 0.5,
+            );
+            let want = conic_of(&chart, (centre, a, b), inside);
+            let image = Image::conic(c, chart).unwrap_or_else(|| panic!("{name} is a conic"));
+            check(name, &image, &want, s, (0.0, TAU));
+        }
+
+        fn beside<C: ParametricCurve + Clone>(name: &str, c: C, s: &dyn Surface, toward: Vec3, span: (f64, f64)) {
+            let chart = Chart::of(s, s.analytic(crate::conformance::tolerance()).unwrap()).unwrap();
+            let want = beside_of(&chart, toward);
+            check(name, &Image::beside(c, chart, Point::from_vec3(toward)), &want, s, span);
+        }
+
+        /// A circle a plane cuts from a sphere of `r`, and whether the sphere's axis passes inside it, or `None` where a
+        /// pole is too near the plane for the image to keep from jumping between samples.
+        fn sphere_case(place: &Placement<Local, World>, r: f64, dice: &mut Dice) -> Option<(Circle, bool)> {
+            let n = dice.unit();
+            let d = r * dice.within(-0.85, 0.85);
+            if (r * n.z - d).abs() < 0.2 * r || (r * n.z + d).abs() < 0.2 * r {
+                return None;
+            }
+            let (centre, rho) = (n * d, (r * r - d * d).sqrt());
+            let meet = Vec3::new(0.0, 0.0, d / n.z);
+            let x = square(n, dice);
+            Some((ring(place, centre, (x, n.cross(x)), rho), (meet - centre).norm() < rho))
+        }
+
+        #[test]
+        fn images_on_spheres_and_cylinders_hold_their_references() {
+            let mut dice = Dice(7);
+            for seed in 0..24 {
+                let place = dice.placement();
+                let r = dice.within(0.5, 2.0);
+                let sphere = Sphere::placed(&place, mm(r)).unwrap();
+                if let Some((circle, inside)) = sphere_case(&place, r, &mut dice) {
+                    conic(&format!("sphere[{seed}]"), circle, &sphere, inside);
+                    if !inside {
+                        let toward = circle.eval_point(1.0).to_vec3();
+                        beside(&format!("sphere_beside[{seed}]"), circle, &sphere, toward, (0.0, TAU));
+                    }
+                }
+                let cylinder = Cylinder::placed(&place, mm(r)).unwrap();
+                let n = Vec3::new(
+                    dice.within(-1.0, 1.0),
+                    dice.within(-1.0, 1.0),
+                    dice.within(0.25, 1.0) * if seed % 2 == 0 { 1.0 } else { -1.0 },
+                );
+                let n = n * (1.0 / n.norm());
+                let minor = n.cross(Vec3::new(0.0, 0.0, 1.0)) * (1.0 / n.cross(Vec3::new(0.0, 0.0, 1.0)).norm());
+                let centre = Vec3::new(0.0, 0.0, dice.within(-2.0, 2.0));
+                let axes = if seed % 3 == 0 { (minor, n.cross(minor)) } else { (n.cross(minor) * -1.0, minor) };
+                let radii = if seed % 3 == 0 { (r, r / n.z.abs()) } else { (r / n.z.abs(), r) };
+                conic(&format!("cylinder[{seed}]"), oval(&place, centre, axes, radii), &cylinder, true);
+                let (sin, cos) = sin_cos(dice.within(-PI, PI));
+                let foot = put(&place, Vec3::new(r * cos, r * sin, centre.z));
+                let rising = Line::new(
+                    Point::from_vec3(foot),
+                    occam_units::Direction::normalised(turn(&place, Vec3::new(0.0, 0.0, 1.0))),
+                );
+                beside(&format!("cylinder_line[{seed}]"), rising, &cylinder, foot, (-3.0, 3.0));
+            }
+        }
+
+        #[test]
+        fn an_image_round_a_sphere_keeps_its_angle_on_a_circle_its_axis_sees_almost_edge_on() {
+            // The circle's plane all but holds the axis, and passes a tenth of the radius from a pole: seen down the
+            // axis it is a thin ellipse, on which the angle from its centre runs far from its parameter.
+            let sphere = Sphere::placed(&Placement::identity(), mm(1.0)).unwrap();
+            let n = Vec3::new(0.73, 0.675, 0.111);
+            let n = n * (1.0 / n.norm());
+            let (d, e) = (0.019, Vec3::new(-0.533, 0.46, 0.71));
+            let x = e - n * e.dot(n);
+            let x = x * (1.0 / x.norm());
+            let circle = ring(&Placement::identity(), n * d, (x, n.cross(x)), (1.0 - d * d).sqrt());
+            conic("sphere_edge_on", circle, &sphere, true);
+        }
+
+        /// The ellipse a plane through the axis `h` from a cone's apex, facing `n`, cuts from the cone of `half` about
+        /// the local Z axis with its apex at `apex`: its centre, axes and radii.
+        fn cone_ellipse(apex: Vec3, h: f64, n: Vec3, half: f64) -> (Vec3, (Vec3, Vec3), (f64, f64)) {
+            let up = Vec3::new(0.0, 0.0, 1.0);
+            let (sin, cos) = sin_cos(half);
+            let (slant, gap) = (n.dot(up), -h * n.dot(up));
+            let e1 = (up - n * slant) * (1.0 / (up - n * slant).norm());
+            let (rise, k, foot) = (e1.dot(up), slant * slant - sin * sin, apex - n * gap);
+            let centre = foot + e1 * (-rise * gap * slant / k);
+            (centre, (e1, n.cross(e1)), (gap.abs() * sin * cos / k, gap.abs() * sin / k.sqrt()))
+        }
+
+        #[test]
+        fn images_on_cones_hold_their_references_on_both_nappes() {
+            let mut dice = Dice(11);
+            for seed in 0..24 {
+                let place = dice.placement();
+                let (half, radius) = (dice.within(0.3, 1.1), dice.within(0.0, 1.0));
+                let (sin, cos) = sin_cos(half);
+                let cone = Cone::placed(&place, mm(radius), occam_units::Angle::from_radians(half)).unwrap();
+                let apex = Vec3::new(0.0, 0.0, -radius * cos / sin);
+                let height = dice.within(0.5, 2.0) * if seed % 2 == 0 { 1.0 } else { -1.0 };
+                let level = (Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+                let flat = ring(&place, apex + Vec3::new(0.0, 0.0, height), level, height.abs() * sin / cos);
+                conic(&format!("cone_ring[{seed}]"), flat, &cone, true);
+                // From nearly as steep as the side, a long ellipse whose centre is far from the axis inside it, to steep.
+                let steep =
+                    sin + if seed % 4 == 0 { dice.within(0.002, 0.02) } else { dice.within(0.1, 0.9) } * (1.0 - sin);
+                let side = (1.0 - steep * steep).sqrt();
+                let (s2, c2) = sin_cos(dice.within(-PI, PI));
+                let facing = Vec3::new(side * c2, side * s2, steep);
+                let (centre, axes, radii) = cone_ellipse(apex, height, facing, half);
+                conic(&format!("cone_ellipse[{seed}]"), oval(&place, centre, axes, radii), &cone, true);
+                let phase = dice.within(-PI, PI);
+                let (ps, pc) = sin_cos(phase);
+                let first = turn(&place, axes.0) * (radii.0 * pc) + turn(&place, axes.1) * (radii.1 * ps);
+                let second = turn(&place, axes.0) * (-radii.0 * ps) + turn(&place, axes.1) * (radii.1 * pc);
+                let still = Vec3::new(0.0, 0.0, 0.0);
+                let skewed = Sketch { centre: put(&place, centre), a: first, b: second, wobble: still };
+                conic(&format!("cone_skewed[{seed}]"), skewed, &cone, true);
+                let (gap, angle) = (dice.within(0.2, 1.0), dice.within(-PI, PI));
+                let (s3, c3) = sin_cos(angle);
+                let (out, across) = (Vec3::new(c3, s3, 0.0), Vec3::new(-s3, c3, 0.0));
+                for (way, name) in [(1.0, "cone_upper"), (-1.0, "cone_lower")] {
+                    let (x, y) = (turn(&place, Vec3::new(0.0, 0.0, way)), turn(&place, across * way));
+                    let centre = put(&place, apex + out * gap);
+                    let branch = Hyperbola::restore(&numbers(centre, x, y, &[gap * cos / sin, gap], false)).unwrap();
+                    let vertex = branch.eval_point(0.0).to_vec3();
+                    beside(&format!("{name}[{seed}]"), branch, &cone, vertex, (-1.5, 1.5));
+                }
+            }
+        }
+
+        #[test]
+        fn images_on_tori_and_planes_hold_their_references() {
+            let mut dice = Dice(13);
+            for seed in 0..24 {
+                let place = dice.placement();
+                let (major, minor) = (dice.within(2.0, 3.0), dice.within(0.3, 0.8));
+                let torus = Torus::placed(&place, mm(major), mm(minor)).unwrap();
+                let tube = dice.within(-PI + 0.05, PI - 0.05);
+                let (sv, cv) = sin_cos(tube);
+                let (x, y) = (Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+                let flat = ring(&place, Vec3::new(0.0, 0.0, minor * sv), (x, y), major + minor * cv);
+                conic(&format!("torus_ring[{seed}]"), flat, &torus, true);
+                let (su, cu) = sin_cos(dice.within(-PI, PI));
+                let out = Vec3::new(cu, su, 0.0);
+                let middle = dice.within(-PI, PI);
+                let arc = ring(&place, out * major, (out, Vec3::new(0.0, 0.0, 1.0)), minor)
+                    .trimmed(middle - 2.5, middle + 2.5)
+                    .unwrap();
+                let toward = arc.eval_point(middle).to_vec3();
+                beside(&format!("torus_meridian[{seed}]"), arc, &torus, toward, (middle - 2.5, middle + 2.5));
+                let sheet = Plane::placed(&place);
+                let up = Vec3::new(0.0, 0.0, 1.0);
+                let x = square(up, &mut dice);
+                let radius = dice.within(0.5, 3.0);
+                let centre = Vec3::new(dice.within(-2.0, 2.0), dice.within(-2.0, 2.0), 0.0);
+                let circle = ring(&place, centre, (x, up.cross(x)), radius);
+                conic(&format!("plane[{seed}]"), circle, &sheet, false);
+            }
+        }
+    }
 }
