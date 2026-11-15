@@ -2,11 +2,16 @@
 //! unmutated suite first, then `cargo mutants --in-diff` over the Rust changes since the merge base with `origin/main`.
 //! A mutant no test catches fails the gate unless `.cargo/mutants.toml` excludes it with a reason.
 //!
+//! cargo-mutants has no baseline of its own to derive a timeout from, since the gate runs the suite itself, so the
+//! gate times that run and passes the timeout.
+//!
 //! It runs in two passes. No crate depends on `occam-xtask`, so only its own tests can catch its mutants and they run
 //! those alone; every other mutant runs the whole workspace's tests, which
 //! `docs/decisions/2026-11-14-mutants-keep-the-whole-workspace.md` measured against narrower scopes. `--shard k/n` runs
 //! one of n slices of both. `--iterate` skips the mutants an earlier run in this checkout caught, to try a fix on what
 //! survived or was not reached; the gate is a run without it.
+
+use std::time::{Duration, Instant};
 
 use crate::repo::Repo;
 use crate::verdict::{Finding, Verdict};
@@ -16,6 +21,13 @@ const PASSES: [(&str, &[&str]); 2] = [
     ("workspace", &["--exclude", "crates/occam-xtask/**"]),
     ("xtask", &["--package", "occam-xtask", "--test-workspace", "false"]),
 ];
+
+/// The least a mutant's tests are given, in seconds: cargo-mutants' own default where it has no baseline to go by.
+const TIMEOUT_FLOOR: u64 = 300;
+
+/// How many times the unmutated suite's time a mutant's tests are given: cargo-mutants' own default multiple of its
+/// baseline.
+const TIMEOUT_MULTIPLE: u64 = 5;
 
 /// What a run was asked for.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -47,15 +59,16 @@ pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     if diff.trim().is_empty() {
         return Ok(no_diff());
     }
-    repo.checked(
-        "mutants.unmutated-failed",
-        env!("CARGO"),
-        &["nextest", "run", "--workspace", "--cargo-profile", "mutants", "--profile", "ci"],
-    )
-    .map_err(|e| vec![e])?;
+    // Built first, so that the run that is timed is the tests alone.
+    let suite = ["nextest", "run", "--workspace", "--cargo-profile", "mutants", "--profile", "ci"];
+    let build: Vec<&str> = suite.into_iter().chain(["--no-run"]).collect();
+    repo.checked("mutants.unmutated-failed", env!("CARGO"), &build).map_err(|e| vec![e])?;
+    let started = Instant::now();
+    repo.checked("mutants.unmutated-failed", env!("CARGO"), &suite).map_err(|e| vec![e])?;
+    let timeout = timeout(started.elapsed()).to_string();
     let mut passes = Vec::new();
     for (pass, selection) in PASSES {
-        let args = arguments(selection, &options);
+        let args = arguments(selection, &options, &timeout);
         let result = repo.cargo_mutants(pass, &diff, &args).map_err(|e| vec![e])?;
         let [caught, missed, timeout, unviable] = result.outcomes.each_ref().map(String::as_str);
         let (caught, hung) = check(result.success, &Outcomes { caught, missed, timeout })?;
@@ -91,10 +104,20 @@ fn is_shard(slice: &str) -> bool {
     parsed.is_some_and(|(k, n)| k < n)
 }
 
-/// The cargo-mutants arguments of one pass: its selection, then the run's shard and `--iterate` where asked for.
-fn arguments<'a>(selection: &[&'a str], options: &'a Options) -> Vec<&'a str> {
+/// How long a mutant's tests may run, in seconds, given how long the unmutated suite took: [`TIMEOUT_MULTIPLE`] times
+/// it, a part of a second counted as a whole one, and never less than [`TIMEOUT_FLOOR`]. A mutant no test catches runs
+/// the whole suite, beside the other jobs' builds and tests, and one that ran out of time would count as caught (L13).
+fn timeout(suite: Duration) -> u64 {
+    let seconds = suite.as_secs().saturating_add(u64::from(suite.subsec_nanos() > 0));
+    seconds.saturating_mul(TIMEOUT_MULTIPLE).max(TIMEOUT_FLOOR)
+}
+
+/// The cargo-mutants arguments of one pass: its selection and the timeout, then the run's shard and `--iterate` where
+/// asked for.
+fn arguments<'a>(selection: &[&'a str], options: &'a Options, timeout: &'a str) -> Vec<&'a str> {
     let shard = options.shard.iter().flat_map(|slice| ["--shard", slice.as_str()]);
-    selection.iter().copied().chain(shard).chain(options.iterate.then_some("--iterate")).collect()
+    let selected = selection.iter().copied().chain(["--timeout", timeout]);
+    selected.chain(shard).chain(options.iterate.then_some("--iterate")).collect()
 }
 
 /// Checks one cargo-mutants run (`success` is its exit status, which is also false after a timeout). Returns how many
@@ -251,14 +274,25 @@ mod tests {
     }
 
     #[test]
-    fn a_shard_and_iterate_reach_every_pass() {
+    fn a_shard_and_iterate_reach_every_pass_and_the_timeout_always_does() {
         let [(_, workspace), (_, xtask)] = PASSES;
-        assert_eq!(arguments(workspace, &Options::default()), ["--exclude", "crates/occam-xtask/**"]);
+        let plain = ["--exclude", "crates/occam-xtask/**", "--timeout", "300"];
+        assert_eq!(arguments(workspace, &Options::default(), "300"), plain);
         let options = Options { shard: Some("2/16".to_string()), iterate: true };
-        let sliced = ["--package", "occam-xtask", "--test-workspace", "false", "--shard", "2/16", "--iterate"];
-        assert_eq!(arguments(xtask, &options), sliced);
+        let sliced = ["--package", "occam-xtask", "--test-workspace", "false", "--timeout", "450"];
+        assert_eq!(arguments(xtask, &options, "450"), [&sliced[..], &["--shard", "2/16", "--iterate"]].concat());
         let again = Options { iterate: true, ..Options::default() };
-        assert_eq!(arguments(workspace, &again), ["--exclude", "crates/occam-xtask/**", "--iterate"]);
+        assert_eq!(arguments(workspace, &again, "300"), [&plain[..], &["--iterate"]].concat());
+    }
+
+    #[test]
+    fn a_mutants_tests_get_five_times_the_unmutated_suite_and_never_less_than_the_floor() {
+        let of = |millis| timeout(Duration::from_millis(millis));
+        // A quick suite keeps the floor, up to the suite that five times over is the floor.
+        assert_eq!([of(0), of(23_000), of(59_000), of(59_999)], [300; 4]);
+        // Past it, five times the suite's seconds, a part of a second counted as a whole one.
+        assert_eq!([of(60_000), of(60_001), of(66_400), of(136_600)], [300, 305, 335, 685]);
+        assert_eq!(timeout(Duration::MAX), u64::MAX);
     }
 
     fn header(path: &str) -> String {

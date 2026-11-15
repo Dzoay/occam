@@ -47,11 +47,14 @@ codegen-units = 1
 lto = "fat"
 codegen-units = 1
 
-# The mutants gate's build: the test profile, optimised. The same assertions, overflow checks included, and the same
-# floating-point results (L14). No debug info, so links are shorter.
+# The mutants gate's build: the test profile without debug info, so links are shorter. Not optimised: a mutant's time
+# is its build, and its tests stop at the first failure. On the same 58 mutants, 3 jobs, opt-level 1 took 26.8 min
+# (4,669 s building, 98 s testing) and opt-level 0 took 7.2 min (986 s, 300 s), with the same outcome for every mutant
+# (docs/decisions/2026-11-14-mutants-keep-the-whole-workspace.md). The dependencies keep `dev`'s opt-level 2 below,
+# which this profile inherits through `test`: changing this level rebuilt no dependency.
 [profile.mutants]
 inherits = "test"
-opt-level = 1
+opt-level = 0
 debug = false
 
 # Line tables, not full debug info: panics keep their files and lines.
