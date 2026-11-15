@@ -284,3 +284,6 @@ mod tests {
         assert!(close(plane.flipped().normal, Vec3::new(0.0, 0.0, -1.0)));
     }
 }
+
+#[cfg(test)]
+mod tests_limits;

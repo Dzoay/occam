@@ -302,3 +302,6 @@ pub(crate) fn sheet(
     edit.set(body, BodyRecord { kind: BodyKind::Sheet, first_shell: Some(shell), first_wire: None, born })?;
     Ok(face)
 }
+
+#[cfg(test)]
+mod tests;

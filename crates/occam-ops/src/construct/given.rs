@@ -294,3 +294,6 @@ pub(crate) fn face_step(at: &At, fields: &Map<String, Value>, units: Units, out:
     let fields = object(at, &value, Operation::Face.fields(), out)?;
     face(at, fields, units, out)
 }
+
+#[cfg(test)]
+mod tests;

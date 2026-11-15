@@ -284,3 +284,6 @@ mod tests {
         assert_eq!(Boxes::new(Vec::new()).least([0.0, 0.0], 0.0, |_| 1.0), f64::INFINITY);
     }
 }
+
+#[cfg(test)]
+mod tests_halving;

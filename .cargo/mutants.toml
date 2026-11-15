@@ -270,4 +270,10 @@ exclude_re = [
     # without it falls to a double's resolution only where the cut is as coarse as the sag allows and the point faces a
     # chord's middle, which no test can place, as a sine's last bit there differs by platform.
     "loops\\.rs:81:92: replace / with % in Loops<'a>::winding$",
+    # The plane of a face's wires. By line. A unit normal no more than 1e-12 across the z axis has a z part within 1e-24
+    # of 1 or -1, never 0, so no turn and the half turn are told apart by its sign alone.
+    "construct/space\\.rs:35:17: replace > with >= in lift$",
+    # Only a circle in the plane has its curve in the plane's parameters asked for, so its axes' normal is the plane's or
+    # the opposite: their product is 1 or -1 within rounding, never 0.
+    "construct/space\\.rs:\\d+:\\d+: replace < with <= in Flatland::pcurve$",
 ]

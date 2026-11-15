@@ -108,3 +108,6 @@ fn crossing(edit: &Edit, chain: &Chain, at: &Input, band: f64) -> Result<(), Rep
     let flats = run.flats(&plane);
     first_touch(&[(&flats, chain.closed)], band).map_or(Ok(()), |touch| Err(crosses_itself(&plane, touch, at, band)))
 }
+
+#[cfg(test)]
+mod tests;

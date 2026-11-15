@@ -283,3 +283,6 @@ mod tests {
         assert!(!loops.witnesses(face.len(), [1.0, 1.0], 0.1), "no such loop");
     }
 }
+
+#[cfg(test)]
+mod tests_margins;

@@ -111,3 +111,6 @@ pub(crate) fn off_plane(plane: &Flatland, points: &[Vec3], band: f64) -> Option<
 pub(crate) fn not_a_wire(at: &Input, given: &str) -> Report {
     Report::new(Code::NotAWire, Fault::InvalidInput).with_input(at.clone().given(given))
 }
+
+#[cfg(test)]
+mod tests;

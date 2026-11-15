@@ -223,3 +223,6 @@ fn take(edit: &mut Edit, id: Id<Wire>, at: &Input, band: f64) -> Result<Vec<(Id<
     edit.remove(wire.body)?;
     Ok(edges)
 }
+
+#[cfg(test)]
+mod tests;

@@ -176,3 +176,6 @@ mod tests {
         assert_eq!(found, Some(((4, 0), (5, 0))), "the circle between holes 3 and 5 touches both");
     }
 }
+
+#[cfg(test)]
+mod tests_open;
