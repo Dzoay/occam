@@ -51,9 +51,9 @@ are the allowed [`wasm-bindgen`](../decisions/2026-11-09-wasm-bindgen.md), and [
 `web/` is built with [Preact and signals](../decisions/2026-11-13-preact-with-signals.md), which the full web
 application grows from, and is written in
 [TypeScript, typed against WebGPU](../decisions/2026-11-13-typescript-with-webgpu-types.md): esbuild builds it and
-`tsc --noEmit` checks it in the gates. `view.renderer` adds them, esbuild, `typescript` and `@webgpu/types` at pinned
-versions, asking for each again under the dependency rule. `web/`'s tests use the Playwright `gates perf` already
-runs. Each face is meshed once: [view-dependent
+`tsc --noEmit` checks it in the gates. `web/` pins them, esbuild, `typescript` and `@types/web`, each
+[approved](../decisions/2026-11-15-the-viewers-npm-packages.md) under the dependency rule. `web/`'s tests use the
+Playwright `gates perf` already runs. Each face is meshed once: [view-dependent
 detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes after the release. The sketch's `mesh.rs`,
 then `compose.rs`'s `Session`, are deleted as they become real.
 
@@ -103,21 +103,6 @@ thread, and the page needs no COOP or COEP headers.
 
 *Failing test first:* in headless Chromium, a request run in the editing worker is meshed by four workers to the
 native mesher's hash; a failing face is named and the rest arrive; the main thread never loads the module.
-
-### `view.renderer`
-
-`web/`, the viewer: a page that draws the per-face buffers with WebGPU. Its buffers can be read by both a storage
-binding and a vertex fetch, coordinates are `f32` offsets from an `f64` origin the page keeps, uploads are bounded per
-frame, and the frame loop keeps submitting during interaction. It orbits, pans and zooms, centres on the selection and
-fits the model to the window. Preact draws the controls and
-signals carry their state; the frame loop and the GPU work stay outside the component tree. A browser without WebGPU
-gets a named report with its remedy. CI has no GPU, so its tests run on headless Chromium's software adapter and assert
-buffers, not pixels.
-
-*Failing test first:* the page draws a cube, and the buffers it uploaded match the mesh, offsets within `f32` of the
-`f64` positions; a model over the per-frame bound is uploaded in pieces; a face edited away disappears without the
-others being uploaded again; fit leaves every vertex inside the view; a page denied WebGPU shows the report, not a
-blank canvas.
 
 ### `view.live`
 
@@ -215,6 +200,6 @@ None is open. The six of [the plan's §7](../PLAN.md#7-decisions-the-user-still-
 [O30](../decisions/2026-11-13-gpu-figures-are-goals.md). The live view follows
 [prompt-driven building](../decisions/2026-11-14-prompt-driven-building-shown-live.md), [the agent starts
 the viewer](../decisions/2026-11-14-the-agent-starts-the-viewer.md), and `occam view` uses
-[axum and tokio](../decisions/2026-11-14-axum-and-tokio-for-the-viewer.md). `view.renderer`'s PR still asks for its npm packages,
-esbuild and the [TypeScript checker](../decisions/2026-11-13-typescript-with-webgpu-types.md) under the
-dependency rule.
+[axum and tokio](../decisions/2026-11-14-axum-and-tokio-for-the-viewer.md). The page's npm packages, esbuild and the
+[TypeScript checker](../decisions/2026-11-13-typescript-with-webgpu-types.md) were
+[approved](../decisions/2026-11-15-the-viewers-npm-packages.md) under the dependency rule.

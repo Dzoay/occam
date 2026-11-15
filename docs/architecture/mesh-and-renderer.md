@@ -1,6 +1,6 @@
 # Mesh and renderer
 
-[Architecture](../ARCHITECTURE.md) › Mesh and renderer · crate `occam-mesh` · sketch [`mesh.rs`](../sketch/src/mesh.rs)
+[Architecture](../ARCHITECTURE.md) › Mesh and renderer · crate `occam-mesh` · page `web/` · sketch [`mesh.rs`](../sketch/src/mesh.rs)
 
 Triangles for display: shared edges first, so neighbouring faces meet exactly, then faces, then a check.
 
@@ -24,6 +24,8 @@ flowchart LR
 
 - Buffers readable by both a storage binding and a vertex fetch.
 - Index buffers that stay stable while the topology does.
+- Each index counts from the start of its face's vertex block, so a block is kept, moved or dropped without rewriting
+  another face's.
 - Per-face ranges and dirty rectangles.
 - Uploads bounded per frame.
 - Camera-relative coordinates from the first version: an `f64` origin with `f32` offsets.

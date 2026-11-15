@@ -12,6 +12,10 @@ target := `scripts/target-dir.sh`
 tmp := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-tmp"
 # The OCCT wheel's virtualenv lives outside the repository too (docs/decisions/2026-11-09-occt-oracle.md).
 oracle_venv := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-oracle" / "venv"
+# What gives `web-test`'s headless Chromium (156, Playwright 1.64.1) its software WebGPU adapter. Without the first flag
+# it gives none; without Vulkan through SwiftShader every read-back after a canvas frame fails ("A valid external
+# Instance reference no longer exists"). The last asks for that adapter by name, whatever GPU the machine has.
+webgpu_flags := "--enable-unsafe-webgpu --enable-features=Vulkan --use-angle=swiftshader --use-webgpu-adapter=swiftshader"
 
 [private]
 default:
@@ -57,6 +61,16 @@ test *args:
 fmt:
     cargo fmt --all
 
+# The viewer's npm packages, as web/package-lock.json pins them, installed again only when the lock is newer
+[private]
+web-deps:
+    if [ ! web/node_modules/.package-lock.json -nt web/package-lock.json ]; then npm ci --prefix web --no-audit --no-fund; fi
+
+# Build the viewer with esbuild into web/dist, or the directory given: `just web-build <directory>`
+[group('build')]
+web-build *args: web-deps
+    node web/build.mjs "$@"
+
 # Type-check docs/sketch, the compiled sketch of the seams in docs/ARCHITECTURE.md, which no workspace build includes
 [env("CARGO_TARGET_DIR", target)]
 [group('check')]
@@ -74,6 +88,20 @@ fmt-check:
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings
     cargo clippy -p occam-topo --all-targets --features determinism -- -D warnings
+
+# The viewer's types, strict and declaration files included, against @types/web's, with `tsc --noEmit`; esbuild builds it without checking them
+[group('gates')]
+web-check: web-deps
+    web/node_modules/.bin/tsc --noEmit -p web
+
+# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, and its reports against the catalogue
+[env("CARGO_TARGET_DIR", target)]
+[env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
+[group('gates')]
+web-test: web-build
+    mkdir -p "$CARGO_TARGET_DIR"
+    cargo run --quiet -p occam-report --example catalogue > "$CARGO_TARGET_DIR/occam-catalogue.json"
+    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" node --test --test-timeout=300000 web/test/viewer.test.mjs
 
 # Every test on the host, then the doctests of any library
 [env("CARGO_TARGET_DIR", target)]
@@ -113,9 +141,9 @@ tools-test: corpus-test
 [group('gates')]
 preflight: fmt-check (gate "all" "--except" "deps,errors,determinism,counts,mutants,perf")
 
-# Everything except mutants and perf, the quick checks first: `preflight`, then clippy, the tests, wasm and the gates that build or run something
+# Everything except mutants and perf, the quick checks first: `preflight` and the viewer's types, then clippy, the tests, wasm, the viewer's tests and the gates that build or run something
 [group('gates')]
-gates: preflight clippy test-all wasm tools-test (gate "all" "--except" "layers,complexity,provenance,docs,plan,seam,mutants,perf")
+gates: preflight web-check clippy test-all wasm tools-test web-test (gate "all" "--except" "layers,complexity,provenance,docs,plan,seam,mutants,perf")
 
 # occam-geom's frozen seam against ci/seam.txt; `just seam --update docs/decisions/<decision>.md`: re-record it under it
 [env("CARGO_TARGET_DIR", target)]
