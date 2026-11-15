@@ -35,14 +35,14 @@ pub(super) fn all(mesh: &mut Triangulation, segments: &[[usize; 2]]) -> Result<(
     }
     let every = (0..mesh.tris.len()).flat_map(|t| (0..3).map(move |k| (t, k))).collect();
     mesh.legalize(every)?;
-    mesh.mark();
-    Ok(())
+    mesh.mark()
 }
 
-/// Whether `v`, on the line through `a` and `b`, lies on the side of `a` that `b` does.
+/// Whether `v`, on the line through `a` and `b`, lies on the side of `a` that `b` does: each of its coordinates on
+/// the same side of `a`'s as `b`'s, or at it with `b`'s.
 fn ahead(a: [f64; 2], b: [f64; 2], v: [f64; 2]) -> bool {
-    let sign = |x: f64, from: f64| (x > from, x < from);
-    sign(v[0], a[0]) == sign(b[0], a[0]) && sign(v[1], a[1]) == sign(b[1], a[1])
+    let side = |x: f64, from: f64, to: f64| x.partial_cmp(&from) == to.partial_cmp(&from);
+    side(v[0], a[0], b[0]) && side(v[1], a[1], b[1])
 }
 
 impl Triangulation {
@@ -51,10 +51,12 @@ impl Triangulation {
         let first = self.incident.get(a).copied().unwrap_or(NONE);
         let mut around = Vec::new();
         let mut t = first;
-        while let Some(k) = (0..3).find(|&k| at(self.tri(t).v, k) == a) {
+        // No star holds more triangles than there are, so a walk that has not come back by then has met a broken link.
+        for _ in 0..self.tris.len() {
+            let Some(k) = (0..3).find(|&k| at(self.tri(t).v, k) == a) else { break };
             around.push((t, k));
             t = at(self.tri(t).n, next(k));
-            if t == first || around.len() > self.tris.len() {
+            if t == first {
                 break;
             }
         }
@@ -63,7 +65,7 @@ impl Triangulation {
 
     /// A triangle with an edge from `a` to `b`, either way, and the corner opposite it: found round whichever end's
     /// star holds it, as a corner of the outermost triangle's star is open.
-    fn find_edge(&self, a: usize, b: usize) -> Option<(usize, usize)> {
+    pub(super) fn find_edge(&self, a: usize, b: usize) -> Option<(usize, usize)> {
         self.edge_round(a, b).or_else(|| self.edge_round(b, a))
     }
 
@@ -82,16 +84,19 @@ impl Triangulation {
     }
 
     /// The triangle at `a` through which the segment to `b` leaves it, and the edge it leaves by, the end right of
-    /// the segment first.
+    /// the segment first. Every point round `a` is first held against the segment, so that one on it is found
+    /// wherever it lies round the star.
     fn leaving(&self, a: usize, b: usize) -> Result<(usize, [usize; 2]), Fail> {
-        for (t, k) in self.star(a) {
+        let star = self.star(a);
+        for &(t, k) in &star {
+            let x = at(self.tri(t).v, next(k));
+            if self.orient(a, b, x)? == Side::Within && ahead(self.point(a), self.point(b), self.point(x)) {
+                return Err(Fail::Touches([a, b], x));
+            }
+        }
+        for (t, k) in star {
             let v = self.tri(t).v;
             let (right, left) = (at(v, next(k)), at(v, prev(k)));
-            for x in [right, left] {
-                if self.orient(a, b, x)? == Side::Within && ahead(self.point(a), self.point(b), self.point(x)) {
-                    return Err(Fail::Touches([a, b], x));
-                }
-            }
             if self.orient(a, b, right)? == Side::Below && self.orient(a, b, left)? == Side::Above {
                 return Ok((t, [right, left]));
             }
@@ -125,7 +130,7 @@ impl Triangulation {
     }
 
     /// Whether the edge opposite corner `k` of triangle `t` is the diagonal of a strictly convex quadrilateral.
-    fn convex(&self, t: usize, k: usize) -> Result<bool, Fail> {
+    pub(super) fn convex(&self, t: usize, k: usize) -> Result<bool, Fail> {
         let tri = self.tri(t);
         let (c, a, b) = (at(tri.v, k), at(tri.v, next(k)), at(tri.v, prev(k)));
         let u = at(tri.n, k);
@@ -133,11 +138,9 @@ impl Triangulation {
         Ok(self.orient(c, a, d)? == Side::Above && self.orient(c, d, b)? == Side::Above)
     }
 
-    /// Whether the segments from `a` to `b` and from `c` to `d` cross strictly inside both.
-    fn cross(&self, [a, b]: [usize; 2], [c, d]: [usize; 2]) -> Result<bool, Fail> {
-        if a == c || a == d || b == c || b == d {
-            return Ok(false);
-        }
+    /// Whether the segments from `a` to `b` and from `c` to `d` cross strictly inside both: an end they share lies on
+    /// both lines, so on neither side of either.
+    pub(super) fn cross(&self, [a, b]: [usize; 2], [c, d]: [usize; 2]) -> Result<bool, Fail> {
         let apart = |x: Side, y: Side| matches!((x, y), (Side::Above, Side::Below) | (Side::Below, Side::Above));
         let (s, t) = (self.orient(a, b, c)?, self.orient(a, b, d)?);
         Ok(apart(s, t) && apart(self.orient(c, d, a)?, self.orient(c, d, b)?))
@@ -179,12 +182,12 @@ impl Triangulation {
     }
 
     /// Marks each triangle inside where reaching it from the outermost triangle crosses an odd number of fixed edges,
-    /// and counts them.
-    fn mark(&mut self) {
+    /// and counts them. Each triangle is reached once, so a walk that takes more steps than there are triangles has met
+    /// a broken link.
+    fn mark(&mut self) -> Result<(), Fail> {
         let mut depth = vec![u32::MAX; self.tris.len()];
         let start = self.incident.first().copied().unwrap_or(0);
-        let mut level = vec![start];
-        let mut crossings = 0_u32;
+        let (mut level, mut crossings, mut steps) = (vec![start], 0_u32, self.tris.len());
         while !level.is_empty() {
             for &t in &level {
                 if let Some(d) = depth.get_mut(t) {
@@ -193,6 +196,7 @@ impl Triangulation {
             }
             let (mut stack, mut beyond) = (level, Vec::new());
             while let Some(t) = stack.pop() {
+                steps = steps.checked_sub(1).ok_or(Fail::Broken)?;
                 let tri = self.tri(t);
                 for k in 0..3 {
                     let u = at(tri.n, k);
@@ -201,8 +205,9 @@ impl Triangulation {
                             *d = crossings;
                             stack.push(u);
                         }
-                        Some(d) if *d == u32::MAX => beyond.push(u),
-                        Some(_) | None => {}
+                        // Across a fixed edge, or already reached: those reached are left out below.
+                        Some(_) => beyond.push(u),
+                        None => {}
                     }
                 }
             }
@@ -213,5 +218,6 @@ impl Triangulation {
         }
         self.inside = depth.iter().map(|&d| d != u32::MAX && d & 1 == 1).collect();
         self.count = self.inside.iter().filter(|&&inside| inside).count();
+        Ok(())
     }
 }

@@ -84,8 +84,15 @@ pub(crate) fn orient(a: P2, b: P2, c: P2) -> Option<Side> {
 
 /// Where `d` lies against the circle through `a`, `b`, `c`, which run anticlockwise: [`Side::Above`] certainly inside
 /// it, [`Side::Below`] certainly outside, and `None` within a rounding of it or where a coordinate is not finite.
-#[expect(clippy::similar_names, reason = "the differences and products as Shewchuk names them")]
 pub(crate) fn incircle(a: P2, b: P2, c: P2, d: P2) -> Option<Side> {
+    let (det, permanent) = lifted(a, b, c, d);
+    beyond(det, INCIRCLE_BOUND * permanent, permanent)
+}
+
+/// The lifted determinant of `a`, `b`, `c` and `d` in plain arithmetic, and its permanent, which Shewchuk's bound is
+/// taken of: each written as he writes them.
+#[expect(clippy::similar_names, reason = "the differences and products as Shewchuk names them")]
+fn lifted(a: P2, b: P2, c: P2, d: P2) -> (f64, f64) {
     let (adx, ady, bdx, bdy) = (a[0] - d[0], a[1] - d[1], b[0] - d[0], b[1] - d[1]);
     let (cdx, cdy) = (c[0] - d[0], c[1] - d[1]);
     let (bdxcdy, cdxbdy, alift) = (bdx * cdy, cdx * bdy, adx * adx + ady * ady);
@@ -95,7 +102,7 @@ pub(crate) fn incircle(a: P2, b: P2, c: P2, d: P2) -> Option<Side> {
     let permanent = (bdxcdy.abs() + cdxbdy.abs()) * alift
         + (cdxady.abs() + adxcdy.abs()) * blift
         + (adxbdy.abs() + bdxady.abs()) * clift;
-    beyond(det, INCIRCLE_BOUND * permanent, permanent)
+    (det, permanent)
 }
 
 #[cfg(test)]

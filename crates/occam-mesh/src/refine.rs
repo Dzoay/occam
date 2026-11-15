@@ -73,11 +73,17 @@ fn strays(work: &Work<'_>, uv: UvPoint, flat: [Vec3; 3], middle: Option<Vec3>) -
 }
 
 /// Where triangle `t` of `mesh` takes a new point, if it strays too far or is turned over.
-#[expect(clippy::many_single_char_names, reason = "a triangle's corners, in the parameters and in space")]
 fn assess(mesh: &Triangulation, points: &Points, work: &Work<'_>, t: usize) -> Option<UvPoint> {
     let corners = mesh.corners(t)?;
     let [Some(a), Some(b), Some(c)] = corners.map(|k| points.uv.get(k).copied()) else { return None };
     let [Some(pa), Some(pb), Some(pc)] = corners.map(|k| points.at.get(k).map(|p| p.to_vec3())) else { return None };
+    wants(work, [a, b, c], [pa, pb, pc], mesh.fixed(t))
+}
+
+/// Where the triangle with corners at `[a, b, c]` in the face's parameters and at `[pa, pb, pc]` in space, whose edges
+/// opposite them are fixed as `fixed` says, takes a new point, if it strays too far or is turned over.
+#[expect(clippy::many_single_char_names, reason = "a triangle's corners, in the parameters and in space")]
+fn wants(work: &Work<'_>, [a, b, c]: [UvPoint; 3], [pa, pb, pc]: [Vec3; 3], fixed: [bool; 3]) -> Option<UvPoint> {
     if pa == pb || pb == pc || pc == pa {
         return None;
     }
@@ -86,7 +92,6 @@ fn assess(mesh: &Triangulation, points: &Points, work: &Work<'_>, t: usize) -> O
     let across = (pb - pa).cross(pc - pa);
     let over = at_middle.is_some_and(|n| across.dot(n) <= work.square * across.norm());
     let middle = at_middle.filter(|_| longest > 2.0 * work.floor);
-    let fixed = mesh.fixed(t);
     let (mut worst, mut best): (f64, Option<(f64, UvPoint)>) = (0.0, None);
     for at in grid(STEPS) {
         let [i, j, k] = at;
@@ -133,7 +138,8 @@ pub(crate) fn refine(mesh: &mut Triangulation, points: &mut Points, work: &Work<
         points.at.push(work.surface.point(uv));
         queued.resize(mesh.slots(), false);
         for changed in mesh.take_touched() {
-            if let Some(q) = queued.get_mut(changed).filter(|q| !**q && mesh.is_inside(changed)) {
+            // Only triangles inside change: no flip crosses a fixed edge, and the inside ends only at fixed edges.
+            if let Some(q) = queued.get_mut(changed).filter(|q| !**q) {
                 *q = true;
                 queue.push_back(changed);
             }

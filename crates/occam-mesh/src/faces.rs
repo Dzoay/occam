@@ -24,7 +24,7 @@ use occam_units::{Direction, Point, Tolerance, UvPoint, Vec3, World};
 use crate::boundary::{self, Boundary, not_meshed};
 use crate::deviation::between;
 use crate::edges::{Edges, stale};
-use crate::limits::Limits;
+use crate::limits::{Limits, higher, lower};
 use crate::refine::{Points, Work, refine};
 use crate::triangulation::{Fail, Triangulation};
 
@@ -150,17 +150,16 @@ fn refusal(face: Id<Face>, boundary: &Boundary, fail: Fail) -> Report {
     not_meshed(face, reason, fault, &edges)
 }
 
-/// The power of two nearest below the ratio of `surface`'s rates along `u` and along `v`, summed over `places`: what
-/// `u` is multiplied by in the plane the face is triangulated in.
+/// The power of two at or below the ratio of `surface`'s rates along `u` and along `v`, summed over `places`, within
+/// 2^64 of 1: what `u` is multiplied by in the plane the face is triangulated in. 1 where the ratio is not a normal
+/// number, as where there are no places or one rate is nought at all of them.
 fn scale(surface: &dyn Surface, places: &[UvPoint]) -> f64 {
-    let (mut along_u, mut along_v) = (0.0, 0.0);
-    for &uv in places {
-        let jet = surface.first(uv);
-        along_u += jet.du.rate().norm();
-        along_v += jet.dv.rate().norm();
-    }
+    let jets: Vec<_> = places.iter().map(|&uv| surface.first(uv)).collect();
+    let along_u: f64 = jets.iter().map(|jet| jet.du.rate().norm()).sum();
+    let along_v: f64 = jets.iter().map(|jet| jet.dv.rate().norm()).sum();
+    // Sums of lengths, so the ratio is never below nought.
     let ratio = along_u / along_v;
-    if !ratio.is_normal() || ratio < 0.0 {
+    if !ratio.is_normal() {
         return 1.0;
     }
     let exponent = i64::try_from((ratio.to_bits() >> 52) & 0x7ff).unwrap_or(1023).saturating_sub(1023);
@@ -168,17 +167,21 @@ fn scale(surface: &dyn Surface, places: &[UvPoint]) -> f64 {
     f64::from_bits(u64::try_from(exponent).unwrap_or(1023) << 52)
 }
 
-/// The unit normal of `surface` at `uv`, `Su x Sv` normalised, where its derivatives span a plane: neither is a
-/// rounding against the other, as at a pole, and they are not parallel within the angle of `tol`.
+/// The unit normal of `surface` at `uv`, `Su x Sv` normalised, where its derivatives span a plane.
 fn spanned(surface: &dyn Surface, uv: UvPoint, tol: Tolerance) -> Option<Vec3> {
     let jet = surface.first(uv);
-    let (su, sv) = (jet.du.rate(), jet.dv.rate());
+    spans(jet.du.rate(), jet.dv.rate(), tol.angle().radians())
+}
+
+/// `su x sv` normalised, where `su` and `sv` span a plane: neither is a rounding against the other, within 64 machine
+/// epsilons of it, as at a pole, and they are not parallel within `angle`.
+fn spans(su: Vec3, sv: Vec3, angle: f64) -> Option<Vec3> {
     let (a, b) = (su.norm(), sv.norm());
     let across = su.cross(sv);
     let length = across.norm();
-    let (short, long) = if a < b { (a, b) } else { (b, a) };
-    let spans = short > 64.0 * f64::EPSILON * long && length > tol.angle().radians() * a * b && length.is_normal();
-    spans.then(|| across * (1.0 / length))
+    let (short, long) = (lower(a, b), higher(a, b));
+    let spanned = short > 64.0 * f64::EPSILON * long && length > angle * a * b && length.is_normal();
+    spanned.then(|| across * (1.0 / length))
 }
 
 /// The normal `surface` declares at a pole within the band of `tol` of `p`, if `p` is one.

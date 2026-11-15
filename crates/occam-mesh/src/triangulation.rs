@@ -25,10 +25,6 @@ pub(crate) const NONE: usize = usize::MAX;
 /// How many points come before the ones given: the corners of the triangle that holds them.
 const OUTER: usize = 3;
 
-/// The most flips any one change may make before the triangulation is taken as broken: far more than valid input
-/// needs, so that a mistake is a report and not a hang.
-const FLIPS: usize = 1 << 26;
-
 /// A triangle: its corners anticlockwise, and across each edge, the edge opposite the corner at the same place, the
 /// triangle there and whether the edge is fixed.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -340,15 +336,14 @@ impl Triangulation {
         Ok([(t, 0), (t, 2), (u, 0), (u, 2)])
     }
 
-    /// Flips edges from `stack` until none of them, nor any edge a flip makes, needs it.
+    /// Flips edges from `stack` until none of them, nor any edge a flip makes, needs it. A flip never brings back an
+    /// edge a flip took away (Lawson), so no call makes more flips than there are pairs of points; one that would is
+    /// taken as broken, so that a mistake is a report and not a hang.
     fn legalize(&mut self, mut stack: Vec<(usize, usize)>) -> Result<(), Fail> {
-        let mut flips = 0_usize;
+        let mut left = self.points.len().saturating_mul(self.points.len());
         while let Some((t, k)) = stack.pop() {
             if self.flippable(t, k)? {
-                flips = flips.saturating_add(1);
-                if flips > FLIPS {
-                    return Err(Fail::Broken);
-                }
+                left = left.checked_sub(1).ok_or(Fail::Broken)?;
                 stack.extend(self.flip(t, k)?);
             }
         }

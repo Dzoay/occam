@@ -8,7 +8,7 @@
 //! vertex's position, so the triangle on that segment has two corners at one place and is left out of the mesh.
 
 use occam_report::{Code, Fault, Reason, Report};
-use occam_topo::{Edge, EdgeUse, Face, Id, Loop, Snapshot, Vertex, View};
+use occam_topo::{Edge, EdgeUse, Face, Id, Loop, Snapshot, View};
 use occam_units::{Point, UvPoint, World};
 
 use crate::edges::{Edges, stale};
@@ -30,19 +30,11 @@ pub(crate) struct Boundary {
     pub sides: Vec<Side>,
 }
 
-/// What a sample stands for: a vertex, or a sample of an edge strictly between its ends.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Key {
-    Vertex(Id<Vertex>),
-    Sample(Id<Edge>, usize),
-}
-
 /// One sample of a use, before its loop is joined up.
 #[derive(Clone, Copy)]
 struct Raw {
     uv: UvPoint,
     at: Point<World>,
-    key: Key,
 }
 
 /// The report that `face` could not be meshed, for `reason`, naming `edges`.
@@ -55,7 +47,6 @@ pub(crate) fn not_meshed(face: Id<Face>, reason: Reason, fault: Fault, edges: &[
 fn samples(model: &Snapshot, face: Id<Face>, u: Id<EdgeUse>, edges: &Edges) -> Result<(Side, Vec<Raw>), Report> {
     let used = model.view(u).ok_or_else(|| stale(model, u))?;
     let edge = used.edge();
-    let ends = model.view(edge).ok_or_else(|| stale(model, edge))?.ends();
     let sampled = match edges.get(edge) {
         Some(Ok(sampled)) => sampled,
         Some(Err(refused)) => {
@@ -67,14 +58,8 @@ fn samples(model: &Snapshot, face: Id<Face>, u: Id<EdgeUse>, edges: &Edges) -> R
     let Some(pcurve) = used.pcurve() else {
         return Err(not_meshed(face, Reason::NoParamCurve, Fault::NotImplemented, &[edge]));
     };
-    let last = sampled.params.len().saturating_sub(1);
-    let key = |k: usize| match k {
-        0 => Key::Vertex(ends.0),
-        k if k == last => Key::Vertex(ends.1),
-        k => Key::Sample(edge, k),
-    };
-    let raw = |(k, (&t, &at)): (usize, (&f64, &Point<World>))| Raw { uv: pcurve.uv(t), at, key: key(k) };
-    let mut raws: Vec<Raw> = sampled.params.iter().zip(&sampled.points).enumerate().map(raw).collect();
+    let raw = |(&t, &at): (&f64, &Point<World>)| Raw { uv: pcurve.uv(t), at };
+    let mut raws: Vec<Raw> = sampled.params.iter().zip(&sampled.points).map(raw).collect();
     if used.reversed() {
         raws.reverse();
     }
@@ -115,27 +100,31 @@ fn closeness(places: impl Iterator<Item = UvPoint>) -> [f64; 2] {
 pub(crate) fn of(model: &Snapshot, face: View<'_, Face>, edges: &Edges) -> Result<Boundary, Report> {
     let loops = loops(model, face, edges)?;
     let near = closeness(loops.iter().flatten().flat_map(|(_, raws)| raws.iter().map(|r| r.uv)));
-    let same = |a: &Raw, b: &Raw| {
-        a.key == b.key && (a.uv.u() - b.uv.u()).abs() <= near[0] && (a.uv.v() - b.uv.v()).abs() <= near[1]
-    };
+    let same = |a: &Raw, b: &Raw| (a.uv.u() - b.uv.u()).abs() <= near[0] && (a.uv.v() - b.uv.v()).abs() <= near[1];
     let mut boundary = Boundary::default();
     for uses in loops {
         let (first, sides) = (boundary.uv.len(), boundary.sides.len());
         let (mut opening, mut previous): (Option<Raw>, Option<Raw>) = (None, None);
         for (mut side, raws) in uses {
-            for raw in raws {
-                if !previous.is_some_and(|p| same(&p, &raw)) {
-                    boundary.push(raw, side.edge);
+            let mut raws = raws.into_iter();
+            // A use begins at the vertex the use before it ends at: one point there where their places agree.
+            if let Some(start) = raws.next() {
+                if !previous.is_some_and(|end| same(&end, &start)) {
+                    boundary.push(start, side.edge);
                 }
-                side.vertices.push(u32::try_from(boundary.uv.len().saturating_sub(1)).unwrap_or(u32::MAX));
-                opening = opening.or(Some(raw));
+                side.vertices.push(boundary.last());
+                opening = opening.or(Some(start));
+                previous = Some(start);
+            }
+            for raw in raws {
+                boundary.push(raw, side.edge);
+                side.vertices.push(boundary.last());
                 previous = Some(raw);
             }
             boundary.sides.push(side);
         }
         if let (Some(opening), Some(last)) = (opening, previous)
             && same(&opening, &last)
-            && boundary.uv.len() > first.saturating_add(1)
         {
             boundary.fold_last(first, sides);
         }
@@ -151,6 +140,11 @@ pub(crate) fn of(model: &Snapshot, face: View<'_, Face>, edges: &Edges) -> Resul
 }
 
 impl Boundary {
+    /// The number of the last point, as a mesh's vertex.
+    fn last(&self) -> u32 {
+        u32::try_from(self.uv.len().saturating_sub(1)).unwrap_or(u32::MAX)
+    }
+
     /// Adds the point `raw` stands for, a sample of `edge`.
     fn push(&mut self, raw: Raw, edge: Id<Edge>) {
         self.uv.push(raw.uv);

@@ -13,6 +13,13 @@ fail-fast = { max-fail = 1, terminate = "immediate" }
 filter = "package(occam-xtask) & test(/^(probes|compile_fail)::/)"
 priority = -10
 
+# occam-mesh's tests that mesh whole faces, and occam-ops' that mesh every face construction makes, run after the unit
+# tests: a mutant that sends refinement or flipping on without end then fails a quick test first, which ends the run,
+# rather than holding every thread until the timeout.
+[[profile.default.overrides]]
+filter = "(package(occam-mesh) & test(/^faces::tests::/)) | (package(occam-ops) & test(/^meshed::/))"
+priority = -5
+
 # The gates and CI: run everything and report every failure.
 [profile.ci]
 fail-fast = false

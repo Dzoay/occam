@@ -9,7 +9,7 @@ use occam_geom::Surface;
 use occam_units::{Point, UvPoint, Vec3};
 
 use crate::faces::FaceMesh;
-use crate::limits::higher;
+use crate::limits::{higher, lower};
 
 /// The point of the triangle `a`, `b`, `c` closest to `p`.
 fn closest(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
@@ -51,10 +51,7 @@ pub(crate) fn distance(p: Vec3, [a, b, c]: [Vec3; 3]) -> f64 {
     if off.is_finite() {
         return off;
     }
-    [a, b, c]
-        .into_iter()
-        .map(|corner| (p - corner).norm())
-        .fold(f64::INFINITY, |least, d| if d < least { d } else { least })
+    [a, b, c].into_iter().map(|corner| (p - corner).norm()).fold(f64::INFINITY, lower)
 }
 
 /// The point a fraction `(i, j, k) / n` of the way to each of `corners`, in a face's parameters.
