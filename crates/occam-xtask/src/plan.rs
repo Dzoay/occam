@@ -97,17 +97,121 @@ pub fn footers(log: &str) -> BTreeSet<String> {
     log.lines().filter_map(|line| line.trim().strip_prefix("Plan-Step: ")).map(|id| id.trim().to_string()).collect()
 }
 
+/// A milestone's Mermaid flowchart. Its nodes are its steps' slugs, and an arrow `a --> b` says that `b` needs `a`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Diagram {
+    /// Each node once, in the order they first appear.
+    pub nodes: Vec<String>,
+    /// Each arrow, from the step needed to the step that needs it.
+    pub arrows: Vec<(String, String)>,
+}
+
+/// The lines inside each fenced Mermaid block of `text`, trimmed.
+fn mermaid(text: &str) -> Vec<Vec<&str>> {
+    let mut blocks = Vec::new();
+    let mut lines = text.lines().map(str::trim);
+    while lines.any(|line| line == "```mermaid") {
+        blocks.push(lines.by_ref().take_while(|line| !line.starts_with("```")).collect());
+    }
+    blocks
+}
+
+/// The first Mermaid `flowchart` of a milestone file, `None` if it has none. Each line after its header is a chain of
+/// groups joined by `-->`, a group being one node or several joined by `&`, and each node of a group points to each
+/// node of the next: `a & b --> c --> d & e` is four arrows. Blank lines and `%%` comments are skipped.
+pub fn diagram(text: &str) -> Option<Diagram> {
+    let drawn = |line: &&str| !line.is_empty() && !line.starts_with("%%");
+    let flowchart = |lines: &Vec<&str>| lines.first().is_some_and(|line| line.starts_with("flowchart"));
+    let lines = mermaid(text).into_iter().map(|block| block.into_iter().filter(drawn).collect()).find(flowchart)?;
+    let mut found = Diagram::default();
+    for line in lines.iter().skip(1) {
+        let group = |nodes: &str| nodes.split('&').map(|node| node.trim().to_string()).collect::<Vec<_>>();
+        let groups: Vec<Vec<String>> = line.split("-->").map(group).collect();
+        for node in groups.iter().flatten() {
+            if !found.nodes.contains(node) {
+                found.nodes.push(node.clone());
+            }
+        }
+        for (from, to) in groups.iter().zip(groups.iter().skip(1)) {
+            found.arrows.extend(from.iter().flat_map(|a| to.iter().map(move |b| (a.clone(), b.clone()))));
+        }
+    }
+    Some(found)
+}
+
+impl Diagram {
+    /// A node in `left` with an arrow into `node`.
+    fn feeding<'a>(&'a self, node: &str, left: &BTreeSet<&str>) -> Option<&'a str> {
+        let arrow = self.arrows.iter().find(|(from, to)| to == node && left.contains(from.as_str()));
+        arrow.map(|(from, _)| from.as_str())
+    }
+
+    /// A cycle of its arrows, as the nodes along it from one back to itself, or `None` if it has none.
+    pub fn cycle(&self) -> Option<Vec<&str>> {
+        // Take away each node that nothing left points into, until none can go: what stays is on a cycle or after one.
+        let mut left: BTreeSet<&str> = self.nodes.iter().map(String::as_str).collect();
+        while let Some(free) = left.iter().copied().find(|node| self.feeding(node, &left).is_none()) {
+            left.remove(free);
+        }
+        // Each node left has an arrow into it from another, so walking those back from any of them repeats a node.
+        let mut path = vec![left.first().copied()?];
+        loop {
+            let from = self.feeding(path.last()?, &left)?;
+            if let Some(start) = path.iter().position(|node| *node == from) {
+                let mut cycle = path.split_off(start);
+                cycle.push(from);
+                cycle.reverse();
+                return Some(cycle);
+            }
+            path.push(from);
+        }
+    }
+}
+
 /// A milestone with the steps still written in its file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Planned {
     pub milestone: Milestone,
     pub steps: Vec<String>,
+    /// Its diagram, which orders its steps. With none, the file's order does.
+    pub diagram: Option<Diagram>,
 }
 
 impl Planned {
     /// Its steps not yet done, in order.
     pub fn remaining<'a>(&'a self, done: &'a BTreeSet<String>) -> impl Iterator<Item = &'a String> {
         self.steps.iter().filter(move |step| !done.contains(*step))
+    }
+
+    /// The id of its step `slug`.
+    pub fn id(&self, slug: &str) -> String {
+        format!("{}.{slug}", self.milestone.name)
+    }
+
+    /// The steps `step` needs: those with an arrow into it in its milestone's diagram or, with no diagram, every step
+    /// written before it.
+    pub fn needs(&self, step: &str) -> Vec<String> {
+        match &self.diagram {
+            Some(diagram) => {
+                let into = diagram.arrows.iter().filter(|(_, to)| self.id(to) == step);
+                into.map(|(from, _)| self.id(from)).collect()
+            }
+            None => self.steps.iter().take_while(|id| *id != step).cloned().collect(),
+        }
+    }
+
+    /// The steps `step` needs that are still written and not done, leaving out those `claimed` with it. A need whose
+    /// text is gone is finished (L42); `gates plan` names a node that never was a step.
+    pub fn waiting(&self, step: &str, done: &BTreeSet<String>, claimed: &BTreeSet<&str>) -> Vec<String> {
+        let remaining: BTreeSet<&str> = self.remaining(done).map(String::as_str).collect();
+        let unmet = |need: &String| remaining.contains(need.as_str()) && !claimed.contains(need.as_str());
+        self.needs(step).into_iter().filter(unmet).collect()
+    }
+
+    /// Its steps not done whose needs are all finished, in file order.
+    pub fn ready(&self, done: &BTreeSet<String>) -> Vec<String> {
+        let alone = BTreeSet::new();
+        self.remaining(done).filter(|step| self.waiting(step, done, &alone).is_empty()).cloned().collect()
     }
 
     fn closed(&self, done: &BTreeSet<String>) -> bool {
@@ -120,7 +224,7 @@ impl Planned {
 pub fn planned(plan: &str, read: impl Fn(&str) -> Option<String>) -> Vec<Planned> {
     let load = |milestone: Milestone| {
         let text = read(&milestone.file).unwrap_or_default();
-        Planned { milestone, steps: steps(&text).into_iter().map(|(_, id)| id).collect() }
+        Planned { milestone, steps: steps(&text).into_iter().map(|(_, id)| id).collect(), diagram: diagram(&text) }
     };
     milestones(plan).into_iter().map(load).collect()
 }
@@ -158,22 +262,31 @@ pub fn open<'a>(planned: &'a [Planned], done: &BTreeSet<String>) -> Vec<&'a Plan
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct Next {
     pub milestone: String,
-    /// `None` when the milestone has no steps written yet.
-    pub step: Option<String>,
+    /// Its steps that can start, in file order. Empty when it has no steps written yet, or when they all wait on a
+    /// cycle in its diagram.
+    pub steps: Vec<String>,
+    /// Whether it has steps written but none can start.
+    pub stuck: bool,
 }
 
-/// For each open milestone, its first step not done.
+/// For each open milestone, every step not done whose needs are all finished.
 pub fn next(planned: &[Planned], done: &BTreeSet<String>) -> Vec<Next> {
-    let line =
-        |item: &&Planned| Next { milestone: item.milestone.name.clone(), step: item.remaining(done).next().cloned() };
+    let line = |item: &&Planned| {
+        let steps = item.ready(done);
+        let stuck = steps.is_empty() && item.remaining(done).next().is_some();
+        Next { milestone: item.milestone.name.clone(), steps, stuck }
+    };
     open(planned, done).iter().map(line).collect()
 }
 
-/// The text form of `just next`.
+/// The text form of `just next`: a line a milestone, its steps that can start joined by commas.
 pub fn render(next: &[Next]) -> String {
-    let line = |n: &Next| match &n.step {
-        Some(step) => format!("{}: {step}\n", n.milestone),
-        None => format!("{}: no steps written yet: detail its milestone file (L43)\n", n.milestone),
+    let line = |n: &Next| match (n.steps.as_slice(), n.stuck) {
+        ([], false) => format!("{}: no steps written yet: detail its milestone file (L43)\n", n.milestone),
+        ([], true) => {
+            format!("{}: no step can start: its diagram has a cycle, which `just gate plan` names\n", n.milestone)
+        }
+        (steps, _) => format!("{}: {}\n", n.milestone, steps.join(", ")),
     };
     next.iter().map(line).collect()
 }
@@ -244,13 +357,13 @@ web/                           the renderer
         ids.iter().map(ToString::to_string).collect()
     }
 
-    fn next_of(ids: &[&str]) -> Vec<(String, Option<String>)> {
+    fn next_of(ids: &[&str]) -> Vec<(String, Vec<String>)> {
         let planned = planned(PLAN_TEXT, read);
-        next(&planned, &done(ids)).into_iter().map(|n| (n.milestone, n.step)).collect()
+        next(&planned, &done(ids)).into_iter().map(|n| (n.milestone, n.steps)).collect()
     }
 
-    fn line(milestone: &str, step: &str) -> (String, Option<String>) {
-        (milestone.to_string(), Some(step.to_string()))
+    fn line(milestone: &str, step: &str) -> (String, Vec<String>) {
+        (milestone.to_string(), vec![step.to_string()])
     }
 
     #[test]
@@ -320,7 +433,7 @@ web/                           the renderer
     #[test]
     fn a_milestone_with_no_steps_written_is_open_not_closed() {
         let all = ["alpha.one", "alpha.two", "beta.one", "gamma.one"];
-        assert_eq!(next_of(&all), [("outline one".to_string(), None)]);
+        assert_eq!(next_of(&all), [("outline one".to_string(), vec![])]);
     }
 
     #[test]
@@ -370,8 +483,108 @@ web/                           the renderer
 
     #[test]
     fn rendering_names_the_step_or_says_there_is_none() {
-        let next =
-            [Next { milestone: "a".into(), step: Some("a.one".into()) }, Next { milestone: "b c".into(), step: None }];
+        let line = |milestone: &str, steps: &[&str], stuck| Next {
+            milestone: milestone.into(),
+            steps: steps.iter().map(ToString::to_string).collect(),
+            stuck,
+        };
+        let next = [line("a", &["a.one"], false), line("b c", &[], false)];
         assert_eq!(render(&next), "a: a.one\nb c: no steps written yet: detail its milestone file (L43)\n");
+        assert_eq!(render(&[line("b", &["b.one", "b.two"], false)]), "b: b.one, b.two\n");
+        let stuck = render(&[line("c", &[], true)]);
+        assert!(stuck.starts_with("c: no step can start") && stuck.contains("cycle"), "{stuck}");
+    }
+
+    /// A milestone `m` whose file holds the steps `written`, in that order, and `lines` in a Mermaid flowchart.
+    fn drawn(written: &[&str], lines: &[&str]) -> Planned {
+        let headings = written.iter().map(|slug| format!("### `m.{slug}`\n\n")).collect::<Vec<_>>().concat();
+        let arrows = lines.iter().map(|line| format!("  {line}\n")).collect::<Vec<_>>().concat();
+        let text = format!("# m\n\n```mermaid\nflowchart LR\n{arrows}```\n\n## Steps\n\n{headings}");
+        let milestone = Milestone { name: "m".into(), file: "docs/plan/m.md".into(), alongside: None, after: None };
+        Planned { milestone, steps: steps(&text).into_iter().map(|(_, id)| id).collect(), diagram: diagram(&text) }
+    }
+
+    fn ready(planned: &Planned, finished: &[&str]) -> Vec<String> {
+        planned.ready(&slugs(finished).into_iter().collect())
+    }
+
+    fn slugs(ids: &[&str]) -> Vec<String> {
+        ids.iter().map(|slug| format!("m.{slug}")).collect()
+    }
+
+    fn arrows(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(from, to)| (from.to_string(), to.to_string())).collect()
+    }
+
+    #[test]
+    fn a_diagram_reads_chains_fan_out_and_fan_in() {
+        let found = drawn(&[], &["a --> b --> c", "c --> d & e", "d & e --> f", "g"]).diagram.unwrap();
+        assert_eq!(found.nodes, ["a", "b", "c", "d", "e", "f", "g"]);
+        let want = [("a", "b"), ("b", "c"), ("c", "d"), ("c", "e"), ("d", "f"), ("e", "f")];
+        assert_eq!(found.arrows, arrows(&want));
+    }
+
+    #[test]
+    fn only_a_mermaid_flowchart_is_a_diagram() {
+        assert_eq!(diagram("# m\n\n### `m.a`\n"), None);
+        assert_eq!(diagram("```text\nflowchart LR\n  a --> b\n```\n"), None);
+        assert_eq!(diagram("```mermaid\nsequenceDiagram\n  a ->> b: hi\n```\n"), None);
+        let text = "```mermaid\npie\n```\n\n```mermaid\n\n%% the order\nflowchart TD\n\n  %% x first\n  x-->y\n```\n```mermaid\nflowchart LR\n  z\n```\n";
+        assert_eq!(diagram(text), Some(Diagram { nodes: vec!["x".into(), "y".into()], arrows: arrows(&[("x", "y")]) }));
+    }
+
+    #[test]
+    fn fan_out_and_fan_in_order_the_steps() {
+        let planned = drawn(&["a", "c", "b", "d"], &["a --> b & c", "b & c --> d"]);
+        assert_eq!(ready(&planned, &[]), slugs(&["a"]));
+        assert_eq!(ready(&planned, &["a"]), slugs(&["c", "b"]));
+        assert_eq!(ready(&planned, &["a", "b"]), slugs(&["c"]));
+        assert_eq!(ready(&planned, &["a", "b", "c"]), slugs(&["d"]));
+        assert_eq!(planned.needs("m.d"), slugs(&["b", "c"]));
+    }
+
+    #[test]
+    fn a_chain_orders_its_steps() {
+        let planned = drawn(&["a", "b", "c"], &["a --> b --> c"]);
+        assert_eq!(ready(&planned, &[]), slugs(&["a"]));
+        assert_eq!(ready(&planned, &["a"]), slugs(&["b"]));
+        assert_eq!(planned.needs("m.c"), slugs(&["b"]));
+    }
+
+    #[test]
+    fn a_finished_steps_node_without_a_heading_still_orders_the_rest() {
+        let planned = drawn(&["b", "c"], &["a --> b & c"]);
+        assert_eq!(ready(&planned, &["a"]), slugs(&["b", "c"]));
+        assert_eq!(ready(&planned, &[]), slugs(&["b", "c"]));
+    }
+
+    #[test]
+    fn a_milestone_with_no_diagram_keeps_the_file_order() {
+        let planned = Planned { diagram: None, ..drawn(&["b", "a", "c"], &[]) };
+        assert_eq!(ready(&planned, &[]), slugs(&["b"]));
+        assert_eq!(ready(&planned, &["b"]), slugs(&["a"]));
+        assert_eq!(planned.needs("m.c"), slugs(&["b", "a"]));
+    }
+
+    #[test]
+    fn a_step_on_a_cycle_never_starts() {
+        let planned = drawn(&["a", "b", "c"], &["a --> b --> c --> b"]);
+        assert_eq!(ready(&planned, &["a"]), Vec::<String>::new());
+        let found = next(&[planned], &done(&["m.a"]));
+        assert_eq!(found, [Next { milestone: "m".into(), steps: vec![], stuck: true }]);
+        let free = next(&[drawn(&["a", "b"], &["a --> b"])], &done(&[]));
+        assert_eq!(free, [Next { milestone: "m".into(), steps: slugs(&["a"]), stuck: false }]);
+        let unwritten = next(&[drawn(&[], &[])], &done(&[]));
+        assert_eq!(unwritten, [Next { milestone: "m".into(), steps: vec![], stuck: false }]);
+    }
+
+    #[test]
+    fn a_cycle_is_found_and_walked_in_the_arrows_direction() {
+        let cycle = |lines: &[&str]| drawn(&[], lines).diagram.unwrap().cycle().map(|c| c.join(" "));
+        assert_eq!(cycle(&["a --> b --> c --> a", "c --> d"]), Some("a b c a".into()));
+        assert_eq!(cycle(&["b --> c --> b", "c --> a"]), Some("c b c".into()));
+        assert_eq!(cycle(&["a --> a"]), Some("a a".into()));
+        assert_eq!(cycle(&["a --> b & c", "b & c --> d"]), None);
+        assert_eq!(cycle(&[]), None);
     }
 }

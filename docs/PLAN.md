@@ -12,9 +12,12 @@ checkout `../phasekit`.
 
 - **Step ids.** A step is a level-3 heading or a table row whose text begins with a backticked id of the form
   `<milestone>.<slug>`. Nothing else is a step.
-- **What is next comes from git.** `just next` prints, for each open milestone, its first step with no `Plan-Step:`
-  footer on `main`. A milestone opens when every one before it in §6's table has closed, unless its row says it
-  runs alongside another or names the one whose closing opens it.
+- **What is next comes from git.** `just next` prints, for each open milestone, every unfinished step whose needs all
+  have a `Plan-Step:` footer on `main`. A step needs each step with an arrow into it in its milestone file's Mermaid
+  flowchart, whose nodes are slugs and stay when a step's text is deleted, or, with no flowchart, every step before it
+  ([decision](decisions/2026-11-15-steps-follow-their-milestones-diagram.md)). A PR may finish a step once every step
+  it needs is finished on `main` or in the same PR. A milestone opens when every one before it in §6's table has
+  closed, unless its row says it runs alongside another or names the one whose closing opens it.
 - **Footers.** `main` changes only by squash merge, which takes its message from the PR body, so footers go in the PR
   body: one `Plan-Step: <id>` line per step. `gates plan` fails a step PR that lacks them.
 - **Working a step:** write the failing test first, show it red, implement. Before each commit a worker runs the tests
