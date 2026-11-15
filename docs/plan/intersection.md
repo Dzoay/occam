@@ -96,18 +96,6 @@ Each curve lies on both surfaces within the band at dense samples, and its image
 degenerate pencil is classified as built, and none is fitted. Where a closed form also answers, the two agree within
 the band. A pencil nudged to within the band of a split is `decide.undecided`.
 
-### `intersection.trace`
-
-The marcher: a tangent predictor along the cross product of the normals, a Newton corrector on both surfaces (on the
-implicit form when one side is analytic), step control by curvature within the band, and loop closure (Bajaj, Hoffmann,
-Lynch and Hopcroft 1988; Barnhill and Kersey 1990). Near a tangency, where Newton loses rank, alternating projections
-take over (von Neumann). Seams and poles are domain edges, and a contact at a pole is not the curve's end. A trace that
-neither closes nor leaves the domain within its budget has stalled, and it is reported with its points.
-
-*Failing test first:* P5's failure modes as tests: a corrector that jumps to a neighbouring loop is caught as a stalled
-trace, not a long wrong curve; a trace across a closed NURBS's seam continues; a contact at a sphere's pole is
-classified; a double cone's lower nappe inverts to the right parameters; a tangency converges by projection.
-
 ### `intersection.fit`
 
 Traced points become curves. A section curve is a B-spline fitted to the trace (Piegl and Tiller 1997, ch. 9), with

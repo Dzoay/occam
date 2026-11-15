@@ -34,6 +34,11 @@ pub struct Work {
 }
 
 impl Work {
+    /// The whole of `budget`, unspent.
+    pub(crate) const fn of(budget: Budget) -> Self {
+        Self { left: budget.steps }
+    }
+
     /// Spends `steps` of the budget, or, when fewer are left, spends nothing and gives [`Spent`].
     ///
     /// # Errors
@@ -99,7 +104,7 @@ fn key(surface: &dyn Surface) -> (FamilyName, BatchKey, Content) {
 }
 
 /// A report of a section that stopped with `found` held, for `reason`.
-fn incomplete(fault: Fault, reason: Reason, found: &Section) -> Report {
+pub(crate) fn incomplete(fault: Fault, reason: Reason, found: &Section) -> Report {
     let count = |name: &str, n: usize| NamedValue::count(name, u32::try_from(n).unwrap_or(u32::MAX));
     Report::new(Code::Incomplete, fault)
         .with_reason(reason)
@@ -135,7 +140,7 @@ impl Methods {
     fn ordered(&self, a: &dyn Surface, b: &dyn Surface, tol: Tolerance, budget: Budget) -> Section {
         let mut tally = Tally::default();
         for method in &self.list {
-            let (mut work, mut found) = (Work { left: budget.steps }, Section::default());
+            let (mut work, mut found) = (Work::of(budget), Section::default());
             let answer = method.attempt(a, b, tol, &mut work, &mut found);
             tally = tally.merged(found.tally);
             let failure = match answer {

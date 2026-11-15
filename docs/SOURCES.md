@@ -26,3 +26,6 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | `hormann-agathos-2001` | paper | n/a | Hormann, Agathos. *The Point in Polygon Problem for Arbitrary Polygons*. Computational Geometry 20(3), 2001 |
 | `patrikalakis-maekawa-2002` | book | n/a | Patrikalakis, Maekawa. *Shape Interrogation for Computer Aided Design and Manufacturing*, chapter 5, *Intersection Problems*. Springer, 2002 |
 | `sarraga-1983` | paper | n/a | Sarraga. *Algebraic Methods for Intersections of Quadric Surfaces in GMSOLID*. Computer Vision, Graphics, and Image Processing 22(2), 1983 |
+| `bajaj-hoffmann-lynch-hopcroft-1988` | paper | n/a | Bajaj, Hoffmann, Lynch, Hopcroft. *Tracing Surface Intersections*. Computer Aided Geometric Design 5(4), 1988 |
+| `barnhill-kersey-1990` | paper | n/a | Barnhill, Kersey. *A Marching Method for Parametric Surface/Surface Intersection*. Computer Aided Geometric Design 7(1–4), 1990 |
+| `von-neumann-1950` | book | n/a | von Neumann. *Functional Operators, Volume II: The Geometry of Orthogonal Spaces*. Annals of Mathematics Studies 22, Princeton University Press, 1950 |
