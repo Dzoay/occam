@@ -13,9 +13,10 @@ tmp := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-tmp"
 # The OCCT wheel's virtualenv lives outside the repository too (docs/decisions/2026-11-09-occt-oracle.md).
 oracle_venv := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-oracle" / "venv"
 # What gives `web-test`'s headless Chromium (156, Playwright 1.64.1) its software WebGPU adapter. Without the first flag
-# it gives none; without Vulkan through SwiftShader every read-back after a canvas frame fails ("A valid external
-# Instance reference no longer exists"). The last asks for that adapter by name, whatever GPU the machine has.
-webgpu_flags := "--enable-unsafe-webgpu --enable-features=Vulkan --use-angle=swiftshader --use-webgpu-adapter=swiftshader"
+# it gives none. Compositing through GL, every read-back after a canvas frame fails ("A valid external Instance
+# reference no longer exists"), so the next three make it composite through Vulkan on its own SwiftShader, which needs
+# no Vulkan driver on the machine (CI has none). The last asks for SwiftShader's adapter, whatever GPU the machine has.
+webgpu_flags := "--enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader --use-angle=swiftshader --use-webgpu-adapter=swiftshader"
 
 [private]
 default:
@@ -102,6 +103,12 @@ web-test: web-build
     mkdir -p "$CARGO_TARGET_DIR"
     cargo run --quiet -p occam-report --example catalogue > "$CARGO_TARGET_DIR/occam-catalogue.json"
     OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" node --test --test-timeout=300000 web/test/viewer.test.mjs
+
+# What headless Chromium gives the viewer's tests: its WebGPU adapter, its GPU status, and whether a read-back works
+[env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
+[group('tools')]
+web-gpu: web-deps
+    node web/test/gpu-report.mjs
 
 # Every test on the host, then the doctests of any library
 [env("CARGO_TARGET_DIR", target)]
