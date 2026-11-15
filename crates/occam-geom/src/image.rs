@@ -362,20 +362,14 @@ impl<C: ParametricCurve + Clone> Image<C> {
         }
     }
 
-    /// The second parameter's reach over the curve's box, by its `corners`, before the image moved.
-    fn heights(&self, corners: &[Vec3], origin: Vec3, (x, y, z): (Vec3, Vec3, Vec3), meridian: Meridian) -> (f64, f64) {
+    /// The second parameter's reach over the curve's box, by the heights of its `corners` along the axis, before the
+    /// image moved: a height itself, on a cone the height over the cosine of its half-angle, which is how far a point of
+    /// either nappe is along it from the apex, and a latitude.
+    fn heights(&self, corners: &[Vec3], origin: Vec3, z: Vec3, meridian: Meridian) -> (f64, f64) {
         let (low, high) = extremes(corners.iter().map(|c| (*c - origin).dot(z)));
-        let far = extremes(corners.iter().map(|c| {
-            let q = *c - origin;
-            (q.dot(x) * q.dot(x) + q.dot(y) * q.dot(y)).sqrt()
-        }))
-        .1;
         match meridian {
             Meridian::Upright { .. } => (low, high),
-            Meridian::Slanted { apex, slope } => {
-                let across = if self.below { (-far * slope.0, 0.0) } else { (0.0, far * slope.0) };
-                (apex + across.0 + low * slope.1, apex + across.1 + high * slope.1)
-            }
+            Meridian::Slanted { apex, slope } => (apex + low / slope.1, apex + high / slope.1),
             Meridian::Centred { radius } => {
                 let latitude = |h: f64| {
                     let h = if h > radius {
@@ -450,8 +444,8 @@ impl<C: ParametricCurve + Clone> ParametricParamCurve for Image<C> {
                 let along = |axis: Vec3, at: f64| extremes(corners.iter().map(|c| at + (*c - origin).dot(axis)));
                 (along(dual.0, at.0), along(dual.1, at.1))
             }
-            Form::Turned { origin, x, y, z, meridian } => {
-                (self.turns(lo, hi), self.heights(&corners, origin, (x, y, z), meridian))
+            Form::Turned { origin, z, meridian, .. } => {
+                (self.turns(lo, hi), self.heights(&corners, origin, z, meridian))
             }
         };
         let moved: Vec<UvPoint> = [(us.0, vs.0), (us.0, vs.1), (us.1, vs.0), (us.1, vs.1)]

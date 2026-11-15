@@ -160,7 +160,7 @@ impl Chart {
     }
 
     /// The parameters of `point`, a point of the surface, by the chart: where a parameter is undefined, at a pole or an
-    /// apex, any value serves, and 0 is given.
+    /// apex, any value serves: an angle there is the angle of two noughts, 0 or a half turn by their signs.
     #[must_use]
     pub fn parameters(&self, point: Point<World>) -> UvPoint {
         match self.0 {
