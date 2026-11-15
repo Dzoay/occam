@@ -541,6 +541,14 @@ catalogue! {
         "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
     }
 
+    /// A decision on a computed value could not be made at this resolution (O11): its certified enclosure reaches
+    /// across an edge of the band. Nothing is guessed in its place.
+    Undecided = "decide.undecided" {
+        Error, [],
+        "A decision cannot be made at this resolution: the value's certified enclosure reaches across an edge of the band.",
+        "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}.",
+    }
+
     /// A limit a mesh is made to, its deflection or its angle, is not a finite number greater than zero.
     LimitNotPositive = "mesh.limit-not-positive" {
         Error, [],
@@ -1234,6 +1242,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A section of two surfaces stopped before it was complete; what it found is kept.",
                 "template": "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
+                "remedies": []
+            },
+            {
+                "name": "Undecided",
+                "code": "decide.undecided",
+                "severity": "error",
+                "summary": "A decision cannot be made at this resolution: the value's certified enclosure reaches across an edge of the band.",
+                "template": "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}.",
                 "remedies": []
             }
         ])
