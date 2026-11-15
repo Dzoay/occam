@@ -16,6 +16,9 @@ text_enum! {
         /// Write the edge the report names as a whole circle about the `centre` parameter, of the `radius` parameter,
         /// facing the `normal` parameter.
         UseCircle = "use-circle",
+        /// Mesh at the deflection in the `deflection` parameter, coarser than the one asked, at which the edge the report
+        /// names fits under its cap.
+        UseDeflection = "use-deflection",
     }
 }
 
@@ -33,6 +36,9 @@ impl RemedyKind {
             Self::UseCircle => {
                 "Write the edge the report names as a whole circle with the centre, radius and normal given."
             }
+            Self::UseDeflection => {
+                "Mesh at the deflection given, at which the edge the report names fits under its cap."
+            }
         }
     }
 
@@ -45,6 +51,7 @@ impl RemedyKind {
             Self::UseThreads => &["threads"],
             Self::MeetAt => &["point"],
             Self::UseCircle => &["centre", "radius", "normal"],
+            Self::UseDeflection => &["deflection"],
         }
     }
 }

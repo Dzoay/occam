@@ -27,8 +27,8 @@ x86-64 and on wasm32 baseline and simd128. In headless Chromium, against `occam 
 - an `occam run` that adds a body reaches the page, which meshes only the new faces;
 - a click on a face, and one on an edge, give the ids `occam pick` gives for the same rays; `occam selection` then
   describes what was clicked; and an `occam highlight` shows in the page;
-- the agent test passes when its recipe runs on the first PR, its log kept as evidence: an agent on the cheapest model
-  the blind runs used starts `occam view`, builds a part from a prompt, the page following each run, and acts on a face
+- the agent test passes when its recipe runs on `view.agent`'s PR, its log kept as evidence: an agent on the cheapest
+  model the blind runs used starts `occam view`, builds a part from a prompt, the page following each run, and acts on a face
   selected as a person would.
 
 **Exit (goal):** [P9's](../evidence/2026-11-09-p9.md) quality and scaling tables on the real mesher; the mesh pool timed
@@ -38,8 +38,8 @@ pick timed on real GPUs in Chromium and Firefox within 16.7 ms on P9's 10,001-fa
 [Write-through](../decisions/2026-11-14-write-through-after-the-first-release.md) and its figures wait for the editing
 tools.
 
-**PR grouping:** two PRs, with a commit a step. The first ends at `view.agent`, so the live demo reaches `main` as soon
-as it works; the second holds `view.hardening` and `view.timing`, and closes the milestone.
+**PR grouping:** a step merges in its own PR ([decision](../decisions/2026-11-15-view-merges-a-step-a-pr.md)). The
+live demo reaches `main` with `view.agent`'s.
 
 **Throughout.** `occam-mesh` takes its place in [the layers](../PLAN.md#4-layers), std-only, computing through
 `occam-math` and running in parallel only through `Exec`. Meshing [ships complete](first-release.md) as an operation
@@ -58,17 +58,6 @@ detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes af
 then `compose.rs`'s `Session`, are deleted as they become real.
 
 ## Steps
-
-### `view.edges`
-
-`occam-mesh` with its limits, and every edge any face uses sampled once, as finely as the finest of its faces asks
-under the deflection and angle limits. The limits come first (P9): no surface may ask an edge for a step below the
-floor, no size estimate comes from a collapsed row or a pole, and each edge has a sample cap. An edge over its cap is
-refused by name, with a remedy giving a deflection that fits.
-
-*Failing test first:* a circle's samples are within the deflection of their chords; P9's bicubic patch with a collapsed
-row asks for no more than the cap; an edge over its cap is named, and meshing at its remedy's deflection succeeds; the
-samples are the same bits at 1 and N threads.
 
 ### `view.faces`
 
@@ -185,7 +174,7 @@ a hole, starts `occam view` and builds the plate through `occam run` while headl
 then selects the plate's top face through the page and prompts "stand a cylinder of radius 5 and height 20 on the
 centre of the selected face"; the agent reads the selection, highlights it, and runs; the cylinder's base lies on that
 face, within the band. The agent is headless Claude Code, resumed for the second prompt, with the model pinned and a
-cap on its calls, run by a recipe on the person's own key: once on the first PR, its log kept as evidence, as in
+cap on its calls, run by a recipe on the person's own key: once on `view.agent`'s PR, its log kept as evidence, as in
 [the construction blind run](../evidence/2026-11-13-construction-blind-run.md). The same steps with the agent's calls
 scripted run in CI. Rounding an edge waits for `blends`, and adding material to a solid's face for `booleans`.
 
