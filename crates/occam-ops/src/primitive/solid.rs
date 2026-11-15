@@ -202,17 +202,21 @@ fn shells(solid: &Solid) -> Shells {
     }
     let (mut of, mut first) = (vec![None; solid.faces.len()], Vec::new());
     for start in 0..solid.faces.len() {
+        let shell = first.len();
+        let Some(slot @ None) = of.get_mut(start) else { continue };
+        *slot = Some(shell);
+        first.push(start);
+        // Each face is marked as it joins the walk, so it joins once: the walk never holds more than every face.
         let mut walk = vec![start];
         while let Some(f) = walk.pop() {
-            match of.get_mut(f) {
-                Some(slot) if slot.is_none() => *slot = Some(first.len()),
-                _ => continue,
+            for e in solid.faces.get(f).map(edges).unwrap_or_default() {
+                for &g in by_edge.get(e).into_iter().flatten() {
+                    if let Some(slot @ None) = of.get_mut(g) {
+                        *slot = Some(shell);
+                        walk.push(g);
+                    }
+                }
             }
-            let faces = solid.faces.get(f).map(edges).unwrap_or_default();
-            walk.extend(faces.into_iter().flat_map(|e| by_edge.get(e).into_iter().flatten().copied()));
-        }
-        if of.get(start).copied().flatten() == Some(first.len()) {
-            first.push(start);
         }
     }
     Shells { of: of.into_iter().map(|s| s.unwrap_or(0)).collect(), first }
