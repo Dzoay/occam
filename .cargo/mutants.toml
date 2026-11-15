@@ -255,6 +255,14 @@ exclude_re = [
     # The orientation check's (the construction review's first finding). By line. A corner that turns by exactly
     # nought, of either sign, is a cusp taken either way: as no angle or as a whole turn, each within the cusp's band.
     "geometric/outward\\.rs:444:25: replace > with >= in spanned$",
+    # A face's pieces in its plane. Ties, which give the same distance either way: the parameter of a point's foot on a
+    # segment exactly 1, or exactly nought of either sign, taken as itself or as that end. The foot then differs at most
+    # in a nought's sign, which the distance squares away.
+    "construct/flat\\.rs:\\d+:\\d+: replace > with >= in Flat::distance$",
+    # An arc that turns by exactly nought, of either sign, has no left to give a normal on. No loop has one: an edge's
+    # range ends above where it starts, and its piece turns by that span times its sense, 1 or -1. A witness, the only
+    # reader, moves off a piece by shares of its length, which for such an arc is nought.
+    "construct/flat\\.rs:\\d+:\\d+: replace > with >= in Flat::at$",
     # A face's loops. By line. The remainder of a clearance by 4 for its quarter, as the sag a winding cuts arcs to.
     # Below 4 that is the whole clearance, and a chord strays from its arc by less than the sag (1 - cos x < x^2 / 2),
     # so it still never reaches the point, which is at least that far from the loop; from 4 up the arcs are cut finer.

@@ -568,3 +568,6 @@ pub(super) mod tests {
         assert!((area(&square(0.0, 2.0), 1.0) - 8.0).abs() < 1e-12, "twice the area");
     }
 }
+
+#[cfg(test)]
+mod tests_meet;
