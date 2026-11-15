@@ -16,79 +16,79 @@ use crate::correct::{Here, Pair};
 use crate::decide::{Decide, touch};
 use crate::{Budget, End, Jump, ROUND, Section, Start, Station, SurfacePair, Trace, Tracer, Which, Work};
 
-const BAND: f64 = 1e-7;
+pub(crate) const BAND: f64 = 1e-7;
 
 /// How near a touch the trace must come: far nearer than the band alone puts it, which is anywhere within the
 /// near-tangent shift `sqrt(2 r band)`, 6.3e-4 for a radius of 2, of where the surfaces touch.
-const CONVERGED: f64 = 1e-6;
+pub(crate) const CONVERGED: f64 = 1e-6;
 
-fn tol() -> Tolerance {
+pub(crate) fn tol() -> Tolerance {
     Tolerance::new(Length::from_millimetres(BAND), Angle::from_radians(1e-9)).unwrap()
 }
 
-fn mm(x: f64) -> Length {
+pub(crate) fn mm(x: f64) -> Length {
     Length::from_millimetres(x)
 }
 
-fn tracer(sag: f64, longest: f64, steps: u32) -> Tracer {
+pub(crate) fn tracer(sag: f64, longest: f64, steps: u32) -> Tracer {
     Tracer { tol: tol(), sag: mm(sag), longest: mm(longest), steps }
 }
 
 /// Turned by `angle` about `axis`, then moved to `to`.
-fn placed(axis: [f64; 3], angle: f64, to: [f64; 3]) -> Placement<Local, World> {
+pub(crate) fn placed(axis: [f64; 3], angle: f64, to: [f64; 3]) -> Placement<Local, World> {
     let spin =
         Placement::rotation(Direction::normalised(Vec3::new(axis[0], axis[1], axis[2])), Angle::from_radians(angle));
     let shift = Placement::translation(Vector::from_vec3(Vec3::new(to[0], to[1], to[2])));
     Placement::identity().then(&spin).then(&shift)
 }
 
-fn moved(to: [f64; 3]) -> Placement<Local, World> {
+pub(crate) fn moved(to: [f64; 3]) -> Placement<Local, World> {
     placed([0.0, 0.0, 1.0], 0.0, to)
 }
 
 /// The plane `z = height`, its parameters along X and Y.
-fn level(height: f64) -> Plane {
+pub(crate) fn level(height: f64) -> Plane {
     Plane::placed(&moved([0.0, 0.0, height]))
 }
 
 /// The plane `x = across`, facing along X.
-fn upright(across: f64) -> Plane {
+pub(crate) fn upright(across: f64) -> Plane {
     Plane::placed(&placed([0.0, 1.0, 0.0], FRAC_PI_2, [across, 0.0, 0.0]))
 }
 
-fn point(x: f64, y: f64, z: f64) -> Point<World> {
+pub(crate) fn point(x: f64, y: f64, z: f64) -> Point<World> {
     Point::from_vec3(Vec3::new(x, y, z))
 }
 
-fn ball(radius: f64, centre: [f64; 3]) -> Sphere {
+pub(crate) fn ball(radius: f64, centre: [f64; 3]) -> Sphere {
     Sphere::placed(&moved(centre), mm(radius)).unwrap()
 }
 
 /// `surface` over `patch` as the B-spline it is exactly there, which presents no analytic form.
-fn nurbs(surface: &dyn Surface, lo: (f64, f64), hi: (f64, f64)) -> SplineSurface {
+pub(crate) fn nurbs(surface: &dyn Surface, lo: (f64, f64), hi: (f64, f64)) -> SplineSurface {
     let patch = UvBox::new(UvPoint::new(lo.0, lo.1), UvPoint::new(hi.0, hi.1));
     SplineSurface::new(&surface.to_bspline(patch).unwrap()).unwrap()
 }
 
 /// The exact rational cylinder of radius 2 about Z, over the angles `turn` and the heights -1 to 1.
-fn nurbs_cylinder(turn: (f64, f64)) -> SplineSurface {
+pub(crate) fn nurbs_cylinder(turn: (f64, f64)) -> SplineSurface {
     nurbs(&Cylinder::placed(&moved([0.0; 3]), mm(2.0)).unwrap(), (turn.0, -1.0), (turn.1, 1.0))
 }
 
 /// The start whose parameters on each surface are those of the foot of `near`.
-fn start_near(a: &dyn Surface, b: &dyn Surface, near: Point<World>) -> Start {
+pub(crate) fn start_near(a: &dyn Surface, b: &dyn Surface, near: Point<World>) -> Start {
     let mut scratch = Scratch::default();
     let on_a = a.invert(near, None, tol(), &mut scratch).unwrap();
     Start { on_a, on_b: b.invert(near, None, tol(), &mut scratch).unwrap() }
 }
 
-fn gap(p: Point<World>, q: Point<World>) -> f64 {
+pub(crate) fn gap(p: Point<World>, q: Point<World>) -> f64 {
     (p.to_vec3() - q.to_vec3()).norm()
 }
 
 /// Every station is within the band of both surfaces at its parameters on each, inside both domains, and the band
 /// decided every decision the trace made.
-fn on_both(trace: &Trace, a: &dyn Surface, b: &dyn Surface) {
+pub(crate) fn on_both(trace: &Trace, a: &dyn Surface, b: &dyn Surface) {
     assert_ne!(trace.stations.len(), 0, "{trace:?}");
     assert!(trace.tally.decided > 0 && trace.tally.undecided == 0, "{:?}", trace.tally);
     assert_eq!(trace.undecided, []);

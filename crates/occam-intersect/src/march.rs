@@ -225,7 +225,7 @@ impl<'p, 's> Run<'p, 's> {
         let turn = angle(here.along, next.along);
         let sag = h * turn * 0.125;
         if (sag > 2.0 * self.limits.sag || turn > MOST_TURN) && h > self.limits.shortest {
-            return Next::Again { h: self.scaled(h, sag), fresh };
+            return Next::Again { h: self.again(h, sag, turn), fresh };
         }
         match breach(self.pair, &mut self.decide, &next.here) {
             Ok(Some(edge)) => return self.edge(here, h, &edge),
@@ -337,5 +337,18 @@ impl<'p, 's> Run<'p, 's> {
             Ok(false) => Next::Done(End::Stalled),
             Err(uncertain) => self.unsure(uncertain),
         }
+    }
+
+    /// The step to take again after a step of `h` that sagged by `sag` and turned by `turn`, one of them too far: as
+    /// [`Run::scaled`] has it, and where the turn was too far, no more than nine tenths of the step that turns by
+    /// [`MOST_TURN`], so that it is shorter whichever was too far, and never below the shortest step.
+    fn again(&self, h: f64, sag: f64, turn: f64) -> f64 {
+        let by_sag = self.scaled(h, sag);
+        if turn <= MOST_TURN {
+            return by_sag;
+        }
+        let by_turn = 0.9 * h * MOST_TURN / turn;
+        let shorter = if by_turn < by_sag { by_turn } else { by_sag };
+        if shorter < self.limits.shortest { self.limits.shortest } else { shorter }
     }
 }

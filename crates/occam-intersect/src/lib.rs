@@ -25,6 +25,8 @@ mod decide;
 mod edge;
 mod implicit;
 mod march;
+#[cfg(test)]
+mod march_tests;
 mod methods;
 mod project;
 mod section;
