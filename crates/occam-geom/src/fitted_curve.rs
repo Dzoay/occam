@@ -130,7 +130,7 @@ mod tests {
     use crate::conformance::{self, Check, WrongSecondCurve, placement, twist};
     use crate::curve::Curve;
     use crate::param_curve::ParamCurve;
-    use crate::{Circle, SplineCurve, UvCurve};
+    use crate::{Circle, Line, SplineCurve, UvCurve};
 
     fn mm(x: f64) -> Length {
         Length::from_millimetres(x)
@@ -206,6 +206,24 @@ mod tests {
         let names: Vec<&str> = shape.values.iter().map(|v| v.name.as_str()).collect();
         assert_eq!((shape.form, names.first(), shape.values[0].number()), ("fitted", Some(&"fit"), Some(0.5)));
         assert!(names.iter().skip(1).all(|name| name.starts_with("curve-")), "{names:?}");
+    }
+
+    #[test]
+    fn it_searches_for_a_foot_over_its_bases_window() {
+        // A line has a window of its own for each point and reach, none of them a constant one.
+        let along = Direction::normalised(Vec3::new(1.0, 2.0, -0.5));
+        let line = || Line::new(Point::from_vec3(Vec3::new(3.0, -1.0, 2.0)), along);
+        let c = fitted(line(), 1e-3);
+        for t in [50.0, -20.0] {
+            let at = Curve::point(&line(), t).to_vec3() + Vec3::new(0.1, -0.05, 0.2);
+            let p = Point::from_vec3(at);
+            assert_eq!(ParametricCurve::search(&c, p), ParametricCurve::search(&line(), p), "{at:?}");
+            for (across, radius) in [(None, 2.0), (Some(Direction::normalised(Vec3::new(0.0, 0.0, 1.0))), 5.0)] {
+                let window = ParametricCurve::within(&c, p, across, radius);
+                assert_eq!(window, ParametricCurve::within(&line(), p, across, radius));
+                assert!(window.is_some_and(|(lo, hi)| lo.abs() > 1.0 && hi.abs() > 1.0), "{window:?}");
+            }
+        }
     }
 
     #[test]

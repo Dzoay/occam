@@ -103,7 +103,10 @@ fn every_case_is_fitted_within_the_band_with_its_decisions_counted() {
             let fit = curve.curve.fit().unwrap().millimetres();
             assert!(fit > 0.0 && fit <= BAND, "{}: {fit:e}", case.name);
             assert_eq!(curve.curve.family().0, "fitted");
-            assert!(curve.on_a.fit().is_some() && curve.on_b.fit().is_some(), "{}", case.name);
+            for image in [&curve.on_a, &curve.on_b] {
+                let fit = image.fit().unwrap();
+                assert!(fit < 1e-6, "{}: an image fits to {fit:e} in its surface's parameters", case.name);
+            }
         }
     }
 }
@@ -258,23 +261,24 @@ fn a_fit_that_cannot_reach_the_band_is_reported_with_what_it_reached() {
     lies_within("the parallel planes", curve, (flat.as_ref(), above.as_ref()), (40, reached));
 }
 
+/// A hand-made trace of `stations`, which reached an edge at both ends.
+fn traced(stations: Vec<Station>) -> Trace {
+    Trace { stations, crossings: vec![], ends: [End::Edge; 2], steps: 0, tally: Tally::default(), undecided: vec![] }
+}
+
+/// `count` stations along the X axis a unit apart, on the plane `z = 0`, with their parameters on the plane
+/// `z = height` those of the point `ahead` of each further along.
+fn on_two_planes_by(height: f64, count: u8, ahead: impl Fn(u8) -> f64) -> (Box<dyn Surface>, Box<dyn Surface>, Trace) {
+    let station = |k: u8| {
+        let x = f64::from(k);
+        Station { at: point(x, 0.0, 0.0), on_a: UvPoint::new(x, 0.0), on_b: UvPoint::new(x + ahead(k), 0.0) }
+    };
+    (Box::new(level(0.0)), Box::new(level(height)), traced((0..count).map(station).collect()))
+}
+
 /// Ten stations along the X axis, on the plane `z = 0` and with their parameters on the plane `z = height`.
 fn on_two_planes(height: f64) -> (Box<dyn Surface>, Box<dyn Surface>, Trace) {
-    let stations = (0..10_u8)
-        .map(|k| {
-            let x = f64::from(k);
-            Station { at: point(x, 0.0, 0.0), on_a: UvPoint::new(x, 0.0), on_b: UvPoint::new(x, 0.0) }
-        })
-        .collect();
-    let trace = Trace {
-        stations,
-        crossings: vec![],
-        ends: [End::Edge; 2],
-        steps: 0,
-        tally: Tally::default(),
-        undecided: vec![],
-    };
-    (Box::new(level(0.0)), Box::new(level(height)), trace)
+    on_two_planes_by(height, 10, |_| 0.0)
 }
 
 #[test]
@@ -338,5 +342,67 @@ fn fits_are_the_same_bits_at_one_and_many_threads() {
             digest(std::slice::from_ref(found)),
             digest(&[fit(shared.0.as_ref(), shared.1.as_ref(), trace, tol())])
         );
+    }
+}
+
+#[test]
+fn an_images_fit_is_twice_its_furthest_from_the_curves_feet_its_ends_included() {
+    // Four stations, so that the curves are lines through the first and last. The image on the plane above runs
+    // beside the curve by a tenth of the band, and by four tenths at one end, where it is furthest.
+    for end in [0, 3] {
+        let ahead = |k: u8| if k == end { 0.4 * BAND } else { 0.1 * BAND };
+        let (flat, above, trace) = on_two_planes_by(0.1 * BAND, 4, ahead);
+        let Fitted { curves, failures, .. } = fit(flat.as_ref(), above.as_ref(), &trace, tol());
+        assert!(failures.is_empty(), "{failures:?}");
+        let [curve] = curves.as_slice() else { panic!("{}", curves.len()) };
+        let (on_flat, on_above) = (curve.on_a.fit().unwrap(), curve.on_b.fit().unwrap());
+        assert!((on_above - 0.8 * BAND).abs() < 1e-14, "end {end}: {on_above:e}");
+        assert!(on_flat < 1e-12, "the image on the plane it lies on fits to rounding: {on_flat:e}");
+    }
+}
+
+/// Stations `y` apart up the Y axis, where the planes `z = 0` and `x = 0` meet, with their parameters on the first
+/// wrong by `wrong` of each along the axis.
+fn up_the_axis(ys: &[f64], wrong: impl Fn(usize) -> f64) -> Trace {
+    let station = |(k, &y): (usize, &f64)| Station {
+        at: point(0.0, y, 0.0),
+        on_a: UvPoint::new(0.0, y + wrong(k)),
+        on_b: UvPoint::new(0.0, y),
+    };
+    traced(ys.iter().enumerate().map(station).collect())
+}
+
+#[test]
+fn refining_stops_when_its_rounds_are_done_and_reports_an_image_beyond_the_band() {
+    // The first station's parameters on the floor are 1.5 of the band from its point, and a curve's first station is
+    // always one it runs through. No station settled beside it brings the image there nearer, so each round settles
+    // one more until the rounds are done.
+    let (flat, wall) = (level(0.0), upright(0.0));
+    let ys: Vec<f64> = (0..11_u8).map(|k| 0.1 * f64::from(k)).collect();
+    let trace = up_the_axis(&ys, |k| if k == 0 { 1.5 * BAND } else { 0.0 });
+    let Fitted { curves, failures, .. } = fit(&flat, &wall, &trace, tol());
+    let [curve] = curves.as_slice() else { panic!("{}", curves.len()) };
+    let [report] = failures.as_slice() else { panic!("{failures:?}") };
+    let reached = report.value("reached").and_then(NamedValue::number).unwrap();
+    assert_eq!(report.code, Code::FitOutsideBand);
+    assert!((reached - 1.5 * BAND).abs() < 1e-20, "how far the image is, not the curve's fit: {reached:e}");
+    assert!(curve.curve.fit().unwrap().millimetres() < 1e-12, "the curve itself lies on both");
+    let range = curve.curve.range();
+    let poles = curve.curve.to_bspline(range.lo, range.hi).unwrap().poles.len();
+    assert!((12..=11 + 16).contains(&poles), "new stations, at most one a round: {poles}");
+}
+
+#[test]
+fn a_piece_of_two_stations_is_a_line_and_one_of_fewer_is_nothing() {
+    let (flat, wall) = (level(0.0), upright(0.0));
+    let Fitted { curves, failures, .. } = fit(&flat, &wall, &up_the_axis(&[0.0, 2.0], |_| 0.0), tol());
+    assert!(failures.is_empty(), "{failures:?}");
+    let [line] = curves.as_slice() else { panic!("{}", curves.len()) };
+    let range = line.curve.range();
+    assert_eq!(line.curve.to_bspline(range.lo, range.hi).unwrap().degree, 1);
+    assert!(gap(line.curve.point(f64::midpoint(range.lo, range.hi)), point(0.0, 1.0, 0.0)) < 1e-15);
+    for few in [&[1.0][..], &[]] {
+        let found = fit(&flat, &wall, &up_the_axis(few, |_| 0.0), tol());
+        assert!(found.curves.is_empty() && found.failures.is_empty(), "{} stations", few.len());
     }
 }

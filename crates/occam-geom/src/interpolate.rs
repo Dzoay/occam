@@ -208,19 +208,25 @@ mod tests {
         let (params, points) = on_a_cubic();
         let code =
             |degree: u16, params: &[f64], points: &[Point<World>]| interpolate(degree, params, points).unwrap_err();
+        let code_of = |params: &[f64], points: &[Point<World>]| code(3, params, points);
         assert_eq!(code(3, &params[..7], &points).code, Code::WrongCount);
         assert_eq!(code(3, &params[..3], &points[..3]).code, Code::WrongCount, "too few for a cubic");
         assert_eq!(code(0, &params, &points).code, Code::OutOfRange);
         assert_eq!(code(26, &params, &points).code, Code::OutOfRange);
+        // Each is refused as the parameter it is, by its index and value, before any knot or row is made of it.
+        let named = |r: &Report| {
+            (r.code, r.fault, r.value("index").and_then(NamedValue::number), r.value("value").map(|v| v.value))
+        };
         let mut flat = params.clone();
-        flat[4] = flat[3];
-        let refused = code(3, &flat, &points);
-        assert_eq!(
-            (refused.code, refused.value("index").and_then(NamedValue::number)),
-            (Code::KnotsNotValid, Some(4.0))
-        );
-        flat[4] = f64::NAN;
-        assert_eq!(code(3, &flat, &points).code, Code::NotFinite);
+        for (index, value) in [(4, flat[3]), (5, flat[4] - 0.1), (4, f64::NAN), (0, f64::NEG_INFINITY)] {
+            flat.clone_from(&params);
+            flat[index] = value;
+            let code = if value.is_finite() { Code::KnotsNotValid } else { Code::NotFinite };
+            let want = (code, Some(Fault::InvalidInput), Some(f64::from(u32::try_from(index).unwrap())));
+            let got = named(&code_of(&flat, &points));
+            assert_eq!((got.0, got.1, got.2), want, "parameter {index} at {value}");
+            assert_eq!(format!("{:?}", got.3), format!("{:?}", Some(occam_report::Value::Scalar(value))));
+        }
         let mut far = points.clone();
         far[2] = point(0.0, f64::INFINITY, 0.0);
         assert_eq!(code(3, &params, &far).code, Code::NotFinite);

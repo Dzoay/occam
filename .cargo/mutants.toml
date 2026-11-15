@@ -365,4 +365,13 @@ exclude_re = [
     # The trace's projections, by line. A move of no length, or none that is finite, gives a point that is not a number;
     # its foot stays at the seed, whose gap is the base's, so the search gives the base, as returning it at once does.
     "occam-intersect/src/project\\.rs:69:28: replace \\|\\| with && in search$",
+    # The fit's ties, by line. Where two numbers are equal, keeping either gives the same number: the largest
+    # coordinate a fit's floor is taken from, a fit at its floor, and an image's largest step to a foot. Where the
+    # largest gap is found twice, or an image's gap equals the curve's fit, the fit reached is the same, and the place
+    # named is as far as the other.
+    "occam-intersect/src/fit\\.rs:251:57: replace > with >= in Worst::note$",
+    "occam-intersect/src/fit\\.rs:392:65: replace > with >= in floored$",
+    "occam-intersect/src/fit\\.rs:393:28: replace > with >= in floored$",
+    "occam-intersect/src/fit\\.rs:418:48: replace > with >= in image_fit$",
+    "occam-intersect/src/fit\\.rs:508:42: replace > with >= in fit_piece$",
 ]

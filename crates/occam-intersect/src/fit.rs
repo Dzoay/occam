@@ -515,3 +515,6 @@ fn fit_piece(pair: &Pair<'_>, surfaces: [&dyn Surface; 2], piece: &Piece, out: &
         Err(report) => out.failures.push(report),
     }
 }
+
+#[cfg(test)]
+mod unit;
