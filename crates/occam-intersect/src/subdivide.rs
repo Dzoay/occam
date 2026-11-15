@@ -1,7 +1,9 @@
 //! Source: original
 //! A curve against a surface that presents no analytic form: the span and the patch are subdivided together by their
-//! bounds. A pair of pieces whose boxes do not come within the band of each other is dropped, and the larger of the two
-//! is halved until both are small, a sixty-fourth of the first pair's larger box. On each leaf, Gauss-Newton runs from
+//! bounds, the families' own. A pair of pieces whose boxes do not come within the band of each other is dropped, and the
+//! larger of the two is halved until both are small, a sixty-fourth of the first pair's larger box. A side whose box
+//! comes back from halving the same as before, as a B-spline's does inside a knot span, is not halved again: smaller
+//! pieces would not be told apart. On each leaf, Gauss-Newton runs from
 //! its middle for the nearest pair of points of the curve and the surface, and a pair found inside its leaf, within
 //! the band of each other, is a hit: a crossing where the curve meets the surface at more than the angle tolerance, a
 //! contact where it is tangent. The ends of the span are tested by the surface's foot of their points, and an end on
@@ -16,7 +18,6 @@ use occam_math::{Interval, Side, Verdict, sin};
 use occam_report::Quantity;
 use occam_units::{Bounds, UvPoint, Vec3};
 
-use crate::boxes;
 use crate::distance::{Spread, judge};
 use crate::hits::{Kind, Sink, Span};
 use crate::methods::{Spent, Work};
@@ -34,7 +35,19 @@ const STEPS: u32 = 32;
 /// edge between two leaves is found from both and kept once.
 const EDGE: f64 = 1.0 / 1024.0;
 
-/// A piece of the span against a piece of the patch, with the boxes of the pair it was split from.
+/// Which side of a pair of pieces was halved to make it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Halved {
+    /// Neither: the first pair.
+    Neither,
+    /// Its piece of the span.
+    Span,
+    /// Its piece of the patch.
+    Patch,
+}
+
+/// A piece of the span against a piece of the patch, with the boxes of the pair it was split from, which side was
+/// halved, and which sides no longer shrink when halved.
 #[derive(Clone, Copy, Debug)]
 struct Cell {
     lo: f64,
@@ -42,6 +55,13 @@ struct Cell {
     patch: UvBox,
     depth: u32,
     parents: Option<(Bounds, Bounds)>,
+    halved: Halved,
+    stuck: (bool, bool),
+}
+
+/// The length of a box's diagonal: NaN or infinity for a box that is not finite.
+fn size(bounds: &Bounds) -> f64 {
+    (bounds.high().to_vec3() - bounds.low().to_vec3()).norm()
 }
 
 /// A point found, with its parameters on the surface.
@@ -93,25 +113,36 @@ fn keep(mut found: Vec<Found>, sink: &mut Sink<'_>) {
 /// go, each solved as it is reached and what it finds added to `found`.
 fn leaves(span: Span, work: &mut Work, sink: &mut Sink<'_>, found: &mut Vec<Found>) -> Result<(), Spent> {
     let (curve, surface, tol) = (sink.curve, sink.surface, sink.tol);
-    let mut stack = vec![Cell { lo: span.lo, hi: span.hi, patch: sink.patch, depth: 0, parents: None }];
-    let mut floor = None;
+    let first = Cell {
+        lo: span.lo,
+        hi: span.hi,
+        patch: sink.patch,
+        depth: 0,
+        parents: None,
+        halved: Halved::Neither,
+        stuck: (false, false),
+    };
+    let (mut stack, mut floor) = (vec![first], None);
     while let Some(cell) = stack.pop() {
         work.spend(1)?;
-        let parents = cell.parents.unzip();
-        let pair = (
-            boxes::curve(curve, cell.lo, cell.hi, parents.0.as_ref()),
-            boxes::surface(surface, cell.patch, parents.1.as_ref()),
-        );
+        let pair = (curve.bounds(cell.lo, cell.hi), surface.bounds(cell.patch));
         if !pair.0.overlaps(&pair.1, tol) {
             continue;
         }
-        let sizes = (boxes::size(&pair.0), boxes::size(&pair.1));
+        let settled = match (cell.halved, cell.parents) {
+            (Halved::Span, Some((was, _))) => (cell.stuck.0 || was == pair.0, cell.stuck.1),
+            (Halved::Patch, Some((_, was))) => (cell.stuck.0, cell.stuck.1 || was == pair.1),
+            _ => cell.stuck,
+        };
+        let cell = Cell { stuck: settled, ..cell };
+        let sizes = (size(&pair.0), size(&pair.1));
         let floor = *floor.get_or_insert(if sizes.0 > sizes.1 { sizes.0 } else { sizes.1 } * LEAF);
-        let small = sizes.0 <= floor && sizes.1 <= floor;
+        let small = (sizes.0 <= floor || settled.0) && (sizes.1 <= floor || settled.1);
         match split(cell, sizes, sink).filter(|_| !small && cell.depth < DEPTH) {
-            Some(halves) => {
+            Some((halves, side)) => {
                 for half in halves.into_iter().rev() {
-                    stack.push(Cell { depth: cell.depth.saturating_add(1), parents: Some(pair), ..half });
+                    let depth = cell.depth.saturating_add(1);
+                    stack.push(Cell { depth, parents: Some(pair), halved: side, ..half });
                 }
             }
             None => found.extend(solve(&cell, span, sink)),
@@ -120,22 +151,25 @@ fn leaves(span: Span, work: &mut Work, sink: &mut Sink<'_>, found: &mut Vec<Foun
     Ok(())
 }
 
-/// The two halves of `cell`: of its piece of the span where that box is the larger, otherwise of its piece of the
-/// patch across its longer side. `None` where nothing can be halved.
-fn split(cell: Cell, sizes: (f64, f64), sink: &Sink<'_>) -> Option<[Cell; 2]> {
+/// The two halves of `cell`, and which side they halve: its piece of the span where that box is the larger, otherwise
+/// its piece of the patch across its longer side, but never a side that no longer shrinks. `None` where nothing can be
+/// halved.
+fn split(cell: Cell, sizes: (f64, f64), sink: &Sink<'_>) -> Option<([Cell; 2], Halved)> {
     let (lo, hi) = (cell.patch.lo, cell.patch.hi);
     let mid = centre(cell.patch);
     let (t, u, v) = (middle(cell.lo, cell.hi), mid.u(), mid.v());
-    let (can_t, can_u, can_v) = (cell.lo < t && t < cell.hi, lo.u() < u && u < hi.u(), lo.v() < v && v < hi.v());
+    let (span_free, patch_free) = (!cell.stuck.0, !cell.stuck.1);
+    let can_t = span_free && cell.lo < t && t < cell.hi;
+    let (can_u, can_v) = (patch_free && lo.u() < u && u < hi.u(), patch_free && lo.v() < v && v < hi.v());
     let jet = sink.surface.first(mid);
     let wide_u = jet.du.rate().norm() * (hi.u() - lo.u()) >= jet.dv.rate().norm() * (hi.v() - lo.v());
     let patch = |a: UvPoint, b: UvPoint| Cell { patch: UvBox::new(a, b), ..cell };
     if can_t && (sizes.0 >= sizes.1 || !(can_u || can_v)) {
-        Some([Cell { hi: t, ..cell }, Cell { lo: t, ..cell }])
+        Some(([Cell { hi: t, ..cell }, Cell { lo: t, ..cell }], Halved::Span))
     } else if can_u && (wide_u || !can_v) {
-        Some([patch(lo, UvPoint::new(u, hi.v())), patch(UvPoint::new(u, lo.v()), hi)])
+        Some(([patch(lo, UvPoint::new(u, hi.v())), patch(UvPoint::new(u, lo.v()), hi)], Halved::Patch))
     } else if can_v {
-        Some([patch(lo, UvPoint::new(hi.u(), v)), patch(UvPoint::new(lo.u(), v), hi)])
+        Some(([patch(lo, UvPoint::new(hi.u(), v)), patch(UvPoint::new(lo.u(), v), hi)], Halved::Patch))
     } else {
         None
     }

@@ -25,7 +25,6 @@
 //! Every decision a method makes goes through occam-math's predicates.
 
 mod along;
-mod boxes;
 mod closed;
 mod correct;
 #[cfg(test)]

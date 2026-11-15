@@ -2,7 +2,9 @@
 //! A curve against a surface that presents an analytic form: the roots of the surface's signed distance along the
 //! curve, isolated by interval bounds over subranges (Rump 1999). A piece of the span whose box lies certainly on one
 //! side of the band is decided whole, and so is one whose box lies within it, or whose points at its ends, middle and
-//! quarters all do. Any other is halved, down to a floor. What is left are runs of pieces within the band or undecided,
+//! quarters all do. Any other is halved, down to a floor, or until its box, the curve family's own, comes back from
+//! halving the same as before, as a B-spline's does inside a knot span. What is left are runs of pieces within the band
+//! or undecided,
 //! each between two decided pieces or an end of the span, and each is read by what it lies between:
 //!
 //! - between the two sides, the curve crosses, and the root is found by bisection;
@@ -25,7 +27,6 @@ use occam_math::{Interval, Side, Verdict};
 use occam_report::Quantity;
 use occam_units::Bounds;
 
-use crate::boxes;
 use crate::distance::{Spread, canonical, distance, gradient, judge, padded};
 use crate::hits::{Kind, Sink, Span};
 use crate::methods::{Spent, Work};
@@ -127,7 +128,7 @@ impl Along<'_, '_> {
         let mut stack: Vec<(f64, f64, u32, Option<Bounds>)> = vec![(self.span.lo, self.span.hi, 0, None)];
         while let Some((lo, hi, depth, parent)) = stack.pop() {
             work.spend(1)?;
-            let piece = boxes::curve(self.curve(), lo, hi, parent.as_ref());
+            let piece = self.curve().bounds(lo, hi);
             let held = if self.moved.is_some() { padded(&piece) } else { piece };
             let (verdict, tally) = judge(distance(&self.form, Spread::of(&held)), self.band());
             let mid = middle(lo, hi);
@@ -138,6 +139,7 @@ impl Along<'_, '_> {
                 }
                 Verdict::Undecided if depth >= FLOOR || !(lo < mid && mid < hi) => Lie::Open,
                 Verdict::Undecided if self.probed_on(lo, hi) => Lie::On,
+                Verdict::Undecided if parent == Some(piece) => Lie::Open,
                 Verdict::Undecided => {
                     let deeper = depth.saturating_add(1);
                     stack.push((mid, hi, deeper, Some(piece)));

@@ -8,8 +8,8 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use occam_geom::{
-    BsplineSurface, Circle, Cone, Content, Curve, Cylinder, FamilyName, Line, ParamRange, ParametricCurve, Plane,
-    Scratch, Shape, Sphere, SplineSurface, Surface, Torus, UvBox,
+    BsplineCurve, BsplineSurface, Circle, Cone, Content, Curve, Cylinder, FamilyName, Line, ParamRange,
+    ParametricCurve, Plane, Scratch, Shape, Sphere, SplineSurface, Surface, Torus, UvBox,
 };
 use occam_math::{Digest, Exec, Real, atan2};
 use occam_report::{Code, NamedValue, Reason, Report};
@@ -360,12 +360,23 @@ fn hits_are_the_same_bits_at_one_and_many_threads() {
     assert_eq!(got, alone);
 }
 
-/// A line rising from its start, whose box is the box of its ends, exact where it is lowest, or seeded one ulp too small:
-/// its low Z one double up.
+/// How a [`Seeded`] line's boxes and B-spline form are seeded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Seed {
+    /// Its box is the box of its ends, exact where it is lowest, rising from its start.
+    Exact,
+    /// That box one ulp too small: its low Z one double up.
+    Short,
+    /// Its box is the whole line's over any part, as a B-spline's is inside a knot span, and its B-spline form over a
+    /// part runs over other parameters: the stretch half the part further on.
+    Lying,
+}
+
+/// A line whose boxes and B-spline form are seeded.
 #[derive(Clone, Copy)]
 struct Seeded {
     line: Line,
-    short: bool,
+    seed: Seed,
 }
 
 impl ParametricCurve for Seeded {
@@ -396,10 +407,23 @@ impl ParametricCurve for Seeded {
     }
 
     fn bounds(&self, lo: f64, hi: f64) -> Bounds {
+        let range = ParametricCurve::range(&self.line);
+        let (lo, hi) = if self.seed == Seed::Lying { (range.lo, range.hi) } else { (lo, hi) };
         let exact = Bounds::of([self.line.eval_point(lo), self.line.eval_point(hi)]).unwrap();
         let low = exact.low().to_vec3();
-        let low = if self.short { v(low.x, low.y, low.z.next_up()) } else { low };
+        let low = if self.seed == Seed::Short { v(low.x, low.y, low.z.next_up()) } else { low };
         Bounds::of([Point::from_vec3(low), exact.high()]).unwrap()
+    }
+
+    fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
+        let further = |t: f64| self.line.eval_point(t + (hi - lo) * 0.5);
+        let poles = vec![further(lo), further(hi)];
+        (self.seed == Seed::Lying).then(|| BsplineCurve {
+            degree: 1,
+            knots: vec![lo, lo, hi, hi],
+            poles,
+            weights: None,
+        })
     }
 
     fn family(&self) -> FamilyName {
@@ -426,7 +450,8 @@ fn a_box_seeded_one_ulp_too_small_changes_a_digest_and_is_caught() {
     let budget = Budget { steps: 256 };
     let run = |short: bool, culled: bool| {
         let go = if culled { hits } else { scan };
-        go(&Seeded { line, short }, span(0.0, 2.0), &plane, flat, tol(), budget)
+        let seed = if short { Seed::Short } else { Seed::Exact };
+        go(&Seeded { line, seed }, span(0.0, 2.0), &plane, flat, tol(), budget)
     };
     let unculled = run(false, false);
     let [report] = unculled.failures.as_slice() else {
@@ -457,4 +482,14 @@ fn a_patch_outside_the_domain_is_refused_whether_or_not_the_boxes_meet() {
         assert_eq!(report.code, Code::UndefinedParameter);
         assert_eq!(digest(&boxed), digest(&unculled), "from {from:?}");
     }
+}
+
+#[test]
+fn a_box_is_the_familys_own_and_never_one_read_from_its_b_spline_form() {
+    let (plane, flat) = (Plane::placed(&Placement::identity()), patch((-10.0, -10.0), (10.0, 10.0)));
+    let line = Line::new(Point::from_vec3(v(0.5, 0.5, -0.7)), Direction::normalised(v(0.0, 0.0, 1.0)));
+    let rising = Seeded { line: line.trimmed(0.0, 2.0).unwrap(), seed: Seed::Lying };
+    let crossing = hits(&rising, span(0.0, 2.0), &plane, flat, tol(), BUDGET);
+    found(&crossing, (1, 0, 0));
+    hit_at(&crossing.crossings[0], 0.7, &plane);
 }
