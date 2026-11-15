@@ -18,7 +18,7 @@ use super::given::{FaceArgs, WireRef};
 use super::loops::Loops;
 use super::outline::{Run, not_a_wire, off_plane, plane_through};
 use super::space::Flatland;
-use super::touch::first_touch;
+use super::touch::{Touch, first_touch};
 use super::wire::{band, crosses_itself, made};
 use crate::operand::{Labels, Operand};
 use crate::read::count;
@@ -92,7 +92,8 @@ fn turning(run: &Run, plane: &Flatland) -> f64 {
 ///
 /// # Errors
 ///
-/// [`Code::WireCrossesItself`], [`Code::WiresCross`], [`Code::HoleOutside`] or [`Code::HolesNested`].
+/// [`Code::WireCrossesItself`], naming the edges that touch in the order the loop's edges were given in, whether or not
+/// it was turned, [`Code::WiresCross`], [`Code::HoleOutside`] or [`Code::HolesNested`].
 fn apart(
     plane: &Flatland,
     runs: &[(Run, Input)],
@@ -104,6 +105,9 @@ fn apart(
     if let Some(touch) = first_touch(&closed, band) {
         let (first, second) = (touch.first.0, touch.second.0);
         if first == second {
+            let given = |k: usize| runs.get(first).map_or(k, |(run, _)| run.given(k));
+            let (a, b) = (given(touch.first.1), given(touch.second.1));
+            let touch = Touch { first: (first, a.min(b)), second: (first, a.max(b)), at: touch.at };
             return Err(crosses_itself(plane, touch, &at(first), band));
         }
         return Err(refused(Code::WiresCross, &at(second), band)

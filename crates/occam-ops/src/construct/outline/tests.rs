@@ -36,6 +36,7 @@ fn a_run_s_samples_follow_each_edge_the_way_the_run_takes_it() {
         edges: parts.iter().map(|&(_, _, back)| (edit.reserve(), back)).collect(),
         bents: parts.iter().map(|&(bent, _, _)| bent).collect(),
         ranges: parts.iter().map(|&(_, range, _)| range).collect(),
+        turned: false,
     };
     // Each edge from its start, which is the end of its curve's part where the run takes it backwards; a circle's part
     // in sixteenths; and, the run being open, the last edge to its end.

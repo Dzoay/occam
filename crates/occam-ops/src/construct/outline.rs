@@ -21,6 +21,8 @@ pub(crate) struct Run {
     pub bents: Vec<Bent>,
     /// The part of each one's curve it covers, lowest first.
     pub ranges: Vec<(f64, f64)>,
+    /// Whether it is taken the other way round from the order its edges were given in.
+    pub turned: bool,
 }
 
 impl Run {
@@ -38,7 +40,12 @@ impl Run {
             bents.push(Bent::of(&*curve.0).ok_or_else(|| not_a_wire(at, form))?);
             ranges.push(record.range);
         }
-        Ok(Self { edges, bents, ranges })
+        Ok(Self { edges, bents, ranges, turned: false })
+    }
+
+    /// Where its `k`-th edge is in the order its edges were given in: counted from the other end if it was turned.
+    pub(crate) fn given(&self, k: usize) -> usize {
+        if self.turned { self.edges.len().saturating_sub(1).saturating_sub(k) } else { k }
     }
 
     /// Each edge's line or circle, the part it covers, and whether the run takes it backwards, in order.
@@ -75,7 +82,8 @@ impl Run {
     /// The same run taken the other way round.
     pub(crate) fn reversed(self) -> Self {
         let edges = self.edges.into_iter().rev().map(|(e, back)| (e, !back)).collect();
-        Self { edges, bents: self.bents.into_iter().rev().collect(), ranges: self.ranges.into_iter().rev().collect() }
+        let (bents, ranges) = (self.bents.into_iter().rev().collect(), self.ranges.into_iter().rev().collect());
+        Self { edges, bents, ranges, turned: !self.turned }
     }
 }
 
