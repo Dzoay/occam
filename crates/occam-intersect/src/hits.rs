@@ -87,7 +87,8 @@ pub fn boxes_meet(curve: &dyn Curve, span: Span, surface: &dyn Surface, patch: U
 }
 
 /// The hits of `curve` over `span` on `surface` over `patch`, once their boxes meet ([`boxes_meet`]): otherwise none,
-/// with no work done. The same as [`scan`] wherever the boxes are conservative.
+/// with no work done. A span or patch outside the domain is refused first, as [`scan`] refuses it, so the two are the
+/// same wherever the boxes are conservative.
 #[must_use]
 pub fn hits(
     curve: &dyn Curve,
@@ -97,7 +98,8 @@ pub fn hits(
     tol: Tolerance,
     budget: Budget,
 ) -> Hits {
-    if boxes_meet(curve, span, surface, patch, tol) {
+    let refused = valid(curve.range(), span, surface.domain(), patch).is_err();
+    if refused || boxes_meet(curve, span, surface, patch, tol) {
         scan(curve, span, surface, patch, tol, budget)
     } else {
         Hits::default()

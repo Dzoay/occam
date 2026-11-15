@@ -442,3 +442,19 @@ fn a_box_seeded_one_ulp_too_small_changes_a_digest_and_is_caught() {
     assert_eq!(digest(&run(false, true)), digest(&unculled), "the right box changes nothing");
     assert_ne!(digest(&run(true, true)), digest(&unculled), "a box one ulp too small drops the pair, and is caught");
 }
+
+#[test]
+fn a_patch_outside_the_domain_is_refused_whether_or_not_the_boxes_meet() {
+    let ball = Sphere::placed(&Placement::identity(), mm(2.0)).unwrap();
+    let beyond = patch((0.0, -FRAC_PI_2 - 1e-9), (TAU, FRAC_PI_2));
+    for from in [v(5.0, 0.0, 0.0), v(50.0, 50.0, 50.0)] {
+        let line = segment(&Placement::identity(), from, v(-1.0, 0.0, 0.0), 3.0);
+        let (boxed, unculled) = (
+            hits(line.as_ref(), span(0.0, 3.0), &ball, beyond, tol(), BUDGET),
+            scan(line.as_ref(), span(0.0, 3.0), &ball, beyond, tol(), BUDGET),
+        );
+        let [report] = unculled.failures.as_slice() else { panic!("{unculled:?}") };
+        assert_eq!(report.code, Code::UndefinedParameter);
+        assert_eq!(digest(&boxed), digest(&unculled), "from {from:?}");
+    }
+}
