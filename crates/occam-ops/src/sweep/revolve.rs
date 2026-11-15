@@ -18,7 +18,7 @@ use super::around::{Axes, Family, Meridian, meridian, seams};
 use super::given::RevolveArgs;
 use super::profile::{Piece, Profile};
 use super::shape::{Flat, Shape, planar};
-use crate::construct::space::{Bent, Flatland};
+use crate::construct::space::{Bent, Flatland, unit};
 use crate::construct::{refused, shown};
 use crate::primitive::parts::uv_line;
 use crate::primitive::solid::{LoopSpec, UseSpec};
@@ -82,7 +82,7 @@ fn axes(profile: &Profile, args: &RevolveArgs, band: f64) -> Result<(Axes, f64),
         // A profile on the axis has no direction across it; it moves nothing, and is refused as such once read.
         return Ok((Axes { origin, axis, x: across(near) }, 0.0));
     }
-    let toward = across(near) * (1.0 / first);
+    let toward = unit(across(near));
     let (far, _) = furthest(profile, |piece| furthest_on(piece, origin, toward));
     let reach = across(far).norm();
     let x = across(far) * (1.0 / reach);
