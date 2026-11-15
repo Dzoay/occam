@@ -6,13 +6,13 @@
 
 use occam_math::Real;
 use occam_report::Report;
-use occam_units::{Bounds, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Affine, Bounds, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::line::Line;
 use crate::support::splat;
 use crate::{
-    Analytic, Closest, Content, Degeneracy, Domain, FamilyName, Jet1, Jet2, ParamRange, Parametric, ParametricCurve,
-    Scratch, Shape, UvBox,
+    Analytic, Closest, Content, Degeneracy, Domain, FamilyName, Jet1, Jet2, ParamMap, ParamRange, Parametric,
+    ParametricCurve, Scratch, Shape, UvBox, UvMap,
 };
 
 /// The seeded error.
@@ -148,6 +148,11 @@ impl<S: Parametric> Parametric for Seeded<S> {
             Fault::First | Fault::Second | Fault::Capped(_) => Parametric::analytic(&self.surface, tol),
         }
     }
+
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let (surface, params) = Parametric::moved(&self.surface, map)?;
+        Some((Self { surface, fault: self.fault }, params))
+    }
 }
 
 /// A curve whose second derivative is wrong.
@@ -215,6 +220,10 @@ impl<C: ParametricCurve> ParametricCurve for WrongSecondCurve<C> {
     fn shape(&self) -> Shape {
         ParametricCurve::shape(&self.0)
     }
+
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        ParametricCurve::moved(&self.0, map).map(|(curve, params)| (Self(curve), params))
+    }
 }
 
 /// A line that says it was sampled, to show that the object layer passes its fit on.
@@ -265,5 +274,9 @@ impl ParametricCurve for Fitted {
 
     fn fit(&self) -> Option<Length> {
         Some(Length::from_millimetres(0.25))
+    }
+
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        ParametricCurve::moved(&self.0, map).map(|(line, params)| (Self(line), params))
     }
 }

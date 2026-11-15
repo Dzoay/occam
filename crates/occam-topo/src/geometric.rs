@@ -10,6 +10,7 @@
 //! deviation, at even steps along each edge it created or changed or whose uses it did, and stores it, so no caller
 //! asserts it.
 
+mod outward;
 #[cfg(test)]
 mod reach;
 #[cfg(test)]
@@ -17,10 +18,18 @@ mod refused;
 mod trace;
 mod winding;
 
-use core::num::NonZeroU32;
+pub(crate) use outward::inside_out;
+
+/// The winding number the checks use to decide that a loop's witness is strictly inside it, so that what builds a face
+/// finds witnesses by the same count. See [`winding::number`].
+pub use winding::number as winding_number;
+
+use core::num::{NonZeroU32, NonZeroUsize};
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use occam_geom::{Curve, Scratch, join_edge};
+use occam_math::Exec;
 use occam_report::{Code, EntityKind, EntityRef, Fault, NamedValue, Quantity, Reason, Report};
 use occam_units::{Length, Tolerance};
 
@@ -30,7 +39,7 @@ use crate::kind::{Edge, EdgeUse, Face, Id, Kind, Loop, Vertex};
 use crate::records::{Around, End, UseOwner};
 use crate::snapshot::Model;
 use crate::view::{View, most, view, walk};
-use trace::{Off, Trace, Untraced};
+use trace::{Off, Place, Trace, Untraced};
 
 /// How many even steps an edge's deviation is measured at, its ends included: as many as a parameter curve is
 /// joined to its edge at.
@@ -220,7 +229,21 @@ fn bounding(model: &Model, l: View<'_, Loop>, out: &mut Vec<Report>) {
             report = report.with_value(NamedValue::new("winding", Quantity::Count, f64::from(winding)));
         }
         out.push(report.with_tolerance_in_force(band));
+        return;
     }
+    out.extend(against(model, l, place));
+}
+
+/// The report of loop `l`, whose witness is inside it at `place`, if it winds about the witness against the way its face
+/// faces: an outer loop must wind anticlockwise in the surface's parameters, and a hole clockwise, where the face is not
+/// reversed, and each the other way where it is. So each face lies on the left of its uses seen from outside, and with
+/// each edge's uses opposed, a face faces the way each neighbour does across their edge.
+fn against(model: &Model, l: View<'_, Loop>, place: Place) -> Option<Report> {
+    let (face, winding) = (view(model, l.face())?, place.winding?);
+    let anticlockwise = (face.outer() == l.id()) != face.reversed();
+    let report = failed(Reason::LoopAgainstFace, &[l.id().entity(), face.id().entity()]);
+    (winding.is_positive() != anticlockwise)
+        .then(|| report.with_value(NamedValue::new("winding", Quantity::Count, f64::from(winding))))
 }
 
 /// Whether each of `l`'s uses ends at the vertex the next begins at, round to the first. Where one does not, the
@@ -284,10 +307,7 @@ pub(crate) fn measure(edit: &mut Edit) -> Vec<Report> {
         match deviation(next, e) {
             Ok(d) if e.deviation().millimetres().to_bits() != d.to_bits() => measured.push((e.id(), d)),
             Ok(_) => {}
-            Err(miss) => failures.push(
-                failed(Reason::DeviationNotMeasured, &[e.id().entity(), miss.face.entity()])
-                    .with_value(NamedValue::new("parameter", miss.quantity, miss.t)),
-            ),
+            Err(miss) => failures.push(unmeasured(e.id(), &miss)),
         }
     }
     for (e, deviation) in measured {
@@ -301,18 +321,60 @@ pub(crate) fn measure(edit: &mut Edit) -> Vec<Report> {
     failures
 }
 
-/// The edges on a curve, or of a face on a surface, that the edit replaced in place. Finding them reads every edge or
-/// face, which only an edit replacing geometry in place pays.
+/// The report of an edge whose distance from a face could not be measured.
+fn unmeasured(e: Id<Edge>, miss: &Unmeasured) -> Report {
+    failed(Reason::DeviationNotMeasured, &[e.entity(), miss.face.entity()]).with_value(NamedValue::new(
+        "parameter",
+        miss.quantity,
+        miss.t,
+    ))
+}
+
+/// How many edges one task of [`measure_all`] measures.
+const EDGES_A_TASK: NonZeroUsize = match NonZeroUsize::new(256) {
+    Some(n) => n,
+    None => NonZeroUsize::MIN,
+};
+
+/// Measures every edge's deviation from each face that uses it and stores it, as a model read back from a file must be
+/// (the deviation cap's decision): in tasks of [`EDGES_A_TASK`] edges on `exec`, stored in slot order, so the bits are
+/// the same at any thread count. Gives one report for each edge whose distance from a face could not be measured.
+pub(crate) fn measure_all(model: &mut Model, exec: &Exec) -> Vec<Report> {
+    let edges: Arc<Vec<Id<Edge>>> =
+        Arc::new(Edge::table(model).records().map(|(slot, generation, _)| Id::new(slot, generation)).collect());
+    let (shared, count) = (Arc::new(model.clone()), edges.len());
+    let measured = exec.map_chunks(count, EDGES_A_TASK, move |range| {
+        let ids = edges.get(range).unwrap_or_default();
+        ids.iter().filter_map(|&e| view(&shared, e)).map(|e| (e.id(), deviation(&shared, e))).collect()
+    });
+    let mut failures = Vec::new();
+    for (e, found) in measured {
+        match found {
+            Ok(d) => {
+                if let Some(record) = Edge::table_mut(model).live_mut(e.slot(), e.generation()) {
+                    record.deviation = Length::from_millimetres(d);
+                }
+            }
+            Err(miss) => failures.push(unmeasured(e, &miss)),
+        }
+    }
+    failures
+}
+
+/// The edges on a curve, or of a face on a surface, that the edit replaced in place. Finding them reads every edge and
+/// face once, however many curves and surfaces it replaced, which only an edit replacing geometry in place pays.
 fn on_replaced(edit: &Edit) -> Vec<Id<Edge>> {
     let next = &edit.next;
-    let mut found = Vec::new();
-    for &g in edit.changed.iter().filter(|g| matches!(g.kind, EntityKind::Curve | EntityKind::Surface)) {
-        let on_curve = Edge::table(next).records().filter(|(_, _, r)| r.curve.entity() == g);
-        found.extend(on_curve.map(|(slot, generation, _)| Id::<Edge>::new(slot, generation)));
-        let faces = Face::table(next).records().filter(|(_, _, r)| r.surface.entity() == g);
-        let faces: Vec<Id<Face>> = faces.map(|(slot, generation, _)| Id::new(slot, generation)).collect();
-        found.extend(faces.into_iter().filter_map(|f| view(next, f)).flat_map(View::<Face>::edges));
+    let replaced: BTreeSet<EntityRef> =
+        edit.changed.iter().copied().filter(|g| matches!(g.kind, EntityKind::Curve | EntityKind::Surface)).collect();
+    if replaced.is_empty() {
+        return Vec::new();
     }
+    let on_curve = Edge::table(next).records().filter(|(_, _, r)| replaced.contains(&r.curve.entity()));
+    let mut found: Vec<Id<Edge>> = on_curve.map(|(slot, generation, _)| Id::new(slot, generation)).collect();
+    let faces = Face::table(next).records().filter(|(_, _, r)| replaced.contains(&r.surface.entity()));
+    let faces: Vec<Id<Face>> = faces.map(|(slot, generation, _)| Id::new(slot, generation)).collect();
+    found.extend(faces.into_iter().filter_map(|f| view(next, f)).flat_map(View::<Face>::edges));
     found
 }
 

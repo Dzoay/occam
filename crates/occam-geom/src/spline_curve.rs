@@ -6,17 +6,18 @@
 
 use occam_math::Real;
 use occam_report::{NamedValue, Quantity, Report};
-use occam_units::{Bounds, ParamKind, Point, Tangent, Vec3, World};
+use occam_units::{Affine, Bounds, ParamKind, Point, Tangent, Vec3, World};
 
 use crate::basis::{basis, rows_len, span};
 use crate::batch::Scratch;
 use crate::bspline::{BsplineCurve, MAX_DEGREE, bezier_knots, cartesian, checked_knots, checked_poles, homogeneous};
 use crate::curve::ParametricCurve;
-use crate::domain::{ParamRange, Wrap};
+use crate::domain::{ParamMap, ParamRange, Wrap};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::knots::{Rows, canonical};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
-use crate::spline::{CAPACITIES, curve_quotient};
+use crate::restore::{Numbers, knots as saved_knots, poles as saved_poles};
+use crate::spline::{CAPACITIES, curve_quotient, moved_pole};
 use crate::support::{everything, padded};
 
 /// A B-spline or Bézier curve, rational or not.
@@ -52,6 +53,28 @@ impl SplineCurve {
         let range = ParamRange { lo: at(p), hi: at(n), wrap: Wrap::Open, kind: ParamKind::Knot };
         let poles = homogeneous(&form.poles, form.weights.as_deref());
         Ok(Self { degree: p, knots, poles, rational: form.weights.is_some(), bezier: false, range })
+    }
+
+    /// The curve saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written. The knots are made canonical, and a Bézier form must have its own knots.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `geom.out-of-range` for a flag, degree or count that is not
+    /// one, and as [`SplineCurve::new`] for the knots and the poles, a weight other than 1 in a form that is not rational being
+    /// `geom.out-of-range`.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let (bezier, rational) = (read.flag()?, read.flag()?);
+        let p = read.count(u32::from(MAX_DEGREE))?;
+        let n = read.left().saturating_sub(p.saturating_add(1)).checked_div(5).unwrap_or(0);
+        let knots = saved_knots(&mut read, n.saturating_add(p).saturating_add(1), bezier.then_some(p))?;
+        let poles = saved_poles(&mut read, n, rational)?;
+        read.done()?;
+        let (p, n) = checked_knots(u16::try_from(p).unwrap_or(u16::MAX), n, &knots)?;
+        let at = |i: usize| knots.get(i).copied().unwrap_or(f64::NAN);
+        let range = ParamRange { lo: at(p), hi: at(n), wrap: Wrap::Open, kind: ParamKind::Knot };
+        Ok(Self { degree: p, knots, poles, rational, bezier, range })
     }
 
     /// The Bézier curve of these poles and their weights, if it is rational: degree one less than the poles, from 0
@@ -167,6 +190,9 @@ impl ParametricCurve for SplineCurve {
         (Point::from_vec3(point), Tangent::new(rate), Tangent::new(change))
     }
 
+    /// Inlined into each caller, as the rungs are: an offset calls it a lane at a time at a constant order, which a
+    /// copy shared with the dyn trait's callers cannot use.
+    #[inline(always)]
     fn derivatives(
         &self,
         t: f64,
@@ -230,6 +256,12 @@ impl ParametricCurve for SplineCurve {
         let (poles, weights) = cartesian(&cut.poles.concat(), self.rational);
         let degree = u16::try_from(self.degree).unwrap_or(u16::MAX);
         Some(BsplineCurve { degree, knots: cut.knots, poles, weights })
+    }
+
+    /// Any map keeps a B-spline: its poles moved, its weights and knots kept, and so its parameter.
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        let poles = self.poles.iter().map(|pole| moved_pole(map, *pole)).collect();
+        Some((Self { poles, ..self.clone() }, ParamMap::IDENTITY))
     }
 }
 

@@ -3,7 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Code, DisplayUnits, EntityRef, Fault, NamedValue, Partial, Reason, Remedy, RemedyKind, Report, Severity};
+use crate::description::Shown;
+use crate::{
+    Code, DisplayUnits, EntityRef, Fault, Input, NamedValue, Partial, Reason, Remedy, RemedyKind, Report, Severity,
+};
 
 /// The version of every JSON form here. It changes when a form changes in a way a reader would notice.
 pub const SCHEMA: u32 = 2;
@@ -24,6 +27,10 @@ pub(crate) struct ReportWire<'a> {
     remedies: &'a [Remedy],
     #[serde(skip_serializing_if = "Option::is_none")]
     partial: Option<&'a Partial>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input: Option<&'a Input>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    described: Vec<Shown<'a>>,
 }
 
 impl<'a> ReportWire<'a> {
@@ -39,6 +46,8 @@ impl<'a> ReportWire<'a> {
             values: &report.values,
             remedies: &report.remedies,
             partial: report.partial.as_ref(),
+            input: report.input.as_ref(),
+            described: report.described.iter().map(|description| description.shown(units)).collect(),
         }
     }
 }
@@ -144,6 +153,45 @@ mod tests {
             assert!(text.contains(part), "{part} in {text}");
         }
         assert_eq!(Report::from_json(&text), Ok(report));
+    }
+
+    #[test]
+    fn a_bad_inputs_place_in_the_request_round_trips() {
+        let input = Input::at("steps[0].op").in_step(0, Some("loft")).given("loft");
+        let report = Report::new(Code::UnknownOperation, Fault::InvalidInput).with_input(input);
+        let text = report.to_json(DisplayUnits::default()).unwrap();
+        let part = r#""input":{"step":0,"operation":"loft","parameter":"steps[0].op","given":"loft"}"#;
+        assert!(text.contains(part), "{text}");
+        assert!(text.contains(r#""message":"steps[0].op is loft, which is not an operation occam has.""#), "{text}");
+        assert_eq!(Report::from_json(&text), Ok(report));
+        let plain = Report::new(Code::Malformed, Fault::InvalidInput).to_json(DisplayUnits::default()).unwrap();
+        assert!(!plain.contains(r#""input":"#), "{plain}");
+    }
+
+    #[test]
+    fn a_report_carries_what_each_entity_it_names_is_and_reads_it_back() {
+        let face = EntityRef::new(EntityKind::Face, 3, 1);
+        let described = crate::Description {
+            entity: face,
+            form: "plane".to_string(),
+            values: vec![NamedValue::point("low", [0.0, 0.0, 0.0]), NamedValue::point("high", [25.4, 50.8, 0.0])],
+            origin: None,
+            adjacent: vec![EntityRef::new(EntityKind::Shell, 0, 1)],
+        };
+        let report = Report::new(Code::StaleId, Fault::InvalidInput).with_entity(face).with_described(vec![described]);
+        let units = DisplayUnits { length: LengthUnit::Inch, angle: AngleUnit::Radian };
+        let value: Value = serde_json::from_str(&report.to_json(units).unwrap()).unwrap();
+        let want = json!([{
+            "entity": "face:3/1", "form": "plane", "adjacent": ["shell:0/1"],
+            "values": [
+                {"name": "low", "quantity": "length", "value": [0.0, 0.0, 0.0], "shown": "(0, 0, 0) in"},
+                {"name": "high", "quantity": "length", "value": [25.4, 50.8, 0.0], "shown": "(1, 2, 0) in"},
+            ],
+        }]);
+        assert_eq!(value["described"], want);
+        assert_eq!(Report::from_json(&value.to_string()), Ok(report));
+        let bare = Report::new(Code::StaleId, Fault::InvalidInput).with_entity(face).to_json(units).unwrap();
+        assert!(!bare.contains("described"), "a report described by nothing yet says nothing of it: {bare}");
     }
 
     #[test]

@@ -11,12 +11,12 @@
 
 use occam_math::Real;
 use occam_report::{Code, Fault, NamedValue, Report};
-use occam_units::{Direction, Point, Tangent, UvPoint, UvVector, Vec3, World};
+use occam_units::{Affine, Direction, Placement, Point, Tangent, UvPoint, UvVector, Vec3, Vector, World};
 
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
 use crate::curve::{ParametricCurve, holding};
-use crate::domain::{ParamRange, UvBox};
+use crate::domain::{ParamMap, ParamRange, UvBox, UvMap};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::nearest::nearest_by;
 use crate::param_curve::{ParametricParamCurve, UvClosest};
@@ -168,6 +168,22 @@ impl<C: ParametricCurve> ParametricParamCurve for UvCurve<C> {
         let form = self.curve.to_bspline(lo, hi)?;
         let poles = form.poles.iter().map(|p| Point::from_vec3(flat(p.to_vec3()))).collect();
         Some(BsplineCurve { poles, ..form })
+    }
+
+    /// A map of the face's parameters keeps the curve where its family keeps itself under the same map of the plane it
+    /// is drawn in: a similarity where the map scales both parameters alike, and a stretch of the plane otherwise.
+    #[expect(clippy::float_cmp, reason = "a map's factors as given, compared exactly: equal ones scale alike")]
+    fn moved(&self, map: &UvMap) -> Option<(Self, ParamMap)> {
+        let ([u_by_u, u_by_v, u_shift], [v_by_u, v_by_v, v_shift]) = (map.u, map.v);
+        let shift = Vec3::new(u_shift, v_shift, 0.0);
+        let plane = if u_by_u == v_by_v && u_by_v == 0.0 && v_by_u == 0.0 {
+            Affine::similarity(Placement::translation(Vector::from_vec3(shift)), u_by_u)?
+        } else {
+            let rows = [Vec3::new(u_by_u, u_by_v, 0.0), Vec3::new(v_by_u, v_by_v, 0.0), Vec3::new(0.0, 0.0, 1.0)];
+            Affine::linear(rows, shift)?
+        };
+        let (curve, params) = self.curve.moved(&plane)?;
+        Some((Self::new(curve).ok()?, params))
     }
 }
 

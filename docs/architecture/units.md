@@ -21,6 +21,7 @@ flowchart LR
 | `Tangent<F>` | A derivative: length per unit of a parameter, which may be a length, an angle or a knot unit |
 | `ParamKind` | What a parameter measures, so a test in parameter space uses the right tolerance |
 | `Placement<A, B>` | A rigid map, built once with the owned `sin_cos` |
+| `Affine` | A map of `World` that may scale, alike or along a frame's axes, and keeps its sense; where it is a similarity it says so ([moving geometry](../decisions/2026-11-12-moving-geometry.md)) |
 | `Bounds` | A box holding everything it bounds, rounding included |
 
 ## Tolerance

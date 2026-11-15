@@ -47,6 +47,20 @@ struct Timing {
     /// Each lane kernel in the simd128 build, at its width and at width 1.
     #[serde(default)]
     kernels: Vec<KernelTiming>,
+    /// Each construction operation in both builds.
+    #[serde(default)]
+    operations: Vec<OperationTiming>,
+}
+
+/// One construction operation in the browser, in each build: how long it took, and a digest of what it answered, or
+/// `failed` if its run did not go through.
+#[derive(Debug, PartialEq, Deserialize)]
+struct OperationTiming {
+    name: String,
+    scalar_ms: f64,
+    simd128_ms: f64,
+    scalar_result: String,
+    simd128_result: String,
 }
 
 /// One lane kernel in the browser's simd128 build: how long it took at width 1 and at its width, and what each gave.
@@ -234,7 +248,25 @@ fn check_browser(timing: &Timing) -> Vec<Finding> {
         findings.push(Finding::new("perf.simd128-differs", WORKLOAD, message, "see docs/DETERMINISM.md (L23)"));
     }
     findings.extend(timing.kernels.iter().flat_map(check_kernel));
+    findings.extend(timing.operations.iter().flat_map(check_operation));
     findings
+}
+
+/// A construction operation in the browser went through in both builds and answered with the same bits (L23). Its time
+/// is reported, not held to anything yet.
+fn check_operation(operation: &OperationTiming) -> Vec<Finding> {
+    let gave = [operation.scalar_result.as_str(), operation.simd128_result.as_str()];
+    if gave.iter().any(|result| matches!(*result, "failed" | "unknown")) {
+        let message =
+            format!("in the browser, {} gave {} in scalar and {} in simd128", operation.name, gave[0], gave[1]);
+        return vec![Finding::new("perf.operation-failed", WORKLOAD, message, "run its request natively to see why")];
+    }
+    if gave[0] != gave[1] {
+        let message =
+            format!("in the browser, {} answered {} in scalar and {} in simd128", operation.name, gave[0], gave[1]);
+        return vec![Finding::new("perf.operation-differs", WORKLOAD, message, "see docs/DETERMINISM.md (L23)")];
+    }
+    Vec::new()
 }
 
 /// A lane kernel in the simd128 build is clearly faster at its width than at width 1, and gives the same bits.
@@ -385,12 +417,19 @@ fn measure(repo: &Repo) -> Verdict {
         .iter()
         .map(|kernel| format!("{} {:.2}x at width {}", kernel.name, kernel.one_ms / kernel.lanes_ms, kernel.width))
         .collect();
+    let operations: Vec<String> = timing
+        .operations
+        .iter()
+        .map(|o| format!("{} {:.1} ms scalar, {:.1} ms simd128", o.name, o.scalar_ms, o.simd128_ms))
+        .collect();
     let summary = format!(
-        "{}; in the browser, scalar {:.1} ms, simd128 {:.1} ms, {ratio:.2} times as fast; lane kernels with simd128: {}",
+        "{}; in the browser, scalar {:.1} ms, simd128 {:.1} ms, {ratio:.2} times as fast; lane kernels with simd128: {}; \
+         operations: {}",
         native.unwrap_or_default(),
         timing.scalar_ms,
         timing.simd128_ms,
-        kernels.join(", ")
+        kernels.join(", "),
+        operations.join(", ")
     );
     verdict(summary, findings)
 }
@@ -563,7 +602,47 @@ mod tests {
     }
 
     fn timing(scalar_ms: f64, simd128_ms: f64) -> Timing {
-        Timing { scalar_ms, simd128_ms, scalar_result: 1.5, simd128_result: 1.5, kernels: Vec::new() }
+        Timing {
+            scalar_ms,
+            simd128_ms,
+            scalar_result: 1.5,
+            simd128_result: 1.5,
+            kernels: Vec::new(),
+            operations: Vec::new(),
+        }
+    }
+
+    fn operation(scalar_result: &str, simd128_result: &str) -> OperationTiming {
+        OperationTiming {
+            name: "construct_sweeps".to_string(),
+            scalar_ms: 40.0,
+            simd128_ms: 38.0,
+            scalar_result: scalar_result.to_string(),
+            simd128_result: simd128_result.to_string(),
+        }
+    }
+
+    #[test]
+    fn an_operation_answering_alike_in_both_builds_passes_at_any_speed() {
+        let slow = OperationTiming { simd128_ms: 400.0, ..operation("00ab", "00ab") };
+        let run = Timing { operations: vec![operation("00ab", "00ab"), slow], ..timing(100.0, 50.0) };
+        assert_eq!(browser_codes(&run), [""; 0]);
+    }
+
+    #[test]
+    fn an_operation_must_answer_with_the_same_bits_in_both_builds() {
+        let run = Timing { operations: vec![operation("00ab", "00ac")], ..timing(100.0, 50.0) };
+        let found = check_browser(&run);
+        assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["perf.operation-differs"]);
+        assert!(found[0].message.contains("construct_sweeps"), "{found:?}");
+    }
+
+    #[test]
+    fn an_operation_that_did_not_go_through_fails() {
+        for (scalar, simd128) in [("failed", "failed"), ("00ab", "failed"), ("unknown", "unknown")] {
+            let run = Timing { operations: vec![operation(scalar, simd128)], ..timing(100.0, 50.0) };
+            assert_eq!(browser_codes(&run).first(), Some(&"perf.operation-failed"), "{scalar} {simd128}");
+        }
     }
 
     fn kernel(one_ms: f64, lanes_ms: f64) -> KernelTiming {
@@ -642,9 +721,7 @@ mod tests {
     #[test]
     fn a_timing_is_read_from_the_runners_json() {
         let text = r#"{"scalar_ms": 12.5, "simd128_ms": 6.25, "scalar_result": 1.5, "simd128_result": 1.5}"#;
-        let want =
-            Timing { scalar_ms: 12.5, simd128_ms: 6.25, scalar_result: 1.5, simd128_result: 1.5, kernels: Vec::new() };
-        assert_eq!(parse_timing(text), Some(want));
+        assert_eq!(parse_timing(text), Some(Timing { scalar_ms: 12.5, simd128_ms: 6.25, ..timing(0.0, 0.0) }));
         let with_kernels = r#"{"scalar_ms": 1, "simd128_ms": 1, "scalar_result": 0, "simd128_result": 0,
             "kernels": [{"name": "atan2", "width": 2, "one_ms": 3, "lanes_ms": 2, "one_result": 1, "lanes_result": 1}]}"#;
         let kernels = parse_timing(with_kernels).map(|timing| timing.kernels);
@@ -657,6 +734,11 @@ mod tests {
             lanes_result: 1.0,
         };
         assert_eq!(kernels, Some(vec![want]));
+        let with_operations = r#"{"scalar_ms": 1, "simd128_ms": 1, "scalar_result": 0, "simd128_result": 0,
+            "operations": [{"name": "construct_sweeps", "scalar_ms": 40, "simd128_ms": 38,
+            "scalar_result": "00ab", "simd128_result": "00ab"}]}"#;
+        let operations = parse_timing(with_operations).map(|timing| timing.operations);
+        assert_eq!(operations, Some(vec![operation("00ab", "00ab")]));
         assert_eq!(parse_timing(r#"{"scalar_ms": 12.5}"#), None);
         assert_eq!(parse_timing("not json"), None);
     }

@@ -190,6 +190,28 @@ impl<R: Clone> Table<R> {
         true
     }
 
+    /// A table of `slots`, in slot order: each the generation of its latest entity and its record if that entity is
+    /// live, as a file holds them. Its free slots are reused lowest first, as the table they were saved from would.
+    pub(crate) fn restore(slots: impl IntoIterator<Item = (NonZeroU32, Option<R>)>) -> Self {
+        let mut table = Self::with_most(u32::MAX);
+        for (generation, record) in slots {
+            if table.chunks.last().is_none_or(|chunk| chunk.len() >= CHUNK) {
+                table.chunks.push(Arc::new(Vec::with_capacity(CHUNK)));
+                table.free.push(0);
+            }
+            let state = record.map_or(State::Free, State::Live);
+            let slot = Slot { generation: generation.get(), state };
+            if let Some(count) = table.free.last_mut().filter(|_| slot.reusable()) {
+                *count = count.saturating_add(1);
+            }
+            if let Some(chunk) = table.chunks.last_mut() {
+                Arc::make_mut(chunk).push(slot);
+            }
+        }
+        table.lowest = table.free.iter().position(|&n| n > 0).unwrap_or(table.chunks.len());
+        table
+    }
+
     /// How many chunks this table shares with `other`.
     #[cfg(test)]
     #[expect(clippy::disallowed_methods, reason = "a test that chunks are shared compares them by address")]
@@ -352,5 +374,30 @@ mod tests {
         assert!(table.free(0, one()));
         assert_eq!(table.live_mut(0, one()), None, "free");
         assert_eq!(table.live_mut(1, one()).map(|r| *r), Some(1));
+    }
+
+    #[test]
+    fn a_table_read_back_looks_for_a_free_slot_from_the_first_chunk_that_has_one() {
+        // So the first slot an edit of a model just read takes is found without searching the chunks before it (P1):
+        // the third chunk of three, the second of two, and where none has a free slot, past the last of one or of three.
+        let saved = |table: &Table<u32>| -> Vec<(NonZeroU32, Option<u32>)> {
+            let record = |s: &Slot<u32>| if let State::Live(r) = s.state { Some(r) } else { None };
+            table.slots().map(|(_, s)| (NonZeroU32::new(s.generation).unwrap(), record(s))).collect()
+        };
+        let freed = |n: u32, slot: u32| {
+            let mut table = filled(n);
+            assert!(table.free(slot, one()));
+            table
+        };
+        for (table, lowest, given) in [
+            (freed(3000, 2500), 2, (2500, 2)),
+            (freed(2000, 1500), 1, (1500, 2)),
+            (filled(5), 1, (5, 1)),
+            (filled(2049), 3, (2049, 1)),
+        ] {
+            let mut back = Table::restore(saved(&table));
+            assert_eq!(back.lowest, lowest, "{} slots", table.len());
+            assert_eq!(back.reserve().map(|(s, g)| (s, g.get())), Some(given));
+        }
     }
 }

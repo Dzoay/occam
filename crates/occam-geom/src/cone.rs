@@ -8,16 +8,19 @@ use std::f64::consts::FRAC_PI_2;
 
 use occam_math::{Real, sin_cos};
 use occam_report::{NamedValue, Quantity, Report};
-use occam_units::{Angle, Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{
+    Affine, Angle, Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World,
+};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox};
+use crate::domain::{Degeneracy, Domain, Param, ParamMap, ParamRange, UvBox, UvMap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, opposite, turned_box};
+use crate::restore::Numbers;
 use crate::support::{between, not_negative};
 use crate::surface::Parametric;
 use crate::turn::turn;
@@ -44,9 +47,28 @@ impl Cone {
     /// `geom.size-not-positive` for a radius that is not a finite length of zero or more, and `geom.out-of-range` for
     /// a half-angle not strictly between zero and a right angle.
     pub fn placed(placement: &Placement<Local, World>, radius: Length, half_angle: Angle) -> Result<Self, Report> {
+        Self::on(Axes::of(placement), radius, half_angle)
+    }
+
+    /// The cone saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, and `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, and as [`Cone::placed`] for its radius and half-angle.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let (radius, half_angle) = (read.next()?, read.next()?);
+        read.done()?;
+        Self::on(axes, Length::from_millimetres(radius), Angle::from_radians(half_angle))
+    }
+
+    /// The cone about `axes`' normal, as [`Cone::placed`] makes it.
+    fn on(axes: Axes, radius: Length, half_angle: Angle) -> Result<Self, Report> {
         let radius = not_negative(radius)?;
         let half_angle = between(half_angle.radians(), (0.0, FRAC_PI_2), Quantity::Angle)?;
-        let (axes, slope) = (Axes::of(placement), sin_cos(half_angle));
+        let slope = sin_cos(half_angle);
         let at = -radius / slope.0;
         let point = Point::from_vec3(axes.origin + axes.normal.get() * (at * slope.1));
         Ok(Self { axes, radius, half_angle, slope, apex: [Degeneracy { param: Param::V, at, point, normal: None }] })
@@ -143,6 +165,14 @@ impl Parametric for Cone {
             Parametric::domain(self),
             patch,
         )
+    }
+
+    /// A similarity keeps a cone, its radius and `v`, a length along the surface, scaled and its half-angle kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let radius = Length::from_millimetres(self.radius * similar.scale);
+        let moved = Self::on(self.axes.moved(&similar), radius, Angle::from_radians(self.half_angle)).ok()?;
+        Some((moved, UvMap::apart(ParamMap::IDENTITY, ParamMap::scaled(similar.scale))))
     }
 }
 

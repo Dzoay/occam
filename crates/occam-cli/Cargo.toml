@@ -11,7 +11,13 @@ name = "occam"
 path = "src/main.rs"
 
 [dependencies]
+# The command line's parser, with the usage and help an agent reads (docs/decisions/2026-11-13-clap.md). No default
+# features: no colour or terminal detection, and no suggestions, which need another crate.
+clap = { version = "4.6.7", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 occam = { path = "../occam" }
+
+[dev-dependencies]
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
 [lints]
 workspace = true

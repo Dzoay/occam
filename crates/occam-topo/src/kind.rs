@@ -87,6 +87,15 @@ impl<K: Kind> Id<K> {
         Self { slot, generation, kind: PhantomData }
     }
 
+    /// The id `entity` names, if it is of kind `K` with a generation above zero. Whether it is live is not asked: a view
+    /// or [`Snapshot::resolve`](crate::Snapshot::resolve) asks that, and `commit` refuses a record linking to one that
+    /// is not.
+    #[must_use]
+    pub fn from_entity(entity: EntityRef) -> Option<Self> {
+        (entity.kind == K::ENTITY).then_some(())?;
+        Some(Self::new(entity.slot, NonZeroU32::new(entity.generation)?))
+    }
+
     /// Its slot in its kind's table.
     #[must_use]
     pub const fn slot(self) -> u32 {

@@ -3,12 +3,13 @@
 //! turned about an axis are written in.
 
 use occam_math::{Interval, Real};
-use occam_report::{NamedValue, Quantity, Value};
-use occam_units::{Direction, Local, Placement, Point, Vec3, World};
+use occam_report::{Code, Fault, NamedValue, Quantity, Report, Value};
+use occam_units::{Affine, Direction, Local, Placement, Point, Similar, Vec3, Vector, World};
 
-use crate::domain::ParamRange;
+use crate::domain::{ParamRange, UvMap};
 use crate::identity::Content;
-use crate::support::{exact, splat};
+use crate::restore::{Numbers, wrap_code};
+use crate::support::{exact, finite, splat};
 
 /// An origin and two perpendicular unit axes in `World`, with the normal they face.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,6 +48,33 @@ impl Axes {
         let across = least.0 - n * least.0.dot(n);
         let x = across * (1.0 / across.norm());
         Self { origin, x, y: n.cross(x), normal }
+    }
+
+    /// These axes moved by the similarity `similar`: the origin placed after the scale, and the axes turned, then made
+    /// square again, so that axes moved over and over keep within what [`Axes::restore`] reads back.
+    pub(crate) fn moved(&self, similar: &Similar) -> Self {
+        let Similar { placement, scale } = *similar;
+        let origin = placement.point(Point::from_vec3(self.origin * scale)).to_vec3();
+        let turned = |v: Vec3| placement.vector(Vector::from_vec3(v)).to_vec3();
+        let normal = Direction::<World>::normalised(turned(self.normal.get()));
+        let n = normal.get();
+        let x = turned(self.x);
+        let x = Direction::<World>::normalised(x - n * x.dot(n)).get();
+        Self { origin, x, y: n.cross(x), normal }
+    }
+
+    /// The axes of the plane through these that `map` makes, and how the plane's parameters move, which are lengths
+    /// along the axes: the origin goes where `map` takes it, `x` along where it takes `x`, and the normal across where it
+    /// takes `x` and `y`. A point `u` along `x` and `v` along `y` goes to one `|M x| u + (M y . x') v` along the new `x`
+    /// and `(M y . y') v` along the new `y`, where `M` is the map's linear part.
+    pub(crate) fn stretched(&self, map: &Affine) -> (Self, UvMap) {
+        let origin = map.point(Point::from_vec3(self.origin)).to_vec3();
+        let (mx, my) = (map.vector(self.x), map.vector(self.y));
+        let normal = Direction::<World>::normalised(mx.cross(my));
+        let n = normal.get();
+        let x = Direction::<World>::normalised(mx).get();
+        let y = n.cross(x);
+        (Self { origin, x, y, normal }, UvMap { u: [mx.norm(), my.dot(x), 0.0], v: [0.0, my.dot(y), 0.0] })
     }
 
     /// `a x + b y`.
@@ -91,11 +119,40 @@ impl Axes {
         }
     }
 
-    /// Adds what defines a curve placed on these axes: the axes, its `sizes`, and its range's ends.
+    /// Adds what defines a curve placed on these axes: the axes, its `sizes`, its range's ends, and how the range wraps,
+    /// since an arc trimmed to a whole turn stops at its seam where an untrimmed one carries on round.
     pub(crate) fn push_curve(&self, out: &mut Content, sizes: &[f64], range: ParamRange) {
         self.push(out);
-        for x in sizes.iter().copied().chain([range.lo, range.hi]) {
+        for x in sizes.iter().copied().chain([range.lo, range.hi, wrap_code(range.wrap)]) {
             out.push(x);
+        }
+    }
+
+    /// Axes read back as [`Axes::push`] wrote them. The two axes and the normal must each be a unit axis, square to
+    /// each other within 64 machine epsilons and right-handed, as a placement's are, and the origin finite.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` if too few numbers are left, `units.not-finite` for an origin that is not finite, and
+    /// `geom.degenerate-direction` for axes that are not as a placement makes them.
+    pub(crate) fn restore(numbers: &mut Numbers<'_>) -> Result<Self, Report> {
+        let origin = numbers.vec3()?;
+        finite(Point::from_vec3(origin))?;
+        let (x, y) = (numbers.vec3()?, numbers.vec3()?);
+        let normal = Direction::<World>::kept(numbers.vec3()?)?;
+        Direction::<World>::kept(x)?;
+        Direction::<World>::kept(y)?;
+        let n = normal.get();
+        let worst =
+            [x.dot(y), x.dot(n), y.dot(n)].into_iter().fold(0.0, |a: f64, d| if d.abs() > a { d.abs() } else { a });
+        if worst <= 64.0 * f64::EPSILON && x.cross(y).dot(n) > 0.0 {
+            Ok(Self { origin, x, y, normal })
+        } else {
+            Err(Report::new(Code::DegenerateDirection, Fault::InvalidInput).with_value(NamedValue::new(
+                "square",
+                Quantity::Ratio,
+                worst,
+            )))
         }
     }
 
@@ -127,7 +184,27 @@ pub(crate) fn direction(name: &str, d: Vec3) -> NamedValue {
 
 #[cfg(test)]
 mod tests {
+    use occam_units::Angle;
+
     use super::*;
+
+    #[test]
+    fn axes_moved_over_and_over_stay_square_enough_to_be_read_back() {
+        // A turn about a skew axis and a scale, eighty times: rounding left square to the axes would double each time.
+        let turn = Placement::rotation(Direction::normalised(Vec3::new(1.0, -2.0, 0.5)), Angle::from_radians(0.3));
+        let similar = Similar { placement: turn, scale: 1.1 };
+        let mut axes = Axes::about(Vec3::new(1.0, 2.0, 3.0), Direction::normalised(Vec3::new(0.3, 0.4, 0.9)));
+        for _ in 0..80 {
+            axes = axes.moved(&similar);
+        }
+        let n = axes.normal.get();
+        let square = [axes.x.dot(n), axes.y.dot(n), axes.x.dot(axes.y)].map(f64::abs);
+        assert!(square.iter().all(|d| *d <= 4.0 * f64::EPSILON), "{square:?}");
+        let mut content = Content::default();
+        axes.push(&mut content);
+        let numbers: Vec<f64> = content.words().iter().map(|w| f64::from_bits(*w)).collect();
+        assert_eq!(Axes::restore(&mut Numbers::new(&numbers)).map(|a| a == axes), Ok(true));
+    }
 
     #[test]
     fn axes_about_a_normal_start_from_the_first_world_axis_least_along_it() {
@@ -140,5 +217,22 @@ mod tests {
         let want = Vec3::new(2.0, -1.0, -1.0) * (1.0 / 6f64.sqrt());
         assert!((diagonal.x - want).norm() < 1e-15 && diagonal.x.dot(n).abs() < 1e-15, "{:?}", diagonal.x);
         assert!((diagonal.y - n.cross(want)).norm() < 1e-15);
+    }
+
+    #[test]
+    fn unit_axes_more_than_64_machine_epsilons_from_square_are_refused_naming_the_worst() {
+        // The normal leans off the second axis twice as far as off the first, the other way round: that lean is named.
+        let leaning = |lean: f64| {
+            let normal = Vec3::new(lean / 2.0, -lean, 1.0);
+            let axes = [Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), normal];
+            let numbers: Vec<f64> = axes.iter().flat_map(|v| [v.x, v.y, v.z]).collect();
+            Axes::restore(&mut Numbers::new(&numbers))
+        };
+        for lean in [128.0 * f64::EPSILON, 1e-9] {
+            let square = NamedValue::new("square", Quantity::Ratio, lean);
+            let refused = Report::new(Code::DegenerateDirection, Fault::InvalidInput).with_value(square);
+            assert_eq!(leaning(lean), Err(refused), "{lean}");
+        }
+        assert!(leaning(32.0 * f64::EPSILON).is_ok(), "within 64 machine epsilons");
     }
 }

@@ -3,15 +3,16 @@
 
 use occam_math::Real;
 use occam_report::Report;
-use occam_units::{Bounds, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Affine, Bounds, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Domain, ParamRange, UvBox};
+use crate::domain::{Domain, ParamMap, ParamRange, UvBox, UvMap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
+use crate::restore::Numbers;
 use crate::support::{enclose, exact, splat};
 use crate::surface::Parametric;
 
@@ -26,6 +27,19 @@ impl Plane {
     #[must_use]
     pub fn placed(placement: &Placement<Local, World>) -> Self {
         Self { axes: Axes::of(placement) }
+    }
+
+    /// The plane saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, and `units.not-finite` and `geom.degenerate-direction` for axes no placement makes.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        read.done()?;
+        Ok(Self { axes })
     }
 }
 
@@ -108,6 +122,17 @@ impl Parametric for Plane {
         let poles = vec![corner(u.lo, v.lo), corner(u.hi, v.lo), corner(u.lo, v.hi), corner(u.hi, v.hi)];
         let (knots_u, knots_v) = (vec![u.lo, u.lo, u.hi, u.hi], vec![v.lo, v.lo, v.hi, v.hi]);
         Some(BsplineSurface { degree: (1, 1), count: (2, 2), knots_u, knots_v, poles, weights: None })
+    }
+
+    /// Any map keeps a plane, and moves its parameters linearly: by its scale under a similarity, and askew under a
+    /// stretch, whose new axes are made square again.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        if let Some(similar) = map.similar() {
+            let scaled = ParamMap::scaled(similar.scale);
+            return Some((Self { axes: self.axes.moved(&similar) }, UvMap::apart(scaled, scaled)));
+        }
+        let (axes, params) = self.axes.stretched(map);
+        Some((Self { axes }, params))
     }
 }
 

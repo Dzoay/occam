@@ -11,6 +11,7 @@
     reason = "a kernel compiles at a dispatched instruction level only through what is inlined into it (P4)"
 )]
 
+mod affine;
 mod bounds;
 mod direction;
 mod frame;
@@ -20,6 +21,7 @@ mod tolerance;
 mod uv;
 mod vec3;
 
+pub use affine::{Affine, Similar};
 pub use bounds::Bounds;
 pub use direction::{Direction, Tangent};
 pub use frame::{Displacement, Frame, Local, Point, Position, Role, Triple, Vector, World};

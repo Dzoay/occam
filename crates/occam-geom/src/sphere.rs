@@ -7,16 +7,17 @@ use std::f64::consts::FRAC_PI_2;
 
 use occam_math::{Real, atan2};
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{Affine, Bounds, Length, Local, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
+use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox, UvMap, Wrap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
+use crate::restore::Numbers;
 use crate::support::positive;
 use crate::surface::Parametric;
 use crate::turn::turn;
@@ -38,7 +39,26 @@ impl Sphere {
     ///
     /// `geom.size-not-positive` for a radius that is not a finite length greater than zero.
     pub fn placed(placement: &Placement<Local, World>, radius: Length) -> Result<Self, Report> {
-        let (axes, radius) = (Axes::of(placement), positive(radius)?);
+        Self::on(Axes::of(placement), radius)
+    }
+
+    /// The sphere saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, and `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, and `geom.size-not-positive` for its radius.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let radius = read.next()?;
+        read.done()?;
+        Self::on(axes, Length::from_millimetres(radius))
+    }
+
+    /// The sphere about `axes`' origin, its poles along their normal, as [`Sphere::placed`] makes it.
+    fn on(axes: Axes, radius: Length) -> Result<Self, Report> {
+        let radius = positive(radius)?;
         let pole = |at: f64, normal: occam_units::Direction<World>| Degeneracy {
             param: Param::V,
             at,
@@ -122,6 +142,13 @@ impl Parametric for Sphere {
 
     fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
         exact::turned(&self.axes, Meridian::Round { centre: 0.0, radius: self.radius }, Parametric::domain(self), patch)
+    }
+
+    /// A similarity keeps a sphere, its radius scaled and its angles kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let moved = Self::on(self.axes.moved(&similar), Length::from_millimetres(self.radius * similar.scale)).ok()?;
+        Some((moved, UvMap::IDENTITY))
     }
 }
 

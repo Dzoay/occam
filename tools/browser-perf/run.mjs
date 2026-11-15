@@ -89,6 +89,39 @@ for (const name of KERNELS) {
     lanes_result: gave.lanes,
   });
 }
+// Each construction operation in both builds, alternating in the same way, which must answer with the same bits (L23).
+const OPERATIONS = ["construct_primitives", "construct_sweeps", "construct_transforms", "measure_primitives"];
+const OPERATION_ROUNDS = 5;
+const operationTimed = (build, name) =>
+  page.evaluate(
+    async ({ build, name }) => {
+      const module = await import(`/${build}/perf.js`);
+      await module.default();
+      const start = performance.now();
+      const result = module.operation(name);
+      return { ms: performance.now() - start, result };
+    },
+    { build, name },
+  );
+const operations = [];
+for (const name of OPERATIONS) {
+  const fastest = { scalar: Infinity, simd128: Infinity };
+  const gave = {};
+  for (let round = 0; round < OPERATION_ROUNDS; round += 1) {
+    for (const build of ["scalar", "simd128"]) {
+      const { ms, result } = await operationTimed(build, name);
+      fastest[build] = Math.min(fastest[build], ms);
+      gave[build] = result;
+    }
+  }
+  operations.push({
+    name,
+    scalar_ms: fastest.scalar,
+    simd128_ms: fastest.simd128,
+    scalar_result: gave.scalar,
+    simd128_result: gave.simd128,
+  });
+}
 await browser.close();
 server.close();
 console.log(
@@ -98,5 +131,6 @@ console.log(
     scalar_result: results.scalar,
     simd128_result: results.simd128,
     kernels,
+    operations,
   }),
 );

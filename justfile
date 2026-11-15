@@ -93,6 +93,7 @@ wasm:
     cargo build -p occam-wasm --release --target wasm32-unknown-unknown
     wasm-bindgen --target nodejs --out-dir "$CARGO_TARGET_DIR/occam-wasm-js" "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/occam_wasm.wasm"
     node crates/occam-wasm/js/distance.test.mjs "$CARGO_TARGET_DIR/occam-wasm-js/occam_wasm.js"
+    node crates/occam-wasm/js/session.test.mjs "$CARGO_TARGET_DIR/occam-wasm-js/occam_wasm.js"
     cargo check --workspace --target wasm32-unknown-unknown
     CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo check --workspace --exclude occam-xtask --target wasm32-unknown-unknown
     cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
@@ -179,6 +180,12 @@ advisories:
 [group('tools')]
 workflows:
     actionlint
+
+# Time loading a model of about 10⁵ faces from the native format, parsing and checking apart: `construction`'s goal
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+load *args:
+    cargo run --quiet --release -p occam-io --example load -- "$@"
 
 # Raise ci/test-counts.txt's minimums to this tree's
 [env("CARGO_TARGET_DIR", target)]

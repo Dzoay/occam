@@ -65,6 +65,17 @@ impl<A: Frame, B: Frame> Placement<A, B> {
         Placement { rows, shift: next.rotate(self.shift) + next.shift, frames: PhantomData }
     }
 
+    /// The rotation's rows and the shift, for the maps built from a placement.
+    pub(crate) const fn parts(&self) -> ([Vec3; 3], Vec3) {
+        (self.rows, self.shift)
+    }
+
+    /// The placement whose rotation has `rows` and whose shift is `shift`: rows a rotation's own, as [`Placement::parts`]
+    /// gives them.
+    pub(crate) const fn from_parts(rows: [Vec3; 3], shift: Vec3) -> Self {
+        Self { rows, shift, frames: PhantomData }
+    }
+
     /// The rotation's columns, which are the rows of its inverse.
     const fn columns(&self) -> [Vec3; 3] {
         let [a, b, c] = self.rows;

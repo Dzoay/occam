@@ -9,11 +9,13 @@
 
 use occam_math::Real;
 use occam_report::{Code, Fault, NamedValue, Quantity, Report};
+use std::sync::Arc;
+
 use occam_units::{UvPoint, UvVector};
 
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
-use crate::domain::{ParamRange, UvBox};
+use crate::domain::{ParamMap, ParamRange, UvBox, UvMap};
 use crate::identity::{Content, FamilyName, Shape};
 
 /// The point of a parameter curve nearest a point of the face's parameters.
@@ -89,6 +91,13 @@ pub trait ParametricParamCurve: Sized + Send + Sync + 'static {
     fn to_bspline(&self, _lo: f64, _hi: f64) -> Option<BsplineCurve> {
         None
     }
+
+    /// Itself moved by `map`, which moves the face's parameters, as its own family, and where its parameter goes: the
+    /// point at `t` goes to the moved curve's point at `params.of(t)`. `None` where the family does not keep its form
+    /// under `map`, as for a surface ([`crate::Parametric::moved`]).
+    fn moved(&self, _map: &UvMap) -> Option<(Self, ParamMap)> {
+        None
+    }
 }
 
 /// The second layer, which everything outside a family calls: dyn-compatible, and checking each call as [`crate::Curve`]
@@ -144,6 +153,9 @@ pub trait ParamCurve: Send + Sync {
 
     /// As [`ParametricParamCurve::to_bspline`].
     fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve>;
+
+    /// As [`ParametricParamCurve::moved`], the moved curve shared.
+    fn moved(&self, map: &UvMap) -> Option<(Arc<dyn ParamCurve>, ParamMap)>;
 }
 
 /// Refuses a point of the face's parameters that is not finite, naming the first part that is not.
@@ -215,6 +227,10 @@ impl<P: ParametricParamCurve> ParamCurve for P {
 
     fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
         ParametricParamCurve::to_bspline(self, lo, hi)
+    }
+
+    fn moved(&self, map: &UvMap) -> Option<(Arc<dyn ParamCurve>, ParamMap)> {
+        ParametricParamCurve::moved(self, map).map(|(moved, params)| (Arc::new(moved) as Arc<dyn ParamCurve>, params))
     }
 }
 

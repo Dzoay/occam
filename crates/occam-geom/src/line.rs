@@ -3,16 +3,17 @@
 
 use occam_math::{Interval, Real};
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Direction, ParamKind, Point, Tangent, Tolerance, Vec3, World};
+use occam_units::{Affine, Bounds, Direction, ParamKind, Point, Tangent, Tolerance, Vec3, World};
 
 use crate::axes::direction;
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
 use crate::curve::ParametricCurve;
-use crate::domain::ParamRange;
+use crate::domain::{ParamMap, ParamRange};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
-use crate::support::{enclose, exact, foot_at, seen, splat};
+use crate::restore::Numbers;
+use crate::support::{enclose, exact, finite, foot_at, seen, splat};
 use crate::surface::Closest;
 
 /// A line, unbounded or trimmed to a segment.
@@ -28,6 +29,22 @@ impl Line {
     #[must_use]
     pub fn new(origin: Point<World>, direction: Direction<World>) -> Self {
         Self { origin: origin.to_vec3(), direction: direction.get(), range: ParamRange::unbounded(ParamKind::Length) }
+    }
+
+    /// The line saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, `units.not-finite` for an origin that is not, `geom.degenerate-direction` for a direction that is not a unit axis, and for its range as [`ParamRange::trimmed`] and `geom.out-of-range` for a range trimming would not give.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let origin = read.vec3()?;
+        finite(Point::from_vec3(origin))?;
+        let direction = Direction::<World>::kept(read.vec3()?)?.get();
+        let range = read.range(ParamRange::unbounded(ParamKind::Length), false)?;
+        read.done()?;
+        Ok(Self { origin, direction, range })
     }
 
     /// The segment from parameter `lo` to `hi`.
@@ -140,6 +157,19 @@ impl ParametricCurve for Line {
         let part = self.range.trimmed(lo, hi).ok()?;
         let at = |t: f64| self.origin + self.direction * t;
         Some(exact::curve(1, exact::span(1, (part.lo, part.hi), vec![at(part.lo), at(part.hi)]), false))
+    }
+
+    /// Any map keeps a line, its parameter, a distance, scaled by how much the map stretches its direction.
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        let origin = map.point(Point::from_vec3(self.origin)).to_vec3();
+        let (direction, scale) = if let Some(similar) = map.similar() {
+            (similar.placement.direction(Direction::normalised(self.direction)).get(), similar.scale)
+        } else {
+            let along = map.vector(self.direction);
+            (Direction::<World>::normalised(along).get(), along.norm())
+        };
+        let params = ParamMap::scaled(scale);
+        Some((Self { origin, direction, range: params.of_range(self.range) }, params))
     }
 }
 

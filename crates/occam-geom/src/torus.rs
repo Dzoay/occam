@@ -5,16 +5,17 @@
 
 use occam_math::{Real, atan2};
 use occam_report::{NamedValue, Quantity, Report};
-use occam_units::{Bounds, Length, Local, Placement, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{Affine, Bounds, Length, Local, Placement, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Domain, UvBox};
+use crate::domain::{Domain, UvBox, UvMap};
 use crate::exact;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::meridian::{self, Meridian, cylindrical, turned_box};
+use crate::restore::Numbers;
 use crate::support::{between, positive};
 use crate::surface::Parametric;
 use crate::turn::{above, turn};
@@ -36,9 +37,28 @@ impl Torus {
     /// `geom.size-not-positive` for a radius that is not a finite length greater than zero, and `geom.out-of-range`
     /// for a minor radius not less than the major.
     pub fn placed(placement: &Placement<Local, World>, major: Length, minor: Length) -> Result<Self, Report> {
+        Self::on(Axes::of(placement), major, minor)
+    }
+
+    /// The torus about `axes`' normal, as [`Torus::placed`] makes it.
+    fn on(axes: Axes, major: Length, minor: Length) -> Result<Self, Report> {
         let (major, minor) = (positive(major)?, positive(minor)?);
         let minor = between(minor, (0.0, major), Quantity::Length)?;
-        Ok(Self { axes: Axes::of(placement), major, minor })
+        Ok(Self { axes, major, minor })
+    }
+
+    /// The torus saved as its content: the numbers its content holds after the family's name, read back in the order
+    /// they were written.
+    ///
+    /// # Errors
+    ///
+    /// `geom.wrong-count` for too few or too many numbers, and `units.not-finite` and `geom.degenerate-direction` for axes no placement makes, and as [`Torus::placed`] for its radii.
+    pub fn restore(numbers: &[f64]) -> Result<Self, Report> {
+        let mut read = Numbers::new(numbers);
+        let axes = Axes::restore(&mut read)?;
+        let (major, minor) = (read.next()?, read.next()?);
+        read.done()?;
+        Self::on(axes, Length::from_millimetres(major), Length::from_millimetres(minor))
     }
 }
 
@@ -117,6 +137,14 @@ impl Parametric for Torus {
             Parametric::domain(self),
             patch,
         )
+    }
+
+    /// A similarity keeps a torus, both radii scaled and its angles kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let scaled = |r: f64| Length::from_millimetres(r * similar.scale);
+        let moved = Self::on(self.axes.moved(&similar), scaled(self.major), scaled(self.minor)).ok()?;
+        Some((moved, UvMap::IDENTITY))
     }
 }
 

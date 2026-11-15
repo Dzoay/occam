@@ -2,13 +2,16 @@
 //! The workloads for browser timing. Bicubic Bézier surface points by de Casteljau's algorithm, two lanes at a time:
 //! `gates perf` builds it with and without simd128 and compares the two in one run (L30). And each lane kernel of
 //! `occam_math::workloads`, and the spline kernel, at width 1 and at its width, which the simd128 build must show clearly
-//! faster (L29).
+//! faster (L29). And each construction operation `gates perf` counts natively, run through a session as the editing
+//! worker runs it, which the simd128 build must answer with the same bits (L23).
 #![allow(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 #![allow(missing_docs, reason = "an example")]
 
+use std::cell::RefCell;
 use std::hint::black_box;
 
-use occam::{Jets, Lanes, Real, SplineSurface, spline_workloads, width, workloads};
+use occam::operation_workloads::{MEASURES, PRIMITIVES, SWEEPS, TRANSFORMS};
+use occam::{Encoding, Jets, Lanes, Real, Session, SplineSurface, ran_json, spline_workloads, width, workloads};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A point on the cubic with these control points, at `at`.
@@ -130,4 +133,46 @@ pub fn kernel(name: &str, lanes: bool, repeats: u32) -> f64 {
         total += run(black_box(&items)).iter().sum::<f64>();
     }
     total
+}
+
+thread_local! {
+    /// The primitives, made once for the measures: setup, which the timing leaves out after the first round.
+    static PRIMITIVES_MADE: RefCell<Option<Session>> = const { RefCell::new(None) };
+}
+
+/// FNV-1a, 64 bits, of `text`: enough to tell two builds' answers apart without passing them whole.
+fn digest(text: &str) -> String {
+    let hash = text
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3));
+    format!("{hash:016x}")
+}
+
+/// The session a measure runs in, the primitives made in it.
+fn primitives() -> Session {
+    PRIMITIVES_MADE.with(|made| {
+        made.borrow_mut()
+            .get_or_insert_with(|| {
+                let mut session = Session::new(Encoding::Binary);
+                let _ = session.run(PRIMITIVES);
+                session
+            })
+            .clone()
+    })
+}
+
+/// Runs the construction operation `name`, as `gates perf` names its class, once, and gives a digest of the run's JSON
+/// form, or `failed` if the run did not go through, or `unknown` for no such operation.
+#[wasm_bindgen]
+#[must_use]
+pub fn operation(name: &str) -> String {
+    let (mut session, request) = match name {
+        "construct_primitives" => (Session::new(Encoding::Binary), PRIMITIVES),
+        "construct_sweeps" => (Session::new(Encoding::Binary), SWEEPS),
+        "construct_transforms" => (Session::new(Encoding::Binary), TRANSFORMS),
+        "measure_primitives" => (primitives(), MEASURES),
+        _ => return "unknown".to_string(),
+    };
+    let (ran, _) = session.run(black_box(request));
+    if ran.failed.is_some() { "failed".to_string() } else { digest(&ran_json(&ran)) }
 }

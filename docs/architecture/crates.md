@@ -42,6 +42,7 @@ flowchart TB
   (A:9). A's `Verifier` trait, the alternative to a checker inside `commit`, needed a source gate to stay honest.
 - `rayon` is named only by `Exec`, and `fearless_simd` only by `Level` and `dispatch`:
   [the rayon decision](../decisions/2026-11-10-rayon.md),
-  [the fearless_simd decision](../decisions/2026-11-10-fearless-simd.md).
+  [the fearless_simd decision](../decisions/2026-11-10-fearless-simd.md). `postcard` is named only by `occam-io`, for
+  the native format's binary twin: [the binary twin decision](../decisions/2026-11-12-binary-twin.md).
 
 </details>

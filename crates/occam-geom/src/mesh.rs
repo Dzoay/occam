@@ -7,12 +7,12 @@
 
 use occam_math::Real;
 use occam_report::{Code, Fault, NamedValue, Quantity, Report};
-use occam_units::{Bounds, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Affine, Bounds, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::{checked_poles, wrong_count};
 use crate::cells::Cells;
-use crate::domain::{Domain, ParamRange, UvBox, Wrap};
+use crate::domain::{Domain, ParamRange, UvBox, UvMap, Wrap};
 use crate::facet::Facet;
 use crate::identity::{Content, FamilyName, Shape};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
@@ -260,6 +260,13 @@ impl Parametric for MeshSurface {
 
     fn triangles(&self) -> Option<&dyn TriangleView> {
         Some(self)
+    }
+
+    /// Any map keeps a mesh: its vertices moved, each triangle flat still, and its parameters kept.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let points: Vec<Point<World>> = self.points.iter().map(|p| map.point(Point::from_vec3(*p))).collect();
+        let triangles: Vec<[u32; 3]> = self.facets.iter().map(|facet| facet.corners).collect();
+        Some((Self::new(&points, self.uv.clone(), &triangles).ok()?, UvMap::IDENTITY))
     }
 }
 

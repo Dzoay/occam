@@ -6,12 +6,12 @@
 
 use occam_math::Real;
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Length, Point, Tangent, Tolerance, World};
+use occam_units::{Affine, Bounds, Length, Point, Tangent, Tolerance, World};
 
 use crate::batch::Scratch;
 use crate::bspline::BsplineCurve;
 use crate::curve::ParametricCurve;
-use crate::domain::ParamRange;
+use crate::domain::{ParamMap, ParamRange};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::nearest::nearest;
 use crate::support::foot_at;
@@ -112,6 +112,12 @@ impl<C: ParametricCurve> ParametricCurve for TrimmedCurve<C> {
     fn to_bspline(&self, lo: f64, hi: f64) -> Option<BsplineCurve> {
         self.range.trimmed(lo, hi).ok()?;
         self.base.to_bspline(lo, hi)
+    }
+
+    /// A map keeps a trimmed curve where it keeps its base, its ends moved with the parameter.
+    fn moved(&self, map: &Affine) -> Option<(Self, ParamMap)> {
+        let (base, params) = self.base.moved(map)?;
+        Some((Self::new(base, params.of(self.range.lo), params.of(self.range.hi)).ok()?, params))
     }
 }
 

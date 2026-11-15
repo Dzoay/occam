@@ -1,7 +1,7 @@
 //! Source: original
 //! Clean models for the tests, built through `Edit` as any caller would: a cube, a block with a square hole through it
-//! (genus 1), a cylinder of two patches split at its seam, a square sheet, an open wire, a tiled plate of any size, and
-//! two cubes that meet at one corner. Each edge's uses form its
+//! (genus 1), a cylinder of two patches split at its seam, a square sheet, an open wire, a tiled plate of any size, two
+//! cubes that meet at one corner, and cubes set apart. Each edge's uses form its
 //! radial cycle in the order the faces list them, and each vertex's star runs in the order the edges list their ends.
 #![expect(clippy::arithmetic_side_effects, reason = "small indices in test models")]
 
@@ -250,7 +250,7 @@ fn segment(a: Point<World>, b: Point<World>, ends: (usize, usize)) -> EdgeSpec {
 }
 
 /// The placement whose XY plane passes through `p` and faces along `normal`, which is along an axis.
-fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
+pub(crate) fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
     let axis = |x, y, z| Direction::<Local>::normalised(Vec3::new(x, y, z));
     let (about, angle) = if normal.x != 0.0 {
         (axis(0.0, 1.0, 0.0), FRAC_PI_2.copysign(normal.x))
@@ -413,26 +413,32 @@ pub(crate) fn ring(m: usize) -> Spec {
     polyhedron(BodyKind::Solid, &corners, &faces)
 }
 
+/// The unit cube's corners, its corner 0 at the origin.
+const UNIT: [[f64; 3]; 8] =
+    [[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.], [0., 0., 1.], [1., 0., 1.], [1., 1., 1.], [0., 1., 1.]];
+
+/// The unit cube's faces, each a list of [`UNIT`]'s corners anticlockwise seen from outside.
+const QUADS: [[usize; 4]; 6] = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [0, 4, 7, 3], [1, 2, 6, 5]];
+
 /// Two unit cubes that meet only at the corner `(1, 1, 1)`, as one body of one shell: the first cube's faces, then the
 /// second's.
 pub(crate) fn pinched() -> Spec {
-    let unit = [
-        [0., 0., 0.],
-        [1., 0., 0.],
-        [1., 1., 0.],
-        [0., 1., 0.],
-        [0., 0., 1.],
-        [1., 0., 1.],
-        [1., 1., 1.],
-        [0., 1., 1.],
-    ];
-    let mut corners: Vec<[f64; 3]> = unit.to_vec();
-    corners.extend(unit.iter().skip(1).map(|&[x, y, z]| [x + 1., y + 1., z + 1.]));
+    let mut corners: Vec<[f64; 3]> = UNIT.to_vec();
+    corners.extend(UNIT.iter().skip(1).map(|&[x, y, z]| [x + 1., y + 1., z + 1.]));
     // The second cube's corners: its own 0 is the first cube's 6, and its 1 to 7 follow the first cube's eight.
     let second = |c: usize| if c == 0 { 6 } else { 7 + c };
-    let quads: [[usize; 4]; 6] = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [0, 4, 7, 3], [1, 2, 6, 5]];
     let faces: Vec<Vec<usize>> =
-        quads.iter().map(|q| q.to_vec()).chain(quads.iter().map(|q| q.iter().map(|&c| second(c)).collect())).collect();
+        QUADS.iter().map(|q| q.to_vec()).chain(QUADS.iter().map(|q| q.iter().map(|&c| second(c)).collect())).collect();
+    let faces: Vec<&[usize]> = faces.iter().map(Vec::as_slice).collect();
+    polyhedron(BodyKind::Solid, &corners, &faces)
+}
+
+/// `n` unit cubes along x, each 2 on from the one before, as one body of one shell: the first cube's faces, then the
+/// second's, and so on.
+pub(crate) fn apart(n: usize) -> Spec {
+    let along = |k: usize| 2.0 * f64::from(u32::try_from(k).unwrap());
+    let corners: Vec<[f64; 3]> = (0..n).flat_map(|k| UNIT.map(|[x, y, z]| [x + along(k), y, z])).collect();
+    let faces: Vec<Vec<usize>> = (0..n).flat_map(|k| QUADS.map(|q| q.map(|c| c + 8 * k).to_vec())).collect();
     let faces: Vec<&[usize]> = faces.iter().map(Vec::as_slice).collect();
     polyhedron(BodyKind::Solid, &corners, &faces)
 }

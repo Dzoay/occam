@@ -5,8 +5,9 @@
 //! are `unimplemented!` unless a body shows something: this proves that the types and signatures fit together and fit
 //! the real `occam-report`, `occam-math`, `occam-units`, `occam-geom` and `occam-topo`, not that anything works. Nothing
 //! here is copied into a crate; each part is rewritten test-first when its milestone comes. `geom.rs` and `units.rs` went
-//! with `geometry.freeze`, when occam-geom's seam was frozen and recorded in `ci/seam.txt`, and `topo.rs` with
-//! `topology.scale`, when occam-topo held all of it but the describer.
+//! with `geometry.freeze`, when occam-geom's seam was frozen and recorded in `ci/seam.txt`, `topo.rs` with
+//! `topology.scale`, when occam-topo held all of it but the describer, and `compose.rs` with `construction.commands`,
+//! when the `occam` crate's `Session` and its listing became real.
 #![forbid(unsafe_code)]
 #![allow(dead_code, unused_variables, clippy::unimplemented, missing_docs)]
 
@@ -19,5 +20,3 @@ pub mod mesh;
 pub mod ops;
 
 pub mod io;
-
-pub mod compose;

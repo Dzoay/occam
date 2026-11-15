@@ -11,7 +11,7 @@ use occam_report::{EntityKind, EntityRef, Report, StepRole};
 
 use crate::check;
 use crate::kind::{Id, Kind, Record};
-use crate::records::Provenance;
+use crate::records::{Provenance, StepNote};
 use crate::snapshot::{Holds, Model, Snapshot, stale};
 
 /// How a new entity came from an old one.
@@ -23,8 +23,12 @@ pub enum Derivation {
     Trimmed,
     /// It, joined with others.
     Merged,
-    /// A copy of it, moved or not.
+    /// A copy of it, moved or not. What a copy makes is its own, so it keeps the copy's provenance, and the copying
+    /// step's note names the body it copied.
     Copied,
+    /// Made by sweeping it: a face from an edge or a face, an edge from a vertex or an edge, a vertex from a vertex.
+    /// What a sweep makes is its own, so it keeps the sweep's provenance.
+    Swept,
 }
 
 /// Where a new entity came from (PARITY 1.11).
@@ -63,6 +67,8 @@ pub struct Edit {
     lineage: Vec<Lineage>,
     /// The kinds whose tables had no slot left to give.
     pub(crate) full: BTreeSet<EntityKind>,
+    /// What the request that asked for this step said it was, if one did.
+    note: Option<StepNote>,
 }
 
 impl Snapshot {
@@ -78,6 +84,7 @@ impl Snapshot {
             deleted: BTreeSet::new(),
             lineage: Vec::new(),
             full: BTreeSet::new(),
+            note: None,
         }
     }
 }
@@ -87,6 +94,30 @@ impl Edit {
     #[must_use]
     pub const fn step(&self) -> u64 {
         self.step
+    }
+
+    /// Names this step as its request numbers and names it: its index there, from 0, and its operation. Kept with the
+    /// model once the edit commits, so what the step made says it in the request's terms (the step-numbers decision).
+    pub fn name_step(&mut self, request_step: u32, operation: &str) {
+        let copy_of = self.note.take().and_then(|note| note.copy_of);
+        self.note = Some(StepNote { request_step, operation: operation.to_string(), copy_of });
+    }
+
+    /// What its request said the step `step` was: this edit's own step as named so far, or one of its model's.
+    #[must_use]
+    pub fn note(&self, step: u64) -> Option<&StepNote> {
+        if step == self.step {
+            self.note.as_ref().filter(|note| !note.operation.is_empty())
+        } else {
+            self.next.notes.get(&step)
+        }
+    }
+
+    /// Notes that this step copies the body `body`, so the step's note names it once the step is named.
+    pub fn copying(&mut self, body: EntityRef) {
+        let note =
+            self.note.get_or_insert_with(|| StepNote { request_step: 0, operation: String::new(), copy_of: None });
+        note.copy_of = Some(body);
     }
 
     /// The provenance of an entity this step makes in `role`.
@@ -169,7 +200,8 @@ impl Edit {
     }
 
     /// Records that `new` came from `old` by `how`. On commit a new entity takes the provenance of the first entity
-    /// of its own kind it came from, over whatever the edit wrote, so a split face keeps the step that made it.
+    /// of its own kind it came from, other than by sweeping, over whatever the edit wrote, so a split face keeps the
+    /// step that made it.
     ///
     /// # Errors
     ///
@@ -193,14 +225,27 @@ impl Edit {
     ///
     /// One `check.invariant-failed` per failure, fault internal, its reason the invariant and its entities those
     /// involved. The snapshot the edit began from is unchanged.
-    pub fn commit(mut self, _exec: &Exec) -> Result<(Snapshot, Changes), Vec<Report>> {
+    pub fn commit(self, exec: &Exec) -> Result<(Snapshot, Changes), Vec<Report>> {
+        self.try_commit(exec).map_err(|(failures, _)| failures)
+    }
+
+    /// As [`Edit::commit`], but a refused edit comes back with the failures, so that what they name can still be read
+    /// through [`Edit::view`], as the describer reads it (O26). It never becomes a snapshot.
+    ///
+    /// # Errors
+    ///
+    /// As [`Edit::commit`], with the edit as it stood when it was checked.
+    pub fn try_commit(mut self, _exec: &Exec) -> Result<(Snapshot, Changes), (Vec<Report>, Box<Self>)> {
         let mut failures = crate::geometric::measure(&mut self);
         failures.extend(check::edit(&self));
         if !failures.is_empty() {
-            return Err(failures);
+            return Err((failures, Box::new(self)));
         }
         self.carry_provenance();
         self.next.step = self.step;
+        if let Some(note) = self.note.filter(|note| !note.operation.is_empty()) {
+            self.next.notes.insert(self.step, note);
+        }
         let changes = Changes {
             created: self.created.into_iter().collect(),
             changed: self.changed.into_iter().collect(),
@@ -210,10 +255,14 @@ impl Edit {
         Ok((Snapshot { model: self.next }, changes))
     }
 
-    /// Gives each new entity the provenance of the first entity of its own kind it came from.
+    /// Gives each new entity the provenance of the first entity of its own kind it came from, other than by sweeping or
+    /// copying, which make something of the step's own.
     fn carry_provenance(&mut self) {
         let mut carried = BTreeSet::new();
         for lineage in &self.lineage {
+            if matches!(lineage.how, Derivation::Swept | Derivation::Copied) {
+                continue;
+            }
             let (new, old) = (lineage.new, lineage.old);
             if new.kind != old.kind || !self.created.contains(&new) || !carried.insert(new) {
                 continue;

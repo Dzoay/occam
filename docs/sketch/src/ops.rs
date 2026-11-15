@@ -1,9 +1,11 @@
-//! `occam-ops`: operations as data. A request is validated and converted once, before any geometry, with a code for each
-//! kind of invalid input (S6: blind on S1's report, an agent "repaired" a zero-radius hole by setting 0.0001 mm).
+//! `occam-ops`: what it gains after `construction.request`, which made the request real (its schema, units, tolerance,
+//! steps, labels and operands, checked before any geometry, with a code for each kind of bad input): the parameters of
+//! each operation, the per-item results of fillets, and the boolean's phases.
 
 use std::sync::Arc;
 
-use occam_report::{AngleUnit, Batch, LengthUnit, Outcome, Report};
+use occam_ops::Operand;
+use occam_report::{Batch, Outcome, Report};
 use occam_units::{Length, Point, UvPoint, World};
 use serde::Deserialize;
 
@@ -12,52 +14,6 @@ use occam_report::{EntityRef, Stage};
 use occam_topo::{Body, Changes, Edge, Face, Id, Snapshot};
 
 use crate::report::Describe;
-
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct Units {
-    pub length: LengthUnit,
-    pub angle: AngleUnit,
-}
-
-/// A new model's tolerance, in the request's units. Omitted, it is the default of O12, and the outcome says which was
-/// used (`measure.tolerance-used`). On an existing model the model's own tolerance governs, and asking for a finer one is
-/// `measure.tolerance-below-model`, as today.
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct RequestTolerance {
-    pub length: f64,
-    pub angle: f64,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct Request {
-    pub schema: u32,
-    pub units: Units,
-    pub tolerance: Option<RequestTolerance>,
-    pub steps: Vec<Step>,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct Step {
-    /// A name later steps in the same request can use as an operand.
-    pub label: Option<String>,
-    #[serde(flatten)]
-    pub op: Op,
-}
-
-/// An earlier step's label, or an entity by id.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(untagged)]
-pub enum Operand {
-    Label(String),
-    Entity(EntityRef),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct Frame3 {
-    pub origin: [f64; 3],
-    pub z: [f64; 3],
-    pub x: [f64; 3],
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -82,48 +38,13 @@ pub struct EdgeRadius {
     pub radius: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Measurement {
-    Volume,
-    Area,
-    CentreOfMass,
-    Bounds,
-}
-
-/// The first release's operations (PARITY tiers 1 and 2 in its milestones); the rest are listed as refused.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(tag = "op", rename_all = "kebab-case")]
+/// The parameters each operation reads from its step's other fields (`occam_ops::Step::parameters`), as its step will
+/// make them real. The request, its steps and its operands are in `occam-ops` since `construction.request`, and the
+/// wire and the planar face, as `occam_ops::Args`, since `construction.wires`, the primitives since
+/// `construction.primitives`, extrude and revolve since `construction.sweeps`, the measure, with
+/// `occam_ops::measure`, since `construction.measure`, and transform and copy since `construction.transform`.
+#[derive(Clone, Debug, PartialEq)]
 pub enum Op {
-    #[serde(rename = "box")]
-    Block {
-        frame: Frame3,
-        size: [f64; 3],
-    },
-    Cylinder {
-        frame: Frame3,
-        radius: f64,
-        height: f64,
-    },
-    /// Edges through points, lines and arcs, joined into a wire; a gap is reported by location (PARITY 1.6).
-    Wire {
-        points: Vec<[f64; 3]>,
-        closed: bool,
-    },
-    PlanarFace {
-        outer: Operand,
-        holes: Vec<Operand>,
-    },
-    Extrude {
-        face: Operand,
-        vector: [f64; 3],
-    },
-    Revolve {
-        profile: Operand,
-        origin: [f64; 3],
-        axis: [f64; 3],
-        angle: f64,
-    },
     Boolean {
         kind: BooleanKind,
         target: Operand,
@@ -133,30 +54,15 @@ pub enum Op {
         edges: Vec<EdgeRadius>,
         commit: Commit,
     },
-    Transform {
-        target: Operand,
-        frame: Frame3,
-        copy: bool,
-    },
-    Measure {
-        target: Operand,
-        what: Vec<Measurement>,
-    },
 }
 
-/// A step's result. Steps stop at the first failure, and the model returned is the one after the last step that
-/// succeeded, so nothing that failed changed the input (L5).
+/// What a step with many items will add to `occam::Ran` (L6): one result per item. Under `AllOrNothing`, an item that
+/// would have succeeded says so and nothing was applied; under `Feasible`, the items that succeeded were. The runner,
+/// its `Ran` and a step that does one thing are in `occam` since `construction.request`.
 pub enum StepResult {
     Done(Outcome<Changes>),
-    /// One result per item (L6). Under `AllOrNothing`, an item that would have succeeded says so and nothing was
-    /// applied; under `Feasible`, the items that succeeded were.
     PerItem(Batch<Changes>),
     Failed(Failure),
-}
-
-pub struct Ran {
-    pub model: Arc<Snapshot>,
-    pub steps: Vec<StepResult>,
 }
 
 /// Everything that failed, in item order (P2: every failing pair, in candidate order), and the frozen outputs reached,
@@ -224,7 +130,7 @@ pub struct Frozen {
 }
 
 impl Describe for Frozen {
-    fn describe(&self, entity: EntityRef) -> Option<crate::report::Description> {
+    fn describe(&self, entity: EntityRef) -> Option<occam_report::Description> {
         unimplemented!()
     }
 }
@@ -257,23 +163,5 @@ pub fn fillet(
     edges: &[(Id<Edge>, Length)],
     commit: Commit,
 ) -> Result<(Snapshot, Batch<Changes>), Failure> {
-    unimplemented!()
-}
-
-/// Volume, area and centre of mass, by the divergence theorem over the faces with adaptive quadrature (PARITY 1.8): the
-/// bracket test's oracle compares the volume.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Mass {
-    /// Cubic millimetres.
-    pub volume: f64,
-    /// Square millimetres.
-    pub area: f64,
-    pub centre: Point<World>,
-}
-
-/// # Errors
-///
-/// `check.invariant-failed` if the body is not closed.
-pub fn mass(exec: &Exec, model: &Snapshot, body: Id<Body>) -> Result<Mass, Report> {
     unimplemented!()
 }

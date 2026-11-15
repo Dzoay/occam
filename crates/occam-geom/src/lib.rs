@@ -54,6 +54,9 @@ mod offset_surface;
 mod parabola;
 mod param_curve;
 mod plane;
+mod restore;
+#[cfg(test)]
+mod restore_families;
 mod revolution;
 #[cfg(test)]
 mod source_check;
@@ -73,7 +76,7 @@ mod uv_curve;
 pub mod workloads;
 
 pub use analytic::Analytic;
-pub use arc::length;
+pub use arc::{length, rule as gauss_legendre};
 pub use batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
 pub use bspline::{BsplineCurve, BsplineSurface};
 pub use circle::Circle;
@@ -81,7 +84,7 @@ pub use cone::Cone;
 pub use continuity::{Continuity, Smoothness, curve_join, require_curve_join, require_surface_join, surface_join};
 pub use curve::{Curve, ParametricCurve};
 pub use cylinder::Cylinder;
-pub use domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
+pub use domain::{Degeneracy, Domain, Param, ParamMap, ParamRange, UvBox, UvMap, Wrap};
 pub use ellipse::Ellipse;
 pub use extrusion::Extrusion;
 pub use hyperbola::Hyperbola;

@@ -102,6 +102,11 @@ exclude_re = [
     # either sign, and the box is the same from either corner.
     "meridian\\.rs:206:34: replace \\+ with - in along_circle$",
     "cone\\.rs:\\d+:\\d+: replace < with <= in <impl Parametric for Cone>::invert$",
+    # Axes read back. By line. The larger of two leans from square as large as each other is either. And unit axes
+    # square to within 64 machine epsilons, as these must be before their handedness is asked, have a triple product
+    # within a few dozen machine epsilons of 1 or -1, never nought, so `> 0` and `>= 0` tell right from left alike.
+    "axes\\.rs:147:89: replace > with >= in Axes::restore$",
+    "axes\\.rs:148:62: replace > with >= in Axes::restore$",
     # By line. An arc holds `φ + π` where it holds `φ − π`, and a cone's mirrored line is at `u + π` as at `u − π`: a
     # whole turn apart, which `above` takes off.
     "turn\\.rs:80:30: replace \\+ with - in swing$",
@@ -196,7 +201,7 @@ exclude_re = [
     "shell\\.rs:\\d+:\\d+: replace < with <= in reach$",
     # By line. Reading the edges of a shell that is new, whose faces the edit touched and so already reached, or of one
     # whose body is unchanged, which is all a check of an edge reads of its shell: more reads, the same failures.
-    "scope\\.rs:146:37: replace && with \\|\\| in further$",
+    "scope\\.rs:208:37: replace && with \\|\\| in further$",
     # The geometric step's (topology.geometric). Ties, which give the same value either way: the farther of a
     # parameter's distances below and above its chart, the least of two clearances, and the largest deviation found so
     # far.
@@ -206,12 +211,96 @@ exclude_re = [
     # By line. A step whose arc comes exactly to the band at the far end of its bound is within it for certain; halved
     # again, the half holding the arc's nearest point still bounds it from below by no more than the band, so the least
     # clearance stays within it and a point there stays unsettled either way.
-    "trace\\.rs:385:54: replace < with <= in Trace<'_>::refine$",
+    "trace\\.rs:392:54: replace < with <= in Trace<'_>::refine$",
     # By line. One halving more than 24, which changes only how much a search refines: a step 2^-24 of the first strays
     # from its chord by about 2^-48 of what the first does, below a double's resolution of the distance to it, so it is
     # still unsure there only where the band and that distance agree to the last bit. Not a tie; no test can reach it.
-    "trace\\.rs:386:55: replace < with <= in Trace<'_>::refine$",
+    "trace\\.rs:393:55: replace < with <= in Trace<'_>::refine$",
     # The scale step's (topology.scale). A tie: an operation measured at one size alone is its own smallest and largest,
     # so it never grows.
     "perf\\.rs:\\d+:\\d+: replace < with <= in check_growth$",
+    # The sweeps step's. By line. A cone's spread and rise are each more than the band from nought, so their quotient
+    # has their product's sign.
+    "around\\.rs:94:37: replace \\* with / in meridian$",
+    # By line. A torus piece's `v` turns at 1 or -1 to its parameter, so dividing by that rate is multiplying by it.
+    "around\\.rs:136:33: replace / with \\* in seams$",
+    # By line. A profile point exactly the band out of the axis's plane, or beyond the axis: the band is the least
+    # distance occam tells apart, so refusing it and taking it are both within the tolerance.
+    "revolve\\.rs:98:21: replace > with >= in axes$",
+    # A tie: where an arc turns at its high end, that end is the point, which is taken anyway.
+    "revolve\\.rs:\\d+:\\d+: replace < with <= in furthest_on$",
+    # A spot exactly the band from the axis, or a piece that comes exactly the band from it: on the axis or not, as for
+    # `axes`, both are within the tolerance.
+    "revolve\\.rs:\\d+:\\d+: replace <= with < in pinch$",
+    "revolve\\.rs:\\d+:\\d+: replace >= with > in pinch$",
+    # The primitives step's (construction.primitives). By line. A torus's corners and circles are at angles of 0 and a
+    # half turn alone, whose cosines are exactly 1 and -1, so dividing by the cosine is multiplying by it.
+    "primitive/round\\.rs:206:27: replace \\* with / in torus$",
+    "primitive/round\\.rs:213:64: replace \\* with / in torus$",
+    "primitive/round\\.rs:218:42: replace \\* with / in torus$",
+    # A cone's radii differ, as the reader holds them to, so the narrower is the lesser either way.
+    "primitive/round\\.rs:\\d+:\\d+: replace < with <= in cone$",
+    # By line. The circle in a cap's parameters is given unit directions at right angles: the primitive's `x` and `y`
+    # turned into the cap's frame, each of them and their cross product exactly 1 long, so dividing by those lengths is
+    # multiplying by them.
+    "primitive/parts\\.rs:87:71: replace / with \\* in uv_circle$",
+    "primitive/parts\\.rs:87:102: replace / with \\* in uv_circle$",
+    # By line. A flat face's `x` need only lie along its first side, at any length: `axes` turns to it by the angle
+    # `atan2` gives of two of its products, which its length scales alike, so only its direction counts. Its length
+    # squared instead of 1 moves that angle by roundings alone.
+    "primitive/polyhedron\\.rs:66:62: replace / with \\* in face_frame$",
+    # The measure step's (construction.measure). Ties, which give the same value either way: the smaller and the larger
+    # of two numbers, and a loop whose region in its parameters has no area, which counts nothing either way round.
+    "occam-ops/src/measure\\.rs:\\d+:\\d+: replace > with >= in larger$",
+    "measure/extent\\.rs:\\d+:\\d+: replace < with <= in smaller$",
+    "measure/extent\\.rs:\\d+:\\d+: replace > with >= in larger$",
+    "measure/mass\\.rs:\\d+:\\d+: replace < with <= in sums$",
+    # Where each `G` starts along `u`: any start gives the same integral round a closed loop, as `dv` adds up to nothing
+    # round it, so the least `u` the face reaches, which keeps each `G` within the surface's domain, is a choice.
+    "measure/mass\\.rs:\\d+:\\d+: replace least -> f64 with ",
+    "measure/mass\\.rs:\\d+:\\d+: replace < with <= in least$",
+    # A direction exactly at the threshold of lying along a torus's axis, which reaches as far round whole circles.
+    "measure/extent\\.rs:\\d+:\\d+: replace > with >= in turning$",
+    # By line. A period from a range's start and end: every analytic family's angle runs from 0, as `turn()` gives it,
+    # where its end less its start is its end plus its start.
+    "measure/extent\\.rs:112:100: replace - with \\+ in interior$",
+    # By line. The rule's nodes come in pairs either side of the middle, each pair with one weight, so taking each node
+    # the other side of the middle sums the same evaluations in another order.
+    "measure/quadrature\\.rs:73:37: replace \\+ with - in rule$",
+    # The transform's. Ties, which give the same value either way: the lower and the higher of two equal numbers, a
+    # patch's end at its range's end or a period from its start, and the largest of three factors where two are equal.
+    "transform/moved\\.rs:\\d+:\\d+: replace < with <= in spread$",
+    "transform/moved\\.rs:\\d+:\\d+: replace < with <= in within$",
+    "transform/moved\\.rs:\\d+:\\d+: replace > with >= in within$",
+    "affine\\.rs:85:67: replace > with >= in Affine::stretch$",
+    # The orientation check's (the construction review's first finding). By line. A corner that turns by exactly
+    # nought, of either sign, is a cusp taken either way: as no angle or as a whole turn, each within the cusp's band.
+    "geometric/outward\\.rs:444:25: replace > with >= in spanned$",
+    # A face's pieces in its plane. Ties, which give the same distance either way: the parameter of a point's foot on a
+    # segment exactly 1, or exactly nought of either sign, taken as itself or as that end. The foot then differs at most
+    # in a nought's sign, which the distance squares away.
+    "construct/flat\\.rs:\\d+:\\d+: replace > with >= in Flat::distance$",
+    # An arc that turns by exactly nought, of either sign, has no left to give a normal on. No loop has one: an edge's
+    # range ends above where it starts, and its piece turns by that span times its sense, 1 or -1. A witness, the only
+    # reader, moves off a piece by shares of its length, which for such an arc is nought.
+    "construct/flat\\.rs:\\d+:\\d+: replace > with >= in Flat::at$",
+    # By line. A face is the furthest place only where its sphere or torus reaches furthest along the axis, where its
+    # normal lies along the axis: the normal's part along it is 1 or -1 to rounding, so dividing the whole turn by it is
+    # multiplying by it. The same sign, as clear, and the same angle to within two units in its last place, which is as
+    # well as the sum of angles is known: in the suites the part is exactly 1 or -1 at 12 of 14 such places, 1 - 2^-53
+    # at the other two.
+    "geometric/outward\\.rs:374:40: replace \\* with / in facing$",
+    # A face's loops. By line. The remainder of a clearance by 4 for its quarter, as the sag a winding cuts arcs to.
+    # Below 4 that is the whole clearance, and a chord strays from its arc by less than the sag (1 - cos x < x^2 / 2),
+    # so it still never reaches the point, which is at least that far from the loop; from 4 up the arcs are cut finer.
+    # The same winding from more or fewer samples. Not a tie: the quarter keeps a margin well above rounding, which
+    # without it falls to a double's resolution only where the cut is as coarse as the sag allows and the point faces a
+    # chord's middle, which no test can place, as a sine's last bit there differs by platform.
+    "loops\\.rs:81:92: replace / with % in Loops<'a>::winding$",
+    # The plane of a face's wires. By line. A unit normal no more than 1e-12 across the z axis has a z part within 1e-24
+    # of 1 or -1, never 0, so no turn and the half turn are told apart by its sign alone.
+    "construct/space\\.rs:35:17: replace > with >= in lift$",
+    # Only a circle in the plane has its curve in the plane's parameters asked for, so its axes' normal is the plane's or
+    # the opposite: their product is 1 or -1 within rounding, never 0.
+    "construct/space\\.rs:\\d+:\\d+: replace < with <= in Flatland::pcurve$",
 ]

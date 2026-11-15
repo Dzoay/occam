@@ -156,3 +156,50 @@ fn every_family_is_in_the_table() {
     found.sort_unstable();
     assert_eq!(found, listed, "the families the source declares, against the table's");
 }
+
+#[test]
+fn a_stretch_keeps_the_families_closed_under_one_and_no_others() {
+    // A scale that differs along three skew axes keeps a plane, a line, a B-spline, a mesh, and an extrusion or a
+    // trimmed curve of one of those; a cylinder, a cone, a sphere, a torus, a conic, a revolution and an offset are not
+    // closed under it, and a caller moves their B-spline instead. A trimmed surface keeps itself only where its base
+    // moves each parameter on its own, which a sphere does not under a stretch at all.
+    let stretch = occam_units::Affine::stretch(&placement(), [2.0, 0.5, 1.3]).unwrap();
+    let line =
+        || Line::new(Point::from_vec3(Vec3::new(1.0, 2.0, 3.0)), Direction::normalised(Vec3::new(2.0, -1.0, 0.5)));
+    let kept: [Box<dyn Surface>; 4] = [
+        Box::new(Plane::placed(&placement())),
+        Box::new(SplineSurface::new(&crate::workloads::spline()).unwrap()),
+        Box::new(mesh()),
+        Box::new(Extrusion::new(twist(), up()).unwrap()),
+    ];
+    for s in kept {
+        assert!(s.moved(&stretch).is_some(), "{:?}", s.family());
+    }
+    let curves: [Box<dyn Curve>; 3] =
+        [Box::new(line()), Box::new(twist()), Box::new(TrimmedCurve::new(line(), 1.0, 4.0).unwrap())];
+    for c in curves {
+        assert!(c.moved(&stretch).is_some(), "{:?}", c.family());
+    }
+    let declined: [Box<dyn Surface>; 7] = [
+        Box::new(Cylinder::placed(&placement(), mm(6.0)).unwrap()),
+        Box::new(Cone::placed(&placement(), mm(4.0), Angle::from_radians(0.5)).unwrap()),
+        Box::new(ball()),
+        Box::new(Torus::placed(&placement(), mm(8.0), mm(3.0)).unwrap()),
+        Box::new(Revolution::new(Point::from_vec3(local(0.0, 0.0, 0.0)), up(), arc())),
+        Box::new(OffsetSurface::new(Plane::placed(&placement()), mm(0.7)).unwrap()),
+        Box::new(TrimmedSurface::new(ball(), window((0.3, 0.2), (2.0, 1.0))).unwrap()),
+    ];
+    for s in declined {
+        assert!(s.moved(&stretch).is_none(), "{:?}", s.family());
+    }
+    let conics: [Box<dyn Curve>; 5] = [
+        Box::new(ring_of_ten()),
+        Box::new(Ellipse::placed(&placement(), mm(12.0), mm(5.0)).unwrap()),
+        Box::new(Hyperbola::placed(&placement(), mm(4.0), mm(3.0)).unwrap()),
+        Box::new(Parabola::placed(&placement(), mm(3.0)).unwrap()),
+        Box::new(OffsetCurve::new(line(), mm(2.0), up()).unwrap()),
+    ];
+    for c in conics {
+        assert!(c.moved(&stretch).is_none(), "{:?}", c.family());
+    }
+}

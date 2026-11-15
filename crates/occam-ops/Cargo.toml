@@ -1,0 +1,18 @@
+[package]
+name = "occam-ops"
+description = "Operations as data: the request, checked and converted before any geometry, and the operations it asks for"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+occam-geom = { path = "../occam-geom" }
+occam-math = { path = "../occam-math" }
+occam-report = { path = "../occam-report" }
+occam-topo = { path = "../occam-topo" }
+occam-units = { path = "../occam-units" }
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+
+[lints]
+workspace = true

@@ -8,9 +8,14 @@ publish.workspace = true
 
 [dependencies]
 occam-geom = { path = "../occam-geom" }
+occam-io = { path = "../occam-io" }
 occam-math = { path = "../occam-math" }
+occam-ops = { path = "../occam-ops" }
 occam-report = { path = "../occam-report" }
+occam-topo = { path = "../occam-topo" }
 occam-units = { path = "../occam-units" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
 # Native only, because gungraun-runner does not compile for wasm and the benchmarks do not run there.
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]

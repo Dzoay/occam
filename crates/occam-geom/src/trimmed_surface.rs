@@ -5,12 +5,12 @@
 
 use occam_math::{Level, Real};
 use occam_report::{NamedValue, Report};
-use occam_units::{Bounds, Point, Tangent, Tolerance, UvPoint, World};
+use occam_units::{Affine, Bounds, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
 use crate::batch::{Jet1, Jet2, Jets, Order, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox, Wrap};
+use crate::domain::{Degeneracy, Domain, Param, ParamRange, UvBox, UvMap, Wrap};
 use crate::exact;
 use crate::foot::foot;
 use crate::held::{push_surface, with_surface};
@@ -161,6 +161,16 @@ impl<S: Parametric> Parametric for TrimmedSurface<S> {
     fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
         exact::part(self.domain, patch)?;
         self.base.to_bspline(patch)
+    }
+
+    /// A map keeps a trimmed surface where it keeps its base and moves each parameter on its own, so that the rectangle
+    /// stays one: a plane stretched askew does not.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let (base, params) = self.base.moved(map)?;
+        let (u, v) = params.split()?;
+        let (lo, hi) = (self.window().lo, self.window().hi);
+        let window = UvBox::new(UvPoint::new(u.of(lo.u()), v.of(lo.v())), UvPoint::new(u.of(hi.u()), v.of(hi.v())));
+        Some((Self::new(base, window).ok()?, params))
     }
 }
 

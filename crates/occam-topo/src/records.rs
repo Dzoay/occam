@@ -22,6 +22,19 @@ pub struct Provenance {
     pub role: StepRole,
 }
 
+/// What a step of a request was, kept with the model by the step's number, so that what the step made can say it in
+/// the request's terms long after the request has gone: `occam run` numbers a request's steps from 0 and names each
+/// one's operation, and an entity's [`Provenance`] names only the model's step.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StepNote {
+    /// The step's index in its request, from 0, as `occam run` numbers it.
+    pub request_step: u32,
+    /// What it asked for, as a request names it, such as `cylinder`.
+    pub operation: String,
+    /// The body it copied, for a step that copies one.
+    pub copy_of: Option<EntityRef>,
+}
+
 /// What a body is (PARITY 1.1, 1.6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BodyKind {

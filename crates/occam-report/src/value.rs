@@ -189,10 +189,22 @@ impl NamedValue {
             Quantity::Count | Quantity::Ratio => String::new(),
         };
         let text = match self.value {
-            Value::Scalar(value) => format!("{}", number(value)),
-            Value::Point([x, y, z]) => format!("({}, {}, {})", number(x), number(y), number(z)),
+            Value::Scalar(value) => figure(number(value)),
+            Value::Point([x, y, z]) => format!("({}, {}, {})", figure(number(x)), figure(number(y)), figure(number(z))),
         };
         if unit.is_empty() { text } else { format!("{text} {unit}") }
+    }
+}
+
+/// A number as a person reads it: the shortest text that reads back, as Rust writes it, but in powers of ten below 1e-4
+/// and from 1e15 up, where that text runs to hundreds of digits (a box's rounding outward from 0 is 5e-324).
+#[must_use]
+pub fn figure(value: f64) -> String {
+    let size = value.abs();
+    if size > 0.0 && size.is_finite() && !(1e-4..1e15).contains(&size) {
+        format!("{value:e}")
+    } else {
+        format!("{value}")
     }
 }
 
@@ -205,31 +217,15 @@ mod number {
     use serde::ser::SerializeTuple;
 
     use super::Value;
-
-    /// One number as it is written.
-    struct One(f64);
-
-    impl serde::Serialize for One {
-        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            if self.0.is_finite() {
-                serializer.serialize_f64(self.0)
-            } else if self.0.is_nan() {
-                serializer.serialize_str("nan")
-            } else if self.0.is_sign_positive() {
-                serializer.serialize_str("inf")
-            } else {
-                serializer.serialize_str("-inf")
-            }
-        }
-    }
+    use crate::number::{Number, named};
 
     pub fn serialize<S: Serializer>(value: &Value, serializer: S) -> Result<S::Ok, S::Error> {
         match *value {
-            Value::Scalar(number) => One(number).serialize(serializer),
+            Value::Scalar(number) => Number(number).serialize(serializer),
             Value::Point(coordinates) => {
                 let mut tuple = serializer.serialize_tuple(3)?;
                 for coordinate in coordinates {
-                    tuple.serialize_element(&One(coordinate))?;
+                    tuple.serialize_element(&Number(coordinate))?;
                 }
                 tuple.end()
             }
@@ -253,12 +249,7 @@ mod number {
     fn read<E: Error>(single: Single) -> Result<f64, E> {
         match single {
             Single::Number(value) => Ok(value),
-            Single::Text(text) => match text.as_str() {
-                "nan" => Ok(f64::NAN),
-                "inf" => Ok(f64::INFINITY),
-                "-inf" => Ok(f64::NEG_INFINITY),
-                other => Err(E::custom(format!("not a number: {other}"))),
-            },
+            Single::Text(text) => named(&text).ok_or_else(|| E::custom(format!("not a number: {text}"))),
         }
     }
 
@@ -279,6 +270,18 @@ mod tests {
 
     fn value(quantity: Quantity, value: f64) -> NamedValue {
         NamedValue::new("v", quantity, value)
+    }
+
+    #[test]
+    fn a_figure_is_the_shortest_text_that_reads_back_with_powers_of_ten_at_the_ends() {
+        let figures = [5e-324, -5.4e-323, 1e-7, 0.000_099_9, 1e-4, 0.0, -0.0, 2.5, 1e15 - 1.0, 1e15, 2.5e20];
+        let want =
+            ["5e-324", "-5.4e-323", "1e-7", "9.99e-5", "0.0001", "0", "-0", "2.5", "999999999999999", "1e15", "2.5e20"];
+        assert_eq!(figures.map(figure), want);
+        assert_eq!([f64::INFINITY, f64::NEG_INFINITY, f64::NAN].map(figure), ["inf", "-inf", "NaN"]);
+        for value in figures {
+            assert_eq!(figure(value).parse::<f64>().map(f64::to_bits), Ok(value.to_bits()), "{value} reads back");
+        }
     }
 
     #[test]

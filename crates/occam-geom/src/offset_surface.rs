@@ -10,12 +10,12 @@
 
 use occam_math::Real;
 use occam_report::{Code, Fault, NamedValue, Quantity, Report};
-use occam_units::{Angle, Bounds, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Affine, Angle, Bounds, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::analytic::Analytic;
 use crate::batch::{Jet1, Jet2, Scratch};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Degeneracy, Domain, UvBox};
+use crate::domain::{Degeneracy, Domain, UvBox, UvMap};
 use crate::foot::{foot, polish};
 use crate::held::{push_surface, with_surface};
 use crate::identity::{Content, FamilyName, Shape};
@@ -268,6 +268,14 @@ impl<S: Parametric> Parametric for OffsetSurface<S> {
             *pole = Point::from_vec3(moved(pole.to_vec3())?);
         }
         Some(spline)
+    }
+
+    /// A similarity keeps an offset where it keeps its base, the distance scaled. A stretch does not: the offset of a
+    /// stretched surface is not the stretched offset.
+    fn moved(&self, map: &Affine) -> Option<(Self, UvMap)> {
+        let similar = map.similar()?;
+        let (base, params) = self.base.moved(map)?;
+        Some((Self::new(base, Length::from_millimetres(self.distance * similar.scale)).ok()?, params))
     }
 }
 

@@ -1,6 +1,6 @@
 # Browser
 
-[Architecture](../ARCHITECTURE.md) › Browser · sketch [`compose.rs`](../sketch/src/compose.rs), `Session`
+[Architecture](../ARCHITECTURE.md) › Browser · crate `occam-wasm`, `Session`
 
 The kernel in the browser: workers with separate memories, on stable Rust, simd128 by default, and nothing required of
 the hosting page (O18).
@@ -13,7 +13,8 @@ flowchart LR
   page --> gpu(["GPU"])
 ```
 
-- **One editing worker** holds the model and runs requests. After each edit it publishes the model as native bytes.
+- **One editing worker** holds the model, in a `Session`, and runs requests. A request that goes through and changes
+  the model gives the model as native bytes, the binary twin, which the worker publishes.
   Each mesh worker gets its own copy as an `ArrayBuffer`, which skips the UTF-16 conversion a JavaScript string needs
   at both ends.
 - **Mesh workers** load those bytes read-only and mesh ranges of faces, about 64 calls a job.

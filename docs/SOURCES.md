@@ -11,6 +11,7 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | Key | Kind | Licence | Citation |
 |---|---|---|---|
 | `fnv-1a` | spec | n/a | Fowler, Noll, Vo, Eastlake, Hansen. *The FNV Non-Cryptographic Hash Algorithm*. RFC 9923, IETF |
+| `crc-32` | spec | n/a | The CRC-32 of ISO/IEC 3309 and ITU-T V.42, as W3C, *Portable Network Graphics (PNG) Specification*, annex D, gives it; eight bytes at a time as Kounavis, Berry, *A Systematic Approach to Building High Performance Software-Based CRC Generators*, ISCC 2005, describe |
 | `splitmix64` | paper | n/a | Steele, Lea, Flood. *Fast Splittable Pseudorandom Number Generators*. OOPSLA 2014 |
 | `shewchuk-1997` | paper | n/a | Shewchuk. *Adaptive Precision Floating-Point Arithmetic and Fast Robust Geometric Predicates*. Discrete & Computational Geometry 18(3), 1997 |
 | `rump-1999` | paper | n/a | Rump. *Fast and Parallel Interval Arithmetic*. BIT Numerical Mathematics 39(3), 1999 |

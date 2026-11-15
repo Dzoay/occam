@@ -234,7 +234,7 @@ impl<'a> Trace<'a> {
     }
 
     /// `uv` with each parameter that comes round placed in its chart.
-    fn placed(&self, uv: UvPoint) -> UvPoint {
+    pub(super) fn placed(&self, uv: UvPoint) -> UvPoint {
         UvPoint::new(self.charts[0].placed(uv.u()), self.charts[1].placed(uv.v()))
     }
 
@@ -321,18 +321,25 @@ fn least(so_far: f64, here: f64) -> f64 {
 }
 
 impl Trace<'_> {
-    /// The samples of piece `index`, in order.
-    fn of_piece(&self, index: usize) -> impl Iterator<Item = &Sample> {
-        self.samples.iter().filter(move |s| s.piece == index)
+    /// The first and the last sample of each piece, read in one pass over the samples.
+    fn piece_ends(&self) -> Vec<Option<(Sample, Sample)>> {
+        let mut ends: Vec<Option<(Sample, Sample)>> = vec![None; self.pieces.len()];
+        for &s in &self.samples {
+            if let Some(slot) = ends.get_mut(s.piece) {
+                *slot = Some((slot.map_or(s, |(first, _)| first), s));
+            }
+        }
+        ends
     }
 
     /// The first joint, in the loop's order, where one piece's end and the next piece's start are further apart in
     /// either parameter than the band there.
     pub(super) fn open(&self) -> Option<Joint> {
         let count = self.pieces.len();
+        let ends = self.piece_ends();
         (0..count).find_map(|i| {
             let j = i.checked_add(1).filter(|&j| j < count).unwrap_or(0);
-            let (end, start) = (self.of_piece(i).last()?, self.of_piece(j).next()?);
+            let (end, start) = (ends.get(i).copied().flatten()?.1, ends.get(j).copied().flatten()?.0);
             let gap = [(start.uv.u() - end.uv.u()).abs(), (start.uv.v() - end.uv.v()).abs()];
             let bands = self.bands(end.uv);
             if within(gap[0], bands[0]) && within(gap[1], bands[1]) {

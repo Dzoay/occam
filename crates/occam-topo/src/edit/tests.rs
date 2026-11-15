@@ -7,7 +7,7 @@ use occam_units::Length;
 use super::*;
 use crate::kind::{CurveGeom, Edge, Face, Vertex};
 use crate::models::join_star;
-use crate::records::{Around, EdgeRecord, EdgeRole, End, VertexRecord};
+use crate::records::{Around, EdgeRecord, EdgeRole, End, StepNote, VertexRecord};
 use crate::testing::{number, record, serial, tolerance, vertex, x_axis};
 
 /// The reports' reasons and entities, to compare at once.
@@ -134,6 +134,22 @@ fn a_record_linking_to_an_entity_not_live_fails_commit_naming_both() {
 }
 
 #[test]
+fn a_refused_edit_comes_back_with_its_failures_and_can_still_be_read() {
+    let (base, e, [_, b]) = one_edge();
+    let mut edit = base.edit();
+    edit.remove(b).unwrap();
+    let made = edit.add(vertex(7.0));
+    assert_eq!(edit.view(made).unwrap().point(), vertex(7.0).point, "an edit reads as it stands");
+    let (reports, back) = edit.try_commit(&serial()).unwrap_err();
+    assert_eq!(failures(&reports), [(Reason::DeadLink, vec![e.entity(), b.entity()])]);
+    assert_eq!(back.view(made).unwrap().point(), vertex(7.0).point, "what it made is there");
+    assert!(back.view(b).is_none() && back.view(e).is_some(), "what it removed is gone, what it kept is not");
+    assert!(base.view(b).is_some() && base.view(made).is_none(), "the snapshot it began from is unchanged");
+    let Ok((next, changes)) = base.edit().try_commit(&serial()) else { panic!("a clean edit is refused") };
+    assert_eq!((next.step(), changes), (base.step() + 1, Changes::default()), "a clean edit commits as commit does");
+}
+
+#[test]
 fn a_record_left_linking_to_one_the_edit_removed_fails_commit() {
     let (base, e, [a, b]) = one_edge();
     let mut edit = base.edit();
@@ -210,6 +226,19 @@ fn of_two_sources_of_its_own_kind_an_entity_takes_the_first_ones_provenance() {
 }
 
 #[test]
+fn an_entity_swept_from_one_of_its_own_kind_keeps_the_provenance_the_edit_gave_it() {
+    let (base, e, [a, b]) = one_edge();
+    let mut edit = base.edit();
+    let curve = record(&base, e).unwrap().curve;
+    let swept = edge(&mut edit, curve, (a, b), StepRole::Profile);
+    edit.derive(swept.entity(), e.entity(), Derivation::Swept).unwrap();
+    let (after, changes) = edit.commit(&serial()).unwrap();
+    assert_eq!(changes.lineage, [Lineage { new: swept.entity(), old: e.entity(), how: Derivation::Swept }]);
+    let born = record(&after, swept).map(|r| r.born);
+    assert_eq!(born, Some(Provenance { step: 2, role: StepRole::Profile }), "the sweep's, not the edge's");
+}
+
+#[test]
 fn the_step_counts_over_the_model_and_a_dropped_edit_changes_nothing() {
     let empty = Snapshot::empty(tolerance());
     let mut edit = empty.edit();
@@ -250,4 +279,55 @@ fn a_table_with_no_slot_left_fails_the_commit() {
     edit.add(x_axis());
     let reports = edit.commit(&serial()).unwrap_err();
     assert_eq!(failures(&reports), [(Reason::TableFull, vec![])]);
+}
+
+#[test]
+fn a_step_its_request_named_is_kept_with_the_model_through_the_steps_after_it() {
+    let (base, _, _) = one_edge();
+    let mut edit = base.edit();
+    edit.name_step(4, "cylinder");
+    let step = edit.step();
+    let (after, _) = edit.commit(&serial()).unwrap();
+    let want = StepNote { request_step: 4, operation: "cylinder".to_string(), copy_of: None };
+    assert_eq!(after.note(step), Some(&want));
+    let (later, _) = after.edit().commit(&serial()).unwrap();
+    assert_eq!(
+        (later.note(step), later.note(later.step())),
+        (Some(&want), None),
+        "kept; a step no request named has none"
+    );
+    assert_ne!(after.digest(), base.edit().commit(&serial()).unwrap().0.digest(), "the note is part of the model");
+}
+
+#[test]
+fn a_copy_is_made_by_the_step_that_copies_and_that_steps_note_names_what_it_copied() {
+    let (base, e, [a, b]) = one_edge();
+    let curve = record(&base, e).unwrap().curve;
+    let mut edit = base.edit();
+    edit.name_step(1, "copy");
+    edit.copying(e.entity());
+    let copy = edge(&mut edit, curve, (a, b), StepRole::Copy);
+    edit.derive(copy.entity(), e.entity(), Derivation::Copied).unwrap();
+    let step = edit.step();
+    let (after, _) = edit.commit(&serial()).unwrap();
+    let born = record(&after, copy).map(|r| r.born);
+    assert_eq!(born, Some(Provenance { step, role: StepRole::Copy }), "the copy's own step, not its source's");
+    assert_eq!(after.note(step).and_then(|n| n.copy_of), Some(e.entity()));
+}
+
+#[test]
+fn an_edit_tells_its_own_step_as_named_so_far_and_each_earlier_step_as_its_model_keeps_it() {
+    let (base, e, _) = one_edge();
+    let mut edit = base.edit();
+    edit.name_step(4, "cylinder");
+    let named = edit.step();
+    let mut edit = edit.commit(&serial()).unwrap().0.edit();
+    assert_eq!(edit.note(edit.step()), None, "not named yet");
+    edit.copying(e.entity());
+    assert_eq!(edit.note(edit.step()), None, "what it copies noted, but the step not named");
+    edit.name_step(0, "copy");
+    let copy = StepNote { request_step: 0, operation: "copy".to_string(), copy_of: Some(e.entity()) };
+    assert_eq!(edit.note(edit.step()), Some(&copy));
+    let cylinder = StepNote { request_step: 4, operation: "cylinder".to_string(), copy_of: None };
+    assert_eq!(edit.note(named), Some(&cylinder), "an earlier step's, from its model");
 }

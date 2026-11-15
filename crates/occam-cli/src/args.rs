@@ -1,0 +1,156 @@
+//! Source: original
+//! The command line as clap reads it (docs/decisions/2026-11-13-clap.md): each command, what it takes, and the help an
+//! agent reads first. Ids are `kind:slot/generation` (S6) and kinds are the names the reports give.
+
+use std::path::PathBuf;
+
+use clap::builder::PossibleValuesParser;
+use clap::{Args, Parser, Subcommand};
+use occam::{EntityKind, EntityRef};
+
+/// The kinds a model holds, which `list` takes.
+pub const LISTED: [EntityKind; 11] = [
+    EntityKind::Body,
+    EntityKind::Shell,
+    EntityKind::Face,
+    EntityKind::Loop,
+    EntityKind::Wire,
+    EntityKind::EdgeUse,
+    EntityKind::Edge,
+    EntityKind::Vertex,
+    EntityKind::Surface,
+    EntityKind::Curve,
+    EntityKind::ParamCurve,
+];
+
+/// What an id is written as, said when one is not.
+pub const ID_FORM: &str = "an id as kind:slot/generation, such as edge:41/1";
+
+/// The occam CAD kernel, for agents and people.
+///
+/// Each command gives its result in words, or with --json in one JSON form on standard output. Every command that takes
+/// ids answers each one apart: an id that names nothing is refused alone, and the others are answered. The exit status is
+/// 0 when everything asked was answered, 1 when anything was refused, and 2 when the command line is wrong. Lengths are
+/// in millimetres and angles in radians.
+///
+/// A model is built by `occam run`; `occam run --help` shows how to write the request it runs.
+#[derive(Debug, Parser)]
+#[command(name = "occam", version, max_term_width = 100)]
+pub struct Cli {
+    /// Give the result, or the reports refusing it, in one JSON form on standard output.
+    #[arg(long, global = true)]
+    pub json: bool,
+    /// The command.
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+/// What occam can be asked to do.
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Run a request on a model, and write the model back if the whole request went through.
+    ///
+    /// --help shows how to write a request.
+    #[command(after_long_help = occam::guide())]
+    Run(RunArgs),
+    /// List every live entity of each kind given, in slot order.
+    List(ListArgs),
+    /// List each entity's neighbours.
+    Adjacent(IdsArgs),
+    /// Describe each entity: its form, its values, the step that made it and its neighbours.
+    Describe(IdsArgs),
+    /// Check the whole model.
+    Check(ModelArgs),
+    /// The distance between two points, to a tolerance.
+    Distance(DistanceArgs),
+}
+
+/// A model to read.
+#[derive(Debug, Args)]
+pub struct ModelArgs {
+    /// The model: a native file, readable JSON or its binary twin.
+    #[arg(long, value_name = "FILE")]
+    pub model: PathBuf,
+}
+
+/// What `run` takes.
+#[derive(Debug, Args)]
+pub struct RunArgs {
+    /// The model: read if it exists and made new if not, and written back only if the whole request goes through.
+    #[arg(long, value_name = "FILE")]
+    pub model: PathBuf,
+    /// The request: a JSON file of steps.
+    #[arg(value_name = "REQUEST")]
+    pub request: PathBuf,
+    /// Write the model as the binary twin. Otherwise a model keeps its encoding, and a new one is readable JSON.
+    #[arg(long)]
+    pub binary: bool,
+}
+
+/// What `list` takes.
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    /// The model.
+    #[command(flatten)]
+    pub model: ModelArgs,
+    /// The kinds to list: one or more, given again or separated by commas.
+    #[arg(
+        long,
+        required_unless_present = "stray",
+        value_delimiter = ',',
+        value_parser = PossibleValuesParser::new(LISTED.map(EntityKind::text))
+    )]
+    pub kind: Vec<String>,
+    /// Kinds written without `--kind`, which are refused with the flag to use, as the blind run's agents wrote them.
+    #[arg(hide = true, value_name = "KIND")]
+    pub stray: Vec<String>,
+}
+
+/// What the commands that take ids take.
+#[derive(Debug, Args)]
+pub struct IdsArgs {
+    /// The model.
+    #[command(flatten)]
+    pub model: ModelArgs,
+    /// The ids, each as kind:slot/generation, such as edge:41/1.
+    #[arg(required = true, value_name = "ID", value_parser = entity)]
+    pub ids: Vec<EntityRef>,
+}
+
+/// What `distance` takes.
+#[derive(Debug, Args)]
+pub struct DistanceArgs {
+    /// From this point, in millimetres.
+    #[arg(long, value_name = "X,Y,Z", value_parser = numbers::<3>)]
+    pub from: [f64; 3],
+    /// To this point, in millimetres.
+    #[arg(long, value_name = "X,Y,Z", value_parser = numbers::<3>)]
+    pub to: [f64; 3],
+    /// The tolerances the model is built to, a length in millimetres and an angle in radians.
+    #[arg(long = "model-tolerance", value_name = "LENGTH,ANGLE", value_parser = numbers::<2>)]
+    pub model_tolerance: [f64; 2],
+    /// The tolerance asked for, in millimetres.
+    #[arg(long, value_name = "LENGTH", value_parser = number)]
+    pub tolerance: f64,
+}
+
+/// The id `text` writes.
+fn entity(text: &str) -> Result<EntityRef, String> {
+    EntityRef::parse(text).ok_or_else(|| ID_FORM.to_string())
+}
+
+/// The number `text` writes.
+fn number(text: &str) -> Result<f64, String> {
+    text.parse().map_err(|_| "a number".to_string())
+}
+
+/// The `N` numbers `text` lists, separated by commas.
+fn numbers<const N: usize>(text: &str) -> Result<[f64; N], String> {
+    let parsed: Result<Vec<f64>, _> = text.split(',').map(str::parse).collect();
+    parsed.ok().and_then(|list| list.try_into().ok()).ok_or_else(|| format!("{N} numbers separated by commas"))
+}
+
+/// The kind `text` names, one of [`LISTED`].
+pub fn kind(text: &str) -> Option<EntityKind> {
+    LISTED.into_iter().find(|kind| kind.text() == text)
+}

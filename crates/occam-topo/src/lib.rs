@@ -32,6 +32,7 @@ mod models;
 #[doc(hidden)]
 pub mod probe;
 mod records;
+mod restore;
 mod snapshot;
 mod table;
 #[cfg(test)]
@@ -47,12 +48,14 @@ mod whole;
 pub mod workloads;
 
 pub use edit::{Changes, Derivation, Edit, Lineage};
+pub use geometric::winding_number;
 pub use kind::{
     Body, CurveGeom, Edge, EdgeUse, Face, Id, Kind, Loop, ParamCurveGeom, Record, Shell, SurfaceGeom, Vertex, Wire,
 };
 pub use records::{
     Around, BodyKind, BodyRecord, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord,
-    ParamCurveRecord, Provenance, Sheet, ShellRecord, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
+    ParamCurveRecord, Provenance, Sheet, ShellRecord, StepNote, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
 };
+pub use restore::{Restore, Saved};
 pub use snapshot::Snapshot;
 pub use view::View;

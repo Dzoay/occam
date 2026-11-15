@@ -8,8 +8,12 @@
 use std::hint::black_box;
 
 use gungraun::{library_benchmark, library_benchmark_group, main};
+use occam::operation_workloads::{MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded};
 use occam::spline_workloads as splines;
-use occam::{Angle, Jets, Lanes, Length, Model, Point, Real, SplineSurface, Tolerance, UvPoint, World, distance};
+use occam::{
+    Angle, Encoding, EntityKind, EntityRef, Jets, Lanes, Length, Model, Point, Real, Session, SplineSurface, Tolerance,
+    UvPoint, World, distance,
+};
 use occam_geom::{OffsetCurve, OffsetSurface, SplineCurve};
 use occam_math::{Exec, Level, stream, width, workloads};
 use occam_topo::Edit;
@@ -32,6 +36,23 @@ fn point(x: f64, y: f64, z: f64) -> Point<World> {
 fn measure_distance() -> f64 {
     let (from, to) = (point(1.0, 2.0, 3.0), point(4.0, 6.0, 15.0));
     distance(black_box(model()), black_box(from), black_box(to), black_box(mm(0.01))).unwrap().value.millimetres()
+}
+
+/// The plan's test face for wires and faces: a rectangle 40 by 20 with a round hole of radius 3, as a request.
+const WIRE_FACE: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+    {"op": "wire", "label": "outline", "points": [[0, 0, 0], [40, 0, 0], [40, 20, 0], [0, 20, 0]], "closed": true},
+    {"op": "wire", "label": "hole", "edges": [{"circle": {"centre": [20, 10, 0], "radius": 3, "normal": [0, 0, 1]}}]},
+    {"op": "face", "outer": "outline", "holes": ["hole"]}
+]}"#;
+
+// The request read and checked, its two wires and its face made, and each step committed, which checks it. What it made
+// is leaked, so that the count is the operation's and not the freeing of the model.
+#[library_benchmark]
+fn construct_wire_face() -> bool {
+    let ran = occam::run(None, black_box(WIRE_FACE));
+    let built = ran.failed.is_none();
+    core::mem::forget(ran);
+    built
 }
 
 /// One thread, because the operation class is the arithmetic and threads add scheduling noise. The baseline level, so
@@ -94,8 +115,16 @@ fn offset_surfaces((surface, uv): (OffsetSurface<SplineSurface>, Vec<UvPoint>)) 
 
 library_benchmark_group!(
     name = operations,
-    benchmarks =
-        [measure_distance, maths_scalar, maths_lanes2, maths_lanes4, maths_lanes8, offset_curves, offset_surfaces]
+    benchmarks = [
+        measure_distance,
+        construct_wire_face,
+        maths_scalar,
+        maths_lanes2,
+        maths_lanes4,
+        maths_lanes8,
+        offset_curves,
+        offset_surfaces
+    ]
 );
 
 // The benchmarks' names carry each kernel's width, so they must change with it.
@@ -251,4 +280,109 @@ library_benchmark_group!(
     name = topology,
     benchmarks = [topo_snapshot, topo_edit, topo_commit_n1056, topo_commit_n100350]
 );
-main!(library_benchmark_groups = operations, kernels, topology);
+
+// Reading a request and making each primitive once, each step committed and so checked. What it made is leaked, so
+// that the count is the making and not the freeing.
+#[library_benchmark]
+fn construct_primitives() -> bool {
+    let ran = occam::run(None, black_box(PRIMITIVES));
+    let made = ran.failed.is_none() && ran.done.len() == 6;
+    core::mem::forget(ran);
+    made
+}
+
+// The request read and checked, and each step made and committed, which checks it; what it made is leaked, as above.
+#[library_benchmark]
+fn construct_sweeps() -> bool {
+    let ran = occam::run(None, black_box(SWEEPS));
+    let made = ran.failed.is_none() && ran.done.len() == 7;
+    core::mem::forget(ran);
+    made
+}
+
+// The request read and checked, and each step made and committed, which checks it; what it made is leaked, as above.
+#[library_benchmark]
+fn construct_transforms() -> bool {
+    let ran = occam::run(None, black_box(TRANSFORMS));
+    let made = ran.failed.is_none() && ran.done.len() == 5;
+    core::mem::forget(ran);
+    made
+}
+
+// A closed polygon of 1,000 edges made, a face of it, and the face extruded, each step committed, which checks it: work
+// that grows with the edges, where a cost growing with their square, which the checker and the face once had, would
+// stand far above the rest. The request is setup, and what it made is leaked, as above.
+#[library_benchmark]
+#[bench::corners(polygon_extruded(POLYGON_CORNERS))]
+fn construct_polygon_extrude(request: String) -> bool {
+    let ran = occam::run(None, black_box(&request));
+    let made = ran.failed.is_none() && ran.done.len() == 3;
+    core::mem::forget((ran, request));
+    made
+}
+
+/// Each primitive of [`PRIMITIVES`] made: setup, which the counts leave out.
+fn primitives() -> occam_topo::Snapshot {
+    occam::run(None, PRIMITIVES).model.unwrap()
+}
+
+// Measuring each primitive's volume, area, centre of mass and box, on one thread.
+#[library_benchmark]
+#[bench::primitives(primitives())]
+fn measure_primitives(model: occam_topo::Snapshot) -> bool {
+    let ran = occam::run(Some(&model), black_box(MEASURES));
+    let measured = ran.failed.is_none() && ran.done.iter().all(|d| d.measured.is_some());
+    core::mem::forget((ran, model));
+    measured
+}
+
+/// The primitives' model as the native format's readable JSON: setup, which the counts leave out.
+fn primitives_saved() -> Vec<u8> {
+    Session::new(Encoding::Json).run(PRIMITIVES).1.unwrap()
+}
+
+// Opening the primitives' model from its readable JSON, as every command but `run` on a new model begins: parsed, each
+// edge's deviation measured and the whole model checked, on one thread. What it opened is leaked, as above.
+#[library_benchmark]
+#[bench::saved(primitives_saved())]
+fn commands_open(bytes: Vec<u8>) -> bool {
+    let opened = Session::open(black_box(&bytes), &Exec::serial());
+    let ok = opened.is_ok();
+    core::mem::forget((opened, bytes));
+    ok
+}
+
+/// The primitives' model in a session, and the id of every entity in it, of every kind: setup.
+fn primitives_listed() -> (Session, Vec<EntityRef>) {
+    let mut session = Session::new(Encoding::Json);
+    let _ = session.run(PRIMITIVES);
+    let kinds = [EntityKind::Body, EntityKind::Shell, EntityKind::Face, EntityKind::Loop, EntityKind::Wire];
+    let more = [EntityKind::EdgeUse, EntityKind::Edge, EntityKind::Vertex, EntityKind::Surface, EntityKind::Curve];
+    let all: Vec<EntityKind> = kinds.into_iter().chain(more).chain([EntityKind::ParamCurve]).collect();
+    let ids = session.list(&all).into_iter().flat_map(|listed| listed.entities).collect();
+    (session, ids)
+}
+
+// Describing every entity of the primitives' model, each id checked first, as `occam describe` answers.
+#[library_benchmark]
+#[bench::listed(primitives_listed())]
+fn commands_describe((session, ids): (Session, Vec<EntityRef>)) -> bool {
+    let described = session.describe(black_box(&ids));
+    let ok = described.iter().all(|(_, answer)| answer.is_ok());
+    core::mem::forget((described, session, ids));
+    ok
+}
+
+library_benchmark_group!(
+    name = construction,
+    benchmarks = [
+        construct_primitives,
+        construct_sweeps,
+        construct_transforms,
+        construct_polygon_extrude,
+        measure_primitives,
+        commands_open,
+        commands_describe
+    ]
+);
+main!(library_benchmark_groups = operations, kernels, topology, construction);

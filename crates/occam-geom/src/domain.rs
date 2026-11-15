@@ -178,6 +178,75 @@ pub struct Degeneracy {
     pub normal: Option<Direction<World>>,
 }
 
+/// How a curve's parameter moves when the curve is moved: `t` goes to `scale t + shift`, `scale` more than zero, so the
+/// curve keeps its sense.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ParamMap {
+    /// The factor.
+    pub scale: f64,
+    /// The shift, after it.
+    pub shift: f64,
+}
+
+impl ParamMap {
+    /// The map that moves no parameter.
+    pub const IDENTITY: Self = Self { scale: 1.0, shift: 0.0 };
+
+    /// The map that scales a parameter by `scale` alone.
+    #[must_use]
+    pub const fn scaled(scale: f64) -> Self {
+        Self { scale, shift: 0.0 }
+    }
+
+    /// Where `t` goes.
+    #[must_use]
+    pub fn of(self, t: f64) -> f64 {
+        self.scale * t + self.shift
+    }
+
+    /// Where `range` goes: its ends moved, its wrap and kind kept.
+    #[must_use]
+    pub fn of_range(self, range: ParamRange) -> ParamRange {
+        ParamRange { lo: self.of(range.lo), hi: self.of(range.hi), ..range }
+    }
+}
+
+/// How a surface's parameters move when the surface is moved: the new `u` is `u[0] u + u[1] v + u[2]` and the new `v`
+/// is `v[0] u + v[1] v + v[2]`, keeping their sense.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UvMap {
+    /// The new `u`'s factors of `u` and `v`, and its shift.
+    pub u: [f64; 3],
+    /// The new `v`'s.
+    pub v: [f64; 3],
+}
+
+impl UvMap {
+    /// The map that moves no parameter.
+    pub const IDENTITY: Self = Self { u: [1.0, 0.0, 0.0], v: [0.0, 1.0, 0.0] };
+
+    /// Each parameter on its own: `u` by `u`, `v` by `v`.
+    #[must_use]
+    pub const fn apart(u: ParamMap, v: ParamMap) -> Self {
+        Self { u: [u.scale, 0.0, u.shift], v: [0.0, v.scale, v.shift] }
+    }
+
+    /// Where `uv` goes.
+    #[must_use]
+    pub fn of(self, uv: UvPoint) -> UvPoint {
+        let ([u_by_u, u_by_v, u_shift], [v_by_u, v_by_v, v_shift]) = (self.u, self.v);
+        UvPoint::new(u_by_u * uv.u() + u_by_v * uv.v() + u_shift, v_by_u * uv.u() + v_by_v * uv.v() + v_shift)
+    }
+
+    /// The maps of `u` and of `v`, if each new parameter is a map of its old one alone.
+    #[must_use]
+    pub fn split(self) -> Option<(ParamMap, ParamMap)> {
+        let ([u_by_u, u_by_v, u_shift], [v_by_u, v_by_v, v_shift]) = (self.u, self.v);
+        let (u, v) = (ParamMap { scale: u_by_u, shift: u_shift }, ParamMap { scale: v_by_v, shift: v_shift });
+        (u_by_v == 0.0 && v_by_u == 0.0).then_some((u, v))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,6 +263,21 @@ mod tests {
         let unbounded = ParamRange::unbounded(ParamKind::Length);
         assert!(unbounded.contains(-1e300) && unbounded.contains(1e300));
         assert!(!unbounded.contains(f64::INFINITY) && !unbounded.contains(f64::NEG_INFINITY));
+    }
+
+    #[test]
+    fn a_parameter_map_scales_then_shifts_a_parameter_and_a_range() {
+        let map = ParamMap { scale: 2.0, shift: 3.0 };
+        assert_eq!(map.of(1.5), 6.0);
+        let moved = map.of_range(closed(-1.0, 2.0, Wrap::Closed));
+        assert_eq!(moved, ParamRange { lo: 1.0, hi: 7.0, wrap: Wrap::Closed, kind: ParamKind::Angle });
+        let uv = UvMap { u: [2.0, 0.0, 1.0], v: [0.0, 3.0, -1.0] };
+        assert_eq!(uv.of(UvPoint::new(1.0, 2.0)), UvPoint::new(3.0, 5.0));
+        assert_eq!(uv.split(), Some((ParamMap { scale: 2.0, shift: 1.0 }, ParamMap { scale: 3.0, shift: -1.0 })));
+        assert_eq!(UvMap { u: [2.0, 0.5, 0.0], v: [0.0, 3.0, 0.0] }.split(), None, "a new u that takes in v");
+        assert_eq!(UvMap { u: [2.0, 0.0, 0.0], v: [0.5, 3.0, 0.0] }.split(), None, "a new v that takes in u");
+        let mixed = UvMap { u: [2.0, 0.5, 0.0], v: [0.25, 3.0, 0.0] };
+        assert_eq!(mixed.of(UvPoint::new(1.0, 2.0)), UvPoint::new(3.0, 6.25));
     }
 
     #[test]

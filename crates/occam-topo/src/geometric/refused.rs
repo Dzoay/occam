@@ -5,17 +5,16 @@
 
 use std::sync::Arc;
 
-use occam_geom::{Content, Domain, FamilyName, Jet1, Jet2, Parametric, Plane, Scratch, Shape, UvBox};
-use occam_math::Real;
+use occam_geom::Plane;
 use occam_report::{Code, Fault, Reason, Report};
-use occam_units::{Bounds, Length, Local, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, Vector, World};
+use occam_units::{Length, Local, Placement, Vec3, Vector, World};
 
 use crate::kind::Edge;
 use crate::kind::sealed::Sealed;
 use crate::models::{Built, Spec, build, cube};
 use crate::records::SurfaceRecord;
 use crate::snapshot::Snapshot;
-use crate::testing::{number, serial, tolerance};
+use crate::testing::{Unfindable, number, serial, tolerance};
 
 /// `spec` committed clean, and what it built.
 fn committed(spec: &Spec) -> (Snapshot, Built) {
@@ -85,58 +84,6 @@ fn a_stored_deviation_beyond_the_cap_is_found_by_the_whole_model_check() {
     assert_eq!(off.len(), 1, "{reports:#?}");
     assert_eq!(off[0].entities[0], e.entity());
     assert_eq!(number(off[0], "distance"), Some(1.0));
-}
-
-/// A plane on which no point can be found: what a surface whose search fails looks like to the checks.
-struct Unfindable(Plane);
-
-impl Parametric for Unfindable {
-    fn eval_point<R: Real>(&self, uv: UvPoint<R>) -> Point<World, R> {
-        self.0.eval_point(uv)
-    }
-
-    fn eval_first<R: Real>(&self, uv: UvPoint<R>) -> Jet1<R> {
-        self.0.eval_first(uv)
-    }
-
-    fn eval_second<R: Real>(&self, uv: UvPoint<R>) -> Jet2<R> {
-        self.0.eval_second(uv)
-    }
-
-    fn derivatives(
-        &self,
-        uv: UvPoint,
-        order: u8,
-        out: &mut Vec<Tangent<World>>,
-        scratch: &mut Scratch,
-    ) -> Result<(), Report> {
-        self.0.derivatives(uv, order, out, scratch)
-    }
-
-    fn domain(&self) -> Domain {
-        self.0.domain()
-    }
-
-    fn bounds(&self, patch: UvBox) -> Bounds {
-        self.0.bounds(patch)
-    }
-
-    fn invert(&self, _: Point<World>, _: Option<UvPoint>, _: Tolerance, _: &mut Scratch) -> Result<UvPoint, Report> {
-        Err(Report::new(Code::NotConverged, Fault::NumericallySensitive))
-    }
-
-    fn family(&self) -> FamilyName {
-        FamilyName("unfindable")
-    }
-
-    fn content(&self, out: &mut Content) {
-        self.0.content(out);
-        out.push_family(self.family());
-    }
-
-    fn shape(&self) -> Shape {
-        self.0.shape()
-    }
 }
 
 #[test]

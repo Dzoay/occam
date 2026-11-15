@@ -70,6 +70,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "occam-ops"
+version = "0.0.0"
+dependencies = [
+ "occam-geom",
+ "occam-math",
+ "occam-report",
+ "occam-topo",
+ "occam-units",
+ "serde_json",
+]
+
+[[package]]
 name = "occam-report"
 version = "0.0.0"
 dependencies = [
@@ -182,6 +194,7 @@ version = "0.0.0"
 dependencies = [
  "occam-geom",
  "occam-math",
+ "occam-ops",
  "occam-report",
  "occam-topo",
  "occam-units",

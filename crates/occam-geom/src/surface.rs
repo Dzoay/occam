@@ -4,12 +4,14 @@
 
 use occam_math::{Level, Real};
 use occam_report::{Code, Fault, NamedValue, Quantity, Report};
-use occam_units::{Bounds, Length, Point, Tangent, Tolerance, UvPoint, World};
+use std::sync::Arc;
+
+use occam_units::{Affine, Bounds, Length, Point, Tangent, Tolerance, UvPoint, World};
 
 use crate::analytic::Analytic;
 use crate::batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
 use crate::bspline::BsplineSurface;
-use crate::domain::{Degeneracy, Domain, UvBox};
+use crate::domain::{Degeneracy, Domain, UvBox, UvMap};
 use crate::identity::{BatchKey, Content, FamilyName, Shape};
 use crate::support::finite;
 
@@ -152,6 +154,15 @@ pub trait Parametric: Sized + Send + Sync + 'static {
     fn triangles(&self) -> Option<&dyn TriangleView> {
         None
     }
+
+    /// Itself moved by `map`, as its own family, and where its parameters go: the point at `uv` goes to the moved
+    /// surface's point at `params.of(uv)`. `None` where the family does not keep its form under `map`; every family
+    /// keeps it under a similarity, and the conformance suite holds each to that. Where a family gives `None`, its
+    /// B-spline over a patch, which keeps its form under any such map, is what a caller moves
+    /// (`docs/decisions/2026-11-12-moving-geometry.md`).
+    fn moved(&self, _map: &Affine) -> Option<(Self, UvMap)> {
+        None
+    }
 }
 
 /// The second layer, which everything outside a family calls: dyn-compatible, `f64` per call, and lanes inside a batch.
@@ -241,6 +252,9 @@ pub trait Surface: Send + Sync {
 
     /// As [`Parametric::triangles`].
     fn triangles(&self) -> Option<&dyn TriangleView>;
+
+    /// As [`Parametric::moved`], the moved surface shared.
+    fn moved(&self, map: &Affine) -> Option<(Arc<dyn Surface>, UvMap)>;
 }
 
 /// The one place the family trait becomes the object trait.
@@ -343,6 +357,10 @@ impl<S: Parametric> Surface for S {
 
     fn triangles(&self) -> Option<&dyn TriangleView> {
         Parametric::triangles(self)
+    }
+
+    fn moved(&self, map: &Affine) -> Option<(Arc<dyn Surface>, UvMap)> {
+        Parametric::moved(self, map).map(|(moved, params)| (Arc::new(moved) as Arc<dyn Surface>, params))
     }
 }
 
