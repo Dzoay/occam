@@ -233,3 +233,21 @@ pub(crate) fn torus(parts: Parts, major: f64, minor: f64) -> Result<Solid, Repor
     }
     Ok(Solid { points, edges, faces })
 }
+
+#[cfg(test)]
+mod tests {
+    use core::f64::consts::FRAC_PI_3;
+
+    use super::*;
+
+    #[test]
+    fn a_rim_point_is_its_radius_from_the_axis_at_its_angle_and_height() {
+        // A third of a half turn on, whose cosine is a half and sine root 3 over 2, and a half turn beyond, where both
+        // turn over: any angle, not only the 0 and the half turn the primitives ask for.
+        let (x, y) = (1.25, 2.5 * 0.75_f64.sqrt());
+        for (angle, (x, y)) in [(FRAC_PI_3, (x, y)), (PI + FRAC_PI_3, (-x, -y))] {
+            let p = rim(2.5, angle, -4.0);
+            assert!((p - Vec3::new(x, y, -4.0)).norm() < 1e-14, "at {angle}: {p:?}");
+        }
+    }
+}

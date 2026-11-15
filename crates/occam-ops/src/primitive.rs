@@ -57,3 +57,9 @@ pub(crate) fn make(edit: &mut Edit, args: &PrimitiveArgs) -> Result<Option<Entit
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod tests_frame;
+
+#[cfg(test)]
+mod tests_layout;

@@ -228,12 +228,28 @@ exclude_re = [
     # `axes`, both are within the tolerance.
     "revolve\\.rs:\\d+:\\d+: replace <= with < in pinch$",
     "revolve\\.rs:\\d+:\\d+: replace >= with > in pinch$",
+    # The primitives step's (construction.primitives). By line. A torus's corners and circles are at angles of 0 and a
+    # half turn alone, whose cosines are exactly 1 and -1, so dividing by the cosine is multiplying by it.
+    "primitive/round\\.rs:206:27: replace \\* with / in torus$",
+    "primitive/round\\.rs:213:64: replace \\* with / in torus$",
+    "primitive/round\\.rs:218:42: replace \\* with / in torus$",
+    # A cone's radii differ, as the reader holds them to, so the narrower is the lesser either way.
+    "primitive/round\\.rs:\\d+:\\d+: replace < with <= in cone$",
+    # By line. The circle in a cap's parameters is given unit directions at right angles: the primitive's `x` and `y`
+    # turned into the cap's frame, each of them and their cross product exactly 1 long, so dividing by those lengths is
+    # multiplying by them.
+    "primitive/parts\\.rs:87:71: replace / with \\* in uv_circle$",
+    "primitive/parts\\.rs:87:102: replace / with \\* in uv_circle$",
+    # By line. A flat face's `x` need only lie along its first side, at any length: `axes` turns to it by the angle
+    # `atan2` gives of two of its products, which its length scales alike, so only its direction counts. Its length
+    # squared instead of 1 moves that angle by roundings alone.
+    "primitive/polyhedron\\.rs:66:62: replace / with \\* in face_frame$",
     # The measure step's (construction.measure). Ties, which give the same value either way: the smaller and the larger
     # of two numbers, and a loop whose region in its parameters has no area, which counts nothing either way round.
     "occam-ops/src/measure\\.rs:\\d+:\\d+: replace > with >= in larger$",
     "measure/extent\\.rs:\\d+:\\d+: replace < with <= in smaller$",
     "measure/extent\\.rs:\\d+:\\d+: replace > with >= in larger$",
-    "measure/mass\\.rs:205:49: replace < with <= in sums$",
+    "measure/mass\\.rs:\\d+:\\d+: replace < with <= in sums$",
     # Where each `G` starts along `u`: any start gives the same integral round a closed loop, as `dv` adds up to nothing
     # round it, so the least `u` the face reaches, which keeps each `G` within the surface's domain, is a choice.
     "measure/mass\\.rs:\\d+:\\d+: replace least -> f64 with ",
