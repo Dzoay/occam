@@ -61,6 +61,23 @@ impl Rows {
         self.knots.insert(k.saturating_add(1).min(self.knots.len()), t);
     }
 
+    /// How many knots [`Rows::restricted`] inserts for the part from `lo` to `hi`.
+    pub(crate) fn inserted(&self, lo: f64, hi: f64) -> usize {
+        let short = |t: f64| self.degree.saturating_sub(multiplicity(&self.knots, t + 0.0));
+        short(lo).saturating_add(short(hi))
+    }
+
+    /// The part from `lo` to `hi`, where `lo` is below `hi`, and how many knots that inserted; where they are equal, the
+    /// rows as they are.
+    pub(crate) fn cut(self, lo: f64, hi: f64) -> (Self, usize) {
+        if lo < hi {
+            let inserted = self.inserted(lo, hi);
+            (self.restricted(lo, hi), inserted)
+        } else {
+            (self, 0)
+        }
+    }
+
     /// The part from `lo` to `hi`, which lie inside the domain with `lo` below `hi`: each end inserted until it repeats
     /// as often as the degree, then the poles from the one at `lo` to the one at `hi`, and the knots between, each end
     /// repeated once more than the degree.
@@ -80,6 +97,12 @@ impl Rows {
         let poles = |row: &Vec<[f64; 4]>| row.get(start.saturating_sub(1)..end).unwrap_or_default().to_vec();
         Self { knots: knots.collect(), degree: p, poles: self.poles.iter().map(poles).collect() }
     }
+}
+
+/// The knots a B-spline of degree `p` reads on its spans `first` to `last`, as the B-spline of the poles `first - p` to
+/// `last` alone, all that a part of it on those spans uses: knots `first - p` to `last + p + 1`.
+pub(crate) fn of_spans(knots: &[f64], p: usize, (first, last): (usize, usize)) -> Vec<f64> {
+    knots.get(first.saturating_sub(p)..=last.saturating_add(p).saturating_add(1)).unwrap_or_default().to_vec()
 }
 
 /// `knots` with -0 made +0, so that a knot's bits compare as its value does.
