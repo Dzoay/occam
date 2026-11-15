@@ -129,7 +129,7 @@ seam *args:
 perf *args:
     cargo xtask gates perf "$@"
 
-# Mutation testing on the Rust changed since origin/main; `just mutants --shard 1/4`: one slice of it
+# Mutation testing on the Rust changed since origin/main. `--shard 1/4`: one slice of it; `--iterate`: skip the mutants a run here caught
 [env("CARGO_TARGET_DIR", target)]
 [env("TMPDIR", tmp)]
 [group('mutants')]

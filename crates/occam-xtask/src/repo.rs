@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{env, fs, process, thread};
+use std::{env, fs, thread};
 
 use crate::verdict::Finding;
 
@@ -189,13 +189,19 @@ impl Repo {
         if ok { Ok(listing) } else { Err(failed(errors)) }
     }
 
+    /// One cargo-mutants pass over `diff`. What it writes stays in `mutants.out/<pass>` at the root, which git ignores,
+    /// where a later run with `--iterate` finds what this one caught.
     pub fn cargo_mutants(&self, pass: &str, diff: &str, args: &[&str]) -> Result<MutantsRun, Finding> {
-        let dir = env::temp_dir().join(format!("occam-mutants-{}-{pass}", process::id()));
+        let dir = self.root.join("mutants.out").join(pass);
         let shown = dir.display().to_string();
-        drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).map_err(|e| io(&shown, &e))?;
         let diff_file = dir.join("changes.diff");
         fs::write(&diff_file, diff).map_err(|e| io(&shown, &e))?;
+        // cargo-mutants moves the last run's output aside as it starts. Where there was one and it is still in place,
+        // this run never started, and the lists there are the last run's: they are not read.
+        let (out, aside) = (dir.join("mutants.out"), dir.join("mutants.out.old"));
+        drop(fs::remove_dir_all(&aside));
+        let stale = out.is_dir();
         // By default a quarter of the hardware threads, 1 to 4: each job runs its own parallel build and test binaries.
         let quarter = || thread::available_parallelism().map_or(1, |n| (n.get() / 4).clamp(1, 4)).to_string();
         let jobs = env::var("OCCAM_MUTANTS_JOBS").unwrap_or_else(|_| quarter());
@@ -210,12 +216,9 @@ impl Repo {
             .env("CARGO_INCREMENTAL", "1")
             .status()
             .map_err(|e| Finding::new("repo.no-tool", "cargo-mutants", e.to_string(), "run `just setup`"))?;
-        let out = dir.join("mutants.out");
+        let fresh = !stale || aside.is_dir();
         let outcomes = ["caught.txt", "missed.txt", "timeout.txt", "unviable.txt"]
-            .map(|name| fs::read_to_string(out.join(name)).unwrap_or_default());
-        if status.success() {
-            drop(fs::remove_dir_all(&dir));
-        }
+            .map(|name| if fresh { fs::read_to_string(out.join(name)).unwrap_or_default() } else { String::new() });
         Ok(MutantsRun { success: status.success(), outcomes })
     }
 }

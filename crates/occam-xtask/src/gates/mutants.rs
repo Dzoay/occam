@@ -3,7 +3,10 @@
 //! A mutant no test catches fails the gate unless `.cargo/mutants.toml` excludes it with a reason.
 //!
 //! It runs in two passes. No crate depends on `occam-xtask`, so only its own tests can catch its mutants and they run
-//! those alone; every other mutant runs the whole workspace's tests. `--shard k/n` runs one of n slices of both.
+//! those alone; every other mutant runs the whole workspace's tests, which
+//! `docs/decisions/2026-11-14-mutants-keep-the-whole-workspace.md` measured against narrower scopes. `--shard k/n` runs
+//! one of n slices of both. `--iterate` skips the mutants an earlier run in this checkout caught, to try a fix on what
+//! survived or was not reached; the gate is a run without it.
 
 use crate::repo::Repo;
 use crate::verdict::{Finding, Verdict};
@@ -13,6 +16,15 @@ const PASSES: [(&str, &[&str]); 2] = [
     ("workspace", &["--exclude", "crates/occam-xtask/**"]),
     ("xtask", &["--package", "occam-xtask", "--test-workspace", "false"]),
 ];
+
+/// What a run was asked for.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Options {
+    /// One of n slices of each pass, as `k/n`.
+    shard: Option<String>,
+    /// Skip what an earlier run caught.
+    iterate: bool,
+}
 
 /// What cargo-mutants wrote: one mutant per line.
 struct Outcomes<'a> {
@@ -26,7 +38,7 @@ fn no_diff() -> String {
 }
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
-    let shard = shard(args)?;
+    let options = options(args)?;
     let base = repo.base().map_err(|e| vec![e])?;
     let mut diff = code_hunks(&repo.git(&["diff", "-U0", &base, "--", "*.rs"]).map_err(|e| vec![e])?);
     for path in repo.git(&["ls-files", "--others", "--exclude-standard", "--", "*.rs"]).map_err(|e| vec![e])?.lines() {
@@ -43,7 +55,7 @@ pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     .map_err(|e| vec![e])?;
     let mut passes = Vec::new();
     for (pass, selection) in PASSES {
-        let args: Vec<&str> = selection.iter().copied().chain(shard.iter().map(String::as_str)).collect();
+        let args = arguments(selection, &options);
         let result = repo.cargo_mutants(pass, &diff, &args).map_err(|e| vec![e])?;
         let [caught, missed, timeout, unviable] = result.outcomes.each_ref().map(String::as_str);
         let (caught, hung) = check(result.success, &Outcomes { caught, missed, timeout })?;
@@ -56,22 +68,33 @@ pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     Ok(format!("mutants of the changes since origin/main: {}", passes.join("; ")))
 }
 
-/// The cargo-mutants arguments that select this run's shard: none without arguments, `--shard k/n` for one of n.
-fn shard(args: &[String]) -> Result<Vec<String>, Vec<Finding>> {
-    let usage =
-        |detail: String| vec![Finding::new("mutants.usage", "", detail, "pass --shard <k>/<n> with k < n, or nothing")];
-    let [flag, slice] = args else {
-        return if args.is_empty() {
-            Ok(Vec::new())
-        } else {
-            Err(usage(format!("unexpected arguments: {}", args.join(" "))))
-        };
-    };
-    let parsed = slice.split_once('/').and_then(|(k, n)| Some((k.parse::<u32>().ok()?, n.parse::<u32>().ok()?)));
-    match parsed {
-        Some((k, n)) if flag == "--shard" && k < n => Ok(vec![flag.clone(), slice.clone()]),
-        _ => Err(usage(format!("expected --shard <k>/<n> with k < n, not: {flag} {slice}"))),
+/// Reads the gate's arguments: `--shard <k>/<n>` and `--iterate`, in either order.
+fn options(args: &[String]) -> Result<Options, Vec<Finding>> {
+    let remedy = "pass --shard <k>/<n> with k < n, --iterate, both or neither";
+    let usage = |detail: String| vec![Finding::new("mutants.usage", "", detail, remedy)];
+    let mut options = Options::default();
+    let mut rest = args.iter();
+    while let Some(flag) = rest.next() {
+        let value = if flag == "--shard" { rest.next() } else { None };
+        match (flag.as_str(), value) {
+            ("--iterate", _) => options.iterate = true,
+            ("--shard", Some(slice)) if is_shard(slice) => options.shard = Some(slice.clone()),
+            (_, value) => return Err(usage(format!("unexpected: {flag} {}", value.map_or("", String::as_str)))),
+        }
     }
+    Ok(options)
+}
+
+/// Whether `slice` is `k/n` with k < n.
+fn is_shard(slice: &str) -> bool {
+    let parsed = slice.split_once('/').and_then(|(k, n)| Some((k.parse::<u32>().ok()?, n.parse::<u32>().ok()?)));
+    parsed.is_some_and(|(k, n)| k < n)
+}
+
+/// The cargo-mutants arguments of one pass: its selection, then the run's shard and `--iterate` where asked for.
+fn arguments<'a>(selection: &[&'a str], options: &'a Options) -> Vec<&'a str> {
+    let shard = options.shard.iter().flat_map(|slice| ["--shard", slice.as_str()]);
+    selection.iter().copied().chain(shard).chain(options.iterate.then_some("--iterate")).collect()
 }
 
 /// Checks one cargo-mutants run (`success` is its exit status, which is also false after a timeout). Returns how many
@@ -192,28 +215,58 @@ mod tests {
         assert_eq!(codes(&check(false, &outcomes("", "")).map(|_| String::new())), ["mutants.run-failed"]);
     }
 
+    fn owned(list: &[&str]) -> Vec<String> {
+        list.iter().map(ToString::to_string).collect()
+    }
+
     #[test]
     fn a_shard_selects_one_slice_of_the_mutants() {
-        let args = |list: &[&str]| list.iter().map(ToString::to_string).collect::<Vec<_>>();
-        assert_eq!(shard(&[]), Ok(vec![]));
-        assert_eq!(shard(&args(&["--shard", "0/4"])), Ok(args(&["--shard", "0/4"])));
-        assert_eq!(shard(&args(&["--shard", "3/4"])), Ok(args(&["--shard", "3/4"])));
+        assert_eq!(options(&[]), Ok(Options::default()));
+        for good in ["0/4", "3/4"] {
+            let want = Options { shard: Some(good.to_string()), ..Options::default() };
+            assert_eq!(options(&owned(&["--shard", good])), Ok(want));
+        }
         for bad in [
             &["--shard", "4/4"][..],
             &["--shard", "1/0"],
             &["--shard", "a/4"],
+            &["--shard", "1/b"],
             &["--shard", "1"],
             &["--shard"],
             &["--jobs", "2"],
+            &["--base", "abc123"],
+            &["0/4"],
         ] {
-            assert!(shard(&args(bad)).is_err(), "{bad:?}");
+            assert_eq!(codes(&options(&owned(bad)).map(|_| String::new())), ["mutants.usage"], "{bad:?}");
         }
     }
 
     #[test]
+    fn the_options_combine_in_either_order() {
+        let both = Options { shard: Some("1/16".to_string()), iterate: true };
+        assert_eq!(options(&owned(&["--iterate", "--shard", "1/16"])), Ok(both));
+        let both = Options { shard: Some("1/16".to_string()), iterate: true };
+        assert_eq!(options(&owned(&["--shard", "1/16", "--iterate"])), Ok(both));
+        assert_eq!(options(&owned(&["--iterate"])), Ok(Options { iterate: true, ..Options::default() }));
+    }
+
+    #[test]
+    fn a_shard_and_iterate_reach_every_pass() {
+        let [(_, workspace), (_, xtask)] = PASSES;
+        assert_eq!(arguments(workspace, &Options::default()), ["--exclude", "crates/occam-xtask/**"]);
+        let options = Options { shard: Some("2/16".to_string()), iterate: true };
+        let sliced = ["--package", "occam-xtask", "--test-workspace", "false", "--shard", "2/16", "--iterate"];
+        assert_eq!(arguments(xtask, &options), sliced);
+        let again = Options { iterate: true, ..Options::default() };
+        assert_eq!(arguments(workspace, &again), ["--exclude", "crates/occam-xtask/**", "--iterate"]);
+    }
+
+    fn header(path: &str) -> String {
+        format!("diff --git a/{path} b/{path}\nindex 1..2 100644\n--- a/{path}\n+++ b/{path}\n")
+    }
+
+    #[test]
     fn comment_only_hunks_leave_the_diff() {
-        let header =
-            |path: &str| format!("diff --git a/{path} b/{path}\nindex 1..2 100644\n--- a/{path}\n+++ b/{path}\n");
         let comments = "@@ -3,0 +4,2 @@ fn f() {\n+    // Why.\n+    // More.\n";
         let blank = "@@ -9,1 +11,1 @@ fn g() {\n-    // old\n+\n";
         let code = "@@ -20,1 +22,2 @@ fn h() {\n-    a < b\n+    // Why.\n+    a <= b\n";
