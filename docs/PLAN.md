@@ -17,9 +17,14 @@ checkout `../phasekit`.
   when the one before it closes.
 - **Footers.** `main` changes only by squash merge, which takes its message from the PR body, so footers go in the PR
   body: one `Plan-Step: <id>` line per step. `gates plan` fails a step PR that lacks them.
-- **Working a step:** write the failing test first, show it red, implement, get every gate green, open the PR. The PR
-  body holds what was measured, and the finished step's text is deleted from the plan (L42).
-- **PR grouping:** each milestone file says which steps share a PR (L47).
+- **Working a step:** write the failing test first, show it red, implement. Before each commit a worker runs the tests
+  and clippy of the crate it changed, and `just preflight`. The full gates, perf and mutants run once on the branch
+  that brings the work together, and in CI, not once per worker
+  ([two tiers](decisions/2026-11-14-two-tiers-of-verification.md)). Then open the PR. The PR body holds what was
+  measured, and the finished step's text is deleted from the plan (L42).
+- **PR grouping:** a step merges in its own PR, or with the few steps it only makes sense beside, which its milestone
+  file names ([small PRs](decisions/2026-11-14-steps-merge-in-small-prs.md), L47). `construction`, built before that
+  decision, merges as one PR.
 - **Stop and ask the user** when a step fails its gate in a way the plan did not foresee, when a finding contradicts the
   plan, or when a decision in §7 comes up.
 - **Gate or goal:** every target is labelled (L46). A gate fails the PR. A goal is measured and reported.
@@ -96,7 +101,7 @@ same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 | `gates layers` | The crate graph matches §4 (L18) | `bedrock.gates` |
 | `gates complexity` | Function and file length, duplication, with a shrink-only exemption list (L20) | `bedrock.gates` |
 | `gates provenance` | Rust identifiers in `crates/` and `web/` against `ci/forbidden-identifiers.txt`, with `tools/oracle/` exempt. Every file in a kernel crate carries `//! Source: <key>` resolving in `docs/SOURCES.md`, or `//! Source: original`. Derived files are declared in `REUSE.toml` (L36) | `bedrock.gates` |
-| `gates mutants` | Mutation testing on the PR's diff, zero survivors. Runs the unmutated suite first; the timeout floor exceeds a full suite (L13, L14) | `bedrock.gates` |
+| `gates mutants` | Mutation testing on the PR's diff, zero survivors, by the whole workspace's tests ([kept, after measuring narrower scopes](decisions/2026-11-14-mutants-keep-the-whole-workspace.md)). Runs the unmutated suite first and gives a mutant's tests five times as long, at least 300 seconds (L13, L14) | `bedrock.gates` |
 | `gates counts` | No test binary has fewer tests than on the PR's base, or is gone, unless a commit's `Tests-Removed: <binary> <reason>` footer names it (L44, [measured, not stored](decisions/2026-11-14-test-counts-measured-not-stored.md)). CI gives the base, `--base origin/main`, and the gate builds it a second time; a run without one says it compared nothing | `bedrock.gates` |
 | `gates plan` | A step PR carries its `Plan-Step:` footers, and `just next` agrees (L40) | `bedrock.gates` |
 | `gates seam` | occam-geom's seam matches `ci/seam.txt`, every public signature of its modules; a change needs a newer decision, named in the record (L21) | `geometry.freeze` |
