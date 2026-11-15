@@ -218,4 +218,21 @@ mod tests {
         assert!((diagonal.x - want).norm() < 1e-15 && diagonal.x.dot(n).abs() < 1e-15, "{:?}", diagonal.x);
         assert!((diagonal.y - n.cross(want)).norm() < 1e-15);
     }
+
+    #[test]
+    fn unit_axes_more_than_64_machine_epsilons_from_square_are_refused_naming_the_worst() {
+        // The normal leans off the second axis twice as far as off the first, the other way round: that lean is named.
+        let leaning = |lean: f64| {
+            let normal = Vec3::new(lean / 2.0, -lean, 1.0);
+            let axes = [Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), normal];
+            let numbers: Vec<f64> = axes.iter().flat_map(|v| [v.x, v.y, v.z]).collect();
+            Axes::restore(&mut Numbers::new(&numbers))
+        };
+        for lean in [128.0 * f64::EPSILON, 1e-9] {
+            let square = NamedValue::new("square", Quantity::Ratio, lean);
+            let refused = Report::new(Code::DegenerateDirection, Fault::InvalidInput).with_value(square);
+            assert_eq!(leaning(lean), Err(refused), "{lean}");
+        }
+        assert!(leaning(32.0 * f64::EPSILON).is_ok(), "within 64 machine epsilons");
+    }
 }

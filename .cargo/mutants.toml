@@ -102,6 +102,11 @@ exclude_re = [
     # either sign, and the box is the same from either corner.
     "meridian\\.rs:206:34: replace \\+ with - in along_circle$",
     "cone\\.rs:\\d+:\\d+: replace < with <= in <impl Parametric for Cone>::invert$",
+    # Axes read back. By line. The larger of two leans from square as large as each other is either. And unit axes
+    # square to within 64 machine epsilons, as these must be before their handedness is asked, have a triple product
+    # within a few dozen machine epsilons of 1 or -1, never nought, so `> 0` and `>= 0` tell right from left alike.
+    "axes\\.rs:147:89: replace > with >= in Axes::restore$",
+    "axes\\.rs:148:62: replace > with >= in Axes::restore$",
     # By line. An arc holds `φ + π` where it holds `φ − π`, and a cone's mirrored line is at `u + π` as at `u − π`: a
     # whole turn apart, which `above` takes off.
     "turn\\.rs:80:30: replace \\+ with - in swing$",
