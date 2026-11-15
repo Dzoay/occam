@@ -51,6 +51,8 @@ pub struct Milestone {
     pub file: String,
     /// The milestone it opens together with.
     pub alongside: Option<String>,
+    /// The milestone whose closing opens it, whatever else is still open.
+    pub after: Option<String>,
 }
 
 fn milestone(row: &str) -> Option<Milestone> {
@@ -58,11 +60,15 @@ fn milestone(row: &str) -> Option<Milestone> {
     let (name, what, detail) = (cells.first()?, cells.get(1)?, cells.get(2)?);
     let (_, target) = detail.split_once("](")?;
     let (target, _) = target.split_once(')')?;
-    let alongside = what.split_once("Runs alongside `").and_then(|(_, rest)| rest.split_once('`'));
+    let named = |phrase: &str| {
+        let (_, rest) = what.split_once(phrase)?;
+        rest.split_once('`').map(|(name, _)| name.to_string())
+    };
     Some(Milestone {
         name: name.trim_matches('`').to_string(),
         file: format!("docs/{target}"),
-        alongside: alongside.map(|(name, _)| name.to_string()),
+        alongside: named("Runs alongside `"),
+        after: named("Opens when `"),
     })
 }
 
@@ -119,19 +125,29 @@ pub fn planned(plan: &str, read: impl Fn(&str) -> Option<String>) -> Vec<Planned
     milestones(plan).into_iter().map(load).collect()
 }
 
-/// The milestones open now and not yet closed. One opens when the one before it closes, or with the one it runs alongside.
+/// The milestones open now and not yet closed. One opens with the one it runs alongside, or when the one it names closes,
+/// or else when every one before it has closed.
 pub fn open<'a>(planned: &'a [Planned], done: &BTreeSet<String>) -> Vec<&'a Planned> {
     let mut opened = BTreeSet::new();
+    let mut finished = BTreeSet::new();
     let mut found = Vec::new();
     let mut blocked = false;
     for item in planned {
-        let is_open = item.milestone.alongside.as_ref().map_or(!blocked, |with| opened.contains(with));
+        let Milestone { name, alongside, after, .. } = &item.milestone;
+        let is_open = match (alongside, after) {
+            (Some(with), _) => opened.contains(with),
+            (None, Some(before)) => finished.contains(before),
+            (None, None) => !blocked,
+        };
         let closed = item.closed(done);
         if is_open {
-            opened.insert(item.milestone.name.clone());
+            opened.insert(name);
             if !closed {
                 found.push(item);
             }
+        }
+        if closed {
+            finished.insert(name);
         }
         blocked |= !closed;
     }
@@ -191,6 +207,28 @@ web/                           the renderer
 
 | `alpha.not-a-step` | no | [x](y.md) |
 ";
+
+    /// `construction`, `view` beside `intersection`, `booleans` after `intersection`, and one more in order.
+    const SIDE_BY_SIDE: &str = "\
+## 6. Milestones
+
+| Milestone | What | Detail |
+|---|---|---|
+| `alpha` | First | [plan/alpha.md](plan/alpha.md) |
+| `beta` | Second | [plan/beta.md](plan/beta.md) |
+| `gamma` | Third. Runs alongside `beta` | [plan/gamma.md](plan/gamma.md) |
+| `delta` | Fourth. Opens when `gamma` closes | [plan/delta.md](plan/delta.md) |
+| `epsilon` | Fifth | [plan/epsilon.md](plan/epsilon.md) |
+| `zeta` | Never. Opens when `omega` closes | [plan/zeta.md](plan/zeta.md) |
+";
+
+    fn side_by_side(ids: &[&str]) -> Vec<String> {
+        let one_step = |path: &str| {
+            let name = path.strip_prefix("docs/plan/")?.strip_suffix(".md")?;
+            Some(format!("### `{name}.one`\n"))
+        };
+        next(&planned(SIDE_BY_SIDE, one_step), &done(ids)).into_iter().map(|n| n.milestone).collect()
+    }
 
     fn read(path: &str) -> Option<String> {
         match path {
@@ -294,6 +332,40 @@ web/                           the renderer
         assert_eq!(names(&["alpha.one"]), ["beta"]);
         assert_eq!(names(&[]), ["alpha", "beta"]);
         assert_eq!(names(&["alphabet.one"]), ["alpha", "beta"]);
+    }
+
+    #[test]
+    fn a_milestone_names_the_one_whose_closing_opens_it() {
+        let found = milestones(SIDE_BY_SIDE);
+        let after: Vec<Option<&str>> = found.iter().map(|m| m.after.as_deref()).collect();
+        assert_eq!(after, [None, None, None, Some("gamma"), None, Some("omega")]);
+        assert_eq!(found[2].alongside.as_deref(), Some("beta"));
+        assert_eq!(found[3].alongside, None);
+    }
+
+    #[test]
+    fn two_milestones_side_by_side_open_when_the_one_before_them_closes() {
+        assert_eq!(side_by_side(&[]), ["alpha"]);
+        assert_eq!(side_by_side(&["alpha.one"]), ["beta", "gamma"]);
+    }
+
+    #[test]
+    fn a_milestone_opens_when_the_one_it_names_closes_whatever_else_is_open() {
+        assert_eq!(side_by_side(&["alpha.one", "gamma.one"]), ["beta", "delta"]);
+        assert_eq!(side_by_side(&["alpha.one", "gamma.one", "delta.one"]), ["beta"]);
+    }
+
+    #[test]
+    fn a_milestone_waits_for_the_one_it_names_and_no_other() {
+        assert_eq!(side_by_side(&["alpha.one", "beta.one"]), ["gamma"]);
+        assert_eq!(side_by_side(&["alpha.one", "beta.one", "gamma.one"]), ["delta"]);
+    }
+
+    #[test]
+    fn a_milestone_that_names_none_waits_for_every_one_before_it() {
+        let all = ["alpha.one", "beta.one", "gamma.one", "delta.one"];
+        assert_eq!(side_by_side(&all), ["epsilon"]);
+        assert_eq!(side_by_side(&[&all[..], &["epsilon.one"]].concat()), Vec::<String>::new());
     }
 
     #[test]

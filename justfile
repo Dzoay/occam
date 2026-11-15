@@ -17,12 +17,10 @@ oracle_venv := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-oracle" / 
 default:
     @just --list --unsorted
 
-# Install whichever gate tools are missing and set up the test counts' merge driver, safe to repeat
+# Install whichever gate tools are missing, safe to repeat
 [group('setup')]
 setup:
     scripts/toolchain.sh install
-    git config merge.occam-counts.name "ci/test-counts.txt, per test binary"
-    git config merge.occam-counts.driver "scripts/merge-counts.sh %O %A %B"
 
 # Check that the gate tools are installed, changing nothing
 [group('setup')]
@@ -98,7 +96,7 @@ wasm:
     CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo check --workspace --exclude occam-xtask --target wasm32-unknown-unknown
     cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
 
-# One gate, or `all`: `just gate docs`, `just gate all --except counts`, `just gate plan --json`
+# One gate, or `all`: `just gate docs`, `just gate counts --base origin/main`, `just gate all --except counts`
 [env("CARGO_TARGET_DIR", target)]
 [group('gates')]
 gate *args="all":
@@ -111,9 +109,13 @@ tools-test: corpus-test
     python3 -B -m unittest discover -s tools/determinism/tests -t tools/determinism
     python3 -B -m unittest discover -s tools/coefficients/tests -t tools/coefficients
 
-# Everything except mutants and perf
+# What takes seconds and builds only occam-xtask: formatting and the gates that read the repository, which a worker runs before committing
 [group('gates')]
-gates: fmt-check clippy test-all wasm tools-test (gate "all" "--except" "mutants,perf")
+preflight: fmt-check (gate "all" "--except" "deps,errors,determinism,counts,mutants,perf")
+
+# Everything except mutants and perf, the quick checks first: `preflight`, then clippy, the tests, wasm and the gates that build or run something
+[group('gates')]
+gates: preflight clippy test-all wasm tools-test (gate "all" "--except" "layers,complexity,provenance,docs,plan,seam,mutants,perf")
 
 # occam-geom's frozen seam against ci/seam.txt; `just seam --update docs/decisions/<decision>.md`: re-record it under it
 [env("CARGO_TARGET_DIR", target)]
@@ -127,7 +129,7 @@ seam *args:
 perf *args:
     cargo xtask gates perf "$@"
 
-# Mutation testing on the Rust changed since origin/main; `just mutants --shard 1/4`: one slice of it
+# Mutation testing on the Rust changed since origin/main. `--shard 1/4`: one slice of it; `--iterate`: skip the mutants a run here caught
 [env("CARGO_TARGET_DIR", target)]
 [env("TMPDIR", tmp)]
 [group('mutants')]
@@ -186,12 +188,6 @@ workflows:
 [group('tools')]
 load *args:
     cargo run --quiet --release -p occam-io --example load -- "$@"
-
-# Raise ci/test-counts.txt's minimums to this tree's
-[env("CARGO_TARGET_DIR", target)]
-[group('tools')]
-counts:
-    cargo xtask gates counts --update
 
 # The determinism stream's record, from its separate implementation; `--check` compares it with ci/determinism-hashes.txt
 [group('tools')]

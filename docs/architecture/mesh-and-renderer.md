@@ -32,6 +32,11 @@ flowchart LR
 **GPU results are display-only:** never in digests, caches, meshes, picking, measurement, export or the watertight
 check ([the GPU drawing decision](../decisions/2026-11-09-gpu-drawing.md)).
 
+**Picking** tests a ray against the CPU mesh and answers with the model's own id
+([decision](../decisions/2026-11-13-picking-in-the-first-release.md)). **During a continuous edit**, once the editing
+tools arrive after the first release, the GPU writes the touched faces' blocks at each vertex's `(u, v)` on its face,
+until the CPU mesh replaces them ([decision](../decisions/2026-11-14-write-through-after-the-first-release.md)).
+
 <details>
 <summary>Evidence</summary>
 

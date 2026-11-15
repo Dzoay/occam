@@ -3,14 +3,19 @@
 
 gitignore = true
 # A mutant must be caught by any workspace test. `gates mutants` tests occam-xtask's own mutants on its own tests alone.
+# Narrower scopes were measured and were no faster (docs/decisions/2026-11-14-mutants-keep-the-whole-workspace.md).
 test_workspace = true
 # Every test in one parallel pool, stopping at the first failure (.config/nextest.toml, profile `default`).
 test_tool = "nextest"
-# Optimised builds, so the tests a mutant runs take a fraction of the time; the same tests and assertions.
+# The test profile without debug info (Cargo.toml says why it is not optimised); the same tests and assertions.
 profile = "mutants"
-# cargo-mutants times its baseline on the mutated packages only, so the timeout it derives can be shorter than one full
-# workspace run, and a mutant no test catches would run out of time and count as caught (L13). This floor covers a full
-# run with room to spare. A mutant that really hangs costs this much.
+# `gates mutants` skips cargo-mutants' baseline, having run the unmutated suite itself, and passes `--timeout`: five
+# times what that suite took, cargo-mutants' own default multiple, and never less than 300 seconds. Without it
+# cargo-mutants 27.1.0 gives each mutant's tests 300 seconds whatever this floor says (tried with a floor of 77), and
+# a mutant no test catches runs the whole suite: 137 s at most, with 3 jobs on a laptop, so a slower machine could
+# run out of time and count it as caught (L13). This floor is for a run by hand with a baseline: cargo-mutants times
+# that on the mutated packages only, so the timeout it derives can be shorter than one full workspace run. A mutant
+# that really hangs costs the timeout.
 minimum_test_timeout = 300
 
 exclude_globs = [

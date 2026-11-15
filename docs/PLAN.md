@@ -13,13 +13,18 @@ checkout `../phasekit`.
 - **Step ids.** A step is a level-3 heading or a table row whose text begins with a backticked id of the form
   `<milestone>.<slug>`. Nothing else is a step.
 - **What is next comes from git.** `just next` prints, for each open milestone, its first step with no `Plan-Step:`
-  footer on `main`. Milestones run in §6's order. `bedrock` and `census` are open together; every other milestone opens
-  when the one before it closes.
+  footer on `main`. A milestone opens when every one before it in §6's table has closed, unless its row says it
+  runs alongside another or names the one whose closing opens it.
 - **Footers.** `main` changes only by squash merge, which takes its message from the PR body, so footers go in the PR
   body: one `Plan-Step: <id>` line per step. `gates plan` fails a step PR that lacks them.
-- **Working a step:** write the failing test first, show it red, implement, get every gate green, open the PR. The PR
-  body holds what was measured, and the finished step's text is deleted from the plan (L42).
-- **PR grouping:** each milestone file says which steps share a PR (L47).
+- **Working a step:** write the failing test first, show it red, implement. Before each commit a worker runs the tests
+  and clippy of the crate it changed, and `just preflight`. The full gates, perf and mutants run once on the branch
+  that brings the work together, and in CI, not once per worker
+  ([two tiers](decisions/2026-11-14-two-tiers-of-verification.md)). Then open the PR. The PR body holds what was
+  measured, and the finished step's text is deleted from the plan (L42).
+- **PR grouping:** a step merges in its own PR, or with the few steps it only makes sense beside, which its milestone
+  file names ([small PRs](decisions/2026-11-14-steps-merge-in-small-prs.md), L47). `construction`, built before that
+  decision, merges as one PR.
 - **Stop and ask the user** when a step fails its gate in a way the plan did not foresee, when a finding contradicts the
   plan, or when a decision in §7 comes up.
 - **Gate or goal:** every target is labelled (L46). A gate fails the PR. A goal is measured and reported.
@@ -82,8 +87,10 @@ web/                                                  the renderer; consumes dat
 ## 5. Gates
 
 The one definition. Every `gates` subcommand has `--json` (L8) and a test proving that a seeded violation fails it.
-`just gates` runs everything except mutants and perf, which are `just mutants` and `just perf`. CI runs all of them, with
-the same commands. Goal: a PR's CI finishes within 45 minutes (L47).
+`just gates` runs everything except mutants and perf, which are `just mutants` and `just perf`. It runs `just preflight`
+first: formatting and the gates that only read the repository (layers, complexity, provenance, docs, plan, seam), which
+take seconds, so that one of them failing does not wait for clippy, the tests and wasm. CI runs all of them, with the
+same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 
 | Gate | What it checks | Built by |
 |---|---|---|
@@ -94,8 +101,8 @@ the same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 | `gates layers` | The crate graph matches §4 (L18) | `bedrock.gates` |
 | `gates complexity` | Function and file length, duplication, with a shrink-only exemption list (L20) | `bedrock.gates` |
 | `gates provenance` | Rust identifiers in `crates/` and `web/` against `ci/forbidden-identifiers.txt`, with `tools/oracle/` exempt. Every file in a kernel crate carries `//! Source: <key>` resolving in `docs/SOURCES.md`, or `//! Source: original`. Derived files are declared in `REUSE.toml` (L36) | `bedrock.gates` |
-| `gates mutants` | Mutation testing on the PR's diff, zero survivors. Runs the unmutated suite first; the timeout floor exceeds a full suite (L13, L14) | `bedrock.gates` |
-| `gates counts` | Test-count ratchet, with a merge driver (L44) | `bedrock.gates` |
+| `gates mutants` | Mutation testing on the PR's diff, zero survivors, by the whole workspace's tests ([kept, after measuring narrower scopes](decisions/2026-11-14-mutants-keep-the-whole-workspace.md)). Runs the unmutated suite first and gives a mutant's tests five times as long, at least 300 seconds (L13, L14) | `bedrock.gates` |
+| `gates counts` | No test binary has fewer tests than on the PR's base, or is gone, unless a commit's `Tests-Removed: <binary> <reason>` footer names it (L44, [measured, not stored](decisions/2026-11-14-test-counts-measured-not-stored.md)). CI gives the base, `--base origin/main`, and the gate builds it a second time; a run without one says it compared nothing | `bedrock.gates` |
 | `gates plan` | A step PR carries its `Plan-Step:` footers, and `just next` agrees (L40) | `bedrock.gates` |
 | `gates seam` | occam-geom's seam matches `ci/seam.txt`, every public signature of its modules; a change needs a newer decision, named in the record (L21) | `geometry.freeze` |
 | `gates docs` | Links resolve, step and decision ids are unique, files in `docs/evidence/` are unchanged once merged (L41, L45) | `bedrock.gates` |
@@ -109,7 +116,8 @@ from `bedrock.ci`, and jobs join it as the corpus and operations arrive.
 
 ## 6. Milestones
 
-Named, not numbered. They run in this order.
+Named, not numbered. They run in this order, except where a row says otherwise:
+[`view` and `intersection` are open together](decisions/2026-11-15-view-and-intersection-together.md).
 
 | Milestone | What it delivers | Detail |
 |---|---|---|
@@ -120,32 +128,35 @@ Named, not numbered. They run in this order.
 | `geometry` | Every curve and surface family through the two-layer seam, the new unit types, and report schema 2 | [plan/geometry.md](plan/geometry.md) |
 | `topology` | The B-rep: records in copy-on-write chunks, stable ids, the edit whose commit runs the checker, and what changed | [plan/topology.md](plan/topology.md) |
 | `construction` | An agent builds and inspects a solid from JSON alone: requests, wires, faces, primitives, sweeps, copies, mass properties, the native format and the `occam` command | [plan/construction.md](plan/construction.md) |
-| first release | `view`, `intersection`, `booleans`, `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
+| `view` | A person prompts an agent and watches the model live: shared edges first, then faces, the watertight check on every output, the worker pool and the renderer contract; `occam view` redrawing on every run; faces and edges selected by the person and read by the agent | [plan/view.md](plan/view.md) |
+| `intersection` | Where two surfaces meet and where a curve crosses a surface: closed forms, then the hybrid; failures in the result; loops below resolution reported; coincidence detected. Runs alongside `view` | [plan/intersection.md](plan/intersection.md) |
+| `booleans` | Fuse, cut and common of an object and many tools in one pass, as pure phases over the sections; coincident faces answered; which input faces made which output faces; point classification; every failing pair reported, the model unchanged. Opens when `intersection` closes | [plan/booleans.md](plan/booleans.md) |
+| first release | `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 
 **After the first release**, in no fixed order and each needing the user's go-ahead: the 2D sketch solver; the document
 layer (feature tree, persistent naming, incremental recompute);
 [assemblies](decisions/2026-11-11-assemblies-after-release.md);
 [view-dependent detail](decisions/2026-11-11-view-dependent-detail-after-release.md); shell, offset and draft; sweep
-and loft; hidden-line drawings; the full web application; server-side rendering; a C ABI and a side-by-side shim at
+and loft; hidden-line drawings; the full web application; [the editing tools, GPU write-through
+included](decisions/2026-11-14-write-through-after-the-first-release.md); [an in-memory session server, the in-page chat
+and a web service with the prompt in the browser](decisions/2026-11-14-prompt-driven-building-shown-live.md);
+server-side rendering; a C ABI and a side-by-side shim at
 FreeCAD's `Part` layer (L39); an MCP server.
 
 ## 7. Decisions the user still owns
 
-O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md). O21, whether anything needs an exact derivative above the second, is answered by [the approved parity list](PARITY.md): rows 2.1 and 2.2 ask for evaluation to any derivative in `geometry`. O11, O12, O14, O16, O18 and O22 to O26 are [answered with the architecture](decisions/2026-11-11-the-architecture-and-its-answers.md), and [its decisions page](architecture/open-decisions.md) keeps the reasoning. O15 is [answered](decisions/2026-11-11-own-coefficients.md): occam fits its own coefficients.
+O1 to O4 are [answered](decisions/2026-11-08-the-plan-and-its-first-answers.md). O21, whether anything needs an exact derivative above the second, is answered by [the approved parity list](PARITY.md): rows 2.1 and 2.2 ask for evaluation to any derivative in `geometry`. O11, O12, O14, O16, O18 and O22 to O26 are [answered with the architecture](decisions/2026-11-11-the-architecture-and-its-answers.md), and [its decisions page](architecture/open-decisions.md) keeps the reasoning. O15 is [answered](decisions/2026-11-11-own-coefficients.md): occam fits its own coefficients. O8, O19, O20 and O28 to O30 are answered for `view`. As recommended: [WebGPU on current Chromium and Firefox](decisions/2026-11-13-webgpu-on-chromium-and-firefox.md), [continuous edits that re-run their request](decisions/2026-11-13-continuous-edits-rerun-the-request.md), and [the figures on real GPUs as goals](decisions/2026-11-13-gpu-figures-are-goals.md). Against the recommendations: [picking](decisions/2026-11-13-picking-in-the-first-release.md) in the first release, and [Preact with signals](decisions/2026-11-13-preact-with-signals.md) for the page now, which the full web application grows from. [GPU write-through](decisions/2026-11-13-write-through-in-the-first-release.md) was put in the first release against the recommendation, then [moved after it](decisions/2026-11-14-write-through-after-the-first-release.md), and continuous edits go with it. O31 is answered for `intersection`, against the recommendation: quadric pairs with no closed form are intersected [exactly, by Levin's pencil method](decisions/2026-11-13-quadric-pairs-exact-by-levins-method.md), in the first release. O32 is answered for `booleans`, against the recommendation: one boolean takes an object and [a list of tools](decisions/2026-11-14-a-boolean-takes-many-tools.md), in the first release.
 
 | Id | Decision | Recommendation | Needed by |
 |---|---|---|---|
 | O5 | Cargo dependencies, asked one at a time when their step arrives. Answered: [`gungraun`](decisions/2026-11-09-gungraun.md) (test only, `bedrock.perf`), [`wasm-bindgen`](decisions/2026-11-09-wasm-bindgen.md) (`bedrock.thread`), [`fearless_simd`](decisions/2026-11-10-fearless-simd.md), [`rayon`](decisions/2026-11-10-rayon.md), [`postcard`](decisions/2026-11-12-binary-twin.md) (`construction`, the native format's binary twin) and [`clap`](decisions/2026-11-13-clap.md) (`construction.commands`, the command line). Still expected: a property-test crate (test only) | Decide each on the evidence | when reached |
 | O6 | A lawyer's view of the provenance policy and oracle outputs | Worth having before the first public release | first release |
 | O7 | Reserve `occam` on crates.io and an npm scope | Reserve once there is something real to publish | first release |
-| O8 | The framework for the viewer's page | No framework for the viewer; decide again for the full web application | `view` |
 | O9 | A machine with more physical cores for the parallel investigations. This laptop has 4 | Start here, and decide after `proving-ground.p1` shows how far scaling matters | `proving-ground.p2` |
 | O10 | A nightly toolchain for wasm threads, which need `-Zbuild-std`. [Spikes may use one already](decisions/2026-11-09-early-spikes.md) | P10 recommends keeping this open and not taking on nightly for real use. Nothing in the first release needs it. Reopen it if a real kernel has a model large enough that a copy per worker hurts, or tasks fine-grained enough that message passing dominates, or when `-Zbuild-std` stabilises | when one of those happens |
 | O13 | A stored per-entity accuracy for imported geometry, fixed at import and never grown (S2). Foreign geometry was not measured | Decide when import is in scope | when import is in scope |
 | O17 | x86-64-v3 code paths (S3/P3), and whether [`DETERMINISM.md`](DETERMINISM.md) rule 5, "No `target-cpu`", stays as written (P4). The NURBS gain exists only there. Having it means hand-written detection, a new dependency, or a build that excludes older CPUs | Leave this until a real kernel profile shows NURBS evaluation is worth it. Rule 5 needs no change if `dispatch!` is taken under O5 | when a kernel profile asks for it |
-| O19 | Which browsers the first release must support (P10, P12). Safari was not measured, and P12 measured only Firefox on two GPUs. [This also picks the renderer's API](decisions/2026-11-09-gpu-drawing.md) | Measure Safari before any release that claims to support it | `view` |
-| O20 | Whether the first release must serve continuous whole-surface editing of very large faces (P12) | No: draw the CPU mesh with local updates, and add write-through if a real workload asks for it | `view` |
 | O27 | Whether P1's comparison with OCCT should reach `main`. It holds family medians of the time ratio and counts of the cases where the prototype was faster, with no per-case OCCT number. [Kept out for now](decisions/2026-11-09-p1-occt-comparison.md) | Decide with O6's answer, because the figures are derived from oracle outputs | when O6 is answered |
 
 O11 onward come from the spike findings named in each row, which give the detail.

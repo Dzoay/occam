@@ -3,7 +3,7 @@
 //! Every gate fails closed: no input to check is a failure, never a pass.
 
 mod complexity;
-pub mod counts;
+mod counts;
 mod deps;
 mod determinism;
 pub mod docs;
@@ -122,9 +122,9 @@ mod tests {
         assert_eq!(names(&["all"]), Some(every.clone()));
         let but_mutants: Vec<&str> = every.iter().copied().filter(|name| *name != "mutants").collect();
         assert_eq!(names(&["all", "--except", "mutants"]), Some(but_mutants));
-        assert_eq!(names(&["counts", "--update"]), Some(vec!["counts"]));
-        let args = owned(&["counts", "--update"]);
-        assert_eq!(select(&args).map(|gates| gates.first().map(|(.., rest)| rest.len())), Some(Some(1)));
+        assert_eq!(names(&["counts", "--base", "origin/main"]), Some(vec!["counts"]));
+        let args = owned(&["counts", "--base", "origin/main"]);
+        assert_eq!(select(&args).map(|gates| gates.first().map(|(.., rest)| rest.len())), Some(Some(2)));
     }
 
     #[test]

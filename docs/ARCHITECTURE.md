@@ -46,6 +46,7 @@ flowchart LR
 | **Outputs** | [Reports](architecture/reports.md) | What an agent reads |
 | | [Mesh and renderer](architecture/mesh-and-renderer.md) | Edges, then faces, then a watertight check |
 | | [Browser](architecture/browser.md) | One editing worker, several mesh workers |
+| | [Live view](architecture/live-view.md) | The page an agent's runs redraw, and the person's selection |
 | | [Files](architecture/files.md) | JSON native format, STEP export |
 | | [Command line](architecture/command-line.md) | What the agent can call |
 | **Doubts** | [Risks](architecture/risks.md) | What would prove it wrong |

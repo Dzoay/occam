@@ -9,7 +9,7 @@
 # OCCAM_MUTANTS_JOBS, if set here, is passed on as the number of mutants to test at once.
 #
 # Usage: scripts/remote-mutants.sh setup <host>
-#        scripts/remote-mutants.sh run <host> [--shard k/n]
+#        scripts/remote-mutants.sh run <host> [--shard k/n] [--iterate]
 set -euo pipefail
 
 mirror=.cache/occam-remote/occam

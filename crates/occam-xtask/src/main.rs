@@ -44,29 +44,13 @@ fn next(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// `cargo xtask merge-counts <base> <ours> <theirs>`: git's merge driver for the test counts. It writes the merge to
-/// `<ours>` and exits 0, or leaves `<ours>` alone and exits 1 where the merge does not decide.
-fn merge_counts(args: &[String]) -> ExitCode {
-    let [base, ours, theirs] = args else {
-        eprintln!("usage: cargo xtask merge-counts <base> <ours> <theirs>");
-        return ExitCode::FAILURE;
-    };
-    let read = |path: &String| Repo::read_outside(path).ok();
-    let merged = (|| gates::counts::merge(&read(base)?, &read(ours)?, &read(theirs)?))();
-    match merged.map(|text| std::fs::write(ours, text)) {
-        Some(Ok(())) => ExitCode::SUCCESS,
-        _ => ExitCode::FAILURE,
-    }
-}
-
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
     match args.split_first() {
         Some((task, rest)) if task == "gates" => gates::main(rest),
         Some((task, rest)) if task == "next" => next(rest),
-        Some((task, rest)) if task == "merge-counts" => merge_counts(rest),
         _ => {
-            eprintln!("usage: cargo xtask <gates|next|merge-counts> ...");
+            eprintln!("usage: cargo xtask <gates|next> ...");
             ExitCode::FAILURE
         }
     }

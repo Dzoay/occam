@@ -9,7 +9,9 @@ its own `sin_cos` and `atan2`. The design is [the maths topic](../architecture/m
 targets, thread counts and dispatch levels, the owned functions included, against hashes from a separate
 implementation; and the vectorisation check in `gates perf` holds every lane kernel.
 
-**PR grouping:** every step shares one PR, with a commit each, so that CI runs once (the user's request, 2026-11-11).
+**PR grouping:** every step shares one PR, with a commit each, so that CI runs once (the user's request, 2026-11-11,
+[reversed on 2026-11-14](../decisions/2026-11-14-steps-merge-in-small-prs.md) for the milestones after
+[`construction`](construction.md)).
 
 **Throughout.** `f64::sin`, `f64::atan2` and the rest stay banned. The new dependencies are the two already approved,
 [`fearless_simd`](../decisions/2026-11-10-fearless-simd.md) and [`rayon`](../decisions/2026-11-10-rayon.md), each named

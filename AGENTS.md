@@ -28,6 +28,21 @@ the repository.
 
 `just` lists the recipes by group, and every command worth repeating gets one. CI runs the same commands the recipes do.
 
+## How work is checked
+
+The rules are [PLAN §1](docs/PLAN.md#1-how-to-use-this-plan) and
+[two tiers of verification](docs/decisions/2026-11-14-two-tiers-of-verification.md). In short:
+
+- **Before committing or queuing anything:** `just preflight`. It takes seconds.
+- **A worker** checks the crate it changed, its tests and clippy, and shows its test red first.
+- **The integrated branch,** once, and CI: `just gates`, `just perf` and `just mutants`. Not once per worker. Perf is
+  measured once on the base and shared.
+- **Mutants** cover the diff against `origin/main`, judged by
+  [the whole workspace's tests](docs/decisions/2026-11-14-mutants-keep-the-whole-workspace.md). After killing
+  survivors, `just mutants --iterate` reruns only them.
+- **Steps merge in [small PRs](docs/decisions/2026-11-14-steps-merge-in-small-prs.md),** and work that does not depend
+  on other work [runs beside it](docs/decisions/2026-11-15-view-and-intersection-together.md), not after it.
+
 ## Hard rules
 
 - **No personal data leaves this machine.** Never send the user's email address or any other personal identifier to an

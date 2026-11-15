@@ -2,8 +2,8 @@
 
 [Architecture](../ARCHITECTURE.md) › [Operations](operations.md) › The boolean · sketch [`ops.rs`](../sketch/src/ops.rs)
 
-Fuse, cut and common, as seven pure phases. Each phase maps frozen input to frozen output. Only the last one touches the
-model.
+Fuse, cut and common of an object and one or more tools, as seven pure phases. Each phase maps frozen input to frozen
+output. Only the last one touches the model.
 
 ```mermaid
 flowchart LR
@@ -15,7 +15,7 @@ flowchart LR
 
 | Phase | What it does |
 |---|---|
-| 1 Prepare | Only faces whose bounds meet the other operand. The rest keep their ids |
+| 1 Prepare | Only faces whose bounds meet another operand: the object or one of the tools. The rest keep their ids |
 | 2 Broad | Candidate face pairs from a sort and sweep over conservative boxes, in stable order |
 | 3 Pairs | One [section](intersection.md) per distinct surface pair; an edge against a face only after its box test |
 | 4 Edge split | Stops per edge, then pinch vertices merged, then the clips, with the vertex table frozen between rounds |

@@ -18,7 +18,6 @@ path = [
     ".github/workflows/ci.yml",
     ".github/workflows/pr.yml",
     "scripts/target-dir.sh",
-    "scripts/merge-counts.sh",
     "crates/occam-xtask/src/gates/complexity.rs",
     "crates/occam-xtask/src/gates/mutants.rs",
 ]

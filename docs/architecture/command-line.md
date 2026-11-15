@@ -14,6 +14,9 @@ and gives one result per id. `occam --help`, and `--help` after any command, say
 | `occam describe --model part.occam edge:41/1 face:5/1` | Describes entities, with the [one resolver](reports.md#how-an-agent-learns-what-an-entity-is) |
 | `occam check --model part.occam` | Checks the whole model |
 | `occam mesh` | Meshes the model (`view`) |
+| `occam pick` | The face or edge a ray hits first (`view`) |
+| `occam view`, `occam selection`, `occam highlight` | The [live view](live-view.md): the page, what the person selected, what the agent shows (`view`) |
+| `occam skill --install` | Copies the occam skill into this project's `.claude/skills/`, for the [live view](live-view.md) (`view`) |
 | `occam export --step` | Writes STEP (`exchange`) |
 
 ```mermaid
