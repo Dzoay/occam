@@ -33,7 +33,6 @@ text_enum! {
     /// NEW codes of the milestones to come, joining the closed `Code` with wording and followed-remedy tests (L2).
     NewCode {
         InvalidParameter = "input.invalid-parameter",
-        Undecided = "decide.undecided",
         BelowResolution = "intersect.below-resolution",
         CoincidentSurfaces = "boolean.coincident-surfaces",
         DanglingSection = "boolean.dangling-section",
