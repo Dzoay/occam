@@ -102,6 +102,14 @@ text_enum! {
         /// A face's boundary, drawn through its edges' samples in its parameters, crosses or touches itself, so no
         /// triangles can be laid between its loops.
         BoundaryCrosses = "boundary-crosses",
+        /// A face was not meshed, so the mesh has a hole where it is, open along the edges it shares with faces that
+        /// were.
+        FaceMissing = "face-missing",
+        /// Segments of the mesh, matched by position, are not each used once in each direction: the faces either side
+        /// of the edge named do not meet along it, or the triangles of the face named leave a gap inside it.
+        SegmentsUnmatched = "segments-unmatched",
+        /// A shell's mesh, counted by position, has an Euler characteristic other than its faces' `V - E + 2F - L`.
+        CharacteristicDiffers = "characteristic-differs",
     }
 }
 

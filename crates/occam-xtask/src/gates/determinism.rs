@@ -60,8 +60,21 @@ const TOPOLOGY: Probe = Probe {
     levels: false,
 };
 
+/// The mesher's hashes, edges, faces, merge and watertight check, recorded from the x86-64 build on one thread. The
+/// mesher passes no instruction level to anything and has no lane kernel yet, so it is run once, as scalar, and not at
+/// the narrower levels.
+const MESH: Probe = Probe {
+    name: "mesh",
+    package: "occam-mesh",
+    features: Some("determinism"),
+    source: "crates/occam-mesh/src/probe.rs",
+    record: "ci/determinism-mesh.txt",
+    executors: &["scalar"],
+    levels: false,
+};
+
 /// Every probe, in the order the summary gives them.
-const PROBES: [&Probe; 2] = [&MATHS, &TOPOLOGY];
+const PROBES: [&Probe; 3] = [&MATHS, &TOPOLOGY, &MESH];
 
 /// One way a probe is built and run.
 #[derive(Clone)]
@@ -654,9 +667,33 @@ mod tests {
 
     #[test]
     fn every_probe_has_its_own_package_record_and_source() {
-        assert_eq!(PROBES.map(|probe| probe.name), ["maths", "topology"]);
-        assert_eq!(PROBES.map(|probe| probe.record), ["ci/determinism-hashes.txt", "ci/determinism-topology.txt"]);
-        assert_eq!(PROBES.map(|probe| (probe.levels, probe.executors.len())), [(true, 4), (false, 1)]);
+        assert_eq!(PROBES.map(|probe| probe.name), ["maths", "topology", "mesh"]);
+        assert_eq!(
+            PROBES.map(|probe| probe.record),
+            ["ci/determinism-hashes.txt", "ci/determinism-topology.txt", "ci/determinism-mesh.txt"]
+        );
+        assert_eq!(PROBES.map(|probe| (probe.levels, probe.executors.len())), [(true, 4), (false, 1), (false, 1)]);
+        assert_eq!(PROBES.map(|probe| probe.package), ["occam-math", "occam-topo", "occam-mesh"]);
         assert_eq!(MATHS.features, None);
+    }
+
+    #[test]
+    fn the_mesh_runs_as_the_topology_does_under_its_own_feature_and_files() {
+        let all = builds(4, &levels(&["avx2", "sse2"]));
+        let names = |probe: &Probe| builds_of(probe, &all).iter().map(|build| build.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&MESH), names(&TOPOLOGY));
+        let [_, many, ..] = builds_of(&MESH, &all)[..] else { panic!() };
+        assert_eq!(
+            cargo_args(many, &MESH, "SIMD-DIR", "4").join(" "),
+            "run --quiet --release -p occam-mesh --example determinism --features determinism -- --threads 4"
+        );
+        let mut runs: Vec<(Build, String)> = builds_of(&MESH, &all)
+            .into_iter()
+            .map(|build| (build.clone(), topology_output(build, "00000000000000aa")))
+            .collect();
+        runs[3].1 = runs[3].1.replace("add scalar 00000000000000aa", "add scalar 00000000000000bb");
+        let found = check(&MESH, &runs, GOOD).unwrap_err();
+        assert_eq!((found[0].code, found[0].file.as_str()), ("determinism.mismatch", MESH.source));
+        assert!(found[0].message.ends_with("00000000000000bb from wasm32, simd128 scalar"), "{found:?}");
     }
 }

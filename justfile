@@ -68,12 +68,13 @@ sketch:
 fmt-check:
     cargo fmt --all --check
 
-# Clippy on every crate and target, warnings denied, and on occam-topo's determinism probe, which only a feature builds
+# Clippy on every crate and target, warnings denied, and on occam-topo's and occam-mesh's determinism probes, which only a feature builds
 [env("CARGO_TARGET_DIR", target)]
 [group('gates')]
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings
     cargo clippy -p occam-topo --all-targets --features determinism -- -D warnings
+    cargo clippy -p occam-mesh --all-targets --features determinism -- -D warnings
 
 # Every test on the host, then the doctests of any library
 [env("CARGO_TARGET_DIR", target)]
@@ -200,6 +201,13 @@ determinism-record *args:
 determinism-topology:
     cargo run --quiet --release -p occam-topo --features determinism --example determinism -- --record > ci/determinism-topology.txt.new
     mv ci/determinism-topology.txt.new ci/determinism-topology.txt
+
+# The mesher's determinism record, as the x86-64 build prints it on one thread: it has no separate implementation
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+determinism-mesh:
+    cargo run --quiet --release -p occam-mesh --features determinism --example determinism -- --record > ci/determinism-mesh.txt.new
+    mv ci/determinism-mesh.txt.new ci/determinism-mesh.txt
 
 # Regenerate the owned trigonometry's fitted coefficients and constants; `--check` says whether the committed file is current
 [group('tools')]

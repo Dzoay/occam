@@ -14,6 +14,11 @@
 //! conical points and a cap of [`Limits::TRIANGLES_PER_FACE`]. A face that will not mesh is refused by name, with its
 //! reason, and its neighbours are meshed as if it were not there.
 //!
+//! [`mesh`] does all of it: [`merge`] merges the faces by index into one [`Mesh`], each face's vertices a [`Block`] of
+//! its own, welding nothing, and [`watertight`] checks every output, in release builds too, matching vertices by
+//! position: every segment used once each way, a face that did not mesh named as a hole, and each shell's mesh with its
+//! faces' Euler characteristic. [`Mesh::digest`] is what `gates determinism` holds to its record.
+//!
 //! The work runs in parallel only through [`occam_math::Exec`], one face or one edge a task, and every result comes back
 //! in id order, so the samples and the meshes are the same bits at any thread count.
 
@@ -23,13 +28,24 @@ mod deviation;
 mod edges;
 mod faces;
 mod limits;
+mod merge;
 mod predicates;
+#[cfg(any(test, feature = "determinism"))]
+#[doc(hidden)]
+pub mod probe;
 mod refine;
 #[cfg(test)]
 mod testing;
+/// The tests' models, built outside the tests only for the determinism probe, which nothing that ships turns on.
+#[cfg(all(feature = "determinism", not(test)))]
+#[allow(dead_code, clippy::indexing_slicing, clippy::unwrap_used, reason = "the tests' models, as they are written")]
+mod testing;
 mod triangulation;
+mod watertight;
 
 pub use deviation::deviation;
 pub use edges::{EdgeSamples, Edges, sample_edges};
 pub use faces::{FaceMesh, Faces, Side, mesh_face, mesh_faces};
 pub use limits::Limits;
+pub use merge::{Block, Mesh, merge, mesh};
+pub use watertight::watertight;
