@@ -13,8 +13,8 @@ checkout `../phasekit`.
 - **Step ids.** A step is a level-3 heading or a table row whose text begins with a backticked id of the form
   `<milestone>.<slug>`. Nothing else is a step.
 - **What is next comes from git.** `just next` prints, for each open milestone, its first step with no `Plan-Step:`
-  footer on `main`. Milestones run in §6's order. `bedrock` and `census` are open together; every other milestone opens
-  when the one before it closes.
+  footer on `main`. A milestone opens when every one before it in §6's table has closed, unless its row says it
+  runs alongside another or names the one whose closing opens it.
 - **Footers.** `main` changes only by squash merge, which takes its message from the PR body, so footers go in the PR
   body: one `Plan-Step: <id>` line per step. `gates plan` fails a step PR that lacks them.
 - **Working a step:** write the failing test first, show it red, implement. Before each commit a worker runs the tests
@@ -116,7 +116,8 @@ from `bedrock.ci`, and jobs join it as the corpus and operations arrive.
 
 ## 6. Milestones
 
-Named, not numbered. They run in this order.
+Named, not numbered. They run in this order, except where a row says otherwise:
+[`view` and `intersection` are open together](decisions/2026-11-15-view-and-intersection-together.md).
 
 | Milestone | What it delivers | Detail |
 |---|---|---|
@@ -128,8 +129,8 @@ Named, not numbered. They run in this order.
 | `topology` | The B-rep: records in copy-on-write chunks, stable ids, the edit whose commit runs the checker, and what changed | [plan/topology.md](plan/topology.md) |
 | `construction` | An agent builds and inspects a solid from JSON alone: requests, wires, faces, primitives, sweeps, copies, mass properties, the native format and the `occam` command | [plan/construction.md](plan/construction.md) |
 | `view` | A person prompts an agent and watches the model live: shared edges first, then faces, the watertight check on every output, the worker pool and the renderer contract; `occam view` redrawing on every run; faces and edges selected by the person and read by the agent | [plan/view.md](plan/view.md) |
-| `intersection` | Where two surfaces meet and where a curve crosses a surface: closed forms, then the hybrid; failures in the result; loops below resolution reported; coincidence detected | [plan/intersection.md](plan/intersection.md) |
-| `booleans` | Fuse, cut and common of an object and many tools in one pass, as pure phases over the sections; coincident faces answered; which input faces made which output faces; point classification; every failing pair reported, the model unchanged | [plan/booleans.md](plan/booleans.md) |
+| `intersection` | Where two surfaces meet and where a curve crosses a surface: closed forms, then the hybrid; failures in the result; loops below resolution reported; coincidence detected. Runs alongside `view` | [plan/intersection.md](plan/intersection.md) |
+| `booleans` | Fuse, cut and common of an object and many tools in one pass, as pure phases over the sections; coincident faces answered; which input faces made which output faces; point classification; every failing pair reported, the model unchanged. Opens when `intersection` closes | [plan/booleans.md](plan/booleans.md) |
 | first release | `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 

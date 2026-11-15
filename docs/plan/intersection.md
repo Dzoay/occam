@@ -1,9 +1,10 @@
 # Milestone: intersection
 
-The sixth milestone of [the first release](first-release.md). A new crate, `occam-intersect`, finds where two surfaces
-meet and where a curve crosses a surface, for `booleans` to use. It tries closed forms first, then Levin's pencil method
-for the other quadric pairs, then the hybrid, and it keeps every failure beside what was found. A loop too small to
-resolve is reported as one, and coincident surfaces are detected. The design is
+The sixth milestone of [the first release](first-release.md), [open together with
+`view`](../decisions/2026-11-15-view-and-intersection-together.md). A new crate, `occam-intersect`, finds where two
+surfaces meet and where a curve crosses a surface, for `booleans` to use. It tries closed forms first, then Levin's
+pencil method for the other quadric pairs, then the hybrid, and it keeps every failure beside what was found. A loop too
+small to resolve is reported as one, and coincident surfaces are detected. The design is
 [intersection](../architecture/intersection.md), [the boolean](../architecture/boolean.md) phase it serves, and [robust
 decisions](../architecture/maths.md#robust-decisions). No parity row: PARITY places intersection as a query (row 3.4)
 and sections (row 3.2) later.
