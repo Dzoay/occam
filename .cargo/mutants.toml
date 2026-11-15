@@ -312,4 +312,57 @@ exclude_re = [
     # numbers, from the one pair of helpers every bound, box and clamp of occam-mesh is decided by.
     "occam-mesh/src/limits\\.rs:\\d+:\\d+: replace < with <= in lower$",
     "occam-mesh/src/limits\\.rs:\\d+:\\d+: replace > with >= in higher$",
+    # occam-intersect's trace. By line. Ties that give the same number either way: the largest entry of a matrix, the
+    # sag allowed against the band, the shortest step against the longest, a step's growth held to twice, a step held
+    # to the longest or the shortest, a search's first move against the band, and the lesser of a step taken again for
+    # its sag and for its turn, held to the shortest. A sag of nothing gives a growth
+    # beyond twice, which is held to twice, the number the other branch gives.
+    "occam-intersect/src/correct\\.rs:27:72: replace > with >= in solve$",
+    "occam-intersect/src/march\\.rs:50:25: replace > with >= in Limits::of$",
+    "occam-intersect/src/march\\.rs:52:35: replace < with <= in Limits::of$",
+    "occam-intersect/src/march\\.rs:159:29: replace > with >= in Run<'p, 's>::scaled$",
+    "occam-intersect/src/march\\.rs:160:31: replace < with <= in Run<'p, 's>::scaled$",
+    "occam-intersect/src/march\\.rs:161:22: replace > with >= in Run<'p, 's>::scaled$",
+    "occam-intersect/src/march\\.rs:162:14: replace < with <= in Run<'p, 's>::scaled$",
+    "occam-intersect/src/project\\.rs:72:61: replace > with >= in search$",
+    "occam-intersect/src/march\\.rs:359:34: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/march\\.rs:360:20: replace < with <= in Run<'p, 's>::again$",
+    # The trace. By line. A computed sag or turn exactly at its limit, and a loop's start exactly a step and a half
+    # ahead: no test can place a computed value on the boundary, and either side of it is as good. A step at the limit
+    # is within it, and a closure put off at the boundary is tried at the next station, nearer.
+    "occam-intersect/src/march\\.rs:227:17: replace > with >= in Run<'p, 's>::next$",
+    "occam-intersect/src/march\\.rs:227:49: replace > with >= in Run<'p, 's>::next$",
+    "occam-intersect/src/march\\.rs:188:49: replace > with >= in Run<'p, 's>::closes$",
+    # The trace's closure, by line: a march tries to close only with three stations. A loop has at least 2 pi / 0.3, 21,
+    # as no step turns by more than 0.3, before its start can be ahead within a step and a half; with one station the
+    # start is under the march, with two behind it. So the guard decides nothing at fewer than three or at three.
+    "occam-intersect/src/march\\.rs:188:32: replace < with (==|<=) in Run<'p, 's>::closes$",
+    # The trace's normal where a surface's derivatives lose a direction, by line. The declared line it lies on is asked
+    # for only there, which is only on such a line, at its own parameter, put there exactly by the march: the parameter
+    # is the line's to the bit, and any tolerance at or above nought finds the same line.
+    "occam-intersect/src/correct\\.rs:158:40: replace \\* with (\\+|/) in Pair<'s>::normal_of$",
+    "occam-intersect/src/correct\\.rs:158:47: replace \\+ with \\* in Pair<'s>::normal_of$",
+    # The trace's foot, by line. Its damping, 1e-12 of the rates' size, keeps the normal equations solvable where a rate
+    # vanishes, as at a pole, where the right-hand side's entry vanishes with it, so that parameter's step is nought
+    # whatever the damping's sign; elsewhere it moves a step by 1e-12 of itself, which the next step takes back.
+    "occam-intersect/src/correct\\.rs:307:43: replace \\+ with - in foot$",
+    "occam-intersect/src/correct\\.rs:308:(35|83): replace \\+ with - in foot$",
+    # Its stop, by line, which only spares Gauss-Newton steps once one moves the point by less than rounding: stopping
+    # at another such step, or after all sixteen, gives the same foot to rounding. For the analytic families the two
+    # rates are square to each other, so the step's two parts make the same length added or taken away.
+    "occam-intersect/src/correct\\.rs:311:21: replace \\+ with - in foot$",
+    "occam-intersect/src/correct\\.rs:311:48: replace \\* with / in foot$",
+    "occam-intersect/src/correct\\.rs:311:55: replace \\+ with (-|\\*) in foot$",
+    # The trace's edges, by line. A range is finite at both its ends or at neither (no family has one with one end
+    # finite: domain.rs), so one end's being infinite is both's. A range's ends are never equal, so which is above the
+    # other is never a tie. A range that comes round or has no end gives no breach in `against`, so taking it for one
+    # that stops in `edges` only costs an evaluation.
+    "occam-intersect/src/edge\\.rs:82:62: replace \\|\\| with && in against$",
+    "occam-intersect/src/edge\\.rs:125:70: replace > with >= in beside$",
+    "occam-intersect/src/edge\\.rs:99:66: replace && with \\|\\| in edges$",
+    # A cone's implicit form, by line: the side of its apex is 1 or -1, so dividing by it is multiplying by it.
+    "occam-intersect/src/implicit\\.rs:75:36: replace \\* with / in Implicit::at$",
+    # The trace's projections, by line. A move of no length, or none that is finite, gives a point that is not a number;
+    # its foot stays at the seed, whose gap is the base's, so the search gives the base, as returning it at once does.
+    "occam-intersect/src/project\\.rs:69:28: replace \\|\\| with && in search$",
 ]
