@@ -17,7 +17,8 @@ use std::process::ExitCode;
 
 use repo::Repo;
 
-/// `cargo xtask next [--json]`: for each open milestone, its first step with no `Plan-Step:` footer on `origin/main`.
+/// `cargo xtask next [--json]`: for each open milestone, every step that can start, by the `Plan-Step:` footers on
+/// `origin/main`.
 fn next(args: &[String]) -> ExitCode {
     let repo = Repo::locate();
     let gathered = repo.main_log().and_then(|log| Ok((log, repo.read(plan::PLAN)?)));

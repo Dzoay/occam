@@ -40,7 +40,7 @@ build:
 doc *args:
     cargo doc --workspace --no-deps "$@"
 
-# What to do next: each open milestone's first unfinished step
+# What to do next: each open milestone's steps that can start, by its diagram
 [env("CARGO_TARGET_DIR", target)]
 [group('plan')]
 next *args:
