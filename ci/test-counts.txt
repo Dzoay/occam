@@ -4,12 +4,12 @@ occam 50
 occam-cli::agent 3
 occam-cli::bin/occam 7
 occam-cli::cli 16
-occam-geom 369
+occam-geom 370
 occam-io 29
 occam-math 117
-occam-ops 168
+occam-ops 204
 occam-report 51
-occam-topo 176
+occam-topo 178
 occam-units 54
 occam-verify 30
 occam-wasm 6
