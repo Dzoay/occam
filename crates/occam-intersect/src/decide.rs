@@ -151,4 +151,12 @@ mod tests {
         assert!(encloses(touch(2.0, (up, across)), 0.36));
         assert!(encloses(past(3.0, 2.0, 0.5, true), 0.5) && encloses(past(3.0, 2.0, 0.5, false), -0.5));
     }
+
+    #[test]
+    fn a_touchs_gap_takes_every_part_of_the_normals_cross_product() {
+        let (n, m) = (Vec3::new(0.48, 0.6, 0.64), Vec3::new(0.6, 0.64, 0.48));
+        let cross = n.cross(m);
+        let (got, want) = (touch(3.0, (n, m)), 1.5 * cross.dot(cross));
+        assert!(got.lower() <= want && want <= got.upper() && got.radius() < 1e-15, "{got:?} against {want}");
+    }
 }

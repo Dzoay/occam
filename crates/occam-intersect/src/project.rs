@@ -105,3 +105,23 @@ pub(crate) fn project(pair: &Pair<'_>, from: &Here) -> (Option<Here>, u32) {
     }
     (None, ROUNDS)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::vertex;
+
+    #[test]
+    fn the_vertex_of_the_parabola_through_three_points_is_where_it_turns() {
+        // (t - 3)^2 + 1 at 1, 2 and 5, and (t - 2.5)^2 at 1, 2 and 4.
+        assert_eq!(vertex([(1.0, 5.0), (2.0, 2.0), (5.0, 5.0)]), Some(3.0));
+        assert_eq!(vertex([(1.0, 2.25), (2.0, 0.25), (4.0, 2.25)]), Some(2.5));
+    }
+
+    #[test]
+    fn a_vertex_on_or_beyond_an_end_is_none() {
+        assert_eq!(vertex([(1.0, 4.0), (2.0, 1.0), (3.0, 0.0)]), None, "on the last: (t - 3)^2");
+        assert_eq!(vertex([(1.0, 0.0), (2.0, 1.0), (3.0, 4.0)]), None, "on the first: (t - 1)^2");
+        assert_eq!(vertex([(1.0, 64.0), (2.0, 49.0), (3.0, 36.0)]), None, "beyond the last: (t - 9)^2");
+        assert_eq!(vertex([(1.0, 9.0), (2.0, 16.0), (3.0, 25.0)]), None, "before the first: (t + 2)^2");
+    }
+}

@@ -21,6 +21,8 @@
 //! a method makes goes through occam-math's predicates.
 
 mod correct;
+#[cfg(test)]
+mod correct_tests;
 mod decide;
 mod edge;
 mod implicit;

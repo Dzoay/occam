@@ -228,6 +228,7 @@ fn a_double_cones_lower_nappe_inverts_to_the_right_parameters() {
             assert!(gap(cone.point(on_cone), s.at) <= BAND, "its parameters give its point: {s:?}");
         }
         assert!(trace.stations.iter().all(|s| (radius(s) - across).abs() < 1e-6));
+        assert_eq!(trace.crossings, [], "an angle that comes round has no seam");
     }
 }
 
@@ -304,7 +305,7 @@ fn traces_run_in_rounds_and_are_the_same_bits_at_one_and_many_threads() {
     let (one, spent) = run(&Exec::serial(), u32::MAX);
     assert!(!spent);
     assert_eq!(one.len(), ROUND, "the first round traces every start in it, and the second skips the rest");
-    assert!(one.iter().all(|trace| trace.ends == [End::Closed; 2]));
+    assert!(one.iter().all(|trace| trace.ends == [End::Closed; 2] && trace.crossings.is_empty()));
     on_both(&one[0], pair.0.as_ref(), pair.1.as_ref());
     on_both(&one[1], pair.0.as_ref(), pair.1.as_ref());
     let many = Exec::threads(NonZeroUsize::new(4).unwrap()).unwrap();

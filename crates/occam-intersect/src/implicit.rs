@@ -145,4 +145,18 @@ mod tests {
         let (outside, _) = cone.at(Vec3::new(3.0, 0.0, -1.0));
         assert!((outside - std::f64::consts::SQRT_2).abs() < 1e-12, "a distance below the apex too");
     }
+
+    #[test]
+    fn on_the_plane_of_a_cones_apex_its_form_is_the_upper_nappes() {
+        // Where the part along the axis is nought both nappes' distances agree; the gradient is the upper nappe's.
+        let cone = Implicit::of(Analytic::Cone {
+            apex: point(0.0, 0.0, 0.0),
+            axis: up(),
+            half_angle: Angle::from_radians(std::f64::consts::FRAC_PI_4),
+        });
+        let (value, gradient) = cone.at(Vec3::new(2.0, 0.0, 0.0));
+        let half = std::f64::consts::FRAC_1_SQRT_2;
+        assert!((value - std::f64::consts::SQRT_2).abs() < 1e-12);
+        assert!((gradient - Vec3::new(half, 0.0, -half)).norm() < 1e-12, "{gradient:?}");
+    }
 }
