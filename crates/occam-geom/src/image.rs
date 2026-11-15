@@ -10,7 +10,8 @@
 //! of an angle turning with its parameter, and the direction from the axis, short of a half turn from that. Such a
 //! curve comes round in space and not in the parameters, so its image's range does not come round: only a whole curve
 //! beside the axis, whose ends meet in the parameters, keeps a range that comes round. An arc whose ends meet in space
-//! meets itself only where the parameters are undefined, at a pole, so its image's range is open.
+//! meets itself only where the parameters are undefined, at a pole, so its image's range is open. A curve through a
+//! sphere's pole or a cone's apex jumps there in the parameters, so it is cut there first, into arcs that end there.
 
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 
@@ -105,21 +106,17 @@ fn tube(chart: &Chart, p: Vec3) -> f64 {
     atan2(q.dot(z), (q.dot(x) * q.dot(x) + q.dot(y) * q.dot(y)).sqrt() - major)
 }
 
-/// How the conic `centre + a cos t + b sin t` goes round a turned chart's axis, where the axis passes inside it.
+/// How the conic `centre + a cos t + b sin t` goes round a turned chart's axis, where the axis passes inside it: where
+/// the axis meets the conic's plane is `α a + β b` from its centre, inside where `α² + β² < 1`. An axis along the plane
+/// meets it nowhere, or at infinity, which is not inside.
 fn round(chart: &Chart, (centre, first, second): (Vec3, Vec3, Vec3), below: bool) -> Option<Turn> {
     let Form::Turned { origin, x, y, z, .. } = chart.0 else { return None };
     let normal = first.cross(second);
-    let facing = z.dot(normal);
-    if facing.abs() <= 1e-12 * normal.norm() {
-        return None;
-    }
-    // Where the axis meets the conic's plane, in the conic's two axes, which need not be square.
-    let meet = origin + z * ((centre - origin).dot(normal) / facing) - centre;
-    let (aa, ab, bb) = (first.dot(first), first.dot(second), second.dot(second));
-    let (on_a, on_b) = (meet.dot(first), meet.dot(second));
-    let det = aa * bb - ab * ab;
-    let (along_a, along_b) = ((on_a * bb - on_b * ab) / det, (on_b * aa - on_a * ab) / det);
-    if along_a * along_a + along_b * along_b >= 1.0 {
+    let meet = origin + z * ((centre - origin).dot(normal) / z.dot(normal)) - centre;
+    let square = normal.dot(normal);
+    let (along_a, along_b) = (meet.cross(second).dot(normal) / square, first.cross(meet).dot(normal) / square);
+    let inside = along_a * along_a + along_b * along_b < 1.0;
+    if !inside {
         return None;
     }
     let side = if below { -1.0 } else { 1.0 };
@@ -190,12 +187,10 @@ impl<C: ParametricCurve + Clone> Image<C> {
         let (low, tube) = (below(&chart, reference), tube(&chart, reference));
         let range = curve.range();
         let mut image = Self { curve, chart, turn, below: low, tube, after: UvMap::IDENTITY, range };
-        if range.wrap != Wrap::Open {
-            let (lo, hi) = (image.eval_uv(range.lo), image.eval_uv(range.hi));
-            let gap = (lo.u() - hi.u()).abs() + (lo.v() - hi.v()).abs();
-            let beside = matches!(turn, Turn::Beside { .. }) && range.wrap == Wrap::Periodic;
-            let meet = beside && gap <= 1e-9 * (1.0 + lo.u().abs() + lo.v().abs());
-            image.range = if meet { range } else { ParamRange { wrap: Wrap::Open, ..range } };
+        // Beside the axis the image is the point's parameters alone, so a whole periodic curve's ends meet there too.
+        let comes_round = matches!(turn, Turn::Beside { .. }) && range.wrap == Wrap::Periodic;
+        if range.wrap != Wrap::Open && !comes_round {
+            image.range = ParamRange { wrap: Wrap::Open, ..range };
         }
         image
     }

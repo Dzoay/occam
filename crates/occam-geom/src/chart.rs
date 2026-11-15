@@ -111,7 +111,8 @@ fn read(surface: &dyn Surface, form: Analytic, at: UvPoint) -> Form {
 
 impl Chart {
     /// The chart of `surface`, which presents `form`, or `None` where its parameters do not run as the chart's: its
-    /// points at four places of its domain are held to the chart's within a part in 10^11 of their size.
+    /// points at four places of its domain are held to the chart's within a part in 10^11 of the size of its point and
+    /// first derivatives where the chart is read, at the middle of its domain.
     #[must_use]
     pub fn of(surface: &dyn Surface, form: Analytic) -> Option<Self> {
         let domain = surface.domain();
@@ -122,36 +123,15 @@ impl Chart {
         }
         let at = UvPoint::new(us[0], vs[0]);
         let chart = Self(read(surface, form, at));
-        if !chart.is_finite() {
-            return None;
-        }
+        // A chart read where the surface has no derivatives is NaN, which no probe is within any distance of.
         let probes = [(us[1], vs[1]), (us[1], vs[2]), (us[2], vs[1]), (us[2], vs[2])];
-        let size = surface.point(at).to_vec3().norm() + chart.size();
+        let jet = surface.first(at);
+        let size = jet.point.to_vec3().norm() + jet.du.rate().norm() + jet.dv.rate().norm();
         let fits = probes.iter().all(|&(u, v)| {
             let uv = UvPoint::new(u, v);
             (chart.point(uv).to_vec3() - surface.point(uv).to_vec3()).norm() <= 1e-11 * size
         });
         fits.then_some(chart)
-    }
-
-    fn is_finite(&self) -> bool {
-        let vectors = match self.0 {
-            Form::Flat { origin, du, dv, dual, .. } => [origin, du, dv, dual.0, dual.1],
-            Form::Turned { origin, x, y, z, .. } => [origin, x, y, z, z],
-        };
-        vectors.iter().all(|v| v.x.is_finite() && v.y.is_finite() && v.z.is_finite())
-    }
-
-    /// A length the chart's points are made of, which its fit is measured against.
-    fn size(&self) -> f64 {
-        match self.0 {
-            Form::Flat { du, dv, .. } => du.norm() + dv.norm(),
-            Form::Turned { meridian, .. } => match meridian {
-                Meridian::Upright { radius } | Meridian::Centred { radius } => radius,
-                Meridian::Slanted { apex, .. } => 1.0 + apex.abs(),
-                Meridian::Tube { major, minor } => major + minor,
-            },
-        }
     }
 
     /// The surface's point at `uv`, by the chart.

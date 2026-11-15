@@ -386,12 +386,9 @@ impl Parametric for SplineSurface {
         let first = corner(Some(0))?;
         let (along_u, along_v, last) =
             (corner(nu.checked_sub(1))?, corner(n.checked_sub(nu))?, corner(n.checked_sub(1))?);
+        // Corners whose diagonals are parallel face nowhere: the normal is NaN, which no pole is within the band of.
         let facing = (last - first).cross(along_v - along_u);
-        let length = facing.norm();
-        if !length.is_finite() || length <= 0.0 {
-            return None;
-        }
-        let normal = facing * (1.0 / length);
+        let normal = facing * (1.0 / facing.norm());
         let band = tol.band().millimetres();
         let flat = points.iter().all(|p| (*p - first).dot(normal).abs() <= band);
         flat.then(|| Analytic::Plane { origin: Point::from_vec3(first), normal: Direction::normalised(normal) })
