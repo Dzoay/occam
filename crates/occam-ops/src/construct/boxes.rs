@@ -283,6 +283,17 @@ mod tests {
         assert_eq!(skipped.least([0.5, 0.5], 0.0, |k| if k == 0 { f64::NAN } else { 3.0 }), 3.0, "the wild box read");
         assert_eq!(Boxes::new(Vec::new()).least([0.0, 0.0], 0.0, |_| 1.0), f64::INFINITY);
     }
+
+    #[test]
+    fn a_box_that_is_not_finite_is_answered_by_every_search() {
+        // An empty box's sides are infinite and a box from a bad number has a NaN: neither can be placed in a group, so
+        // each is answered whatever is searched for, where a search by its sides would answer it never.
+        let boxes = Boxes::new(vec![[0.0, 0.0, 1.0, 1.0], EMPTY, [f64::NAN, 0.0, 1.0, 1.0], [5.0, 5.0, 6.0, 6.0]]);
+        let mut found = boxes.meeting([10.0, 10.0, 11.0, 11.0]);
+        found.sort_unstable();
+        assert_eq!(found, [1, 2]);
+        assert_eq!(boxes.least([10.0, 10.0], 0.5, |k| if k == 2 { 0.25 } else { 100.0 }), 0.25);
+    }
 }
 
 #[cfg(test)]

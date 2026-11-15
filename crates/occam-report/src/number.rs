@@ -94,7 +94,8 @@ mod tests {
         assert_eq!(serde_json::from_str::<Vec<Number>>("[3, -2]").unwrap(), [Number(3.0), Number(-2.0)]);
         let refused = serde_json::from_str::<Vec<Number>>("[\"lots\"]").unwrap_err().to_string();
         assert!(refused.contains("not a number: lots"), "{refused}");
-        assert!(serde_json::from_str::<Vec<Number>>("[true]").is_err());
+        let wrong = serde_json::from_str::<Vec<Number>>("[true]").unwrap_err().to_string();
+        assert!(wrong.contains(r#"expected a number, or "nan", "inf" or "-inf""#), "{wrong}");
         assert_ne!(Number(0.0), Number(-0.0));
     }
 }
