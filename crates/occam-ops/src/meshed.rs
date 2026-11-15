@@ -171,7 +171,7 @@ fn a_spheres_normals_are_its_radii_at_its_poles_too() {
 /// A sector of radius 10 a sixteenth of a turn either side of +X, extruded: its arc is sampled at its ends and its
 /// middle at 0.1, so the chord from (10, 0) sags about 0.048 inside it. A hole of radius 0.25 comes within 1e-3 of the
 /// arc under the middle of that chord, so the chord cuts across the hole's samples, in both caps.
-fn sector_with_a_hole() -> Value {
+pub(crate) fn sector_with_a_hole() -> Value {
     let (x, y) = (9.807_852_804_032_304, 1.950_903_220_161_282_4);
     json!([
         {"op": "wire", "label": "rim", "edges": [{"arc": [[x, -y, 0], [10, 0, 0], [x, y, 0]]}, {"line": [[x, y, 0], [0, 0, 0]]}, {"line": [[0, 0, 0], [x, -y, 0]]}]},

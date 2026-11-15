@@ -105,6 +105,21 @@ pub(crate) fn numbered(first: u32, count: usize) -> Option<Range<u32>> {
     Some(first..end)
 }
 
+/// `range` as indices into a list.
+pub(crate) fn span(range: &Range<u32>) -> Option<Range<usize>> {
+    Some(usize::try_from(range.start).ok()?..usize::try_from(range.end).ok()?)
+}
+
+/// `triangles`, whose corners are numbered in the mesh's arrays, numbered from `first`, the first vertex of their
+/// block; `None` if a corner lies before it.
+pub(crate) fn local(first: u32, triangles: &[[u32; 3]]) -> Option<Vec<[u32; 3]>> {
+    let back = |t: &[u32; 3]| {
+        let [a, b, c] = t.map(|k| k.checked_sub(first));
+        Some([a?, b?, c?])
+    };
+    triangles.iter().map(back).collect()
+}
+
 /// The report refusing `face`, which would number a vertex or a triangle past `u32::MAX`.
 pub(crate) fn too_many(face: Id<Face>) -> Report {
     not_meshed(face, Reason::BudgetSpent, Fault::Internal, &[])
@@ -149,6 +164,30 @@ impl Mesh {
     pub fn block(&self, face: Id<Face>) -> Option<&Block> {
         let at = self.blocks.binary_search_by_key(&face, |block| block.face).ok()?;
         self.blocks.get(at)
+    }
+
+    /// The mesh of `face` as its block holds it, numbered from the block's first vertex as a [`FaceMesh`] numbers its
+    /// own, or the report refusing it: what [`crate::remesh`] keeps of a face it does not mesh again. `None` for a face
+    /// this mesh does not hold.
+    pub(crate) fn own(&self, face: Id<Face>) -> Option<Result<FaceMesh, Report>> {
+        let Some(block) = self.block(face) else {
+            return self.refused.iter().find(|r| r.entities.first() == Some(&face.entity())).cloned().map(Err);
+        };
+        let (vertices, first) = (span(&block.vertices)?, block.vertices.start);
+        let triangles = local(first, self.triangles.get(span(&block.triangles)?)?)?;
+        let side = |side: &Side| {
+            let vertices = side.vertices.iter().map(|&k| k.checked_sub(first)).collect::<Option<Vec<u32>>>()?;
+            Some(Side { edge: side.edge, reversed: side.reversed, vertices })
+        };
+        let sides = block.sides.iter().map(side).collect::<Option<Vec<Side>>>()?;
+        Some(Ok(FaceMesh {
+            points: self.points.get(vertices.clone())?.to_vec(),
+            normals: self.normals.get(vertices.clone())?.to_vec(),
+            uvs: self.uvs.get(vertices)?.to_vec(),
+            triangles,
+            sides,
+            capped: block.capped,
+        }))
     }
 
     /// The mesh's hash, which `gates determinism` holds to its record: every edge's samples or the report refusing it,

@@ -215,3 +215,30 @@ fn every_number_said_in_words_is_short_enough_to_read() {
     let longest = numbers.max_by_key(|n| n.len()).unwrap_or_default();
     assert!(longest.len() <= 24, "{longest} in {said}");
 }
+
+/// A flat disc of radius 1000 mm: at a deflection of 1e-6 mm its circle would need more samples than an edge may have.
+const DISC: &str = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+  {"op": "wire", "label": "rim", "edges": [{"circle": {"centre": [0, 0, 0], "radius": 1000, "normal": [0, 0, 1]}}]},
+  {"op": "face", "label": "disc", "outer": "rim"}
+]}"#;
+
+#[test]
+fn an_agent_follows_the_remedies_of_a_face_and_an_edge_that_will_not_mesh() {
+    let dir = scratch("mesh-remedy");
+    let (model, request) = (dir.join("disc.occam"), dir.join("disc.json"));
+    std::fs::write(&request, DISC).unwrap();
+    let (status, ran) = occam(&["run", "--model", text(&model), text(&request)]);
+    assert_eq!(status, Some(0), "{ran}");
+    let (status, refused) = occam(&["mesh", "--model", text(&model), "--deflection", "1e-6"]);
+    assert_eq!((status, at(&refused, "/ok")), (Some(1), &json!(false)), "{refused}");
+    let (face, edge) = (at(&refused, "/answers/0/report"), at(&refused, "/reports/0"));
+    assert_eq!((&face["code"], &edge["code"]), (&json!("mesh.face-not-meshed"), &json!("mesh.edge-over-cap")));
+    for report in [face, edge] {
+        let remedies = at(report, "/remedies").as_array().unwrap();
+        let remedy = remedies.iter().find(|r| r["kind"] == "use-deflection").unwrap();
+        let deflection = named(&remedy["values"], "deflection").as_f64().unwrap().to_string();
+        let (status, meshed) = occam(&["mesh", "--model", text(&model), "--deflection", &deflection]);
+        assert_eq!((status, at(&meshed, "/ok")), (Some(0), &json!(true)), "at {deflection}: {meshed}");
+        assert!(at(&meshed, "/answers/0/mesh/triangles/count").as_u64() > Some(0), "{meshed}");
+    }
+}

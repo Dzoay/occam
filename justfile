@@ -93,6 +93,7 @@ wasm:
     wasm-bindgen --target nodejs --out-dir "$CARGO_TARGET_DIR/occam-wasm-js" "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/occam_wasm.wasm"
     node crates/occam-wasm/js/distance.test.mjs "$CARGO_TARGET_DIR/occam-wasm-js/occam_wasm.js"
     node crates/occam-wasm/js/session.test.mjs "$CARGO_TARGET_DIR/occam-wasm-js/occam_wasm.js"
+    node crates/occam-wasm/js/mesh.test.mjs "$CARGO_TARGET_DIR/occam-wasm-js/occam_wasm.js"
     cargo check --workspace --target wasm32-unknown-unknown
     CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo check --workspace --exclude occam-xtask --target wasm32-unknown-unknown
     cargo check --workspace --all-targets --target x86_64-pc-windows-msvc

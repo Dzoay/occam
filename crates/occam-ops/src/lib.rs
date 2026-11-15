@@ -4,6 +4,8 @@
 //! edit, in the `occam` crate's runner. What this build does, and what it refuses by name, is [`listing`].
 
 mod args;
+#[cfg(test)]
+mod buffered;
 mod construct;
 mod execute;
 #[cfg(test)]
