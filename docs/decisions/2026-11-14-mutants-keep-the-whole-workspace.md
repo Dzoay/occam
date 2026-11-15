@@ -40,12 +40,12 @@ crates), and 17 "delete field" mutants that cargo-mutants 27.1.0 runs whatever `
 
 This section is Claude's working reading of the decision. The user can change it.
 
-- `gates mutants` is as it was: one pass against the whole workspace's tests, and `occam-xtask`'s mutants against its
-  own, since nothing depends on it. Zero survivors is the gate.
+- `gates mutants` judges as it did: one pass against the whole workspace's tests, and `occam-xtask`'s mutants against
+  its own, since nothing depends on it. Zero survivors is the gate.
 - Kept from the work: `just mutants --iterate`, which skips the mutants an earlier run in the same checkout caught and
   is never the gate; and CI's sixteen shards.
-- The mutants build is no longer optimised, and the gate sets the timeout itself. Both come from the measurements
-  below.
+- The mutants build is no longer optimised, the gate sets the timeout itself, and since 2026-11-15 the mutants run in
+  copies of a tree built once. All three come from the measurements below.
 
 ## Building unoptimised, which was adopted
 
@@ -68,19 +68,49 @@ in warm copies made by hand, on the same laptop with less other load than the fi
   its own unmutated run and passes `--timeout`: five times that, cargo-mutants' own default multiple of a baseline,
   and never less than 300 seconds. This rule is Claude's choice.
 
-## Warm in-place shards, measured and left for later
+## Warm in-place shards, adopted
 
-The last two rows build the unmutated tests once, copy the whole tree three times with `cp -a --reflink=auto`, which
-keeps file times so that cargo finds each copy already built, and run `cargo mutants --in-place --shard k/3` in each
-copy at once. No job builds from nothing. At opt-level 0 that roughly halved the time again.
+**Decided by the user, 2026-11-15:** "do the warm copies as a small PR". On 14 November they were measured and left
+for later, as needing more machinery in the gate than their gain over opt-level 0 justified then.
+
+The last two rows above build the unmutated tests once, copy the whole tree three times with `cp -a --reflink=auto`,
+which keeps file times so that cargo finds each copy already built, and run `cargo mutants --in-place --shard k/3` in
+each copy at once. No job builds from nothing. At opt-level 0 that roughly halved the time again.
 
 - Its one differing outcome was false: a surviving mutant counted as caught because two of `occam-cli`'s tests use
   the same scratch directory and one removed it under the other. That is the tests' fault, not the method's, and it
   can happen in any run.
-- The risks are a mutated file left in a copy if a run is killed (never in the real tree, as long as only copies
-  are mutated and they are removed), a real 1.2 GB or more per copy on a file system without reflinks, and CI's own
-  `--shard` having to nest with the copies' shards. It needs more machinery in the gate than its gain over
-  opt-level 0 justified now.
+
+The gate now does this itself, and `crates/occam-xtask/src/gates/mutants.rs` says how. Measured through the gate on
+2026-11-15, on the laptop, with 3 jobs: the 22 mutants of a three-line change to `occam-ops`' quadrature and one line
+of `occam-xtask`, whose tests are among the slowest, so that testing outweighs building here.
+
+| Gate | Wall time | Building, summed over jobs | of which each job's first build | Testing | Caught, missed, unviable |
+|---|---|---|---|---|---|
+| Cold copies, `--jobs 3` (as it was) | 15.5 min | 1,095 s | 986 s | 1,260 s | 18, 0, 4 |
+| **Warm copies, one cargo-mutants each (adopted)** | 10.9 min | 210 s | 119 s | 1,073 s | 18, 0, 4 |
+
+Every mutant had the same outcome. Both times include building the unmutated tests from nothing, about 2 minutes, and
+running them, 78 seconds alone. Run as `--shard 0/2` and `--shard 1/2`, the two slices held 11 mutants each, none in
+both, and together gave the unsharded outcomes.
+
+What was a risk on 14 November, and what the gate does about it:
+
+- **A mutated file left behind.** Only copies are mutated, under `TMPDIR`, never the checkout. The gate removes them
+  when it returns, passing or failing. If it is interrupted or killed, a small process it leaves watching stops what
+  it had started and removes them; and a run's directory that outlives even that is removed by the next run, never
+  used again.
+- **A copy that is not built after all.** Each copy repeats the build of the unmutated tests before it mutates
+  anything, and the gate fails if that compiles a single crate.
+- **A file system without reflinks,** such as CI's: each copy is a real one, 1.4 GB in 6 seconds here with
+  `cp --reflink=never`, and cargo found it built all the same.
+- **CI's `--shard` and the copies' shards.** cargo-mutants takes one `--shard`. Dealt round-robin, mutant `i` goes to
+  shard `i % n`, so copy `j` of `m` in slice `k` of `n` takes shard `k + n·j` of `n·m`: one flag, and the copies
+  together are exactly the slice. The gate also lists the slice's mutants before it starts and fails unless every one
+  of them was tested once, which catches a copy that never started as well as a change in how cargo-mutants deals.
+  Slices are now dealt round-robin where they were consecutive runs, so slice `k` holds different mutants than it did.
+- **A slice with no mutants** now passes without building anything. Before, it built and ran the unmutated suite
+  first.
 
 ## `--copy-target`, measured, which does not work yet
 

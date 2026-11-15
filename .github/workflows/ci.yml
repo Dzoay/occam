@@ -150,6 +150,7 @@ jobs:
           tools: just cargo-nextest cargo-mutants
       - run: just mutants --shard ${{ matrix.shard }}/16
         env:
+          # Two copies of the built tree, each testing its half of the slice.
           OCCAM_MUTANTS_JOBS: "2"
 
   # The required check: it passes only when every shard did.
