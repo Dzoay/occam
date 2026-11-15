@@ -1,9 +1,10 @@
 //! Source: original
 //! Where pieces meet, on numbers whose answers are known: a segment and a circle, and two circles, at two points, at
 //! the one where they touch, and nowhere; an arc's point square to a slanting segment; an end exactly as far from where
-//! two pieces meet as counts as away from it; and the limits of `least` and of how finely an arc is cut.
+//! two pieces meet as counts as away from it; two pieces that meet at both ends and run along each other; and the limits
+//! of `least` and of how finely an arc is cut.
 
-use core::f64::consts::{FRAC_1_SQRT_2, SQRT_2};
+use core::f64::consts::{FRAC_1_SQRT_2, PI, SQRT_2};
 
 use super::tests::{circle, seg};
 use super::*;
@@ -72,6 +73,18 @@ fn an_end_folded_back_no_further_than_four_bands_from_where_two_pieces_meet_is_p
     assert_eq!(meet_elsewhere(a, seg([2.0, 0.0], [1.0, 0.0]), &corner, band), None, "exactly four bands back");
     let further = seg([2.0, 0.0], [0.875, 0.0]);
     assert_eq!(meet_elsewhere(a, further, &corner, band), Some([0.875, 0.0]), "four and a half bands back");
+}
+
+#[test]
+fn pieces_that_meet_at_both_ends_and_run_along_each_other_meet_at_the_middle_of_the_first() {
+    let (band, ends) = (1e-7, [[2.0, 0.0], [0.0, 0.0]]);
+    let line = seg([0.0, 0.0], [2.0, 0.0]);
+    assert_eq!(meet_elsewhere(line, line.reversed(), &ends, band), Some([1.0, 0.0]), "a segment and the same back");
+    let half = Flat::Arc { c: [1.0, 0.0], r: 1.0, from: 0.0, sweep: PI };
+    let met = meet_elsewhere(half, half.reversed(), &ends, band).unwrap();
+    assert!(close(met, [1.0, 1.0]), "an arc and the same back: {met:?}");
+    let other = Flat::Arc { c: [1.0, 0.0], r: 1.0, from: PI, sweep: PI };
+    assert_eq!(meet_elsewhere(half, other, &ends, band), None, "the two halves of a circle");
 }
 
 #[test]

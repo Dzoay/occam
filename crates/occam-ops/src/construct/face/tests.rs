@@ -1,7 +1,7 @@
 //! Source: original
 //! The face's checks at their edges: the turn of a thin outline is measured finely enough to have its sign, a loop of no
-//! area is taken as it is given, an open wire's gap runs from its start to its end, and a wire is taken only as the one
-//! wire of its body.
+//! area is taken as it is given, a hole that is turned names its edges as given, an open wire's gap runs from its start
+//! to its end, and a wire is taken only as the one wire of its body.
 
 use core::f64::consts::PI;
 
@@ -66,11 +66,25 @@ fn an_outer_wire_of_no_area_is_taken_as_its_plane_faces_and_its_holes_as_given()
 
 #[test]
 fn a_hole_of_no_area_is_taken_as_given() {
-    // Not turned, the hole's edges are named in the order given: the fourth and the eighth meet at (12, 12).
+    // Its fourth, fifth, eighth and ninth edges meet at (12, 12), and the first two that touch are taken in the order
+    // the hole runs: not turned, the fourth and the eighth; turned, it would be the fifth and the ninth.
     let outer = json!({"points": [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]], "closed": true});
     let report = refused(json!([{"op": "face", "outer": outer, "holes": [{"points": eight(), "closed": true}]}]));
     assert_eq!(report.code, Code::WireCrossesItself);
     assert_eq!(report.input, Some(Input::at("steps[0].holes[0]").in_step(0, Some("face"))));
+    assert_eq!((number(&report, "first"), number(&report, "second")), (3.0, 7.0));
+    assert!(near(point(&report), [12.0, 12.0, 0.0]), "{report:?}");
+}
+
+#[test]
+fn a_hole_turned_to_run_clockwise_names_the_edges_that_touch_as_given() {
+    // Round a square 3 across anticlockwise, then one 2 across clockwise, which meet at (12, 12): the hole bounds more
+    // anticlockwise than clockwise, so it is turned, and the edges that touch there are named as written.
+    let corners = [[15, 12], [15, 15], [12, 15], [12, 12], [12, 10], [10, 10], [10, 12], [12, 12]];
+    let hole = json!({"points": corners.map(|[x, y]| [x, y, 0]), "closed": true});
+    let outer = json!({"points": [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]], "closed": true});
+    let report = refused(json!([{"op": "face", "outer": outer, "holes": [hole]}]));
+    assert_eq!(report.code, Code::WireCrossesItself);
     assert_eq!((number(&report, "first"), number(&report, "second")), (3.0, 7.0));
     assert!(near(point(&report), [12.0, 12.0, 0.0]), "{report:?}");
 }
