@@ -555,6 +555,14 @@ catalogue! {
         "An edge would need more samples than one edge may have at the deflection asked.",
         "The edge would need more than {cap} samples at a deflection of {deflection}.",
     }
+
+    /// A face could not be meshed, for the reason given, so the mesh leaves it out and meshes its neighbours as if it
+    /// were there (P9). Where an edge of it was refused, the report names that edge and carries its remedy.
+    FaceNotMeshed = "mesh.face-not-meshed" {
+        Error, [UseDeflection],
+        "A face could not be meshed, so the mesh leaves a hole where it is.",
+        "The face could not be meshed, for the reason given; the faces around it are meshed without it.",
+    }
 }
 
 #[cfg(test)]
@@ -1255,6 +1263,14 @@ mod tests {
                 "severity": "error",
                 "summary": "An edge would need more samples than one edge may have at the deflection asked.",
                 "template": "The edge would need more than {cap} samples at a deflection of {deflection}.",
+                "remedies": ["use-deflection"]
+            },
+            {
+                "name": "FaceNotMeshed",
+                "code": "mesh.face-not-meshed",
+                "severity": "error",
+                "summary": "A face could not be meshed, so the mesh leaves a hole where it is.",
+                "template": "The face could not be meshed, for the reason given; the faces around it are meshed without it.",
                 "remedies": ["use-deflection"]
             }
         ])

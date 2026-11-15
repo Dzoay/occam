@@ -33,13 +33,21 @@ pub struct EdgeSamples {
     pub points: Vec<Point<World>>,
 }
 
-/// Every edge any face of a model uses, each with its samples or the report refusing it, in id order.
+/// Every edge any face of a model uses, each with its samples or the report refusing it, in id order, and the limits
+/// they were sampled to, which its faces are meshed to.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Edges {
     list: Vec<(Id<Edge>, Result<EdgeSamples, Report>)>,
+    limits: Limits,
 }
 
 impl Edges {
+    /// The limits the edges were sampled to.
+    #[must_use]
+    pub const fn limits(&self) -> Limits {
+        self.limits
+    }
+
     /// The samples of `edge`, or the report refusing it; `None` for an edge no face uses.
     #[must_use]
     pub fn get(&self, edge: Id<Edge>) -> Option<Result<&EdgeSamples, &Report>> {
@@ -73,7 +81,7 @@ pub fn sample_edges(exec: &Exec, model: &Snapshot, limits: Limits) -> Edges {
     let sampled = exec.map(jobs.len(), Grain::Each, move |k| {
         of.get(k).map(|&(edge, bend)| (edge, sample_edge(&read, edge, bend, limits)))
     });
-    Edges { list: sampled.into_iter().flatten().collect() }
+    Edges { list: sampled.into_iter().flatten().collect(), limits }
 }
 
 /// Each edge `faces` use, in id order, with the largest curvature of the faces that use it, `bends` holding each face's.
@@ -89,7 +97,7 @@ fn finest(model: &Snapshot, faces: &[Id<Face>], bends: &[f64]) -> Vec<(Id<Edge>,
 }
 
 /// The report for `id`, which a committed model's links never leave dead.
-fn stale<K: Kind>(model: &Snapshot, id: Id<K>) -> Report {
+pub(crate) fn stale<K: Kind>(model: &Snapshot, id: Id<K>) -> Report {
     match model.resolve::<K>(id.entity()) {
         Err(report) => report,
         Ok(_) => Report::new(Code::StaleId, Fault::Internal).with_entity(id.entity()),

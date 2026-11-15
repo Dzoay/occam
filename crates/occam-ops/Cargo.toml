@@ -14,5 +14,9 @@ occam-topo = { path = "../occam-topo" }
 occam-units = { path = "../occam-units" }
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
+[dev-dependencies]
+# Meshes every face construction makes (view.faces): occam-mesh sits above this crate in the layers.
+occam-mesh = { path = "../occam-mesh" }
+
 [lints]
 workspace = true
