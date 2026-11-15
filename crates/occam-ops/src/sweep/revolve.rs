@@ -407,3 +407,6 @@ enum Use {
 fn at(columns: &Columns, k: usize, j: usize) -> usize {
     columns.get(k).and_then(|column| column.get(j)).copied().flatten().unwrap_or(0)
 }
+
+#[cfg(test)]
+mod tests;

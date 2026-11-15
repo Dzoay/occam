@@ -25,12 +25,12 @@ use crate::construct::tests::{built, number, plate, refused, request};
 use crate::{Labels, Request, default_tolerance, execute};
 
 /// The counts of vertices, edges, faces and loops of `model`.
-fn counts(model: &Snapshot) -> [usize; 4] {
+pub(super) fn counts(model: &Snapshot) -> [usize; 4] {
     [model.ids::<Vertex>().len(), model.ids::<Edge>().len(), model.ids::<Face>().len(), model.ids::<Loop>().len()]
 }
 
 /// The genus of the one closed shell of `model`, from its counts: `V − E + F − (L − F) = 2 − 2g`.
-fn genus(model: &Snapshot) -> f64 {
+pub(super) fn genus(model: &Snapshot) -> f64 {
     let [v, e, f, l] = counts(model).map(|n| f64::from(u32::try_from(n).unwrap()));
     (2.0 - (v - e + f - (l - f))) / 2.0
 }
@@ -41,7 +41,7 @@ fn families(model: &Snapshot) -> Vec<&'static str> {
 }
 
 /// The families of the surfaces of `model`'s faces, sorted.
-fn sorted(model: &Snapshot) -> Vec<&'static str> {
+pub(super) fn sorted(model: &Snapshot) -> Vec<&'static str> {
     let mut found = families(model);
     found.sort_unstable();
     found
@@ -91,7 +91,7 @@ fn with_rectangle(step: Value) -> Value {
 }
 
 /// A revolution of `profile` about the `z` axis through `angle` degrees.
-fn about_z(profile: &str, angle: f64) -> Value {
+pub(super) fn about_z(profile: &str, angle: f64) -> Value {
     json!({"op": "revolve", "label": "turned", "profile": profile, "origin": [0, 0, 0], "axis": [0, 0, 1], "angle": angle})
 }
 
@@ -456,7 +456,7 @@ fn a_turn_whose_ends_meet_within_the_band_is_a_whole_turn_and_half_a_turn_is_one
 
 /// The model `steps` build, then `step`, with every straight edge's line begun `by` before its start, so that its range
 /// begins at `by`, and each use's curve in its face's parameters with it.
-fn with_lines_begun_before(steps: &Value, by: f64, step: Value) -> Result<Snapshot, Vec<Report>> {
+pub(super) fn with_lines_begun_before(steps: &Value, by: f64, step: Value) -> Result<Snapshot, Vec<Report>> {
     let (model, made) = built(steps.clone());
     let mut edit = model.edit();
     for e in model.ids::<Edge>() {
