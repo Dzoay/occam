@@ -284,6 +284,12 @@ exclude_re = [
     # range ends above where it starts, and its piece turns by that span times its sense, 1 or -1. A witness, the only
     # reader, moves off a piece by shares of its length, which for such an arc is nought.
     "construct/flat\\.rs:\\d+:\\d+: replace > with >= in Flat::at$",
+    # By line. A face is the furthest place only where its sphere or torus reaches furthest along the axis, where its
+    # normal lies along the axis: the normal's part along it is 1 or -1 to rounding, so dividing the whole turn by it is
+    # multiplying by it. The same sign, as clear, and the same angle to within two units in its last place, which is as
+    # well as the sum of angles is known: in the suites the part is exactly 1 or -1 at 12 of 14 such places, 1 - 2^-53
+    # at the other two.
+    "geometric/outward\\.rs:374:40: replace \\* with / in facing$",
     # A face's loops. By line. The remainder of a clearance by 4 for its quarter, as the sag a winding cuts arcs to.
     # Below 4 that is the whole clearance, and a chord strays from its arc by less than the sag (1 - cos x < x^2 / 2),
     # so it still never reaches the point, which is at least that far from the loop; from 4 up the arcs are cut finer.

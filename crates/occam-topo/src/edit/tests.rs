@@ -314,3 +314,20 @@ fn a_copy_is_made_by_the_step_that_copies_and_that_steps_note_names_what_it_copi
     assert_eq!(born, Some(Provenance { step, role: StepRole::Copy }), "the copy's own step, not its source's");
     assert_eq!(after.note(step).and_then(|n| n.copy_of), Some(e.entity()));
 }
+
+#[test]
+fn an_edit_tells_its_own_step_as_named_so_far_and_each_earlier_step_as_its_model_keeps_it() {
+    let (base, e, _) = one_edge();
+    let mut edit = base.edit();
+    edit.name_step(4, "cylinder");
+    let named = edit.step();
+    let mut edit = edit.commit(&serial()).unwrap().0.edit();
+    assert_eq!(edit.note(edit.step()), None, "not named yet");
+    edit.copying(e.entity());
+    assert_eq!(edit.note(edit.step()), None, "what it copies noted, but the step not named");
+    edit.name_step(0, "copy");
+    let copy = StepNote { request_step: 0, operation: "copy".to_string(), copy_of: Some(e.entity()) };
+    assert_eq!(edit.note(edit.step()), Some(&copy));
+    let cylinder = StepNote { request_step: 4, operation: "cylinder".to_string(), copy_of: None };
+    assert_eq!(edit.note(named), Some(&cylinder), "an earlier step's, from its model");
+}

@@ -169,25 +169,33 @@ fn a_closed_sheet_that_faces_out_made_a_solid_passes() {
 
 #[test]
 fn a_shell_moved_to_a_solid_is_asked_whether_it_faces_out() {
-    // A cube, and beside it a closed sheet facing in: the sheet's shell moved to the cube's body reaches furthest.
+    // A cube, and beside it a closed sheet facing in: the sheet's shell moved to the cube's body reaches furthest. Moved
+    // after the cube's shell, that shell changes too; moved first, the cube's body changes and its shell does not.
     let mut edit = Snapshot::empty(tolerance()).edit();
     let solid = build(&mut edit, &cube());
     let sheet = build(&mut edit, &inverted(BodyKind::Sheet, 4.0));
     let snapshot = edit.commit(&serial()).unwrap().0;
-    let moved = |into: &Built, from: &Built| {
+    let moved = |into: &Built, from: &Built, first: bool| {
         let mut edit = snapshot.edit();
-        let (first, second) = (into.shell.unwrap(), from.shell.unwrap());
-        change(&mut edit, first, |r: &mut ShellRecord| r.next = Some(second));
-        change(&mut edit, second, |r: &mut ShellRecord| r.body = into.body);
+        let (kept, shell) = (into.shell.unwrap(), from.shell.unwrap());
+        if first {
+            change(&mut edit, into.body, |r: &mut BodyRecord| r.first_shell = Some(shell));
+            change(&mut edit, shell, |r: &mut ShellRecord| r.next = Some(kept));
+        } else {
+            change(&mut edit, kept, |r: &mut ShellRecord| r.next = Some(shell));
+        }
+        change(&mut edit, shell, |r: &mut ShellRecord| r.body = into.body);
         edit.remove(from.body).unwrap();
         edit
     };
-    let edit = moved(&solid, &sheet);
-    let next = edit.next.clone();
-    let commit = failures(&edit.commit(&serial()).unwrap_err());
-    assert_eq!(commit, failures(&whole(&next)));
-    assert_eq!(inside_out(&commit), [(EntityKind::Shell, EntityKind::Vertex)], "{commit:?}");
-    assert_eq!(commit[0].1[0], sheet.shell.unwrap().entity(), "the shell that reaches furthest");
+    for first in [false, true] {
+        let edit = moved(&solid, &sheet, first);
+        let next = edit.next.clone();
+        let commit = failures(&edit.commit(&serial()).unwrap_err());
+        assert_eq!(commit, failures(&whole(&next)), "first: {first}");
+        assert_eq!(inside_out(&commit), [(EntityKind::Shell, EntityKind::Vertex)], "first: {first}: {commit:?}");
+        assert_eq!(commit[0].1[0], sheet.shell.unwrap().entity(), "the shell that reaches furthest");
+    }
 }
 
 #[test]
