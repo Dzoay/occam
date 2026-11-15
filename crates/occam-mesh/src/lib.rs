@@ -8,14 +8,28 @@
 //! floor, no size estimate is read where the surface collapses, and an edge that would need more than
 //! [`Limits::SAMPLES_PER_EDGE`] samples is refused by name, with a deflection at which it fits.
 //!
+//! Each face is then meshed against [`Edges`] by [`mesh_faces`]: its boundary drawn in its parameters through its
+//! edges' samples, triangulated with exact decisions on the coordinates as they are, not P9's integer grid, and
+//! refined until it is within the deflection measured to the triangle ([`deviation`] measures it), with a floor for
+//! conical points and a cap of [`Limits::TRIANGLES_PER_FACE`]. A face that will not mesh is refused by name, with its
+//! reason, and its neighbours are meshed as if it were not there.
+//!
 //! The work runs in parallel only through [`occam_math::Exec`], one face or one edge a task, and every result comes back
-//! in id order, so the samples are the same bits at any thread count.
+//! in id order, so the samples and the meshes are the same bits at any thread count.
 
+mod boundary;
 mod curvature;
+mod deviation;
 mod edges;
+mod faces;
 mod limits;
+mod predicates;
+mod refine;
 #[cfg(test)]
 mod testing;
+mod triangulation;
 
+pub use deviation::deviation;
 pub use edges::{EdgeSamples, Edges, sample_edges};
+pub use faces::{FaceMesh, Faces, Side, mesh_face, mesh_faces};
 pub use limits::Limits;
