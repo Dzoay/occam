@@ -59,17 +59,6 @@ then `compose.rs`'s `Session`, are deleted as they become real.
 
 ## Steps
 
-### `view.edges`
-
-`occam-mesh` with its limits, and every edge any face uses sampled once, as finely as the finest of its faces asks
-under the deflection and angle limits. The limits come first (P9): no surface may ask an edge for a step below the
-floor, no size estimate comes from a collapsed row or a pole, and each edge has a sample cap. An edge over its cap is
-refused by name, with a remedy giving a deflection that fits.
-
-*Failing test first:* a circle's samples are within the deflection of their chords; P9's bicubic patch with a collapsed
-row asks for no more than the cap; an edge over its cap is named, and meshing at its remedy's deflection succeeds; the
-samples are the same bits at 1 and N threads.
-
 ### `view.faces`
 
 Each face meshed against the shared samples, one face a task. Point location uses `occam-math`'s exact predicates on

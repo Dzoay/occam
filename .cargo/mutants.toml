@@ -308,4 +308,8 @@ exclude_re = [
     # Only a circle in the plane has its curve in the plane's parameters asked for, so its axes' normal is the plane's or
     # the opposite: their product is 1 or -1 within rounding, never 0.
     "construct/space\\.rs:\\d+:\\d+: replace < with <= in Flatland::pcurve$",
+    # The mesh's limits (view.edges). Ties, which give the same value either way: the lower and the higher of two equal
+    # numbers, from the one pair of helpers every bound, box and clamp of occam-mesh is decided by.
+    "occam-mesh/src/limits\\.rs:\\d+:\\d+: replace < with <= in lower$",
+    "occam-mesh/src/limits\\.rs:\\d+:\\d+: replace > with >= in higher$",
 ]

@@ -540,6 +540,21 @@ catalogue! {
         "A section of two surfaces stopped before it was complete; what it found is kept.",
         "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
     }
+
+    /// A limit a mesh is made to, its deflection or its angle, is not a finite number greater than zero.
+    LimitNotPositive = "mesh.limit-not-positive" {
+        Error, [],
+        "A limit a mesh is made to must be a finite number greater than zero.",
+        "{parameter} is {value}, which is not a finite number greater than zero.",
+    }
+
+    /// An edge would need more samples than one edge may have at the deflection asked, so it is not sampled (P9: one
+    /// collapsed row asked an edge for 2^28 of them). A coarser deflection at which it fits is the remedy.
+    EdgeOverCap = "mesh.edge-over-cap" {
+        Error, [UseDeflection],
+        "An edge would need more samples than one edge may have at the deflection asked.",
+        "The edge would need more than {cap} samples at a deflection of {deflection}.",
+    }
 }
 
 #[cfg(test)]
@@ -1224,6 +1239,27 @@ mod tests {
         ])
     }
 
+    fn mesh_codes() -> Value {
+        json!([
+            {
+                "name": "LimitNotPositive",
+                "code": "mesh.limit-not-positive",
+                "severity": "error",
+                "summary": "A limit a mesh is made to must be a finite number greater than zero.",
+                "template": "{parameter} is {value}, which is not a finite number greater than zero.",
+                "remedies": []
+            },
+            {
+                "name": "EdgeOverCap",
+                "code": "mesh.edge-over-cap",
+                "severity": "error",
+                "summary": "An edge would need more samples than one edge may have at the deflection asked.",
+                "template": "The edge would need more than {cap} samples at a deflection of {deflection}.",
+                "remedies": ["use-deflection"]
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -1256,6 +1292,12 @@ mod tests {
                 "summary": "Write the edge the report names as a whole circle with the centre, radius and normal given.",
                 "parameters": ["centre", "radius", "normal"],
             },
+            {
+                "name": "UseDeflection",
+                "kind": "use-deflection",
+                "summary": "Mesh at the deflection given, at which the edge the report names fits under its cap.",
+                "parameters": ["deflection"],
+            },
         ])
     }
 
@@ -1281,6 +1323,7 @@ mod tests {
             measure_step_codes(),
             transform_codes(),
             intersect_codes(),
+            mesh_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())

@@ -1,0 +1,17 @@
+[package]
+name = "occam-mesh"
+description = "Tessellation: every shared edge sampled once, then each face against those samples, then the watertight check"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+occam-geom = { path = "../occam-geom" }
+occam-math = { path = "../occam-math" }
+occam-report = { path = "../occam-report" }
+occam-topo = { path = "../occam-topo" }
+occam-units = { path = "../occam-units" }
+
+[lints]
+workspace = true
