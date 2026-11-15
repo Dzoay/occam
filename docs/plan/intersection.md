@@ -36,7 +36,7 @@ flowchart LR
 the way census records them, by case, invariant and verdict. A held-out set, generated after the code is frozen, is
 scored as P5 scored, since P5's counts are in-sample. P5's speed table is rerun on the real code.
 
-**PR grouping:** every step shares one PR, with a commit each, as for the milestones before it.
+**PR grouping:** a step merges in its own PR ([small PRs](../decisions/2026-11-14-steps-merge-in-small-prs.md)).
 
 **Throughout.** `occam-intersect` takes its place in [the layers](../PLAN.md#4-layers), between `occam-geom` and
 `occam-topo`. It is std-only, computes through `occam-math`, and runs in parallel only through `Exec`. It works on

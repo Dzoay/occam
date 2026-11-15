@@ -52,7 +52,7 @@ flowchart LR
   on its reports, 6 of 6 enriched ([the risk](../architecture/risks.md)).
 - The `Tally`'s share of decisions reaching the exact path across the corpus, against the risk's bound of about 1%.
 
-**PR grouping:** every step shares one PR, with a commit each, as for the milestones before it.
+**PR grouping:** a step merges in its own PR ([small PRs](../decisions/2026-11-14-steps-merge-in-small-prs.md)).
 
 **Throughout.** The boolean lives in `occam-ops` and reads sections through `occam-intersect` only. Each phase maps
 frozen input to frozen output, and its output holds indices local to each item, never a model id
