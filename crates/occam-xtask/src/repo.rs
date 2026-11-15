@@ -279,7 +279,13 @@ impl Repo {
         let diff_file = dir.join("changes.diff");
         fs::write(&diff_file, diff).map_err(|e| io(&shown, &e))?;
         let mut command = Command::new(env!("CARGO"));
-        command.args(["mutants", "--in-diff"]).arg(&diff_file).args(args).arg("--output").arg(&dir);
+        // Plain names, whatever `CARGO_TERM_COLOR` says: the gate compares them with the names the copies' lists hold.
+        command
+            .args(["mutants", "--colors", "never", "--in-diff"])
+            .arg(&diff_file)
+            .args(args)
+            .arg("--output")
+            .arg(&dir);
         let (ok, listed, errors) = self.captured(&mut command, "cargo-mutants")?;
         if ok { Ok(listed) } else { Err(failed("mutants.run-failed", "cargo mutants --list", args, &errors)) }
     }
