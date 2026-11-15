@@ -267,6 +267,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "occam-intersect"
+version = "0.0.0"
+dependencies = [
+ "occam-geom",
+ "occam-math",
+ "occam-report",
+ "occam-units",
+]
+
+[[package]]
 name = "occam-io"
 version = "0.0.0"
 dependencies = [

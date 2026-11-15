@@ -1,6 +1,6 @@
 # Intersection
 
-[Architecture](../ARCHITECTURE.md) › Intersection · crate `occam-intersect` · sketch [`intersect.rs`](../sketch/src/intersect.rs)
+[Architecture](../ARCHITECTURE.md) › Intersection · crate [`occam-intersect`](../../crates/occam-intersect/src/lib.rs) · sketch [`intersect.rs`](../sketch/src/intersect.rs)
 
 Where two surfaces meet, and where an edge crosses a surface. An ordered list of methods; what failed stays beside
 what was found.

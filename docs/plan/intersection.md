@@ -55,17 +55,6 @@ source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted
 
 ## Steps
 
-### `intersection.section`
-
-`occam-intersect` and its result. A `Section` holds curves, each with its image on both surfaces, contacts, any
-coincidence, failures and the tally. A pair is first put in canonical order by family, batch key and content
-([S4](../evidence/2026-11-09-s4.md)). Methods form an ordered list: each asks the surfaces what they can present and
-declines when it does not apply. A `Budget` bounds each method's work, and running out of budget is a failure that
-keeps what was found. `sections` runs many pairs, one pair a task, with one result per pair in pair order.
-
-*Failing test first:* with a stub method list, a swapped pair gives the same section with its images swapped; a spent
-budget is reported and keeps the curves found before it; many pairs give one result each, in order, at 1 and N threads.
-
 ### `intersection.closed`
 
 Closed forms where both surfaces present an analytic form: a plane with a plane, sphere, cylinder or cone (conics
