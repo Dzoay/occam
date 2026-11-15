@@ -37,6 +37,10 @@ impl Limits {
     /// The most samples one edge may have, its ends included: P9's cap, `2^14`.
     pub const SAMPLES_PER_EDGE: u32 = 1 << 14;
 
+    /// The most triangles refinement may give one face: once a face has this many it stops, short of its deflection
+    /// if need be, and says so (P9's hard limit on triangles per face).
+    pub const TRIANGLES_PER_FACE: u32 = 1 << 20;
+
     /// The limits of a mesh no point of whose edges' chords is further than `deflection` from its edge, and none of
     /// whose edges turns through more than `angle` between two samples. An angle of a whole turn or more leaves the
     /// turning to the deflection.

@@ -59,18 +59,6 @@ then `compose.rs`'s `Session`, are deleted as they become real.
 
 ## Steps
 
-### `view.faces`
-
-Each face meshed against the shared samples, one face a task. Point location uses `occam-math`'s exact predicates on
-the real coordinates, not P9's integer grid, which caused all three of its failures. Refinement stops on chordal error
-measured to the triangle, with a floor for conical points and a cap on triangles. Normals come from the surface, poles
-included. A face that will not mesh is named with its reason, and its neighbours are unaffected. P9's adversarial
-cases and repair wait for `view.hardening`, after the demo.
-
-*Failing test first:* every face `construction` makes (planes with holes, and the sides and caps of each primitive,
-extrusion and revolve) meshes within its deflection, measured to the triangle; a face seeded to fail is reported, and
-its neighbours still mesh.
-
 ### `view.watertight`
 
 The faces merged by index into one vertex block per face, whose boundary positions are its edges' samples, so
