@@ -2,8 +2,13 @@
 //! The march's step control, against curves whose answer is known: the shortest and longest steps, the sag a chord
 //! may have and the turn a step may take, the way a trace first goes, and how it recovers where the corrector fails.
 
-use occam_geom::{Circle, Extrusion, Line, Revolution, Surface};
-use occam_units::{Direction, UvPoint, Vec3};
+use occam_geom::{
+    Circle, Content, Domain, Extrusion, FamilyName, Jet1, Jet2, Line, ParamRange, Parametric, Plane, Revolution,
+    Scratch, Shape, Surface, UvBox,
+};
+use occam_math::Real;
+use occam_report::{Code, Reason, Report};
+use occam_units::{Bounds, Direction, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 use crate::correct::foot;
 
@@ -154,9 +159,9 @@ fn a_start_beyond_the_edge_of_a_patch_finds_nothing_there() {
     let (patch, plane) = (nurbs_cylinder((0.5, 2.5)), level(0.3));
     let (sin, cos) = occam_math::sin_cos(3.0);
     let near = point(2.0 * cos, 2.0 * sin, 0.3);
-    let at_edge = UvPoint::new(patch.domain().u.hi, 0.3);
+    let at_edge = UvPoint::new(Surface::domain(&patch).u.hi, 0.3);
     let beyond = foot(&patch, near.to_vec3(), at_edge);
-    assert!(beyond.u() > patch.domain().u.hi && gap(patch.point(beyond), near) < 1e-12, "{beyond:?}");
+    assert!(beyond.u() > Surface::domain(&patch).u.hi && gap(patch.point(beyond), near) < 1e-12, "{beyond:?}");
     let start = Start { on_a: beyond, on_b: UvPoint::new(2.0 * cos, 2.0 * sin) };
     let trace = tracer(1e-4, 0.5, 500).trace(&patch, &plane, start);
     assert_eq!((trace.ends, trace.stations.len()), ([End::Apart; 2], 0), "{trace:?}");
@@ -173,4 +178,103 @@ fn a_curve_tighter_than_the_shortest_step_can_turn_by_is_stepped_at_the_shortest
     let shortest = (8.0 * BAND * 4.0_f64).sqrt();
     assert!(chords(&trace).iter().all(|c| *c >= shortest), "{:?}", chords(&trace));
     on_both(&trace, &plane, &sphere);
+}
+
+/// The plane z = 0 from x = cos 0.02 to 2 and y = -1 to 1, its derivatives twice too large: the inexact derivatives a
+/// surface may give where it is an offset or a mesh. Each Newton step then goes half the way.
+struct Hasty(Plane);
+
+/// `t` twice over, in every lane.
+fn twofold<R: Real>(t: Tangent<World, R>) -> Tangent<World, R> {
+    Tangent::new(t.rate() * R::splat(2.0))
+}
+
+impl Parametric for Hasty {
+    fn domain(&self) -> Domain {
+        let range = |lo: f64, hi: f64| ParamRange { lo, hi, wrap: occam_geom::Wrap::Open, kind: ParamKind::Length };
+        Domain { u: range(occam_math::cos(0.02), 2.0), v: range(-1.0, 1.0) }
+    }
+
+    fn eval_first<R: Real>(&self, uv: UvPoint<R>) -> Jet1<R> {
+        let jet = self.0.eval_first(uv);
+        Jet1 { du: twofold(jet.du), dv: twofold(jet.dv), ..jet }
+    }
+
+    fn family(&self) -> FamilyName {
+        FamilyName("hasty")
+    }
+
+    fn eval_point<R: Real>(&self, uv: UvPoint<R>) -> Point<World, R> {
+        self.0.eval_point(uv)
+    }
+
+    fn eval_second<R: Real>(&self, uv: UvPoint<R>) -> Jet2<R> {
+        let jet = self.0.eval_second(uv);
+        Jet2 { first: self.eval_first(uv), ..jet }
+    }
+
+    fn content(&self, out: &mut Content) {
+        Parametric::content(&self.0, out);
+    }
+
+    fn derivatives(
+        &self,
+        uv: UvPoint,
+        order: u8,
+        out: &mut Vec<Tangent<World>>,
+        scratch: &mut Scratch,
+    ) -> Result<(), Report> {
+        Parametric::derivatives(&self.0, uv, order, out, scratch)?;
+        for t in out.iter_mut() {
+            *t = twofold(*t);
+        }
+        Ok(())
+    }
+
+    fn shape(&self) -> Shape {
+        Parametric::shape(&self.0)
+    }
+
+    fn bounds(&self, patch: UvBox) -> Bounds {
+        Parametric::bounds(&self.0, patch)
+    }
+
+    fn invert(
+        &self,
+        p: Point<World>,
+        seed: Option<UvPoint>,
+        tol: Tolerance,
+        scratch: &mut Scratch,
+    ) -> Result<UvPoint, Report> {
+        <Plane as Parametric>::invert(&self.0, p, seed, tol, scratch)
+    }
+}
+
+#[test]
+fn where_newtons_method_finds_nothing_even_at_the_shortest_step_projections_carry_the_trace_on() {
+    // The circle of radius 1 where the hasty plane cuts a sphere about the origin. At the shortest step, sqrt(8 band
+    // 0.125), the eleven half-steps the corrector checks leave its point 1.5 bands off the plane it must land in, and
+    // at half of it they would not, so the march must not halve it there: each station after the start is brought on
+    // from a shortest step ahead by projections, until they bring the trace past an edge of the plane, where it has
+    // stalled, both ways, well within its steps.
+    let (hasty, sphere) = (Hasty(level(0.0)), ball(1.0, [0.0; 3]));
+    let start = start_near(&hasty, &sphere, point(1.0, 0.0, 0.0));
+    let steps = tracer(1e-4, 0.125, 20_000);
+    let trace = steps.trace(&hasty, &sphere, start);
+    assert_eq!(trace.ends, [End::Stalled; 2], "{} stations in {} steps", trace.stations.len(), trace.steps);
+    assert!(
+        trace.stations.len() > 50 && trace.steps < 20_000,
+        "{} stations in {} steps",
+        trace.stations.len(),
+        trace.steps
+    );
+    let shortest = (8.0 * BAND * 0.125_f64).sqrt();
+    // Brought on from a shortest step ahead, each station is about a shortest step on; a Newton step taken at half the
+    // shortest would be half of one.
+    let off: Vec<_> = chords(&trace).into_iter().filter(|c| !(0.7..=1.05).contains(&(c / shortest))).collect();
+    assert!(off.is_empty(), "each most of a shortest step on: {off:?}");
+    on_both(&trace, &hasty, &sphere);
+    let reports = steps.failures(&trace, &crate::Section::default());
+    let [report] = reports.as_slice() else { panic!("{reports:?}") };
+    assert_eq!((report.code, report.reason), (Code::Incomplete, Some(Reason::BudgetSpent)));
 }

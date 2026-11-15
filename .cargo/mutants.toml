@@ -324,9 +324,9 @@ exclude_re = [
     "occam-intersect/src/march\\.rs:160:31: replace < with <= in Run<'p, 's>::scaled$",
     "occam-intersect/src/march\\.rs:161:22: replace > with >= in Run<'p, 's>::scaled$",
     "occam-intersect/src/march\\.rs:162:14: replace < with <= in Run<'p, 's>::scaled$",
-    "occam-intersect/src/project\\.rs:67:61: replace > with >= in search$",
-    "occam-intersect/src/march\\.rs:351:34: replace < with <= in Run<'p, 's>::again$",
-    "occam-intersect/src/march\\.rs:352:20: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/project\\.rs:72:61: replace > with >= in search$",
+    "occam-intersect/src/march\\.rs:359:34: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/march\\.rs:360:20: replace < with <= in Run<'p, 's>::again$",
     # The trace. By line. A computed sag or turn exactly at its limit, and a loop's start exactly a step and a half
     # ahead: no test can place a computed value on the boundary, and either side of it is as good. A step at the limit
     # is within it, and a closure put off at the boundary is tried at the next station, nearer.
@@ -364,5 +364,5 @@ exclude_re = [
     "occam-intersect/src/implicit\\.rs:75:36: replace \\* with / in Implicit::at$",
     # The trace's projections, by line. A move of no length, or none that is finite, gives a point that is not a number;
     # its foot stays at the seed, whose gap is the base's, so the search gives the base, as returning it at once does.
-    "occam-intersect/src/project\\.rs:64:28: replace \\|\\| with && in search$",
+    "occam-intersect/src/project\\.rs:69:28: replace \\|\\| with && in search$",
 ]

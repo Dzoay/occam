@@ -299,8 +299,12 @@ impl<'p, 's> Run<'p, 's> {
 
     /// The march at a touch: alternating projections from `at` to where the surfaces touch, which ends it.
     fn touch(&mut self, at: &Frame) -> Next {
-        let (found, rounds) = project(self.pair, &at.here);
+        let (found, rounds) = project(self.pair, &mut self.decide, &at.here);
         self.count(rounds);
+        let found = match found {
+            Ok(found) => found,
+            Err(uncertain) => return self.unsure(uncertain),
+        };
         let put = match found.map(|touch| self.inside(touch)) {
             Some(Ok(put)) => put,
             Some(Err(uncertain)) => return self.unsure(uncertain),
@@ -316,8 +320,12 @@ impl<'p, 's> Run<'p, 's> {
     fn unstick(&mut self, here: &Frame) -> Next {
         let shortest = self.limits.shortest;
         let aim = Here { at: here.here.at + here.along * shortest, ..here.here };
-        let (found, rounds) = project(self.pair, &aim);
+        let (found, rounds) = project(self.pair, &mut self.decide, &aim);
         self.count(rounds);
+        let found = match found {
+            Ok(found) => found,
+            Err(uncertain) => return self.unsure(uncertain),
+        };
         let Some(found) = found.and_then(|f| frame(self.pair, f, here.along)) else { return Next::Done(End::Stalled) };
         match self.touches(&found) {
             Ok(true) => return self.touch(&found),

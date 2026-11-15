@@ -4,11 +4,16 @@
 //! projections do not. Near a touch each round moves the point only as far as the surfaces' curvature carries it, so
 //! each round here is followed by a search along the way it moved: doubling the move while the gap shrinks, then the
 //! vertex of the parabola through the last three gaps, which is where a touch is when the gap is a square of the
-//! distance from it, as it is between two smooth surfaces. The search is ours, not von Neumann's.
+//! distance from it, as it is between two smooth surfaces. The search is ours, not von Neumann's. Where the rounds come
+//! to rest, whether the surfaces meet there is decided against the band: a gap within it is a meeting, a touch if they
+//! do not cross, and one above it is apart.
 
+use occam_math::{Interval, Side as Band};
 use occam_units::{UvPoint, Vec3};
 
 use crate::correct::{Here, Other, Pair, foot};
+use crate::decide::Decide;
+use crate::trace::Uncertain;
 
 /// The most rounds of projections.
 const ROUNDS: u32 = 64;
@@ -83,27 +88,31 @@ fn search(pair: &Pair<'_>, base: Met, step: Vec3) -> Met {
     vertex(samples).map_or(best, |t| nearer(best, at(t, &best.here)))
 }
 
-/// Where the two surfaces meet near `from`, within a quarter of the band of both, by alternating projections, and
-/// the rounds it took; `None` where they did not come within it, or no round brings them nearer. The rounds go on
-/// until a round moves the point by no more than the band, so that at a touch they come to the touch itself, not
-/// just within the band of both surfaces, which a touch is over a disc `sqrt(2 r band)` across. `q`'s parameters are
-/// those of its foot.
-pub(crate) fn project(pair: &Pair<'_>, from: &Here) -> (Option<Here>, u32) {
+/// Where the two surfaces meet near `from`, by alternating projections, and the rounds it took. The rounds go on until
+/// a round moves the point by no more than the band, so that at a touch they come to the touch itself, not just within
+/// the band of both surfaces, which a touch is over a disc `sqrt(2 r band)` across. Where they come to rest, the gap
+/// between the surfaces is decided against the band: within it they meet there, and `q`'s parameters are those of its
+/// foot; above it they are apart, and the answer is `None`, as it is where the rounds run out.
+///
+/// # Errors
+///
+/// Where the band cannot decide the gap.
+pub(crate) fn project(pair: &Pair<'_>, decide: &mut Decide, from: &Here) -> (Result<Option<Here>, Uncertain>, u32) {
     let mut best = met(pair, from.at, from);
     for round in 1..=ROUNDS {
         let next = met(pair, onto_q(pair, best.here.at, best.here.q), &best.here);
         let better = nearer(nearer(best, next), search(pair, best, next.here.at - best.here.at));
         let moved = (better.here.at - best.here.at).norm();
         best = better;
-        if moved <= pair.band() && best.gap <= pair.band() * 0.25 {
-            let q = pair.q_at(best.here.at, best.here.q);
-            return (q.map(|q| Here { q, ..best.here }), round);
-        }
-        if moved == 0.0 {
-            return (None, round);
+        if moved <= pair.band() {
+            let meets = decide.side(Interval::exact(best.gap), best.here.at).map(|band| {
+                let q = (band != Band::Above).then(|| pair.q_at(best.here.at, best.here.q)).flatten();
+                q.map(|q| Here { q, ..best.here })
+            });
+            return (meets, round);
         }
     }
-    (None, ROUNDS)
+    (Ok(None), ROUNDS)
 }
 
 #[cfg(test)]

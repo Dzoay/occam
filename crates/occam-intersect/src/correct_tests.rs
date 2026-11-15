@@ -18,7 +18,8 @@ use crate::correct::{Here, Pair, solve};
 use crate::march::frame;
 use crate::trace::{End, Start};
 use crate::trace_tests::{
-    CONVERGED, ball, gap, level, mm, moved, nurbs, nurbs_cylinder, on_both, placed, point, start_near, tol, tracer,
+    BAND, CONVERGED, ball, gap, level, mm, moved, nurbs, nurbs_cylinder, on_both, placed, point, start_near, tol,
+    tracer, upright,
 };
 
 #[test]
@@ -268,4 +269,49 @@ fn the_corrector_lands_in_its_plane_within_a_quarter_of_the_band_of_both_at_ever
         let off = (patch.point(landed.p).to_vec3() - sphere.point(landed.q).to_vec3()).norm();
         assert!(off <= 0.25e-3 && (landed.at - aim).dot(along).abs() <= 1e-3, "step {k}: {off:e}");
     }
+}
+
+#[test]
+fn surfaces_within_the_band_of_each_other_touch_and_beyond_it_are_apart() {
+    // The plane x = 2 + apart beside a sphere of radius 2 about the origin, nearest at (2, 0, 0): half the band apart
+    // they touch within it, and at twice the band they are apart, each decided against the band.
+    for (apart, want) in [(0.5 * BAND, End::Touch), (2.0 * BAND, End::Apart)] {
+        let (plane, sphere) = (upright(2.0 + apart), ball(2.0, [0.0; 3]));
+        let start = start_near(&plane, &sphere, point(2.0, 0.05, -0.04));
+        let trace = tracer(1e-4, 0.5, 2000).trace(&plane, &sphere, start);
+        assert_eq!(trace.ends, [want; 2], "{apart:e} apart: {trace:?}");
+        assert!(trace.tally.decided > 0 && trace.tally.undecided == 0, "{:?}", trace.tally);
+        if want == End::Touch {
+            assert!(gap(trace.stations[0].at, point(2.0 + apart, 0.0, 0.0)) <= CONVERGED, "{trace:?}");
+            on_both(&trace, &plane, &sphere);
+        } else {
+            assert_eq!(trace.stations, []);
+        }
+    }
+}
+
+/// The bits of a station's point and parameters.
+fn bits(s: &crate::trace::Station) -> [u64; 7] {
+    let v = s.at.to_vec3();
+    [v.x, v.y, v.z, s.on_a.u(), s.on_a.v(), s.on_b.u(), s.on_b.v()].map(f64::to_bits)
+}
+
+#[test]
+fn a_start_projections_bring_onto_the_curve_lands_on_the_same_bits() {
+    // The shallow crossing's start, too far for Newton's method to settle within the longest step: where projections
+    // bring it, bit for bit, as every run on every target must. The X axis is where the planes cross; its height is the
+    // last of the rounds, within the band.
+    let (flat, tilted) = (level(0.0), occam_geom::Plane::placed(&placed([1.0, 0.0, 0.0], 0.01, [0.0; 3])));
+    let start = Start { on_a: UvPoint::new(0.3, 0.05), on_b: UvPoint::new(0.3, 0.05) };
+    let trace = tracer(1e-4, 0.01, 40).trace(&flat, &tilted, start);
+    let want = [
+        0x3fd3_3333_3333_3333,
+        0x3e51_9029_e59a_a06f,
+        0x0,
+        0x3fd3_3333_3333_3333,
+        0x3e51_9029_e59a_a06f,
+        0x3fd3_3333_3333_3333,
+        0x3e51_8ff0_58b2_9cce,
+    ];
+    assert_eq!(bits(&trace.stations[0]), want, "{:?}", trace.stations[0]);
 }

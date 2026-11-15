@@ -277,8 +277,10 @@ fn begin(run: &mut Run<'_, '_>, seed: Here) -> Result<Option<Begun>, (Here, Unce
     {
         return Ok(Some(Begun::Cross(crossing)));
     }
-    let (found, rounds) = project(pair, &settled.unwrap_or(seed));
+    let from = settled.unwrap_or(seed);
+    let (found, rounds) = project(pair, &mut run.decide, &from);
     run.count(rounds);
+    let found = found.map_err(|uncertain| (from, uncertain))?;
     let Some(found) = found.and_then(|found| found_again(pair, found)) else { return Ok(None) };
     let Some(found) = run.inside(found).map_err(|uncertain| (found, uncertain))? else { return Ok(None) };
     let Some(at) = frame(pair, found, none) else { return Ok(None) };
