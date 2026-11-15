@@ -1,14 +1,14 @@
 //! Source: original
 //! A run of edges as the model holds them, read back for the checks a wire and a face need: each edge's line or circle
 //! and the part of it the edge covers, in the order and direction the run takes them; points along the run; the plane
-//! its points lie in; and its pieces in that plane's parameters.
+//! its points lie in, or one through the line they lie in; and its pieces in that plane's parameters.
 
 use occam_report::{Code, Fault, Input, Report};
 use occam_topo::{Edge, Edit, Id};
-use occam_units::Vec3;
+use occam_units::{Vec3, Vector};
 
 use super::flat::Flat;
-use super::space::{Bent, Flatland, unit};
+use super::space::{Bent, Flatland, frame, unit};
 
 /// Steps a circle's part is sampled at, for the plane through a run and the check that it lies in it.
 const STEPS: u32 = 16;
@@ -87,9 +87,10 @@ impl Run {
     }
 }
 
-/// A plane through `points`, at the first, if they span one beyond `band`: through the point furthest from the first and
-/// the point furthest from the line through those two. Which way it faces is the caller's to settle.
-pub(crate) fn plane_through(points: &[Vec3], band: f64) -> Option<Flatland> {
+/// How `points` spread from the first, if any is further than `band` from it: the first, the unit vector from it towards
+/// the point furthest from it, and, if any is further than `band` from the line through those two, the unit normal of the
+/// plane through them and the point furthest from that line.
+fn spread(points: &[Vec3], band: f64) -> Option<(Vec3, Vec3, Option<Vec3>)> {
     let origin = *points.first()?;
     let furthest = |of: &dyn Fn(Vec3) -> f64| {
         points.iter().map(|&p| (of(p), p)).fold((0.0, origin), |best, next| if next.0 > best.0 { next } else { best })
@@ -100,7 +101,23 @@ pub(crate) fn plane_through(points: &[Vec3], band: f64) -> Option<Flatland> {
     }
     let along = unit(far - origin);
     let (off, wide) = furthest(&|p| (p - origin).cross(along).norm());
-    (off > band).then(|| Flatland::new(origin, unit((far - origin).cross(wide - origin))))
+    Some((origin, along, (off > band).then(|| unit((far - origin).cross(wide - origin)))))
+}
+
+/// A plane through `points`, at the first, if they span one beyond `band`: through the point furthest from the first and
+/// the point furthest from the line through those two. Which way it faces is the caller's to settle.
+pub(crate) fn plane_through(points: &[Vec3], band: f64) -> Option<Flatland> {
+    let (origin, _, normal) = spread(points, band)?;
+    Some(Flatland::new(origin, normal?))
+}
+
+/// A plane `points` lie in, at the first, if any is further than `band` from it: [`plane_through`]'s if they span one,
+/// and if they lie in a line, the plane through that line square to the x axis [`frame`] places about it. Which way it
+/// faces is the caller's to settle.
+pub(crate) fn plane_holding(points: &[Vec3], band: f64) -> Option<Flatland> {
+    let (origin, along, normal) = spread(points, band)?;
+    let square = || frame(origin, along, None).vector(Vector::from_vec3(Vec3::new(1.0, 0.0, 0.0))).to_vec3();
+    Some(Flatland::new(origin, normal.unwrap_or_else(square)))
 }
 
 /// The point of `points` furthest from `plane`, and how far, if any is further than `band`.

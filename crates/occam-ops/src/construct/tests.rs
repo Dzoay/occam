@@ -190,6 +190,22 @@ fn a_wire_that_crosses_itself_is_refused_where_it_crosses() {
 }
 
 #[test]
+fn a_wire_whose_points_are_all_in_line_is_refused_where_it_runs_back_along_itself() {
+    // Its points span no plane, but in any plane through their line its second edge runs back along its first, to its
+    // end two thirds of the way along the first; along x and along a diagonal.
+    for along in [[1.0, 0.0, 0.0], [1.0, 2.0, -2.0]] {
+        let report =
+            refused(json!([{"op": "wire", "points": [[0, 0, 0], along.map(|a| 3.0 * a), along.map(|a| 2.0 * a)]}]));
+        let code = (report.code, number(&report, "first"), number(&report, "second"));
+        assert_eq!(code, (Code::WireCrossesItself, 0.0, 1.0), "{report:?}");
+        let Some(occam_report::Value::Point(p)) = report.value("point").map(|v| v.value) else { panic!("{report:?}") };
+        assert!(p.iter().zip(along).all(|(x, a)| (x - 2.0 * a).abs() < 1e-9), "{report:?}");
+    }
+    let (model, _) = built(json!([{"op": "wire", "points": [[0, 0, 0], [5, 0, 0], [10, 0, 0]]}]));
+    assert_eq!(model.ids::<Edge>().len(), 2, "a wire that goes on along its line is made");
+}
+
+#[test]
 fn an_open_wire_is_judged_with_its_last_point_which_no_edge_begins_at() {
     // Each leaves the plane of every point before its last, so it lies in no plane and crosses nothing.
     let out_of_plane = [
