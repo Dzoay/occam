@@ -206,6 +206,23 @@ fn a_wire_whose_points_are_all_in_line_is_refused_where_it_runs_back_along_itsel
 }
 
 #[test]
+fn one_line_closed_is_refused_at_the_wire_as_three_points_in_line_closed_are() {
+    // Closed, a line is joined to its start by a second edge back along it, which it touches all along: at its middle,
+    // as it is named. So are points that go there and back, and the wire that three points in line close.
+    let line = json!({"op": "wire", "label": "w", "edges": [{"line": [[0, 0, 0], [10, 0, 0]]}], "closed": true});
+    let report = refused(json!([line, {"op": "face", "outer": "w"}]));
+    assert_eq!(report.input, Some(Input::at("steps[0]").in_step(0, Some("wire"))), "{report:?}");
+    let named = (report.code, number(&report, "first"), number(&report, "second"));
+    assert_eq!(named, (Code::WireCrossesItself, 0.0, 1.0));
+    let Some(occam_report::Value::Point(p)) = report.value("point").map(|v| v.value) else { panic!("{report:?}") };
+    assert!(p.iter().zip([5.0, 0.0, 0.0]).all(|(x, q)| (x - q).abs() < 1e-9), "{report:?}");
+    let back = refused(json!([{"op": "wire", "points": [[0, 0, 0], [10, 0, 0], [0, 0, 0]]}]));
+    assert_eq!((back.code, number(&back, "first"), number(&back, "second")), (Code::WireCrossesItself, 0.0, 1.0));
+    let three = refused(json!([{"op": "wire", "points": [[0, 0, 0], [5, 0, 0], [10, 0, 0]], "closed": true}]));
+    assert_eq!((three.code, number(&three, "first"), number(&three, "second")), (Code::WireCrossesItself, 0.0, 2.0));
+}
+
+#[test]
 fn an_open_wire_is_judged_with_its_last_point_which_no_edge_begins_at() {
     // Each leaves the plane of every point before its last, so it lies in no plane and crosses nothing.
     let out_of_plane = [
