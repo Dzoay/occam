@@ -12,8 +12,10 @@ and each was approved as asked:
 | `@preact/signals` | 2.11.4 | MIT | runtime | `@preact/signals-core` 1.14.5, MIT, nothing further |
 | `esbuild` | 0.28.2 | MIT | build | one prebuilt binary for the platform, of 26 optional packages |
 | `typescript` | 7.0.2 | Apache-2.0 | build | the native compiler: one platform package, Apache-2.0, of 20 |
-| `@webgpu/types` | 0.1.74 | BSD-3-Clause | build | nothing |
 | `@types/web` | 0.0.366 | Apache-2.0 | build | nothing |
+
+**The user dropped `@webgpu/types` (0.1.74) later on 2026-11-15,** because `@types/web` declares WebGPU itself and the
+two clash, in 215 duplicate declarations.
 
 ## What it means in practice
 
