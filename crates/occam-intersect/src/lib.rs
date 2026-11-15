@@ -22,6 +22,12 @@
 //! recorded. One that cannot reach the band is reported with what it reached, and kept. [`fits`] fits many traces, one
 //! a task.
 //!
+//! [`Hybrid`] is the general method, a [`Method`] for any pair whose subdivided surfaces have finite domains: a
+//! breadth-first subdivision by boxes, and against an analytic side by its implicit form's sign, gives at most one
+//! start point a leaf; start points already in the tube about a found curve are not traced, the rest are traced in
+//! rounds and fitted. A leaf where the surfaces lie within the band of each other is reported as an overlap, and a part
+//! halved as far as it goes and still too large as unresolved; neither is answered with curves.
+//!
 //! The crate works on surfaces only, through occam-geom's frozen seam, and knows nothing of faces or ids. Every decision
 //! a method makes goes through occam-math's predicates.
 
@@ -34,11 +40,16 @@ mod edge;
 mod fit;
 #[cfg(test)]
 mod fit_tests;
+mod hybrid;
+#[cfg(test)]
+mod hybrid_tests;
 mod implicit;
 mod march;
 #[cfg(test)]
 mod march_tests;
 mod methods;
+mod on;
+mod pieces;
 mod project;
 mod section;
 #[cfg(test)]
@@ -46,9 +57,12 @@ mod tests;
 mod trace;
 #[cfg(test)]
 mod trace_tests;
+mod traverse;
+mod tube;
 
 pub use closed::Closed;
 pub use fit::{Fitted, fit, fits};
+pub use hybrid::Hybrid;
 pub use methods::{Answer, Budget, Method, Methods, Spent, SurfacePair, Work, sections};
 pub use section::{Coincidence, Contact, Section, SectionCurve};
 pub use trace::{Crossing, End, Jump, ROUND, Start, Station, Trace, Tracer, Uncertain, Which};

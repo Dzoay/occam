@@ -6,8 +6,10 @@
 //! cone's away from its apex, both nappes included.
 
 use occam_geom::Analytic;
-use occam_math::sin_cos;
+use occam_math::{Interval, sin_cos};
 use occam_units::Vec3;
+
+use crate::decide::{dot, exact, less};
 
 /// A surface as the zero set of a function of space.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -30,6 +32,21 @@ fn split(x: Vec3, origin: Vec3, axis: Vec3) -> (f64, Vec3, f64) {
     let along = w.dot(axis);
     let across = w - axis * along;
     (along, across, across.norm())
+}
+
+/// `x - origin` as its part along `axis` and its part across it, enclosed.
+fn parts(x: Vec3, origin: Vec3, axis: Vec3) -> (Interval, [Interval; 3]) {
+    let (w, axis) = (less(exact(x), exact(origin)), exact(axis));
+    let along = dot(w, axis);
+    let [wx, wy, wz] = w;
+    let [ax, ay, az] = axis;
+    (along, [wx - ax * along, wy - ay * along, wz - az * along])
+}
+
+/// The size of every value `x` holds, enclosed: what it holds lies within its radius of its middle, and so its size
+/// within that of its middle's size.
+pub(crate) fn magnitude(x: Interval) -> Interval {
+    Interval::new(x.mid().abs(), x.radius())
 }
 
 impl Implicit {
@@ -83,6 +100,31 @@ impl Implicit {
         }
     }
 
+    /// The function's value at `x`, enclosed: the formula of [`Implicit::at`] in interval arithmetic, on `x` and the
+    /// form's numbers as they are held, so that the value's rounding is bounded. Every form here is a distance or, for
+    /// the cone, changes no faster than one, so over a ball of radius `r` about `x` the function stays within `r` of it
+    /// (P8's implicit test).
+    pub(crate) fn enclosed(&self, x: Vec3) -> Interval {
+        let length = |v: [Interval; 3]| dot(v, v).sqrt();
+        match *self {
+            Self::Plane { origin, normal } => dot(less(exact(x), exact(origin)), exact(normal)),
+            Self::Sphere { centre, radius } => length(less(exact(x), exact(centre))) - Interval::exact(radius),
+            Self::Cylinder { on_axis, axis, radius } => {
+                let (_, across) = parts(x, on_axis, axis);
+                length(across) - Interval::exact(radius)
+            }
+            Self::Cone { apex, axis, slope: (sin, cos) } => {
+                let (along, across) = parts(x, apex, axis);
+                length(across) * Interval::exact(cos) - magnitude(along) * Interval::exact(sin)
+            }
+            Self::Torus { centre, axis, major, minor } => {
+                let (along, across) = parts(x, centre, axis);
+                let out = length(across) - Interval::exact(major);
+                (out * out + along * along).sqrt() - Interval::exact(minor)
+            }
+        }
+    }
+
     /// `x` moved along the gradient onto the surface: exact for a distance, and the nearer foot otherwise.
     pub(crate) fn onto(&self, x: Vec3) -> Vec3 {
         let (value, gradient) = self.at(x);
@@ -126,6 +168,34 @@ mod tests {
             assert!((value - distance).abs() < 1e-12 && (gradient.norm() - 1.0).abs() < 1e-12, "{form:?}");
             assert!(Implicit::of(form).at(Implicit::of(form).onto(x)).0.abs() < 1e-12, "{form:?}");
         }
+    }
+
+    #[test]
+    fn each_forms_enclosed_value_holds_its_value_to_rounding() {
+        let mm = Length::from_millimetres;
+        let tilted = Direction::normalised(Vec3::new(0.3, -0.4, 0.866));
+        let forms = [
+            Analytic::Plane { origin: point(0.1, 0.0, 1.0), normal: tilted },
+            Analytic::Sphere { centre: point(1.0, 0.2, 0.0), radius: mm(2.0) },
+            Analytic::Cylinder { on_axis: point(0.0, 0.3, 7.0), axis: tilted, radius: mm(1.0) },
+            Analytic::Cone { apex: point(0.0, 0.0, 0.5), axis: tilted, half_angle: Angle::from_radians(0.4) },
+            Analytic::Torus { centre: point(0.0, 0.0, 0.0), axis: tilted, major: mm(5.0), minor: mm(1.0) },
+        ];
+        for form in forms {
+            for x in [Vec3::new(3.0, 4.0, 3.5), Vec3::new(-0.7, 0.2, -2.5), Vec3::new(4.9, 0.1, 0.3)] {
+                let (value, enclosed) = (Implicit::of(form).at(x).0, Implicit::of(form).enclosed(x));
+                let holds = enclosed.lower() <= value && value <= enclosed.upper();
+                assert!(holds && enclosed.radius() < 1e-13, "{form:?} at {x:?}: {value} in {enclosed:?}");
+            }
+        }
+        let below = Implicit::of(Analytic::Cone {
+            apex: point(0.0, 0.0, 0.0),
+            axis: up(),
+            half_angle: Angle::from_radians(0.4),
+        });
+        let (sin, cos) = sin_cos(0.4);
+        let mid = below.enclosed(Vec3::new(2.0, 0.0, -3.0)).mid();
+        assert!((mid - (2.0 * cos - 3.0 * sin)).abs() < 1e-14, "the lower nappe's height is taken by its size: {mid}");
     }
 
     #[test]

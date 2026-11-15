@@ -30,4 +30,6 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | `sloan-1993` | paper | n/a | Sloan. *A Fast Algorithm for Generating Constrained Delaunay Triangulations*. Computers & Structures 47(3), 1993 |
 | `bajaj-hoffmann-lynch-hopcroft-1988` | paper | n/a | Bajaj, Hoffmann, Lynch, Hopcroft. *Tracing Surface Intersections*. Computer Aided Geometric Design 5(4), 1988 |
 | `barnhill-kersey-1990` | paper | n/a | Barnhill, Kersey. *A Marching Method for Parametric Surface/Surface Intersection*. Computer Aided Geometric Design 7(1–4), 1990 |
+| `lane-riesenfeld-1980` | paper | n/a | Lane, Riesenfeld. *A Theoretical Development for the Computer Generation and Display of Piecewise Polynomial Surfaces*. IEEE Transactions on Pattern Analysis and Machine Intelligence PAMI-2(1), 1980 |
+| `houghton-emnett-factor-sabharwal-1985` | paper | n/a | Houghton, Emnett, Factor, Sabharwal. *Implementation of a Divide-and-Conquer Method for Intersection of Parametric Surfaces*. Computer Aided Geometric Design 2(1–3), 1985 |
 | `von-neumann-1950` | book | n/a | von Neumann. *Functional Operators, Volume II: The Geometry of Orthogonal Spaces*. Annals of Mathematics Studies 22, Princeton University Press, 1950 |

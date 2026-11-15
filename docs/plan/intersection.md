@@ -96,20 +96,6 @@ Each curve lies on both surfaces within the band at dense samples, and its image
 degenerate pencil is classified as built, and none is fitted. Where a closed form also answers, the two agree within
 the band. A pencil nudged to within the band of a split is `decide.undecided`.
 
-### `intersection.hybrid`
-
-The general method: subdivision for start points, then the trace. A breadth-first traversal splits parameter boxes and
-rejects pairs whose `bounds` miss each other, with a rounding margin (Lane and Riesenfeld 1980; Houghton et al. 1985;
-Barnhill and Kersey 1990). Where one side is analytic, a pair is also rejected when that side's implicit function cannot
-change sign over the other's box ([P8](../evidence/2026-11-09-p8.md)). Each leaf gives at most one start point. Points
-are cached and filtered in parallel, and duplicates are found within a tube as wide as the chord's sag, or
-`sqrt(tolerance)` near a tangency. A leaf the budget cannot resolve is reported. Lattice seeding alone is not offered,
-because it returned 256 of 577 curves with no warning.
-
-*Failing test first:* P5's 625-component surface against a plane gives all 577 curves; a curve through a corner shared
-by both subdivisions is found once; a rational cylinder against its analytic twin is reported as an unresolved overlap,
-not answered with curves; the output is the same bits at 1 and N threads.
-
 ### `intersection.resolution`
 
 What the tolerance cannot tell apart (O24). A loop smaller than `d` comes back as `BelowResolution { at, bound }`,

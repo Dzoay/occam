@@ -52,6 +52,13 @@ next *args:
 test *args:
     cargo nextest run "$@"
 
+# The hybrid on P5's 625-component surface against a plane, all 577 curves. Minutes in a debug build, so nightly, not
+# per PR (docs/PLAN.md section 5)
+[env("CARGO_TARGET_DIR", target)]
+[group('test')]
+hybrid-many-loops *args:
+    cargo nextest run -p occam-intersect p5s_625_component_surface --run-ignored only --no-capture "$@"
+
 # Format the Rust code
 [group('check')]
 fmt:

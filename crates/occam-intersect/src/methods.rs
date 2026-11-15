@@ -88,6 +88,25 @@ pub trait Method: Send + Sync {
         work: &mut Work,
         section: &mut Section,
     ) -> Result<Answer, Spent>;
+
+    /// [`Method::attempt`] on a pair held shared, for a method that runs work of its own in parallel through `exec`,
+    /// as the hybrid runs its traces in rounds. It gives the same section as `attempt`, the same bits on any number of
+    /// threads. By default it is `attempt`, on the calling thread.
+    ///
+    /// # Errors
+    ///
+    /// [`Spent`], as from `attempt`.
+    fn attempt_shared(
+        &self,
+        exec: &Exec,
+        pair: &SurfacePair,
+        tol: Tolerance,
+        work: &mut Work,
+        section: &mut Section,
+    ) -> Result<Answer, Spent> {
+        let _ = exec;
+        self.attempt(pair.0.as_ref(), pair.1.as_ref(), tol, work, section)
+    }
 }
 
 /// The methods, in the order they are asked. The order is the only ordered choice there is (S4).
@@ -132,16 +151,37 @@ impl Methods {
     /// a method that runs out of `budget` gives it for `budget-spent`, beside what the method found.
     #[must_use]
     pub fn section(&self, a: &dyn Surface, b: &dyn Surface, tol: Tolerance, budget: Budget) -> Section {
-        if key(a) > key(b) { self.ordered(b, a, tol, budget).swapped() } else { self.ordered(a, b, tol, budget) }
+        let ordered = |a: &dyn Surface, b: &dyn Surface| {
+            self.ordered(budget, |method, work, found| method.attempt(a, b, tol, work, found))
+        };
+        if key(a) > key(b) { ordered(b, a).swapped() } else { ordered(a, b) }
     }
 
-    /// The section of a pair already in canonical order: the first method that applies answers, each with the whole
-    /// budget.
-    fn ordered(&self, a: &dyn Surface, b: &dyn Surface, tol: Tolerance, budget: Budget) -> Section {
+    /// [`Methods::section`] of a pair held shared, each method given `exec` for its own work, through
+    /// [`Method::attempt_shared`]: the same section, the same bits on any number of threads.
+    #[must_use]
+    pub fn section_shared(&self, exec: &Exec, pair: &SurfacePair, tol: Tolerance, budget: Budget) -> Section {
+        let ordered = |pair: &SurfacePair| {
+            self.ordered(budget, |method, work, found| method.attempt_shared(exec, pair, tol, work, found))
+        };
+        if key(pair.0.as_ref()) > key(pair.1.as_ref()) {
+            ordered(&(Arc::clone(&pair.1), Arc::clone(&pair.0))).swapped()
+        } else {
+            ordered(pair)
+        }
+    }
+
+    /// The section of a pair already in canonical order, each method asked through `attempt`: the first that applies
+    /// answers, each with the whole budget.
+    fn ordered(
+        &self,
+        budget: Budget,
+        attempt: impl Fn(&dyn Method, &mut Work, &mut Section) -> Result<Answer, Spent>,
+    ) -> Section {
         let mut tally = Tally::default();
         for method in &self.list {
             let (mut work, mut found) = (Work::of(budget), Section::default());
-            let answer = method.attempt(a, b, tol, &mut work, &mut found);
+            let answer = attempt(method.as_ref(), &mut work, &mut found);
             tally = tally.merged(found.tally);
             let failure = match answer {
                 Ok(Answer::Declined) => continue,
@@ -157,8 +197,8 @@ impl Methods {
     }
 }
 
-/// The section of every pair, one pair a task through `exec`, one result each in pair order (P5, L6). The same pairs
-/// give the same bits on any number of threads.
+/// The section of every pair, one pair a task through `exec`, one result each in pair order (P5, L6), each method given
+/// `exec` for its own work too. The same pairs give the same bits on any number of threads.
 #[must_use]
 pub fn sections(
     exec: &Exec,
@@ -167,9 +207,9 @@ pub fn sections(
     tol: Tolerance,
     budget: Budget,
 ) -> Vec<Section> {
-    let count = pairs.len();
+    let (count, inner) = (pairs.len(), exec.clone());
     let found = exec.map(count, Grain::Each, move |index| {
-        pairs.get(index).map(|(a, b)| methods.section(a.as_ref(), b.as_ref(), tol, budget))
+        pairs.get(index).map(|pair| methods.section_shared(&inner, pair, tol, budget))
     });
     found.into_iter().flatten().collect()
 }

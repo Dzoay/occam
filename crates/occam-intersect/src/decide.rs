@@ -52,12 +52,30 @@ impl Decide {
         self.tally = self.tally.merged(decide_computed(&Formed, &[[length]], self.band, &mut self.verdicts));
         match self.verdicts.first() {
             Some(Verdict::Decided(side)) => Ok(*side),
-            Some(Verdict::Undecided) | None => Err(Uncertain {
-                at: Point::from_vec3(at),
-                length: Length::from_millimetres(length.mid()),
-                radius: Length::from_millimetres(length.radius()),
-            }),
+            Some(Verdict::Undecided) | None => Err(uncertain(length, at)),
         }
+    }
+
+    /// Where each of `lengths` lies against the band, in order, all counted in the tally: `None` for one whose
+    /// enclosure reaches across an edge of the band. They are decided together, four lanes at a time.
+    pub(crate) fn sides(&mut self, lengths: &[Interval]) -> Vec<Option<Side>> {
+        let inputs: Vec<[Interval; 1]> = lengths.iter().map(|length| [*length]).collect();
+        self.verdicts.clear();
+        self.tally = self.tally.merged(decide_computed(&Formed, &inputs, self.band, &mut self.verdicts));
+        let side = |verdict: &Verdict| match verdict {
+            Verdict::Decided(side) => Some(*side),
+            Verdict::Undecided => None,
+        };
+        self.verdicts.iter().map(side).collect()
+    }
+}
+
+/// The decision on `length` at `at` that the band could not make.
+pub(crate) fn uncertain(length: Interval, at: Vec3) -> Uncertain {
+    Uncertain {
+        at: Point::from_vec3(at),
+        length: Length::from_millimetres(length.mid()),
+        radius: Length::from_millimetres(length.radius()),
     }
 }
 
@@ -74,17 +92,17 @@ pub(crate) fn undecided(uncertain: &Uncertain, band: f64) -> Report {
 }
 
 /// `v` as three exact intervals.
-fn exact(v: Vec3) -> [Interval; 3] {
+pub(crate) fn exact(v: Vec3) -> [Interval; 3] {
     [Interval::exact(v.x), Interval::exact(v.y), Interval::exact(v.z)]
 }
 
 /// `a - b`.
-fn less([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> [Interval; 3] {
+pub(crate) fn less([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> [Interval; 3] {
     [ax - bx, ay - by, az - bz]
 }
 
 /// `a . b`.
-fn dot([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> Interval {
+pub(crate) fn dot([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> Interval {
     ax * bx + ay * by + az * bz
 }
 
