@@ -1,4 +1,5 @@
 // Serves a built viewer on 127.0.0.1 only, on a free port: a loopback address is a secure context, which WebGPU needs.
+// It sends no COOP or COEP headers, since the page needs none.
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
@@ -8,6 +9,7 @@ const TYPES = {
   ".js": "text/javascript",
   ".css": "text/css",
   ".map": "application/json",
+  ".wasm": "application/wasm",
 };
 
 /** Serves `root`; resolves to the server and its address. */

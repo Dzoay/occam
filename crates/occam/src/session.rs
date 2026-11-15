@@ -8,12 +8,13 @@
 mod wire;
 
 use std::borrow::Cow;
+use std::ops::Range;
 
 use occam_math::Exec;
 use occam_mesh::Mesh;
 use occam_ops::default_tolerance;
 use occam_report::{Description, EntityKind, EntityRef, Report};
-use occam_topo::{Changes, Snapshot};
+use occam_topo::{Changes, Face, Snapshot};
 
 pub use wire::ran_words;
 pub(crate) use wire::{answer, line};
@@ -169,6 +170,40 @@ impl Session {
         let answer = Meshed::new(limits, &model, &mesh, &meshed);
         self.meshed = Some((mesh, Vec::new()));
         Ok(answer)
+    }
+
+    /// How many faces the model has, which [`Session::mesh_part`] counts its ranges in: none before a request has made
+    /// a model.
+    #[must_use]
+    pub fn face_count(&self) -> usize {
+        self.model.as_ref().map_or(0, |model| model.ids::<Face>().len())
+    }
+
+    /// The model's faces from `faces.start` up to `faces.end`, counted in id order, meshed on `exec` to a chordal
+    /// `deflection` in millimetres and an `angle` in radians, with one answer per face: a part of the mesh
+    /// [`Session::mesh`] gives, as a mesh worker meshes a range of faces. Its buffers are numbered from its own start,
+    /// and each face's block holds the bits the whole mesh's does, so the parts of the model's faces, laid end to end in
+    /// id order, are the whole mesh's buffers. Its reports refuse the edges its faces use and say what checking the part
+    /// watertight as far as it reaches found. A range past the last face stops at it. The session's last mesh is
+    /// neither used nor kept, since a mesh worker's session never changes its model.
+    ///
+    /// # Errors
+    ///
+    /// `mesh.limit-not-positive` for a deflection or an angle that is not a finite number greater than zero.
+    pub fn mesh_part(
+        &self,
+        exec: &Exec,
+        deflection: f64,
+        angle: f64,
+        faces: Range<usize>,
+    ) -> Result<Meshed, Vec<Report>> {
+        let limits = limits(deflection, angle).map_err(|report| vec![report])?;
+        let model = self.answering().map_err(|report| vec![report])?;
+        let ids = model.ids::<Face>();
+        let end = faces.end.min(ids.len());
+        let part = ids.get(faces.start.min(end)..end).unwrap_or_default();
+        let mesh = occam_mesh::mesh_part(exec, &model, limits, part);
+        Ok(Meshed::new(limits, &model, &mesh, part))
     }
 
     /// The live ids of each of `kinds`, in the order asked; none of a kind no model holds.

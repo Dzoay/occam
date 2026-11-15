@@ -1,8 +1,9 @@
 // The controls, drawn by Preact. Each reads the signals it shows, so a change redraws that control alone, and each acts
 // on the viewer only through the actions it is given.
 
+import type { KernelReport } from "./protocol.ts";
 import type { Report } from "./report.ts";
-import { failure, notice, selection, status } from "./state.ts";
+import { failure, notice, refusals, selection, status } from "./state.ts";
 
 export interface Actions {
   fit(): void;
@@ -50,15 +51,31 @@ function Shown({ shown, kind }: { shown: Report; kind: string }) {
   );
 }
 
+/** What the kernel refused of the model shown, each by the entity it names first; the rest of the model is drawn. */
+function Refusals({ reports }: { reports: readonly KernelReport[] }) {
+  return (
+    <div class="refusals" role="status" aria-label="Refused">
+      {reports.map((each) => (
+        <section class="report refusal" data-code={each.code} data-entity={each.entities[0]} data-reason={each.reason}>
+          <p class="code">{each.code} {each.entities[0]}</p>
+          <p class="message">{each.message}{each.reason ? ` (${each.reason})` : ""}</p>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 /** The controls over the drawing, or, when the page cannot draw, the report in its place. */
 export function App({ actions }: { actions: Actions | null }) {
   const failed = failure.value;
   if (failed) return <Shown shown={failed} kind="failure" />;
   const shown = notice.value;
+  const refused = refusals.value;
   return (
     <>
       {actions && <Controls actions={actions} />}
       {shown && <Shown shown={shown} kind="notice" />}
+      {refused.length > 0 && <Refusals reports={refused} />}
     </>
   );
 }

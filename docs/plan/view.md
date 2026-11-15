@@ -58,16 +58,6 @@ detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes af
 
 ## Steps
 
-### `view.workers`
-
-`occam`'s `Session` made real and wrapped by `occam-wasm`. One editing worker holds the model, runs requests and
-publishes the binary twin after each edit. A pool of mesh workers, kept alive between requests, each loads its own
-copy and meshes ranges of faces, about 64 calls a job, transferring flat arrays back. No wasm runs on the page's main
-thread, and the page needs no COOP or COEP headers.
-
-*Failing test first:* in headless Chromium, a request run in the editing worker is meshed by four workers to the
-native mesher's hash; a failing face is named and the rest arrive; the main thread never loads the module.
-
 ### `view.live`
 
 `occam view --model part.occam`: [the live view's server](../architecture/live-view.md#the-server), in `occam-cli`, on axum

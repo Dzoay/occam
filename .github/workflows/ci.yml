@@ -114,6 +114,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
+        with:
+          targets: wasm32-unknown-unknown # the kernel the page's workers run
+          tools: just wasm-bindgen-cli
       - name: The viewer's packages and Playwright's Chromium
         working-directory: web
         run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium

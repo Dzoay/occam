@@ -619,8 +619,8 @@ catalogue! {
     }
 
     /// The viewer's page was given a mesh without the renderer contract's layout, and draws the last good one. Its
-    /// fix, meshing again with the `occam` that serves the page, is in its wording: no test can follow it until the
-    /// page meshes through `occam` (`view.workers`, `view.live`).
+    /// fix, meshing again with the `occam` that serves the page, is in its wording only, as no one can follow it: the
+    /// page's own workers mesh through that `occam`, and meshing again gives the same bits (`view.workers`).
     MeshMalformed = "view.mesh-malformed" {
         Error, [],
         "The mesh the page was given does not have the renderer contract's layout.",

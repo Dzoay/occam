@@ -66,3 +66,28 @@ html, body {
   font-family: ui-monospace, monospace;
   font-weight: 600;
 }
+
+.refusals {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  max-width: 40em;
+  max-height: 40vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report.refusal {
+  margin: 0;
+  padding: 8px 12px;
+}
+
+.report.refusal .code {
+  margin: 0 0 4px;
+}
+
+.report.refusal .message {
+  margin: 0;
+}
