@@ -136,6 +136,7 @@ every_family! {
         Row::Curve(Box::new(Hyperbola::placed(&placement(), mm(4.0), mm(3.0)).unwrap()), (-2.0, 2.5));
     parabola: "Parabola" => Row::Curve(Box::new(Parabola::placed(&placement(), mm(3.0)).unwrap()), (-20.0, 30.0));
     spline_curve: "SplineCurve" => Row::Curve(Box::new(twist()), (twist().range().lo, twist().range().hi));
+    fitted_curve: "FittedCurve" => Row::Curve(Box::new(crate::FittedCurve::new(twist(), mm(1e-4)).unwrap()), (0.1, 0.9));
     offset_curve: "OffsetCurve" =>
         Row::Curve(Box::new(OffsetCurve::new(ring_of_ten(), mm(2.0), up()).unwrap()), (0.0, TAU));
     trimmed_curve: "TrimmedCurve" =>

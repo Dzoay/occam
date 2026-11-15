@@ -17,6 +17,11 @@
 //! occam-math's predicates and counted in its tally; one the band cannot make ends it undecided, reported as
 //! `decide.undecided`. Whether a touch is a contact is decided later.
 //!
+//! [`fit`] makes curves of a trace's points: B-splines through its stations, each with its images on both surfaces,
+//! cut where a surface's parameters jump, refined until each lies within the band of both, and each with its fit
+//! recorded. One that cannot reach the band is reported with what it reached, and kept. [`fits`] fits many traces, one
+//! a task.
+//!
 //! The crate works on surfaces only, through occam-geom's frozen seam, and knows nothing of faces or ids. Every decision
 //! a method makes goes through occam-math's predicates.
 
@@ -25,6 +30,9 @@ mod correct;
 mod correct_tests;
 mod decide;
 mod edge;
+mod fit;
+#[cfg(test)]
+mod fit_tests;
 mod implicit;
 mod march;
 #[cfg(test)]
@@ -38,6 +46,7 @@ mod trace;
 #[cfg(test)]
 mod trace_tests;
 
+pub use fit::{Fitted, fit, fits};
 pub use methods::{Answer, Budget, Method, Methods, Spent, SurfacePair, Work, sections};
 pub use section::{Coincidence, Contact, Section, SectionCurve};
 pub use trace::{Crossing, End, Jump, ROUND, Start, Station, Trace, Tracer, Uncertain, Which};

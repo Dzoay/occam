@@ -99,6 +99,11 @@ wherever the distance is within the base's radii of curvature on that side, and 
 from there finds it where it is not. A trimmed family's foot is the base's where that lies in the trimmed part, and
 otherwise is searched for there.
 
+A curve fitted to points, as a section curve is, is a `FittedCurve<C>`: its base held by type, as an offset's is, and
+`fit` saying how closely it fits what it was fitted to, which a map grows by the most it stretches a length.
+`interpolate` gives the B-spline through points at the parameters given (Piegl and Tiller, A9.1), so that a curve and
+its images in two faces' parameters share their knots.
+
 ## Parameter curves
 
 A curve in a face's parameters is any curve family drawn in the plane `z = 0` and read as `(u, v) = (x, y)`:

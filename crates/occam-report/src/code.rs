@@ -549,6 +549,15 @@ catalogue! {
         "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}.",
     }
 
+    /// A curve fitted to traced points, or one of its images, does not lie within the band of both surfaces, though it
+    /// runs through every station it could be given: what it reached is reported, and the curve is kept beside the
+    /// report with its fit (L5).
+    FitOutsideBand = "intersect.fit-outside-band" {
+        Error, [],
+        "A curve fitted to traced points, or an image of it, is not within the band of both surfaces; it is kept with its fit.",
+        "The curve fitted to {points} traced points and its images lie within {reached} of both surfaces, outside the band of {band}.",
+    }
+
     /// A limit a mesh is made to, its deflection or its angle, is not a finite number greater than zero.
     LimitNotPositive = "mesh.limit-not-positive" {
         Error, [],
@@ -1250,6 +1259,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A decision cannot be made at this resolution: the value's certified enclosure reaches across an edge of the band.",
                 "template": "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "FitOutsideBand",
+                "code": "intersect.fit-outside-band",
+                "severity": "error",
+                "summary": "A curve fitted to traced points, or an image of it, is not within the band of both surfaces; it is kept with its fit.",
+                "template": "The curve fitted to {points} traced points and its images lie within {reached} of both surfaces, outside the band of {band}.",
                 "remedies": []
             }
         ])
