@@ -130,18 +130,6 @@ section cross, split the curves there and are kept as contacts, where P5 passed 
 with a bound that contains the true loop, and never silent. `nt_poly_loop` at 1e-10, P5's one silent failure, is
 `BelowResolution`. The Viviani node splits its curve.
 
-### `intersection.hits`
-
-A curve over a range against a surface. The curve's box over the range is tested against the surface's first. Against
-an analytic surface, the roots of its implicit function along the curve are isolated by interval bounds over subranges
-(Rump 1999). Otherwise the range and the domain are subdivided together by their bounds, and Newton runs on the leaves.
-A touch is a contact. A curve lying in the surface is reported as an overlap over its subrange, which `booleans` needs
-for edges on coincident faces. A box test must be conservative, so the culled and unculled runs are compared by digest.
-
-*Failing test first:* a line through a cylinder gives two hits and a tangent line one contact; a circle lying in a plane
-is an overlap; on the corpus, the box test removes scans and changes no digest; a box seeded one ulp too small changes
-a digest and is caught, as P8's mis-ordered cylinder box was.
-
 ### `intersection.timing`
 
 The exit's measurements: `gates perf` classes for the closed forms, the pencil method, the hybrid and hits, with browser

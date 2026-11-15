@@ -541,6 +541,14 @@ catalogue! {
         "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
     }
 
+    /// The hits of a curve over a span on a surface stopped before they were complete, the budget spent. What was found
+    /// is kept beside the report (L5), and more may be missing.
+    HitsIncomplete = "intersect.hits-incomplete" {
+        Error, [],
+        "The hits of a curve on a surface stopped before they were complete; what was found is kept.",
+        "The hits stopped with {hits} points and {overlaps} overlaps found, and more may be missing.",
+    }
+
     /// A decision on a computed value could not be made at this resolution (O11): its certified enclosure reaches
     /// across an edge of the band. Nothing is guessed in its place.
     Undecided = "decide.undecided" {
@@ -1250,6 +1258,14 @@ mod tests {
                 "severity": "error",
                 "summary": "A section of two surfaces stopped before it was complete; what it found is kept.",
                 "template": "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
+                "remedies": []
+            },
+            {
+                "name": "HitsIncomplete",
+                "code": "intersect.hits-incomplete",
+                "severity": "error",
+                "summary": "The hits of a curve on a surface stopped before they were complete; what was found is kept.",
+                "template": "The hits stopped with {hits} points and {overlaps} overlaps found, and more may be missing.",
                 "remedies": []
             },
             {
