@@ -147,3 +147,6 @@ pub(crate) fn refine(mesh: &mut Triangulation, points: &mut Points, work: &Work<
     }
     Ok(false)
 }
+
+#[cfg(test)]
+mod tests;

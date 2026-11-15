@@ -164,3 +164,14 @@ impl Boundary {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn two_places_of_one_vertex_are_one_point_within_2_to_the_minus_32_of_the_span_in_each_parameter() {
+        let near = closeness([UvPoint::new(-1.0, 3.0), UvPoint::new(1.0, -5.0)].into_iter());
+        assert_eq!(near, [2.0 / 4_294_967_296.0, 8.0 / 4_294_967_296.0]);
+    }
+}

@@ -165,6 +165,19 @@ pub(crate) fn disc(radius: f64) -> Layout {
     Layout { points: vec![Vec3::new(radius, 0.0, 0.0)], edges, faces }
 }
 
+/// A flat triangle in `z = 0`, facing +Z: three straight edges, each drawn in the plane's parameters.
+pub(crate) fn triangle() -> Layout {
+    let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+    let edges = vec![straight(&points, (0, 1)), straight(&points, (1, 2)), straight(&points, (2, 0))];
+    let sides = vec![
+        side(0, false, uv_line((0.0, 0.0), (1.0, 0.0))),
+        side(1, false, uv_line((2.0, 0.0), (-2.0, 1.0))),
+        side(2, false, uv_line((0.0, 1.0), (0.0, -1.0))),
+    ];
+    let faces = vec![Patch { surface: Arc::new(Plane::placed(&Placement::identity())), sides, witness: (0.5, 0.25) }];
+    Layout { points, edges, faces }
+}
+
 /// [`disc`], with its circle drawn in the plane's parameters, where the plane's `(u, v)` is `(x, y)`.
 pub(crate) fn disc_drawn(radius: f64) -> Layout {
     let mut layout = disc(radius);

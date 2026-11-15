@@ -109,8 +109,41 @@ mod tests {
     }
 
     #[test]
+    fn a_point_beyond_the_edge_opposite_an_obtuse_corner_is_measured_to_that_edge() {
+        // Each of these lies beyond the edge from the second corner to the third, and the region test takes it there,
+        // not into the triangle.
+        let at = |x: f64, y: f64| Vec3::new(x, y, 0.0);
+        let near = distance(at(0.5, 1.0), [at(-3.0, 0.0), at(1.0, 0.0), at(0.0, 1.0)]);
+        assert!((near - 0.125_f64.sqrt()).abs() < 1e-15, "{near}");
+        assert_eq!(distance(at(-0.5, -3.0), [at(0.0, 1.0), at(-1.0, 0.0), at(3.0, 0.0)]), 3.0);
+    }
+
+    #[test]
     fn a_triangle_with_no_area_is_measured_from_its_nearest_corner() {
         assert_eq!(distance(Vec3::new(1.0, 1.0, 0.0), [A, A, A]), 2.0_f64.sqrt());
+        // Two corners at one place: the region test divides nought by nought, and the nearest corner answers.
+        let (a, c) = (Vec3::new(1.0, 0.0, 0.0), Vec3::new(3.0, 0.0, 0.0));
+        assert_eq!(distance(Vec3::new(1.5, 1.0, 0.0), [a, a, c]), 1.25_f64.sqrt());
+    }
+
+    #[test]
+    fn a_mesh_strays_from_its_surface_as_far_as_the_surface_is_from_its_triangles() {
+        use occam_geom::Plane;
+        use occam_units::{Direction, Local, Placement, Vector, World};
+
+        // A triangle in z = 0, against the plane z = 0.5 over the same (x, y).
+        let up = Placement::<World, World>::translation(Vector::from_vec3(Vec3::new(0.0, 0.0, 0.5)));
+        let surface = Plane::placed(&Placement::<Local, World>::identity().then(&up));
+        let corners = [(0.0, 0.0), (6.0, 0.0), (0.0, 6.0)];
+        let mesh = FaceMesh {
+            points: corners.map(|(x, y)| Point::from_vec3(Vec3::new(x, y, 0.0))).into(),
+            normals: vec![Direction::normalised(Vec3::new(0.0, 0.0, 1.0)); 3],
+            uvs: corners.map(|(u, v)| UvPoint::new(u, v)).into(),
+            triangles: vec![[0, 1, 2]],
+            sides: Vec::new(),
+            capped: false,
+        };
+        assert_eq!(deviation(&mesh, &surface), 0.5);
     }
 
     #[test]

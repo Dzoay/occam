@@ -149,6 +149,51 @@ mod tests {
     }
 
     #[test]
+    fn the_first_bounds_are_shewchuks() {
+        let epsilon = f64::from_bits(970 << 52);
+        assert_eq!(EPSILON, epsilon, "2^-53");
+        assert_eq!(ORIENT_BOUND, (3.0 + 16.0 * epsilon) * epsilon);
+        assert_eq!(INCIRCLE_BOUND, (10.0 + 96.0 * epsilon) * epsilon);
+    }
+
+    #[test]
+    fn a_value_exactly_on_its_bound_decides_nothing_nor_does_a_size_out_of_range() {
+        assert_eq!((beyond(1.5, 1.0, 1.0), beyond(-1.5, 1.0, 1.0)), (Some(Side::Above), Some(Side::Below)));
+        assert_eq!((beyond(1.0, 1.0, 1.0), beyond(-1.0, 1.0, 1.0)), (None, None));
+        assert_eq!((beyond(1.5, 1.0, 1e-300), beyond(1.5, 1.0, 1e300)), (None, None));
+    }
+
+    #[test]
+    fn the_first_stage_decides_what_the_exact_stage_cannot_reach() {
+        // Coordinates below 2^-427 are beyond the exact stage at degree 2, and their products, near 1e-262, within the
+        // first stage's range. This triangle is near enough a line that occam-math's filter cannot say which way it
+        // runs, and its exact stage cannot reach it: only the first stage says anticlockwise.
+        let (a, b) = (
+            [-2.390_187_475_222_672_3e-131, 5.319_100_281_996_448e-132],
+            [2.879_545_908_160_419_2e-133, -9.077_208_526_217_663e-132],
+        );
+        let c = [9.816_884_088_837_897e-132, -1.474_824_529_625_084_5e-131];
+        assert_eq!(decided(&Orientation, [a[0], a[1], b[0], b[1], c[0], c[1]]), None);
+        assert_eq!(orient(a, b, c), Some(Side::Above));
+        // On a line of constant `u` or `v`, however far out: each product has a factor that is exactly nought.
+        assert_eq!(orient([0.0, 1e300], [0.0, -1e300], [0.0, 0.0]), Some(Side::Within));
+        assert_eq!(orient([1e300, 0.0], [-1e300, 0.0], [0.0, 0.0]), Some(Side::Within));
+        // One coordinate in common is not a line: `a` and `c` share a `v` here, and `c` is left of `a` to `b`.
+        assert_eq!(orient([1.0, 0.0], [0.0, 1.0], [0.0, 0.0]), Some(Side::Above));
+        // A product that is not finite decides nothing, even where the other is nought.
+        assert_eq!(orient([0.0, 1.0], [0.0, f64::INFINITY], [0.0, 0.0]), None);
+    }
+
+    #[test]
+    fn the_lifted_determinant_and_its_permanent_are_shewchuks() {
+        // Differences (2, 1), (-2, 4), (-3, -3) from d; products 6, -12, -3, -6, 8, -2; lifts 5, 20, 18.
+        assert_eq!(lifted([3.0, 1.0], [-1.0, 4.0], [-2.0, -3.0], [1.0, 0.0]), (330.0, 450.0));
+        // A circle of radius 2^-10 about its centre: the permanent is that small too, and the bound with it.
+        let r = 1.0 / 1024.0;
+        assert_eq!(incircle([r, 0.0], [0.0, r], [-r, 0.0], [0.0, 0.0]), Some(Side::Above));
+    }
+
+    #[test]
     fn a_coordinate_that_is_not_finite_decides_nothing() {
         assert_eq!(orient([0.0, 0.0], [1.0, 0.0], [f64::NAN, 1.0]), None);
         assert_eq!(incircle([1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [f64::INFINITY, 0.0]), None);

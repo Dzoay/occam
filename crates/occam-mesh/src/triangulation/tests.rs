@@ -199,3 +199,79 @@ fn coordinates_that_are_not_finite_decide_nothing() {
     assert_eq!(Triangulation::new(&points, &ring(0, 4)).err(), Some(Fail::Undecided));
     assert_eq!(Triangulation::new(&[[0.0, 0.0]; 3], &[]).err(), Some(Fail::Coincide(0, 1)));
 }
+
+#[test]
+fn points_far_below_the_origin_are_held_whichever_way_they_spread() {
+    for (wide, high) in [(100.0, 1.0), (1.0, 100.0)] {
+        let points =
+            vec![[-200.0, -200.0], [-200.0 + wide, -200.0], [-200.0 + wide, -200.0 + high], [-200.0, -200.0 + high]];
+        let mesh = Triangulation::new(&points, &ring(0, 4)).unwrap();
+        assert_eq!(area(&mesh, &points), wide * high, "{wide} by {high}");
+    }
+}
+
+#[test]
+fn a_segment_to_a_point_not_given_is_refused_as_broken() {
+    assert_eq!(Triangulation::new(&square(0.0, 1.0), &[[0, 1], [1, 7]]).err(), Some(Fail::Broken));
+}
+
+#[test]
+fn a_point_behind_a_segments_start_on_its_line_does_not_touch_it() {
+    // The segment from (1, 0) to (5, 0) crosses the edge between (3, ±0.1), and (0, 0), beside its start, lies on its
+    // line behind it.
+    let points = vec![[0.0, 0.0], [1.0, 0.0], [5.0, 0.0], [3.0, 0.1], [3.0, -0.1]];
+    let mesh = Triangulation::new(&points, &[[1, 2]]).unwrap();
+    let fixed = mesh.tris.iter().any(|tri| (0..3).any(|k| tri.fixed[k] && edge_of(*tri, [4, 5]) == Some(k)));
+    assert!(fixed, "the segment is an edge, fixed");
+}
+
+#[test]
+fn a_triangle_outside_the_boundary_has_no_corners_and_takes_no_point() {
+    let (points, segments) = holed(false);
+    let mut mesh = Triangulation::new(&points, &segments).unwrap();
+    let hole = (0..mesh.tris.len()).find(|&t| !mesh.inside[t] && mesh.tris[t].v.iter().all(|&v| v >= OUTER)).unwrap();
+    assert_eq!(mesh.corners(hole), None);
+    let [a, b, c] = mesh.tris[hole].v.map(|v| mesh.points[v]);
+    let inner = [(a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0];
+    assert_eq!(mesh.place_in(hole, inner), Ok(None));
+    assert_eq!(mesh.count(), 8);
+}
+
+#[test]
+fn a_point_on_a_free_edge_splits_the_triangles_either_side_of_it() {
+    // The square's diagonal is its one edge not fixed, and (0.5, 0.5) is on it, whichever diagonal it is.
+    let mut mesh = Triangulation::new(&square(0.0, 1.0), &ring(0, 4)).unwrap();
+    let first = mesh.inside()[0];
+    assert_eq!(mesh.place_in(first, [0.5, 0.5]), Ok(Some(4)));
+    assert_eq!((mesh.count(), mesh.triangles().len()), (4, 4));
+}
+
+#[test]
+fn a_diagonal_flips_only_where_its_two_triangles_make_a_strictly_convex_quadrilateral() {
+    // A kite's one inner edge can flip. With a point inside a triangle, each of its three edges to the corners is the
+    // diagonal of a quadrilateral with a reflex corner at it, and none can.
+    for (fourth, convex) in [([1.0, -1.0], true), ([1.0, 0.1], false)] {
+        let points = vec![[0.0, 0.0], [3.0, 0.0], [1.0, 1.0], fourth];
+        let mesh = Triangulation::new(&points, &[]).unwrap();
+        let real = |t: usize| mesh.tris[t].v.iter().all(|&v| v >= OUTER);
+        let inner: Vec<(usize, usize)> = (0..mesh.tris.len())
+            .filter(|&t| real(t))
+            .flat_map(|t| (0..3).map(move |k| (t, k)))
+            .filter(|&(t, k)| mesh.tris[t].n[k] != NONE && real(mesh.tris[t].n[k]))
+            .collect();
+        assert_eq!(inner.len(), if convex { 2 } else { 6 }, "each inner edge seen from both sides");
+        for (t, k) in inner {
+            assert_eq!(mesh.convex(t, k), Ok(convex), "the fourth point at {fourth:?}");
+        }
+    }
+}
+
+#[test]
+fn segments_cross_only_strictly_inside_both() {
+    let points = vec![[0.0, 0.0], [4.0, 0.0], [2.0, 1.0], [2.0, -1.0], [5.0, 1.0], [5.0, -1.0]];
+    let mesh = Triangulation::new(&points, &[]).unwrap();
+    let at = |a: usize, b: usize| [a + OUTER, b + OUTER];
+    assert_eq!(mesh.cross(at(0, 1), at(2, 3)), Ok(true));
+    assert_eq!(mesh.cross(at(0, 1), at(4, 5)), Ok(false), "across the line beyond the segment's end");
+    assert_eq!(mesh.cross(at(0, 1), at(1, 2)), Ok(false), "an end in common");
+}

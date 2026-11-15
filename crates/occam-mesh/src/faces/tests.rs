@@ -4,13 +4,14 @@ use core::f64::consts::PI;
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 
+use occam_geom::Cylinder;
 use occam_report::{Code, DisplayUnits, NamedValue, RemedyKind, followed_remedy};
-use occam_units::{Angle, Length, Vec3};
+use occam_units::{Angle, Length, Placement, Vec3};
 
 use super::*;
 use crate::deviation::deviation;
 use crate::edges::sample_edges;
-use crate::testing::{Layout, collapsed_patch, disc_drawn, model, plane_and_cylinder, sphere_half, undrawn};
+use crate::testing::{Layout, collapsed_patch, disc_drawn, model, plane_and_cylinder, sphere_half, triangle, undrawn};
 
 fn limits(deflection: f64, angle: f64) -> Limits {
     Limits::new(Length::from_millimetres(deflection), Angle::from_radians(angle)).unwrap()
@@ -123,9 +124,18 @@ fn p9s_bicubic_patch_with_a_collapsed_row_meshes_within_its_deflection() {
         holds(&edges, mesh);
         let off = deviation(mesh, snapshot.view(ids[0]).unwrap().surface().unwrap());
         assert!(off <= deflection, "at {deflection}: {off}");
-        // The row at `v = 0` is one point, where the loop crosses from `u = 0` to `u = 1`: two vertices there.
-        let collapsed = mesh.points.iter().filter(|p| p.to_vec3() == Vec3::new(0.5, 0.0, 0.0)).count();
-        assert_eq!(collapsed, 2);
+        // The row at `v = 0` is one point, where the loop crosses from `u = 0` to `u = 1`: two vertices there, whose
+        // normals, summed from the surface's round them, face as every triangle at them does.
+        let at_row = |k: &u32| mesh.points[usize::try_from(*k).unwrap()].to_vec3() == Vec3::new(0.5, 0.0, 0.0);
+        let collapsed: Vec<u32> = (0..u32::try_from(mesh.points.len()).unwrap()).filter(at_row).collect();
+        assert_eq!(collapsed.len(), 2);
+        for triangle in mesh.triangles.iter().filter(|t| t.iter().any(&at_row)) {
+            let [p, q, r] = triangle.map(|k| mesh.points[usize::try_from(k).unwrap()]);
+            for k in triangle.iter().filter(|k| at_row(k)) {
+                let normal = mesh.normals[usize::try_from(*k).unwrap()].get();
+                assert!(across(p, q, r).dot(normal) > 0.0, "{triangle:?} against the normal at {k}");
+            }
+        }
     }
 }
 
@@ -194,11 +204,14 @@ fn refinement_stops_at_its_cap_and_says_so() {
     let edges = sample_edges(&Exec::serial(), &snapshot, limits(1e-3, 0.35));
     let cylinder = snapshot.ids::<Face>()[1];
     let whole = mesh_face(&snapshot, cylinder, &edges).unwrap();
-    let boundary: usize = whole.sides.iter().map(|s| s.vertices.len() - 1).sum();
-    let cap = boundary + (whole.triangles.len() - boundary) / 2;
+    // The boundary alone, a polygon of n points, is n - 2 triangles, and each point refinement adds makes two more:
+    // a cap an even number past the boundary's is met exactly.
+    let boundary: usize = whole.sides.iter().map(|s| s.vertices.len() - 1).sum::<usize>() - 2;
+    let cap = boundary + 2 * ((whole.triangles.len() - boundary) / 4);
     let capped = mesh_face_within(&snapshot, cylinder, &edges, cap).unwrap();
     assert!(capped.capped && !whole.capped);
-    assert!(capped.triangles.len() <= cap && cap < whole.triangles.len(), "{} of {cap}", capped.triangles.len());
+    assert!(cap < whole.triangles.len());
+    assert_eq!(capped.triangles.len(), cap);
 }
 
 #[test]
@@ -234,4 +247,34 @@ fn half_a_sphere_meshes_within_its_deflection_its_normals_its_radii_at_its_poles
             assert!((n.get() - p.to_vec3() * 0.5).norm() < 1e-12, "at {p:?}: {n:?}");
         }
     }
+}
+
+#[test]
+fn u_is_scaled_by_the_power_of_two_at_or_below_the_ratio_of_the_rates() {
+    // A cylinder of radius 12 moves 12 mm a radian round and 1 mm a millimetre along: 8 is the power of two below 12.
+    let cylinder = Cylinder::placed(&Placement::identity(), Length::from_millimetres(12.0)).unwrap();
+    let places = [UvPoint::new(0.0, 0.0), UvPoint::new(1.0, 2.0), UvPoint::new(3.0, -1.0)];
+    assert_eq!(scale(&cylinder, &places), 8.0);
+    let thin = Cylinder::placed(&Placement::identity(), Length::from_millimetres(0.3)).unwrap();
+    assert_eq!(scale(&thin, &places), 0.25);
+    assert_eq!(scale(&cylinder, &[]), 1.0, "no places, no ratio");
+}
+
+#[test]
+fn derivatives_span_a_plane_unless_one_is_a_rounding_against_the_other_or_they_lie_along_each_other() {
+    let at = Vec3::new;
+    assert_eq!(spans(at(2.0, 0.0, 0.0), at(0.0, 3.0, 0.0), 1e-9), Some(at(0.0, 0.0, 1.0)));
+    assert_eq!(spans(at(1e-17, 0.0, 0.0), at(0.0, 1.0, 0.0), 1e-9), None, "a pole's rounding");
+    assert_eq!(spans(at(128.0 * f64::EPSILON, 0.0, 0.0), at(0.0, 2.0, 0.0), 1e-9), None, "exactly at the limit");
+    assert_eq!(spans(at(4.0, 0.0, 0.0), at(4.0, 4e-10, 0.0), 1e-9), None, "within the angle of each other");
+    let tilt = 1.0 / 1_073_741_824.0;
+    assert_eq!(spans(at(1.0, 0.0, 0.0), at(1.0, tilt, 0.0), tilt), None, "exactly at the angle");
+}
+
+#[test]
+fn a_flat_triangle_is_one_triangle() {
+    let (_, edges, faces, ids) = meshed(&[triangle()], limits(0.1, PI));
+    let mesh = of(&faces, ids[0]);
+    holds(&edges, mesh);
+    assert_eq!((mesh.points.len(), mesh.triangles.len()), (3, 1));
 }
