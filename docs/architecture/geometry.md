@@ -28,7 +28,7 @@ the second, `eval_second`, which a surface swept from it reads in lanes.
 | `highest_derivative` | `None` for every order; a mesh's is 1. An order above it is refused, and its rungs are NaN |
 | `eval_batch(uv, order, out, scratch, level)` | One surface at many points. The caller owns outputs and scratch, so nothing allocates once they have grown. A bit per point in `out`: defined or not |
 | `invert`, `closest` | A foot's parameters; the full closest-point solve, by default the point at `invert`'s parameters. Both report where the solver stopped |
-| `domain`, `bounds(patch)`, `degeneracies` | Each parameter's kind; a conservative box; poles and apexes, declared at construction |
+| `domain`, `bounds(patch)`, `degeneracies` | Each parameter's kind; a conservative box that shrinks with its patch, a B-spline's the hull of the patch's own poles; poles and apexes, declared at construction |
 | `family`, `batch_key`, `content` | For sorting calls and ordering pairs. `content` is the canonical bits, never a pointer |
 | `shape` | The form name and parameters a [description](reports.md) shows |
 | `analytic`, `to_bspline(patch)`, `triangles` | What it can present. Each defaults to nothing, so a new family edits no list. A B-spline is [over a patch](../decisions/2026-11-11-to-bspline-over-a-range.md), never an unbounded one |

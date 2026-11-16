@@ -109,7 +109,7 @@ pub(crate) fn reach(
 /// begins from a face not its own is left to its own check.
 pub(crate) fn body(model: &Model, members: &Members, id: Id<Body>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
-    let Some(shells) = list(model, record.first_shell, |s| s.next).sound(false).map(<[_]>::to_vec) else { return };
+    let Some(shells) = list(model, record.first_shell, |s| s.next).into_sound(false) else { return };
     for shell in shells {
         let joined = faces(model, shell);
         if joined.is_empty() {

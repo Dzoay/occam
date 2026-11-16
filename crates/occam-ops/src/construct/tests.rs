@@ -190,6 +190,18 @@ fn a_wire_that_crosses_itself_is_refused_where_it_crosses() {
 }
 
 #[test]
+fn a_wire_whose_arc_turns_back_along_the_line_before_it_is_refused_where_they_run_together() {
+    // The arc, of radius 1e7, is tangent to the line where the line ends and turns back along it: 5e-8 from the line's
+    // middle, inside the band, where neither crosses the other nor has an end.
+    let edges = json!([{"line": [[0, 0, 0], [2, 0, 0]]}, {"arc": [[2, 0, 0], [0, 2e-7, 0], [-2, 8e-7, 0]]}]);
+    let report = refused(json!([{"op": "wire", "edges": edges}]));
+    let named = (report.code, number(&report, "first"), number(&report, "second"));
+    assert_eq!(named, (Code::WireCrossesItself, 0.0, 1.0), "{report:?}");
+    let Some(occam_report::Value::Point(p)) = report.value("point").map(|v| v.value) else { panic!("{report:?}") };
+    assert!(p.iter().zip([1.0, 0.0, 0.0]).all(|(x, q)| (x - q).abs() < 1e-9), "the line's middle: {report:?}");
+}
+
+#[test]
 fn a_wire_whose_points_are_all_in_line_is_refused_where_it_runs_back_along_itself() {
     // Its points span no plane, but in any plane through their line its second edge runs back along its first, to its
     // end two thirds of the way along the first; along x and along a diagonal.
