@@ -204,6 +204,17 @@ mod tests {
     }
 
     #[test]
+    fn the_knots_a_part_inserts_are_counted_with_minus_zero_as_plus_zero() {
+        // A quadratic from -1 to 1 with a knot at 0: a part from 0 to 0.5 inserts one more there and two at 0.5.
+        let poles = vec![(0..4).map(|i| [f64::from(i), 1.0, 0.0, 1.0]).collect()];
+        let across = Rows { knots: vec![-1.0, -1.0, -1.0, 0.0, 1.0, 1.0, 1.0], degree: 2, poles };
+        assert_eq!((across.inserted(0.0, 0.5), across.inserted(-0.0, 0.5), across.inserted(-1.0, 1.0)), (3, 3, 0));
+        let (part, inserted) = across.clone().cut(-0.0, 0.5);
+        assert_eq!((part, inserted), (across.clone().restricted(0.0, 0.5), 3));
+        assert_eq!(across.clone().cut(0.5, 0.5), (across, 0), "a part of no width is not cut");
+    }
+
+    #[test]
     fn a_grid_transposes_to_its_columns() {
         let rows = vec![vec![[1.0; 4], [2.0; 4], [3.0; 4]], vec![[4.0; 4], [5.0; 4], [6.0; 4]]];
         assert_eq!(transposed(&rows), [vec![[1.0; 4], [4.0; 4]], vec![[2.0; 4], [5.0; 4]], vec![[3.0; 4], [6.0; 4]]]);
