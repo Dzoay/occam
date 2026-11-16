@@ -448,4 +448,14 @@ exclude_re = [
     "occam-intersect/src/fit\\.rs:406:28: replace > with >= in floored$",
     "occam-intersect/src/fit\\.rs:431:48: replace > with >= in image_fit$",
     "occam-intersect/src/fit\\.rs:521:42: replace > with >= in fit_piece$",
+    # The hybrid's ties, by line. Where two numbers are equal, keeping either gives the same number: the furthest a
+    # corner of a part is from its middle, and the largest gap between two boxes, whose radius is the rounding of its
+    # middle alone (occam-math's interval subtraction of exact numbers), so two gaps with one middle are one interval.
+    "occam-intersect/src/pieces\\.rs:50:16: replace > with >= in spread$",
+    "occam-intersect/src/traverse\\.rs:102:61: replace > with >= in apart$",
+    # A chord's foot, by line. A chord of no length gives 0 / 0, not a number, which the clamp below takes to the
+    # start, as the other branch does. At either end of the clamp both branches give the same parameter, 1, or a zero
+    # of either sign, which moves the foot at most by the sign of a zero, and no distance sees that.
+    "occam-intersect/src/tube\\.rs:35:27: replace > with >= in Chord::foot$",
+    "occam-intersect/src/tube\\.rs:(36:22|38:21): replace > with >= in Chord::foot$",
 ]

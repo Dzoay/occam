@@ -188,3 +188,18 @@ impl Tube {
         open.map_or(Ok(false), Err)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_chords_foot_is_the_nearest_point_of_it() {
+        let chord = Chord { from: Vec3::new(0.0, 0.0, 0.0), to: Vec3::new(2.0, 0.0, 0.0), radius: 0.1 };
+        assert_eq!(chord.foot(Vec3::new(0.5, 1.0, 0.0)), Vec3::new(0.5, 0.0, 0.0));
+        assert_eq!(chord.foot(Vec3::new(3.0, 1.0, 0.0)), Vec3::new(2.0, 0.0, 0.0), "past its end");
+        assert_eq!(chord.foot(Vec3::new(-1.0, 1.0, 0.0)), Vec3::new(0.0, 0.0, 0.0), "before its start");
+        let point = Chord { to: chord.from, ..chord };
+        assert_eq!(point.foot(Vec3::new(3.0, 1.0, 0.0)), chord.from, "a chord of no length");
+    }
+}

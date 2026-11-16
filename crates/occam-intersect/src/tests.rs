@@ -188,6 +188,8 @@ fn a_pair_whose_keys_are_equal_keeps_the_order_given() {
     assert_eq!(print(&got, false), print(&methods.section(twin.as_ref(), p.as_ref(), tol(), budget(1)), false));
     let first = words(|out| first_image().content(out));
     assert_eq!(words(|out| got.curves[0].on_a.content(out)), first, "not swapped");
+    let shared = methods.section_shared(&Exec::serial(), &(Arc::clone(&p), Arc::clone(&twin)), tol(), budget(1));
+    assert_eq!(words(|out| shared.curves[0].on_a.content(out)), first, "not swapped when shared either");
 }
 
 #[test]

@@ -242,3 +242,63 @@ pub(crate) fn traverse(
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::f64::consts::TAU;
+
+    use occam_geom::{Circle, Extrusion};
+    use occam_units::{Direction, Length, Point};
+
+    use super::*;
+    use crate::trace_tests::{level, mm, moved, nurbs_cylinder, tol};
+
+    fn cube(low: [f64; 3], high: [f64; 3]) -> Bounds {
+        let corner = |[x, y, z]: [f64; 3]| Point::from_vec3(Vec3::new(x, y, z));
+        Bounds::of([corner(low), corner(high)]).unwrap()
+    }
+
+    #[test]
+    fn a_box_is_finite_or_not_and_its_middle_is_halfway() {
+        assert!(finite(&cube([0.0; 3], [1.0; 3])));
+        let everything =
+            Bounds::around(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0)), Length::from_millimetres(f64::INFINITY));
+        assert!(!finite(&everything));
+        assert_eq!(centre(&cube([1.0, 2.0, -4.0], [3.0, 6.0, 0.0])), Vec3::new(2.0, 4.0, -2.0));
+    }
+
+    #[test]
+    fn two_boxes_are_as_far_apart_as_along_the_axis_they_are_furthest_apart_on() {
+        // The second box is 2 below the first: the gap along z, the last of the six, is the largest.
+        let gap = apart(&cube([0.0; 3], [1.0; 3]), &cube([0.0, 0.0, -3.0], [1.0, 1.0, -2.0]));
+        assert_eq!(gap.mid(), 2.0);
+        let overlap = apart(&cube([0.0; 3], [2.0; 3]), &cube([1.0; 3], [3.0; 3]));
+        assert_eq!(overlap.mid(), -1.0);
+    }
+
+    #[test]
+    fn a_surface_without_ends_and_no_analytic_form_cannot_be_subdivided() {
+        let circle = Circle::placed(&moved([0.0; 3]), mm(1.0)).unwrap();
+        let tube = Extrusion::new(circle, Direction::normalised(Vec3::new(0.0, 0.0, 1.0))).unwrap();
+        let spline = nurbs_cylinder((0.0, TAU));
+        assert!(held(&tube, &spline, tol()).is_none() && held(&spline, &tube, tol()).is_none());
+        assert!(matches!(held(&spline, &nurbs_cylinder((0.0, 3.0)), tol()), Some(Held::Both)));
+    }
+
+    #[test]
+    fn a_halved_part_is_boxed_on_its_own_surface() {
+        let (a, b) = (level(0.0), level(5.0));
+        let whole = UvBox::new(UvPoint::new(0.0, 0.0), UvPoint::new(2.0, 1.0));
+        for (cell, which) in [
+            (Cell { a: Some(Piece::whole(&a, whole)), b: None }, Which::A),
+            (Cell { a: None, b: Some(Piece::whole(&b, whole)) }, Which::B),
+        ] {
+            let halves = made(On::Here(&a, &b), split(&cell).unwrap().into());
+            let surface: &dyn Surface = if which == Which::A { &a } else { &b };
+            for half in halves {
+                let piece = if which == Which::A { half.a } else { half.b }.unwrap();
+                assert_eq!(piece.bounds, surface.bounds(piece.patch), "{which:?}");
+            }
+        }
+    }
+}

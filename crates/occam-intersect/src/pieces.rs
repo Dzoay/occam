@@ -99,3 +99,77 @@ impl Piece {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::f64::consts::PI;
+
+    use occam_geom::Cylinder;
+    use occam_units::Point;
+
+    use super::*;
+    use crate::trace_tests::{level, mm, moved};
+
+    fn patch(u: (f64, f64), v: (f64, f64)) -> UvBox {
+        UvBox::new(UvPoint::new(u.0, v.0), UvPoint::new(u.1, v.1))
+    }
+
+    /// The piece over `patch` that is wider across its first parameter where `wide_u`, its box and size made up.
+    fn piece(patch: UvBox, wide_u: bool) -> Piece {
+        let bounds = Bounds::of([Point::from_vec3(Vec3::new(0.0, 0.0, 0.0))]).unwrap();
+        Piece { patch, bounds, size: 1.0, wide_u, depth: 0 }
+    }
+
+    #[test]
+    fn a_boxs_diagonal_and_a_parts_spread_are_measured() {
+        let corner = |x, y, z| Point::from_vec3(Vec3::new(x, y, z));
+        assert_eq!(diagonal(&Bounds::of([corner(1.0, 2.0, 3.0), corner(4.0, 6.0, 15.0)]).unwrap()), 13.0);
+        // On the plane z = 0, whose parameters are x and y, every corner of this part is sqrt(5) from its middle.
+        let spread = spread(&level(0.0), patch((2.0, 4.0), (1.0, 5.0)));
+        assert!((spread - 2.0 * 5.0_f64.sqrt()).abs() < 1e-12, "{spread}");
+    }
+
+    #[test]
+    fn a_part_is_wider_across_the_parameter_its_surface_moves_further_along() {
+        // On a cylinder of radius 10, a turn of 0.05 moves 0.5 and a rise of 0.9 moves 0.9; a turn of 0.2 moves 2.
+        let cylinder = Cylinder::placed(&moved([0.0; 3]), mm(10.0)).unwrap();
+        assert!(!wide_u(&cylinder, patch((1.0, 1.05), (2.0, 2.9))));
+        assert!(wide_u(&cylinder, patch((1.0, 1.2), (2.0, 2.9))));
+    }
+
+    #[test]
+    fn a_parts_size_is_its_boxs_diagonal_until_the_box_stops_shrinking() {
+        // A half turn of a cylinder of radius 2: its box is 4 by 2, while its corners are 2.83 from its middle.
+        let cylinder = Cylinder::placed(&moved([0.0; 3]), mm(2.0)).unwrap();
+        let half = patch((0.0, PI), (0.0, 0.1));
+        let own = diagonal(&cylinder.bounds(half));
+        let spread = spread(&cylinder, half);
+        assert!((own - spread).abs() > 1.0, "{own} {spread}");
+        assert_eq!(Piece::of_bounds(&cylinder, half, None).size, own);
+        assert_eq!(Piece::of_bounds(&cylinder, half, Some(2.0 * own)).size, own, "it shrank");
+        assert_eq!(Piece::of_bounds(&cylinder, half, Some(own)).size, spread, "it did not");
+        let whole = Piece::whole(&cylinder, half);
+        assert_eq!((whole.depth, whole.part(&cylinder, patch((0.0, 1.0), (0.0, 0.1))).depth), (0, 1));
+    }
+
+    #[test]
+    fn a_part_is_halved_across_its_wider_side_where_it_can_be() {
+        let (u, v) = ((0.0, 2.0), (0.0, 4.0));
+        let across_u = [patch((0.0, 1.0), v), patch((1.0, 2.0), v)];
+        let across_v = [patch(u, (0.0, 2.0)), patch(u, (2.0, 4.0))];
+        assert_eq!(piece(patch(u, v), true).halves(), Some(across_u));
+        assert_eq!(piece(patch(u, v), false).halves(), Some(across_v));
+        // A range one double wide has its middle at one end: at its low end, and with these, at its high end.
+        let (above, below) = ((1.0, 1.0_f64.next_up()), (1.0_f64.next_down(), 1.0));
+        assert_eq!((middle(patch(above, above)).u(), middle(patch(below, below)).u()), (1.0, 1.0));
+        for narrow in [above, below] {
+            let halves = piece(patch(narrow, v), true).halves().unwrap();
+            assert_eq!(halves.map(|h| (h.lo.v(), h.hi.v())), [(0.0, 2.0), (2.0, 4.0)], "across v: {narrow:?}");
+            let halves = piece(patch(u, narrow), false).halves().unwrap();
+            assert_eq!(halves.map(|h| (h.lo.u(), h.hi.u())), [(0.0, 1.0), (1.0, 2.0)], "across u: {narrow:?}");
+            assert_eq!(piece(patch(narrow, narrow), true).halves(), None);
+        }
+        let deep = Piece { depth: DEPTH, ..piece(patch(u, v), true) };
+        assert_eq!(deep.halves(), None);
+    }
+}
