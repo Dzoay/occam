@@ -33,6 +33,9 @@ person's game. Instruction counts come from `just perf` on the laptop, whose rec
 Chromium is Playwright 1.64.1's Chromium 156, on the software adapter `just web-test` asks for, since the workers run on
 the CPU.
 
+**Code.** Every figure here but the record's was measured on this step's code over `aa77cf8`, before `view.hardening`
+(#77) changed the mesher's repair and #76 the commit's allocations. The record's counts were taken again after both.
+
 **P9's models on the kernel.** `occam::mesh_workloads::synthetic` draws P9's parts from P9's seed, 42, with P9's
 generator's random numbers in P9's order, and counts P9's faces against the target, so targets 1,000 and 10,000 give the
 parts of P9's 1,002- and 10,001-face models (a test holds those counts). Plates with holes and solids of revolution are
@@ -77,19 +80,20 @@ page's frame showing it, finished on the GPU (`settled()`), by the same clock.
 
 | Class | What | Instructions |
 |---|---|---|
-| `mesh_p9_parts` | P9's first three parts (two plates and a panel, 28 faces) meshed whole on one thread at 0.1 mm: edges, faces, merge and the watertight check | 265,390,588 |
-| `mesh_pick` | 227 rays picked on their mesh, one onto every sixteenth triangle, with edges within 0.01 mm | 15,103,652 |
+| `mesh_p9_parts` | P9's first three parts (two plates and a panel, 28 faces) meshed whole on one thread at 0.1 mm: edges, faces, merge and the watertight check | 274,546,750 |
+| `mesh_pick` | 227 rays picked on their mesh, one onto every sixteenth triangle, with edges within 0.01 mm | 15,101,133 |
 
 **The mesher has no lane kernel.** It evaluates its surfaces a point at a time through `Surface`, never through the
 batched `eval_batch`, so there is no `<kernel>_w<width>` to hold to width 1, and none was made up. Each class is scalar;
 in the browser each runs in both builds, which must give the same bits (L23), and they did. In the browser, on the
-laptop's headless Chromium: `mesh_p9_parts` 37.3 ms in both builds, simd128 gaining nothing, as a mesher without lanes
-would; `mesh_pick` 2.3 ms scalar and 2.2 simd128, about 10 µs a pick. The green `just perf` held all 31 classes within
-2% of the record.
+laptop's headless Chromium, on the merged tree: `mesh_p9_parts` 31.2 ms scalar and 30.7 simd128, simd128 gaining
+nothing, as a mesher without lanes would; `mesh_pick` 1.7 ms in both, about 7 µs a pick. The green `just perf` held all
+31 classes within 2% of the record.
 
-The red run gave exactly two findings, `perf.unrecorded` for `mesh_p9_parts` and `mesh_pick`; `just perf --update` then
-took them, and moved eight construction, command and measuring classes by under 0.2%, within the gate's 2%, which this
-change's new code in the `occam` crate accounts for.
+The red run gave exactly two findings, `perf.unrecorded` for `mesh_p9_parts` and `mesh_pick`, and `just perf --update`
+took them. The counts above are the record's after this step merged main's, taken again on the merged tree: there
+`mesh_p9_parts` takes 3.4% more than its 265,390,588 at `aa77cf8`, since `view.hardening` changed the mesher's repair,
+and five construction and command classes moved by 0.122% at most from main's record.
 
 ### Quality
 
