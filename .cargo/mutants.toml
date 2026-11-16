@@ -503,7 +503,7 @@ exclude_re = [
     # either side of a chord are equal, or its sag is the tracer's, keeping either gives the same number. A closed
     # trace of one station has one chord from it to itself at the tracer's sag either way, which is the chord its lone
     # station is given otherwise; an open trace's extra span has no station after it, and is dropped.
-    "occam-intersect/src/tube\\.rs:89:18: replace < with <= in Tube::file$",
+    "occam-intersect/src/tube\\.rs:95:18: replace < with <= in Tube::file$",
     "occam-intersect/src/tube\\.rs:(142:47|143:16): replace > with >= in Tube::radius$",
     "occam-intersect/src/tube\\.rs:153:31: replace && with \\|\\| in Tube::add$",
     "occam-intersect/src/tube\\.rs:153:47: replace > with >= in Tube::add$",

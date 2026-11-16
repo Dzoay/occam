@@ -67,6 +67,12 @@ fn cube(x: f64, side: f64) -> f64 {
     (x / side).floor() + 0.0
 }
 
+/// The cubes along an axis from `lo` to `hi`, in order: whole numbers fewer than [`SPAN`] apart, so at most three,
+/// counted off a fixed list rather than a counter, so that no change to it can make the walk endless.
+fn along(lo: f64, hi: f64) -> impl Iterator<Item = f64> {
+    [0.0, 1.0, 2.0].into_iter().map(move |step| lo + step).take_while(move |at| *at <= hi)
+}
+
 impl Tube {
     /// An empty tube for the traces of `tracer`.
     pub(crate) fn new(tracer: &Tracer) -> Self {
@@ -98,18 +104,12 @@ impl Tube {
             return;
         }
         let [(x0, x1), (y0, y1), (z0, z1)] = axes;
-        let mut x = x0;
-        while x <= x1 {
-            let mut y = y0;
-            while y <= y1 {
-                let mut z = z0;
-                while z <= z1 {
+        for x in along(x0, x1) {
+            for y in along(y0, y1) {
+                for z in along(z0, z1) {
                     self.grid.entry([x.to_bits(), y.to_bits(), z.to_bits()]).or_default().push(index);
-                    z += 1.0;
                 }
-                y += 1.0;
             }
-            x += 1.0;
         }
     }
 
@@ -221,6 +221,15 @@ mod tests {
         let mut decide = Decide::new(BAND);
         let held = tube.holds(point, &mut decide).unwrap();
         (held, decide.tally.decided)
+    }
+
+    #[test]
+    fn the_cubes_along_an_axis_run_from_the_lower_end_to_the_upper_in_order() {
+        let cubes = |lo: f64, hi: f64| along(lo, hi).collect::<Vec<f64>>();
+        assert_eq!(
+            (cubes(-1.0, 1.0), cubes(4.0, 4.0), cubes(9.0, 10.0)),
+            (vec![-1.0, 0.0, 1.0], vec![4.0], vec![9.0, 10.0])
+        );
     }
 
     #[test]
