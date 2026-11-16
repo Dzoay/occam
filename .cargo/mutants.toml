@@ -450,10 +450,19 @@ exclude_re = [
     "occam-intersect/src/pencil/trig\\.rs:137:21: replace > with >= in Trig::roots$",
     "occam-intersect/src/pencil/nodal\\.rs:101:17: replace < with <= in node$",
     "occam-intersect/src/pencil/nodal\\.rs:(77:45|81:42): replace > with >= in rulings$",
+    # By line. A smooth quartic's `Δ` has no double root, which would be a singular point of the curve, a node or a
+    # point by itself, so between two neighbouring roots it is zero nowhere, its middle included.
+    "occam-intersect/src/pencil/smooth\\.rs:59:68: replace > with >= in loops$",
     # By line. The angles a polynomial's roots start from may be any nine apart round the turn: one of degree four at
     # most that is not zero is not zero at all nine, and the start half a turn from the one where it is farthest from
     # zero loses no root. Dividing by a ninth of a turn gives nine others, as distinct round it.
     "occam-intersect/src/pencil/trig\\.rs:135:51: replace \\* with / in Trig::roots$",
     # occam-geom's fields, by line. The lesser and greater of two values that are equal are either.
     "occam-geom/src/field\\.rs:170:30: replace < with <= in holding$",
+    # occam-geom's laps, by line. The least and greatest of angles that are equal are either. A crossing is on the
+    # axis, neither ahead nor behind, only where the curve passes through it, which a curve read along does not. At a
+    # point on the plane through the axis at `at`, `east cos + north sin` is its signed distance from the axis, and
+    # `east cos + north / sin` that times `1 + cos²`, of the same sign.
+    "occam-geom/src/laps\\.rs:(92:28|93:28|77:44): replace (< with <=|> with >=) in Laps::(reach|counted)$",
+    "occam-geom/src/laps\\.rs:65:32: replace \\* with / in Laps::counted$",
 ]

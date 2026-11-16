@@ -148,21 +148,26 @@ mod tests {
 
     #[test]
     fn a_curve_round_the_axis_keeps_its_angle_and_counts_its_turns_either_way() {
-        for (to, turns) in [(0.3 + 3.0 * TAU, 3.0), (0.3 - 2.0 * TAU, -2.0), (0.5, 0.0)] {
-            let (laps, angle) = round(0.3, to);
+        // From where, to where, the turns counted behind `at`, and the span from `at` of the readings' turns.
+        let cases = [
+            (0.3, 0.3 + 3.0 * TAU, 3.0, (-TAU, PI + 3.0 * TAU)),
+            (0.3, 0.3 + 2.5 * TAU, 2.0, (-TAU, 3.0 * TAU)),
+            (0.3, 0.3 - 2.0 * TAU, -2.0, (-3.0 * TAU, PI)),
+            (0.3, 0.3 - 1.5 * TAU, -2.0, (-PI - 2.0 * TAU, PI)),
+            (0.3, 0.5, 0.0, (-TAU, PI)),
+            (1.5, 1.5 + 2.0 * TAU, 2.0, (-TAU, PI + 2.0 * TAU)),
+            (FRAC_PI_2, FRAC_PI_2 + 2.0 * TAU, 2.0, (-TAU, PI + 2.0 * TAU)),
+        ];
+        for (from, to, turns, (least, most)) in cases {
+            let (laps, angle) = round(from, to);
             for i in 0..=1000 {
                 let u = f64::from(i) / 1000.0;
-                let want = 0.3 + (to - 0.3) * u;
-                assert!((angle(u) - want).abs() <= 1e-12, "to {to} at {u}: {} against {want}", angle(u));
+                let want = from + (to - from) * u;
+                assert!((angle(u) - want).abs() <= 1e-12, "{from} to {to} at {u}: {} against {want}", angle(u));
             }
-            assert_eq!(laps.winding(), turns * TAU, "to {to}");
-            let at = 0.3 + FRAC_PI_2;
-            let span = match turns {
-                3.0 => (at - TAU, at + PI + 3.0 * TAU),
-                -2.0 => (at - 3.0 * TAU, at + PI),
-                _ => (at - TAU, at + PI),
-            };
-            assert_eq!(laps.span, span, "to {to}");
+            assert_eq!(laps.winding(), turns * TAU, "{from} to {to}");
+            let at = from + FRAC_PI_2;
+            assert_eq!(laps.span, (at + least, at + most), "{from} to {to}");
         }
     }
 
