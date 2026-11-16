@@ -112,3 +112,12 @@ fn a_session_with_no_model_meshes_an_empty_one() {
     assert!(meshed.ok() && meshed.faces.is_empty() && meshed.buffers.vertices() == 0);
     assert_eq!(json_of(&meshed.json(None))["answers"], json!([]));
 }
+
+#[test]
+fn a_mesh_whose_faces_all_meshed_is_not_ok_while_it_carries_a_report() {
+    let mut meshed = cube().mesh(&Exec::serial(), 0.1, 0.35).unwrap();
+    assert!(meshed.faces.iter().all(|(_, placed)| placed.is_ok()) && meshed.ok());
+    let refused = cube().mesh(&Exec::serial(), -1.0, 0.35).unwrap_err();
+    meshed.reports.extend(refused);
+    assert!(!meshed.ok(), "every face meshed, but a report stands");
+}
