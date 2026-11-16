@@ -287,3 +287,62 @@ impl Along<'_, '_> {
         middle(lo, hi)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use occam_geom::Line;
+    use occam_units::{Direction, Point};
+
+    use super::*;
+    use crate::methods::Budget;
+    use crate::tests_hits::{patch, span, tol, v};
+    use crate::trace_tests::level;
+
+    /// The line `z = t` along Z through the origin.
+    fn upward() -> Line {
+        Line::new(Point::from_vec3(v(0.0, 0.0, 0.0)), Direction::normalised(v(0.0, 0.0, 1.0)))
+    }
+
+    /// The sink's curve against its surface's analytic form over `lo..hi`, with nothing taken yet, as [`along`] sets it.
+    fn job<'s, 'a>(sink: &'s mut Sink<'a>, lo: f64, hi: f64) -> Along<'s, 'a> {
+        let form = sink.surface.analytic(sink.tol).unwrap();
+        let (moved, form) = canonical(sink.curve, &form).map_or((None, form), |(moved, form)| (Some(moved), form));
+        Along { form, moved, span: span(lo, hi), sink, open: None, last: None }
+    }
+
+    #[test]
+    fn a_piece_one_double_wide_is_left_open_at_once_for_one_step() {
+        // The band's edge, 1e-7 above the plane, falls inside the piece, so its box is undecided. Its middle rounds to
+        // one of its ends, `lo` for 1 to the next double up and `hi` for the pair above, so it cannot be halved: it is
+        // left open whole, never probed or halved, for one step of the budget.
+        let (line, one) = (upward(), 1.0_f64);
+        for (height, lo, end) in [(0.999_999_900_000_000_2, one, "lo"), (0.999_999_900_000_000_4, one.next_up(), "hi")]
+        {
+            let (plane, hi) = (level(height), lo.next_up());
+            assert_eq!(middle(lo, hi), if end == "lo" { lo } else { hi });
+            let mut sink = Sink::new(&line, &plane, patch((-1.0, -1.0), (1.0, 1.0)), tol());
+            let mut job = job(&mut sink, lo, hi);
+            assert!(job.isolate(&mut Work::of(Budget { steps: 1 })).is_ok(), "the middle at {end}");
+            let run = job.open.unwrap();
+            assert_eq!((run.lo, run.hi, run.on, run.before), (lo, hi, false, None), "the middle at {end}");
+        }
+    }
+
+    #[test]
+    fn a_run_is_within_the_band_only_while_every_piece_of_it_is() {
+        let (line, plane) = (upward(), level(0.0));
+        let mut sink = Sink::new(&line, &plane, patch((-1.0, -1.0), (1.0, 1.0)), tol());
+        let mut on = |lies: &[Lie]| {
+            let mut job = job(&mut sink, 0.0, 4.0);
+            for (k, &lie) in (0_u32..).zip(lies) {
+                job.take(f64::from(k), f64::from(k) + 1.0, lie);
+            }
+            job.open.map(|run| (run.hi, run.on))
+        };
+        assert_eq!(on(&[Lie::On]), Some((1.0, true)));
+        assert_eq!(on(&[Lie::On, Lie::On, Lie::On]), Some((3.0, true)));
+        assert_eq!(on(&[Lie::On, Lie::Open]), Some((2.0, false)));
+        assert_eq!(on(&[Lie::Open, Lie::On]), Some((2.0, false)));
+        assert_eq!(on(&[Lie::On, Lie::Open, Lie::On, Lie::On]), Some((4.0, false)));
+    }
+}
