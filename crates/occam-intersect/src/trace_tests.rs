@@ -110,7 +110,7 @@ fn length(trace: &Trace) -> f64 {
 }
 
 /// The distance of a station from the Z axis.
-fn radius(s: &Station) -> f64 {
+pub(crate) fn radius(s: &Station) -> f64 {
     let v = s.at.to_vec3();
     (v.x * v.x + v.y * v.y).sqrt()
 }

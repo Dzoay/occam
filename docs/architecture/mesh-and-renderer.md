@@ -1,6 +1,6 @@
 # Mesh and renderer
 
-[Architecture](../ARCHITECTURE.md) › Mesh and renderer · crate `occam-mesh` · sketch [`mesh.rs`](../sketch/src/mesh.rs)
+[Architecture](../ARCHITECTURE.md) › Mesh and renderer · crate [`occam-mesh`](../../crates/occam-mesh/src/lib.rs) · page `web/`
 
 Triangles for display: shared edges first, so neighbouring faces meet exactly, then faces, then a check.
 
@@ -16,7 +16,9 @@ flowchart LR
   face.
 - **Point location uses the exact predicates** on real coordinates.
 - **Chordal error is measured** to the triangle.
-- **The watertight check runs on every output,** in production too.
+- **The watertight check runs on every output,** in production too. It matches vertices by position, not by index, as a
+  pole or an apex holds two at one place: every segment is used once each way, or once along a sheet's rim, and each
+  shell's mesh has its faces' Euler characteristic. A face that did not mesh is a named hole.
 - **Each face's mesh is its own vertex block,** with a normal per vertex from the surface. Along a shared edge its
   positions are that edge's samples, so neighbours hold the same bits there: no cracks, no welding.
 
@@ -24,10 +26,51 @@ flowchart LR
 
 - Buffers readable by both a storage binding and a vertex fetch.
 - Index buffers that stay stable while the topology does.
+- Each index counts from the start of its face's vertex block, so a block is kept, moved or dropped without rewriting
+  the others.
 - Per-face ranges and dirty rectangles.
 - Uploads bounded per frame.
 - Camera-relative coordinates from the first version: an `f64` origin with `f32` offsets.
 - A frame loop that keeps submitting during interaction.
+
+## The buffers
+
+[`Buffers`](../../crates/occam-mesh/src/buffers.rs) are a mesh as the contract wants it. `occam mesh` writes them,
+and `occam-wasm` gives them as typed arrays.
+
+- **Flat arrays:** `f64` positions and unit normals, three each; each vertex's `(u, v)` on its face, two, kept for
+  write-through; and `u32` indices, three a triangle.
+- **Per face, in id order:** its vertex block and its range of triangles. A refused face has neither, and its report
+  says why.
+- **After an edit,** [`remesh`](../../crates/occam-mesh/src/remesh.rs) meshes only what the edit touched, read from
+  what its `Changes` say it created or changed. Every other face keeps its block bit for bit, and the result is the
+  mesh the model gives meshed whole.
+- **In parts,** as the [mesh workers](browser.md) mesh a model, [`mesh_part`](../../crates/occam-mesh/src/part.rs)
+  meshes some faces alone. Each edge they use takes the step every face along it asks, so their blocks are the whole
+  mesh's bit for bit. A part is checked watertight as far as it reaches: along an edge to a face outside it, a segment
+  may be used once.
+
+```mermaid
+flowchart LR
+  changes(["What the edit<br/>created or changed"]) --> touched["Faces drawn from it:<br/>surface, loops, uses,<br/>edges, curves, vertices"]
+  touched --> edges["Their edges<br/>sampled again"]
+  edges -->|"samples changed"| along["Faces along<br/>those edges"]
+  touched & along --> again["Meshed again"]
+  rest["Every other face"] -->|"block kept"| merged{"Merged and<br/>checked"}
+  again --> merged
+```
+
+**The file `occam mesh` writes,** beside the model as `part.occam.mesh` or to `--out`, is the buffers as they are,
+little-endian, with nothing else:
+
+| Numbers | What |
+|---|---|
+| 3 `u64` | how many vertices V, triangles T and faces F |
+| 3V, 3V and 2V `f64` | every position, then every normal, then every `(u, v)` |
+| 3T `u32` | the indices |
+| 6F `u32` | each face: its slot and generation, its first vertex and how many, its first triangle and how many |
+
+The `f64` arrays start on a multiple of eight bytes, so each can be read in place.
 
 **GPU results are display-only:** never in digests, caches, meshes, picking, measurement, export or the watertight
 check ([the GPU drawing decision](../decisions/2026-11-09-gpu-drawing.md)).

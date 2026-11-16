@@ -1,6 +1,7 @@
 //! `gates errors`: every suggested fix is a claim with a test that follows it (L2). Every code and remedy pair in the
-//! catalogue is registered by a `followed_remedy!` inside a `#[test]`, the catalogue is well formed, and a match on a code or
-//! remedy has no catch-all, so a new one cannot be forgotten (L4).
+//! catalogue is registered by a `followed_remedy!` inside a `#[test]`, or, for the viewer's page, whose remedies are
+//! followed in a browser, by a `followedRemedy(page, "<code>", "<kind>", retry)` in its tests. The catalogue is well
+//! formed, and a match on a code or remedy has no catch-all, so a new one cannot be forgotten (L4).
 
 use std::collections::BTreeSet;
 
@@ -25,7 +26,54 @@ pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     if !ok {
         return Err(vec![Finding::new("errors.catalogue-unreadable", CATALOGUE, errors, "fix the build")]);
     }
-    check(&json, &repo.texts(measured).map_err(|e| vec![e])?)
+    check(&json, &repo.texts(|path| measured(path) || is_web_test(path)).map_err(|e| vec![e])?)
+}
+
+/// The viewer's tests, which follow the page's remedies in a browser.
+fn is_web_test(path: &str) -> bool {
+    path.starts_with("web/test/") && path.ends_with(".test.mjs")
+}
+
+/// The string literal at the start of `text`, after spaces, and what follows it.
+fn quoted(text: &str) -> Option<(&str, &str)> {
+    text.trim_start().strip_prefix('"')?.split_once('"')
+}
+
+/// The code and kind a `followedRemedy(` call names, from what follows its parenthesis: its second and third
+/// arguments, as string literals on the call's line.
+fn named_texts(args: &str) -> Option<(&str, &str)> {
+    let (_, rest) = args.split_once(',')?;
+    let (code, rest) = quoted(rest)?;
+    let (kind, _) = quoted(rest.trim_start().strip_prefix(',')?)?;
+    Some((code, kind))
+}
+
+/// Every `followedRemedy(page, "<code>", "<kind>", retry)` in the viewer's tests, by the pair's Rust names where the
+/// catalogue has them and by their texts where it does not. The helper's own definition is not one.
+fn web_registrations<'a>(
+    catalogue: &Catalogue,
+    sources: &'a [(String, String)],
+    findings: &mut Vec<Finding>,
+) -> Vec<Registration<'a>> {
+    let mut registered = Vec::new();
+    for (path, text) in sources.iter().filter(|(path, _)| is_web_test(path)) {
+        for (row, line) in text.lines().zip(1..) {
+            let Some((before, args)) = row.split_once("followedRemedy(") else { continue };
+            if before.trim_end().ends_with("function") {
+                continue;
+            }
+            let Some((code, kind)) = named_texts(args) else {
+                let message = "expected `followedRemedy(page, \"<code>\", \"<kind>\", retry)`";
+                let remedy = "name the pair by their texts, on the call's line";
+                findings.push(Finding::new("errors.malformed-registration", path, message, remedy).at(line));
+                continue;
+            };
+            let code = catalogue.codes.iter().find(|row| row.code == code).map_or(code, |row| row.name.as_str());
+            let kind = catalogue.remedies.iter().find(|row| row.kind == kind).map_or(kind, |row| row.name.as_str());
+            registered.push(Registration { path, line, code: code.to_string(), kind: kind.to_string() });
+        }
+    }
+    registered
 }
 
 #[derive(Deserialize)]
@@ -214,7 +262,7 @@ fn pairs(catalogue: &Catalogue, findings: &mut Vec<Finding>) -> BTreeSet<(String
 /// Reads every source file, returning what is registered in tests.
 fn scan<'a>(sources: &'a [(String, String)], findings: &mut Vec<Finding>) -> Vec<Registration<'a>> {
     let mut registered = Vec::new();
-    for (path, text) in sources {
+    for (path, text) in sources.iter().filter(|(path, _)| !is_web_test(path)) {
         match syn::parse_file(text) {
             Ok(file) => {
                 let mut scan = Scan { path, place: Place::Outside, registered: Vec::new(), findings: Vec::new() };
@@ -243,7 +291,8 @@ fn check(catalogue: &str, sources: &[(String, String)]) -> Verdict {
     let mut findings = Vec::new();
     well_formed(&catalogue, &mut findings);
     let expected = pairs(&catalogue, &mut findings);
-    let registered = scan(sources, &mut findings);
+    let mut registered = scan(sources, &mut findings);
+    registered.extend(web_registrations(&catalogue, sources, &mut findings));
     let followed: BTreeSet<(String, String)> = registered.iter().map(|r| (r.code.clone(), r.kind.clone())).collect();
     for item in registered.iter().filter(|r| !expected.contains(&(r.code.clone(), r.kind.clone()))) {
         let message = format!("{} and {} are not paired in the catalogue", item.code, item.kind);
@@ -254,7 +303,10 @@ fn check(catalogue: &str, sources: &[(String, String)]) -> Verdict {
     }
     for (code, kind) in expected.iter().filter(|pair| !followed.contains(*pair)) {
         let message = format!("{code} suggests {kind}, but no test follows it (L2)");
-        let remedy = format!("add a #[test] with followed_remedy!(report, Code::{code}, RemedyKind::{kind}, retry)");
+        let remedy = format!(
+            "add a #[test] with followed_remedy!(report, Code::{code}, RemedyKind::{kind}, retry), or for the page a \
+             followedRemedy(page, code, kind, retry) in web/test/"
+        );
         findings.push(Finding::new("errors.unregistered-pair", CATALOGUE, message, remedy));
     }
     verdict(
@@ -420,6 +472,55 @@ mod tests {
     fn an_empty_or_unreadable_catalogue_fails_closed() {
         assert_eq!(codes(&check(r#"{"schema":1,"codes":[],"remedies":[]}"#, &source(""))), ["errors.no-codes"]);
         assert_eq!(codes(&check("not json", &source(""))), ["errors.catalogue-unreadable"]);
+    }
+
+    const WEB_TEST: &str = "web/test/viewer.test.mjs";
+    const HELPER: &str = "async function followedRemedy(page, code, kind, retry) {\n  return retry();\n}\n";
+
+    fn web(text: &str) -> Vec<(String, String)> {
+        vec![(WEB_TEST.to_string(), format!("{HELPER}{text}"))]
+    }
+
+    #[test]
+    fn a_web_test_that_follows_a_pair_passes() {
+        let text =
+            "test(\"t\", async () => {\n  await followedRemedy(page, \"area.alpha\", \"do-it\", () => open());\n});\n";
+        assert_eq!(check(GOOD, &web(text)), Ok("2 codes, 1 code and remedy pairs, all followed".to_string()));
+    }
+
+    #[test]
+    fn a_web_test_following_what_the_catalogue_does_not_pair_fails_at_its_line() {
+        for text in [
+            "await followedRemedy(page, \"area.beta\", \"do-it\", retry);\n",
+            "await followedRemedy(page, \"area.gamma\", \"do-it\", retry);\n",
+        ] {
+            let found =
+                check(GOOD, &web(&format!("await followedRemedy(page, \"area.alpha\", \"do-it\", retry);\n{text}")));
+            assert_eq!(codes(&found), ["errors.unknown-pair"], "{text}");
+            let finding = &found.unwrap_err()[0];
+            assert_eq!((finding.file.as_str(), finding.line), (WEB_TEST, Some(5)), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_web_registration_must_name_its_pair_by_their_texts() {
+        for text in [
+            "await followedRemedy(page, code, \"do-it\", retry);\n",
+            "await followedRemedy(page, \"area.alpha\");\n",
+            "await followedRemedy(page);\n",
+        ] {
+            let found = check(GOOD, &web(text));
+            assert_eq!(codes(&found), ["errors.malformed-registration", "errors.unregistered-pair"], "{text}");
+        }
+    }
+
+    #[test]
+    fn only_the_viewers_test_files_count_as_its_tests() {
+        assert!(is_web_test(WEB_TEST));
+        assert!(!is_web_test("web/src/inspect.ts"));
+        assert!(!is_web_test("web/test/serve.mjs"));
+        assert!(!is_web_test("tools/browser-perf/run.mjs"));
+        assert!(!is_web_test("crates/a/tests/viewer.test.mjs"));
     }
 
     #[test]

@@ -10,5 +10,14 @@ publish.workspace = true
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 
+# The corpus's tests reach the crates they test (docs/decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md).
+[dev-dependencies]
+occam = { path = "../occam" }
+occam-geom = { path = "../occam-geom" }
+occam-intersect = { path = "../occam-intersect" }
+occam-math = { path = "../occam-math" }
+occam-topo = { path = "../occam-topo" }
+occam-units = { path = "../occam-units" }
+
 [lints]
 workspace = true

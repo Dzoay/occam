@@ -13,5 +13,14 @@ occam-report = { path = "../occam-report" }
 occam-topo = { path = "../occam-topo" }
 occam-units = { path = "../occam-units" }
 
+[features]
+# The determinism probe and the models it meshes, for `gates determinism` (examples/determinism.rs). Nothing that ships
+# turns it on.
+determinism = []
+
+[[example]]
+name = "determinism"
+required-features = ["determinism"]
+
 [lints]
 workspace = true

@@ -67,6 +67,18 @@ impl Decide {
     }
 }
 
+/// The report of a decision the band could not make: `decide.undecided`, fault `numerically-sensitive`, with the length
+/// decided on, its radius, the band, where, and the tolerance in force. It offers no remedy.
+pub(crate) fn undecided(uncertain: &Uncertain, band: f64) -> Report {
+    let v = uncertain.at.to_vec3();
+    Report::new(Code::Undecided, Fault::NumericallySensitive)
+        .with_value(NamedValue::length("quantity", uncertain.length.millimetres()))
+        .with_value(NamedValue::length("radius", uncertain.radius.millimetres()))
+        .with_value(NamedValue::length("band", band))
+        .with_value(NamedValue::point("at", [v.x, v.y, v.z]))
+        .with_tolerance_in_force(band)
+}
+
 /// `v` as three exact intervals.
 fn exact(v: Vec3) -> [Interval; 3] {
     [Interval::exact(v.x), Interval::exact(v.y), Interval::exact(v.z)]

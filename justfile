@@ -12,6 +12,11 @@ target := `scripts/target-dir.sh`
 tmp := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-tmp"
 # The OCCT wheel's virtualenv lives outside the repository too (docs/decisions/2026-11-09-occt-oracle.md).
 oracle_venv := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-oracle" / "venv"
+# What gives `web-test`'s headless Chromium (156, Playwright 1.64.1) its software WebGPU adapter. Without the first flag
+# it gives none. Compositing through GL, every read-back after a canvas frame fails ("A valid external Instance
+# reference no longer exists"), so the next three make it composite through Vulkan on its own SwiftShader, which needs
+# no Vulkan driver on the machine (CI has none). The last asks for SwiftShader's adapter, whatever GPU the machine has.
+webgpu_flags := "--enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader --use-angle=swiftshader --use-webgpu-adapter=swiftshader"
 
 [private]
 default:
@@ -57,6 +62,19 @@ test *args:
 fmt:
     cargo fmt --all
 
+# The viewer's npm packages, as web/package-lock.json pins them, installed again only when the lock is newer
+[private]
+web-deps:
+    if [ ! web/node_modules/.package-lock.json -nt web/package-lock.json ]; then npm ci --prefix web --no-audit --no-fund; fi
+
+# Build the viewer with esbuild into web/dist, or the directory given: `just web-build <directory>`; its workers' kernel is occam-wasm, built for the browser with simd128
+[env("CARGO_TARGET_DIR", target)]
+[group('build')]
+web-build *args: web-deps
+    CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo build --quiet -p occam-wasm --release --target wasm32-unknown-unknown
+    wasm-bindgen --target web --out-dir "$CARGO_TARGET_DIR/occam-web" "$CARGO_TARGET_DIR/simd/wasm32-unknown-unknown/release/occam_wasm.wasm"
+    OCCAM_WASM_JS="$CARGO_TARGET_DIR/occam-web" node web/build.mjs "$@"
+
 # Type-check docs/sketch, the compiled sketch of the seams in docs/ARCHITECTURE.md, which no workspace build includes
 [env("CARGO_TARGET_DIR", target)]
 [group('check')]
@@ -68,12 +86,34 @@ sketch:
 fmt-check:
     cargo fmt --all --check
 
-# Clippy on every crate and target, warnings denied, and on occam-topo's determinism probe, which only a feature builds
+# Clippy on every crate and target, warnings denied, and on occam-topo's and occam-mesh's determinism probes, which only a feature builds
 [env("CARGO_TARGET_DIR", target)]
 [group('gates')]
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings
     cargo clippy -p occam-topo --all-targets --features determinism -- -D warnings
+    cargo clippy -p occam-mesh --all-targets --features determinism -- -D warnings
+
+# The viewer's types, strict and declaration files included, against @types/web's, with `tsc --noEmit`; esbuild builds it without checking them
+[group('gates')]
+web-check: web-deps
+    web/node_modules/.bin/tsc --noEmit -p web
+
+# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, and its workers' meshes against the native `occam mesh`
+[env("CARGO_TARGET_DIR", target)]
+[env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
+[group('gates')]
+web-test: web-build
+    mkdir -p "$CARGO_TARGET_DIR"
+    cargo run --quiet -p occam-report --example catalogue > "$CARGO_TARGET_DIR/occam-catalogue.json"
+    cargo build --quiet -p occam-cli
+    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" OCCAM="$CARGO_TARGET_DIR/debug/occam" node --test --test-timeout=300000 web/test/viewer.test.mjs
+
+# What headless Chromium gives the viewer's tests: its WebGPU adapter, its GPU status, and whether a read-back works
+[env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
+[group('tools')]
+web-gpu: web-deps
+    node web/test/gpu-report.mjs
 
 # Every test on the host, then the doctests of any library
 [env("CARGO_TARGET_DIR", target)]
@@ -92,6 +132,7 @@ wasm:
     wasm-bindgen --target nodejs --out-dir "$CARGO_TARGET_DIR/occam-wasm-js" "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/occam_wasm.wasm"
     node crates/occam-wasm/js/distance.test.mjs "$CARGO_TARGET_DIR/occam-wasm-js/occam_wasm.js"
     node crates/occam-wasm/js/session.test.mjs "$CARGO_TARGET_DIR/occam-wasm-js/occam_wasm.js"
+    node crates/occam-wasm/js/mesh.test.mjs "$CARGO_TARGET_DIR/occam-wasm-js/occam_wasm.js"
     cargo check --workspace --target wasm32-unknown-unknown
     CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo check --workspace --exclude occam-xtask --target wasm32-unknown-unknown
     cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
@@ -113,9 +154,9 @@ tools-test: corpus-test
 [group('gates')]
 preflight: fmt-check (gate "all" "--except" "deps,errors,determinism,counts,mutants,perf")
 
-# Everything except mutants and perf, the quick checks first: `preflight`, then clippy, the tests, wasm and the gates that build or run something
+# Everything except mutants and perf, the quick checks first: `preflight` and the viewer's types, then clippy, the tests, wasm, the viewer's tests and the gates that build or run something
 [group('gates')]
-gates: preflight clippy test-all wasm tools-test (gate "all" "--except" "layers,complexity,provenance,docs,plan,seam,mutants,perf")
+gates: preflight web-check clippy test-all wasm tools-test web-test (gate "all" "--except" "layers,complexity,provenance,docs,plan,seam,mutants,perf")
 
 # occam-geom's frozen seam against ci/seam.txt; `just seam --update docs/decisions/<decision>.md`: re-record it under it
 [env("CARGO_TARGET_DIR", target)]
@@ -151,6 +192,13 @@ corpus-fetch *args:
 [group('corpus')]
 corpus-test *args:
     python3 -B -m unittest discover -s tools/corpus/tests -t tools/corpus "$@"
+
+# Intersection's hits on every corpus case's operands, the box test against the unculled scan by digest, printing the
+# totals. Minutes in a debug build, so nightly, not per PR (docs/PLAN.md section 5)
+[env("CARGO_TARGET_DIR", target)]
+[group('corpus')]
+corpus-hits *args:
+    cargo nextest run -p occam-verify --test corpus_hits --run-ignored only --no-capture "$@"
 
 # Regenerate tools/corpus/imported from a clone of arris at the locked commit, taking only what the per-case gate allows
 [group('corpus')]
@@ -200,6 +248,13 @@ determinism-record *args:
 determinism-topology:
     cargo run --quiet --release -p occam-topo --features determinism --example determinism -- --record > ci/determinism-topology.txt.new
     mv ci/determinism-topology.txt.new ci/determinism-topology.txt
+
+# The mesher's determinism record, as the x86-64 build prints it on one thread: it has no separate implementation
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+determinism-mesh:
+    cargo run --quiet --release -p occam-mesh --features determinism --example determinism -- --record > ci/determinism-mesh.txt.new
+    mv ci/determinism-mesh.txt.new ci/determinism-mesh.txt
 
 # Regenerate the owned trigonometry's fitted coefficients and constants; `--check` says whether the committed file is current
 [group('tools')]

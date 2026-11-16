@@ -56,14 +56,6 @@ source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted
 
 ## Steps
 
-### `intersection.fit`
-
-Traced points become curves. A section curve is a B-spline fitted to the trace (Piegl and Tiller 1997, ch. 9), with
-its fit recorded in `Curve::fit`, and so are its images on both surfaces. This adds a fitted family to `occam-geom`,
-which passes the conformance suite like every other family. The seam does not change.
-
-*Failing test first:* every fitted curve lies within its recorded fit of both surfaces, at samples denser than the
-trace's; its images map onto it within the band; a fit that cannot reach the band is reported with what it reached.
 
 ### `intersection.hybrid`
 
@@ -102,18 +94,6 @@ section cross, split the curves there and are kept as contacts, where P5 passed 
 *Failing test first:* P5's near-tangent sweep, 48 cases from a gap of 1e-1 to 1e-12, each correct or `BelowResolution`
 with a bound that contains the true loop, and never silent. `nt_poly_loop` at 1e-10, P5's one silent failure, is
 `BelowResolution`. The Viviani node splits its curve.
-
-### `intersection.hits`
-
-A curve over a range against a surface. The curve's box over the range is tested against the surface's first. Against
-an analytic surface, the roots of its implicit function along the curve are isolated by interval bounds over subranges
-(Rump 1999). Otherwise the range and the domain are subdivided together by their bounds, and Newton runs on the leaves.
-A touch is a contact. A curve lying in the surface is reported as an overlap over its subrange, which `booleans` needs
-for edges on coincident faces. A box test must be conservative, so the culled and unculled runs are compared by digest.
-
-*Failing test first:* a line through a cylinder gives two hits and a tangent line one contact; a circle lying in a plane
-is an overlap; on the corpus, the box test removes scans and changes no digest; a box seeded one ulp too small changes
-a digest and is caught, as P8's mis-ordered cylinder box was.
 
 ### `intersection.timing`
 

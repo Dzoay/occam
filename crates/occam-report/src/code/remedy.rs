@@ -19,6 +19,12 @@ text_enum! {
         /// Mesh at the deflection in the `deflection` parameter, coarser than the one asked, at which the edge the report
         /// names fits under its cap.
         UseDeflection = "use-deflection",
+        /// Open the viewer's page in a browser that has WebGPU.
+        UseWebgpuBrowser = "use-webgpu-browser",
+        /// Turn WebGPU on in the browser the viewer's page is open in.
+        TurnOnWebgpu = "turn-on-webgpu",
+        /// Reload the viewer's page.
+        ReloadPage = "reload-page",
     }
 }
 
@@ -39,6 +45,11 @@ impl RemedyKind {
             Self::UseDeflection => {
                 "Mesh at the deflection given, at which the edge the report names fits under its cap."
             }
+            Self::UseWebgpuBrowser => "Open the page in a current Chromium or Firefox, which draw with WebGPU.",
+            Self::TurnOnWebgpu => {
+                "Turn on WebGPU and hardware acceleration in the browser's settings; in Chromium, chrome://gpu says why WebGPU is off."
+            }
+            Self::ReloadPage => "Reload the page.",
         }
     }
 
@@ -52,6 +63,7 @@ impl RemedyKind {
             Self::MeetAt => &["point"],
             Self::UseCircle => &["centre", "radius", "normal"],
             Self::UseDeflection => &["deflection"],
+            Self::UseWebgpuBrowser | Self::TurnOnWebgpu | Self::ReloadPage => &[],
         }
     }
 }

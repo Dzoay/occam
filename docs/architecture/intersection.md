@@ -42,11 +42,39 @@ flowchart TD
   is `decide.undecided`. Its curves' images count their turns about each chart's axis.
 - **The hybrid works through evaluation and bounds,** not a B-spline form, so offsets and mesh-backed surfaces reach it.
 - **Many pairs** run one pair a task, one result each, in pair order.
+- **Traced points become curves** through [`fit`](../../crates/occam-intersect/src/fit.rs): B-splines through a trace's
+  stations, with images through the same stations' parameters, cut where a surface's parameters jump and refined until
+  twice every gap between a curve and a surface's point at its image is within the band. The fit is recorded on the
+  curve and on each image; one that cannot reach the band is `intersect.fit-outside-band`, and its curve is kept.
 
 ## Edge against surface
 
-An edge is tested only after its conservative box meets the surface. The culled and unculled runs are compared by
-digest in the tests.
+```mermaid
+flowchart TD
+  pair(["Curve over a span,<br/>surface over a patch"]) --> box{"Boxes within<br/>the band?"}
+  box -->|"no"| none[("No hits, no work")]
+  box -->|"yes"| form{"Surface presents<br/>an analytic form?"}
+  form -->|"yes"| along["Signed distance along the curve:<br/>pieces decided by interval bounds,<br/>runs between them read"]
+  form -->|"no"| sub["Span and patch subdivided by bounds,<br/>Gauss-Newton on the leaves"]
+  along --> hits[("Hits")]
+  sub --> hits
+```
+
+| A `Hits` holds | Meaning |
+|---|---|
+| crossings | Where the curve passes through the surface, with its parameter, point and the surface's parameters |
+| contacts | Where it meets the surface without passing through: a touch, or an end of the span on it |
+| overlaps | A part of the span lying in the surface within the band, for edges on coincident faces |
+| failures | A spent budget, an undecided predicate: what was found stays above |
+| tally | The decisions made |
+
+- **The box test is conservative:** points are kept only where their foot lies in the patch, and overlaps where their
+  box meets the patch's, so a pair whose boxes miss has nothing to find. `hits` and the unculled `scan` are compared by
+  digest in the tests, and a box one ulp too small is caught.
+- **Against an analytic form,** the curve is moved into the form's own frame, so its boxes follow the surface. A run
+  between the two sides is a crossing, between one side and itself a touch, a near miss or two crossings, and a run
+  within the band whose slope and bend keep it there across the span an overlap.
+- **Otherwise** a curve lying in the surface is not told from many contacts, and runs to its budget, which is reported.
 
 <details>
 <summary>Evidence</summary>

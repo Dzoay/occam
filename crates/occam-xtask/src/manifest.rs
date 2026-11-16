@@ -4,12 +4,17 @@ use std::collections::BTreeSet;
 
 const SECTIONS: [&str; 3] = ["dependencies", "dev-dependencies", "build-dependencies"];
 
+/// The sections whose dependencies the crate is built with, not only its tests.
+const BUILT: [&str; 2] = ["dependencies", "build-dependencies"];
+
 /// One crate's manifest.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Manifest {
     pub name: String,
     /// Every dependency of any kind, by its real crate name.
     pub deps: BTreeSet<String>,
+    /// Of those, the ones named only in `[dev-dependencies]`, which only its tests are built with.
+    pub dev_only: BTreeSet<String>,
 }
 
 /// Whether `path` is a workspace crate's manifest, and so not a lint probe's.
@@ -22,8 +27,8 @@ pub fn is_internal(name: &str) -> bool {
     name == "occam" || name.starts_with("occam-")
 }
 
-fn names(table: &toml::Table, deps: &mut BTreeSet<String>) {
-    for section in SECTIONS.iter().filter_map(|section| table.get(*section)?.as_table()) {
+fn names(table: &toml::Table, sections: &[&str], deps: &mut BTreeSet<String>) {
+    for section in sections.iter().filter_map(|section| table.get(*section)?.as_table()) {
         for (key, value) in section {
             deps.insert(value.get("package").and_then(toml::Value::as_str).unwrap_or(key).to_string());
         }
@@ -35,14 +40,14 @@ pub fn parse(text: &str) -> Result<Manifest, String> {
     let table: toml::Table = text.parse().map_err(|e: toml::de::Error| e.to_string())?;
     let name = table.get("package").and_then(|p| p.get("name")).and_then(toml::Value::as_str);
     let name = name.ok_or("no [package] name")?.to_string();
-    let mut deps = BTreeSet::new();
-    names(&table, &mut deps);
-    for target in table.get("target").and_then(toml::Value::as_table).into_iter().flatten() {
-        if let Some(target) = target.1.as_table() {
-            names(target, &mut deps);
-        }
+    let (mut deps, mut built) = (BTreeSet::new(), BTreeSet::new());
+    let targets = table.get("target").and_then(toml::Value::as_table).into_iter().flatten();
+    for part in [Some(&table)].into_iter().chain(targets.map(|target| target.1.as_table())).flatten() {
+        names(part, &SECTIONS, &mut deps);
+        names(part, &BUILT, &mut built);
     }
-    Ok(Manifest { name, deps })
+    let dev_only = deps.difference(&built).cloned().collect();
+    Ok(Manifest { name, deps, dev_only })
 }
 
 /// Every package `Cargo.lock` fetches from elsewhere.
@@ -92,6 +97,27 @@ unix = "1"
         assert_eq!(manifest.name, "occam-a");
         let deps: Vec<&str> = manifest.deps.iter().map(String::as_str).collect();
         assert_eq!(deps, ["build", "dev", "real", "serde", "unix"]);
+    }
+
+    #[test]
+    fn a_dependency_only_dev_dependencies_name_is_dev_only() {
+        let text = r#"
+[package]
+name = "occam-a"
+[dependencies]
+both = "1"
+[dev-dependencies]
+both = "1"
+dev = "1"
+[target.'cfg(unix)'.dev-dependencies]
+unix = "1"
+[target.'cfg(unix)'.build-dependencies]
+built = "1"
+[target.'cfg(windows)'.dev-dependencies]
+built = "1"
+"#;
+        let manifest = parse(text).unwrap();
+        assert_eq!(manifest.dev_only.iter().map(String::as_str).collect::<Vec<_>>(), ["dev", "unix"]);
     }
 
     #[test]

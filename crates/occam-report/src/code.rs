@@ -541,12 +541,29 @@ catalogue! {
         "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
     }
 
+    /// The hits of a curve over a span on a surface stopped before they were complete, the budget spent. What was found
+    /// is kept beside the report (L5), and more may be missing.
+    HitsIncomplete = "intersect.hits-incomplete" {
+        Error, [],
+        "The hits of a curve on a surface stopped before they were complete; what was found is kept.",
+        "The hits stopped with {hits} points and {overlaps} overlaps found, and more may be missing.",
+    }
+
     /// A decision on a computed value could not be made at this resolution (O11): its certified enclosure reaches
     /// across an edge of the band. Nothing is guessed in its place.
     Undecided = "decide.undecided" {
         Error, [],
         "A decision cannot be made at this resolution: the value's certified enclosure reaches across an edge of the band.",
         "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}.",
+    }
+
+    /// A curve fitted to traced points, or one of its images, does not lie within the band of both surfaces, though it
+    /// runs through every station it could be given: what it reached is reported, and the curve is kept beside the
+    /// report with its fit (L5).
+    FitOutsideBand = "intersect.fit-outside-band" {
+        Error, [],
+        "A curve fitted to traced points, or an image of it, is not within the band of both surfaces; it is kept with its fit.",
+        "The curve fitted to {points} traced points and its images lie within {reached} of both surfaces, outside the band of {band}.",
     }
 
     /// A limit a mesh is made to, its deflection or its angle, is not a finite number greater than zero.
@@ -570,6 +587,60 @@ catalogue! {
         Error, [UseDeflection],
         "A face could not be meshed, so the mesh leaves a hole where it is.",
         "The face could not be meshed, for the reason given; the faces around it are meshed without it.",
+    }
+
+    /// The watertight check, which runs on every mesh, found it open or its counts wrong: a face is missing, segments
+    /// matched by position are not each used once in each direction, or a shell's Euler characteristic differs from its
+    /// faces'. The reason says which, and the report names where.
+    NotWatertight = "mesh.not-watertight" {
+        Error, [],
+        "The mesh is not watertight: a face is missing, a segment is not used once each way, or a shell's counts are wrong.",
+        "The mesh is not watertight, for the reason given, at the entities named.",
+    }
+
+    /// The viewer's page is open in a browser that has no WebGPU, which the page draws with.
+    WebgpuMissing = "view.webgpu-missing" {
+        Error, [UseWebgpuBrowser],
+        "The browser has no WebGPU, which the viewer draws with.",
+        "This browser has no WebGPU, which the viewer draws with.",
+    }
+
+    /// The browser has WebGPU, but gave the viewer's page no adapter: it is turned off, or the GPU is blocked.
+    NoAdapter = "view.no-adapter" {
+        Error, [TurnOnWebgpu],
+        "The browser has WebGPU but gave the page no GPU adapter.",
+        "The browser has WebGPU but gave the page no GPU adapter, so the viewer cannot draw.",
+    }
+
+    /// The GPU adapter refused the viewer's page a device.
+    NoDevice = "view.no-device" {
+        Error, [ReloadPage],
+        "The GPU adapter would not give the page a device.",
+        "The GPU adapter would not give the page a device: {reason}",
+    }
+
+    /// The viewer's GPU device was lost, so the page has stopped drawing.
+    DeviceLost = "view.device-lost" {
+        Error, [ReloadPage],
+        "The GPU device was lost, so the page has stopped drawing.",
+        "The GPU device was lost, so the page has stopped drawing: {reason}",
+    }
+
+    /// The viewer's page was given a mesh without the renderer contract's layout, and draws the last good one. The
+    /// page's own workers mesh through the `occam` that serves it, and meshing again gives the same bits, so such a
+    /// mesh is a bug in occam, and no remedy can be followed.
+    MeshMalformed = "view.mesh-malformed" {
+        Error, [],
+        "The page was given a mesh that breaks the renderer contract, which is a bug in occam.",
+        "The page was given a mesh that breaks the renderer contract, which is a bug in occam: {reason}. It still draws the last good model.",
+    }
+
+    /// A call to one of the viewer's mesh workers threw instead of meshing its range of faces: its kernel would not
+    /// load, say, or it stopped. The page names those faces and draws every other face.
+    MeshFailed = "view.mesh-failed" {
+        Error, [ReloadPage],
+        "A mesh worker could not mesh some of the model's faces, so the page draws the model without them.",
+        "A mesh worker could not mesh {faces}, so the page draws the model without them: {reason}",
     }
 }
 
@@ -1253,11 +1324,27 @@ mod tests {
                 "remedies": []
             },
             {
+                "name": "HitsIncomplete",
+                "code": "intersect.hits-incomplete",
+                "severity": "error",
+                "summary": "The hits of a curve on a surface stopped before they were complete; what was found is kept.",
+                "template": "The hits stopped with {hits} points and {overlaps} overlaps found, and more may be missing.",
+                "remedies": []
+            },
+            {
                 "name": "Undecided",
                 "code": "decide.undecided",
                 "severity": "error",
                 "summary": "A decision cannot be made at this resolution: the value's certified enclosure reaches across an edge of the band.",
                 "template": "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "FitOutsideBand",
+                "code": "intersect.fit-outside-band",
+                "severity": "error",
+                "summary": "A curve fitted to traced points, or an image of it, is not within the band of both surfaces; it is kept with its fit.",
+                "template": "The curve fitted to {points} traced points and its images lie within {reached} of both surfaces, outside the band of {band}.",
                 "remedies": []
             }
         ])
@@ -1288,6 +1375,67 @@ mod tests {
                 "summary": "A face could not be meshed, so the mesh leaves a hole where it is.",
                 "template": "The face could not be meshed, for the reason given; the faces around it are meshed without it.",
                 "remedies": ["use-deflection"]
+            },
+            {
+                "name": "NotWatertight",
+                "code": "mesh.not-watertight",
+                "severity": "error",
+                "summary": "The mesh is not watertight: a face is missing, a segment is not used once each way, or a shell's counts are wrong.",
+                "template": "The mesh is not watertight, for the reason given, at the entities named.",
+                "remedies": []
+            }
+        ])
+    }
+
+    fn view_codes() -> Value {
+        json!([
+            {
+                "name": "WebgpuMissing",
+                "code": "view.webgpu-missing",
+                "severity": "error",
+                "summary": "The browser has no WebGPU, which the viewer draws with.",
+                "template": "This browser has no WebGPU, which the viewer draws with.",
+                "remedies": ["use-webgpu-browser"]
+            },
+            {
+                "name": "NoAdapter",
+                "code": "view.no-adapter",
+                "severity": "error",
+                "summary": "The browser has WebGPU but gave the page no GPU adapter.",
+                "template": "The browser has WebGPU but gave the page no GPU adapter, so the viewer cannot draw.",
+                "remedies": ["turn-on-webgpu"]
+            },
+            {
+                "name": "NoDevice",
+                "code": "view.no-device",
+                "severity": "error",
+                "summary": "The GPU adapter would not give the page a device.",
+                "template": "The GPU adapter would not give the page a device: {reason}",
+                "remedies": ["reload-page"]
+            },
+            {
+                "name": "DeviceLost",
+                "code": "view.device-lost",
+                "severity": "error",
+                "summary": "The GPU device was lost, so the page has stopped drawing.",
+                "template": "The GPU device was lost, so the page has stopped drawing: {reason}",
+                "remedies": ["reload-page"]
+            },
+            {
+                "name": "MeshMalformed",
+                "code": "view.mesh-malformed",
+                "severity": "error",
+                "summary": "The page was given a mesh that breaks the renderer contract, which is a bug in occam.",
+                "template": "The page was given a mesh that breaks the renderer contract, which is a bug in occam: {reason}. It still draws the last good model.",
+                "remedies": []
+            },
+            {
+                "name": "MeshFailed",
+                "code": "view.mesh-failed",
+                "severity": "error",
+                "summary": "A mesh worker could not mesh some of the model's faces, so the page draws the model without them.",
+                "template": "A mesh worker could not mesh {faces}, so the page draws the model without them: {reason}",
+                "remedies": ["reload-page"]
             }
         ])
     }
@@ -1330,6 +1478,24 @@ mod tests {
                 "summary": "Mesh at the deflection given, at which the edge the report names fits under its cap.",
                 "parameters": ["deflection"],
             },
+            {
+                "name": "UseWebgpuBrowser",
+                "kind": "use-webgpu-browser",
+                "summary": "Open the page in a current Chromium or Firefox, which draw with WebGPU.",
+                "parameters": [],
+            },
+            {
+                "name": "TurnOnWebgpu",
+                "kind": "turn-on-webgpu",
+                "summary": "Turn on WebGPU and hardware acceleration in the browser's settings; in Chromium, chrome://gpu says why WebGPU is off.",
+                "parameters": [],
+            },
+            {
+                "name": "ReloadPage",
+                "kind": "reload-page",
+                "summary": "Reload the page.",
+                "parameters": [],
+            },
         ])
     }
 
@@ -1356,6 +1522,7 @@ mod tests {
             transform_codes(),
             intersect_codes(),
             mesh_codes(),
+            view_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())
