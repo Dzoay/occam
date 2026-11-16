@@ -96,15 +96,6 @@ Each curve lies on both surfaces within the band at dense samples, and its image
 degenerate pencil is classified as built, and none is fitted. Where a closed form also answers, the two agree within
 the band. A pencil nudged to within the band of a split is `decide.undecided`.
 
-### `intersection.fit`
-
-Traced points become curves. A section curve is a B-spline fitted to the trace (Piegl and Tiller 1997, ch. 9), with
-its fit recorded in `Curve::fit`, and so are its images on both surfaces. This adds a fitted family to `occam-geom`,
-which passes the conformance suite like every other family. The seam does not change.
-
-*Failing test first:* every fitted curve lies within its recorded fit of both surfaces, at samples denser than the
-trace's; its images map onto it within the band; a fit that cannot reach the band is reported with what it reached.
-
 ### `intersection.hybrid`
 
 The general method: subdivision for start points, then the trace. A breadth-first traversal splits parameter boxes and

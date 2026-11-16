@@ -460,4 +460,13 @@ exclude_re = [
     "occam-intersect/src/subdivide\\.rs:141:72: replace < with <= in leaves$",
     "occam-intersect/src/subdivide\\.rs:163:(38|47): replace < with <= in split$",
     "occam-intersect/src/subdivide\\.rs:164:(48|57|88|97): replace < with <= in split$",
+    # The fit's ties, by line. Where two numbers are equal, keeping either gives the same number: the largest
+    # coordinate a fit's floor is taken from, a fit at its floor, and an image's largest step to a foot. Where the
+    # largest gap is found twice, or an image's gap equals the curve's fit, the fit reached is the same, and the place
+    # named is as far as the other.
+    "occam-intersect/src/fit\\.rs:253:57: replace > with >= in Worst::note$",
+    "occam-intersect/src/fit\\.rs:405:65: replace > with >= in floored$",
+    "occam-intersect/src/fit\\.rs:406:28: replace > with >= in floored$",
+    "occam-intersect/src/fit\\.rs:431:48: replace > with >= in image_fit$",
+    "occam-intersect/src/fit\\.rs:521:42: replace > with >= in fit_piece$",
 ]

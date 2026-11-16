@@ -17,6 +17,11 @@
 //! occam-math's predicates and counted in its tally; one the band cannot make ends it undecided, reported as
 //! `decide.undecided`. Whether a touch is a contact is decided later.
 //!
+//! [`fit`] makes curves of a trace's points: B-splines through its stations, each with its images on both surfaces,
+//! cut where a surface's parameters jump, refined until each lies within the band of both, and each with its fit
+//! recorded. One that cannot reach the band is reported with what it reached, and kept. [`fits`] fits many traces, one
+//! a task.
+//!
 //! Where a curve over a span meets a surface over a patch is [`Hits`], beside a section: crossings, contacts and
 //! overlaps, the failures and the tally. [`hits`] tests their boxes first, and [`scan`] does not, so the two can be
 //! compared (P8). [`hits_of_pairs`] runs many, as [`sections`] does.
@@ -32,6 +37,9 @@ mod correct_tests;
 mod decide;
 mod distance;
 mod edge;
+mod fit;
+#[cfg(test)]
+mod fit_tests;
 mod hits;
 mod implicit;
 mod march;
@@ -52,6 +60,7 @@ mod trace;
 mod trace_tests;
 
 pub use closed::Closed;
+pub use fit::{Fitted, fit, fits};
 pub use hits::{Hit, HitPair, Hits, Overlap, Span, boxes_meet, hits, hits_of_pairs, scan};
 pub use methods::{Answer, Budget, Method, Methods, Spent, SurfacePair, Work, sections};
 pub use section::{Coincidence, Contact, Section, SectionCurve};

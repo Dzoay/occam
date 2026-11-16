@@ -10,10 +10,11 @@ use std::sync::Arc;
 
 use occam_geom::{Scratch, Surface};
 use occam_math::{Exec, Grain, Tally};
-use occam_report::{Code, Fault, NamedValue, Reason, Report};
+use occam_report::{Fault, NamedValue, Reason, Report};
 use occam_units::{Length, Point, Tolerance, UvPoint, Vec3, World};
 
 use crate::correct::{Here, Other, Pair, Side};
+use crate::decide::undecided;
 use crate::march::{Frame, Limits, Run, frame};
 use crate::methods::{Spent, SurfacePair, Work, incomplete};
 use crate::project::project;
@@ -205,15 +206,7 @@ impl Tracer {
     #[must_use]
     pub fn failures(&self, trace: &Trace, found: &Section) -> Vec<Report> {
         let band = self.tol.band().millimetres();
-        let undecided = trace.undecided.iter().map(|uncertain| {
-            let v = uncertain.at.to_vec3();
-            Report::new(Code::Undecided, Fault::NumericallySensitive)
-                .with_value(NamedValue::length("quantity", uncertain.length.millimetres()))
-                .with_value(NamedValue::length("radius", uncertain.radius.millimetres()))
-                .with_value(NamedValue::length("band", band))
-                .with_value(NamedValue::point("at", [v.x, v.y, v.z]))
-                .with_tolerance_in_force(band)
-        });
+        let undecided = trace.undecided.iter().map(|uncertain| undecided(uncertain, band));
         let stalled = trace.ends.contains(&End::Stalled).then(|| self.stalled(trace, found));
         stalled.into_iter().chain(undecided).collect()
     }

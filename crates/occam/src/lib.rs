@@ -4,6 +4,7 @@
 
 mod describe;
 mod distance;
+mod mesh;
 mod model;
 pub mod operation_workloads;
 mod run;
@@ -11,6 +12,7 @@ mod session;
 
 pub use describe::describe;
 pub use distance::{Answer, DistanceQuery, distance, distance_json};
+pub use mesh::{Buffers, FaceRange, Limits, Meshed, Placed};
 pub use model::Model;
 pub use occam_geom::workloads as spline_workloads;
 pub use occam_geom::{Jets, SplineSurface};

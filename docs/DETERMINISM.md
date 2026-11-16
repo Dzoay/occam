@@ -81,6 +81,14 @@ baseline and simd128, but not at the narrower instruction levels, because the to
 Every hash must agree, and must equal the record in `ci/determinism-topology.txt`. Its test checks the same in debug
 builds, on one thread and on four.
 
+The mesher has one too, `crates/occam-mesh/src/probe.rs`, built for the gate by
+`crates/occam-mesh/examples/determinism.rs` under occam-mesh's `determinism` feature. It hashes each test model's whole
+mesh, its edges' samples, its faces' blocks and the watertight check's reports, as `Mesh::digest` gives them, one model
+with a face that will not mesh, and the check's reports on a mesh cracked by one ulp. It runs as the topology's does, on
+the same builds and not at the narrower levels: the mesher passes no level to anything and has no lane kernel yet. Every
+hash must agree, and must equal the record in `ci/determinism-mesh.txt`; its test checks the same in debug builds, on
+one thread and on four.
+
 ## The recorded hashes
 
 `ci/determinism-hashes.txt` comes from a separate implementation in another language, which shares no code with
@@ -96,11 +104,15 @@ what the x86-64 build prints on one thread (`just determinism-topology`). It hol
 to that one, and holds the topology to its answers, so a change to a model, a check or the digest shows as a changed
 hash, to be explained in the PR. Unlike the maths record, it cannot catch an answer that every build gets wrong alike.
 
+`ci/determinism-mesh.txt` is made the same way (`just determinism-mesh`), for the same reason: there is no second
+mesher.
+
 ## What it does not cover yet
 
 - wasmtime on x86-64 runs the same floating-point instructions as native code, so comparing these builds cannot show a
   difference in NaN bits that only another CPU would produce. Rule 3 and the record are what guard against that.
-- The topology's record comes from one of the builds it judges, not from a separate implementation (above).
+- The topology's and the mesher's records come from one of the builds they judge, not from a separate implementation
+  (above).
 - Windows is compile-checked only (`just wasm`), and aarch64 is not built.
 - One browser engine is run: `gates perf` times Chromium and requires the simd128 and scalar builds to compute the same bits. Other
   engines are not run.

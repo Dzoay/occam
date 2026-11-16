@@ -68,6 +68,11 @@ pub struct Faces {
 }
 
 impl Faces {
+    /// `list`, each face with its mesh or the report refusing it, in id order.
+    pub(crate) const fn new(list: Vec<(Id<Face>, Result<FaceMesh, Report>)>) -> Self {
+        Self { list }
+    }
+
     /// The mesh of `face`, or the report refusing it; `None` for a face the model does not have.
     #[must_use]
     pub fn get(&self, face: Id<Face>) -> Option<Result<&FaceMesh, &Report>> {
@@ -91,11 +96,21 @@ impl Faces {
 /// [`occam_report::Code::FaceNotMeshed`] and the reason, and the other faces are meshed as if it were not there.
 #[must_use]
 pub fn mesh_faces(exec: &Exec, model: &Snapshot, edges: &Edges) -> Faces {
+    Faces { list: mesh_some(exec, model, &model.ids::<Face>(), edges) }
+}
+
+/// Each of `faces` meshed against `edges`, one face a task on `exec`, in the order given.
+pub(crate) fn mesh_some(
+    exec: &Exec,
+    model: &Snapshot,
+    faces: &[Id<Face>],
+    edges: &Edges,
+) -> Vec<(Id<Face>, Result<FaceMesh, Report>)> {
     let (model, edges) = (Arc::new(model.clone()), Arc::new(edges.clone()));
-    let faces: Arc<[Id<Face>]> = model.ids::<Face>().into();
+    let faces: Arc<[Id<Face>]> = faces.into();
     let of = Arc::clone(&faces);
     let meshed = exec.map(faces.len(), Grain::Each, move |k| of.get(k).map(|&f| (f, mesh_face(&model, f, &edges))));
-    Faces { list: meshed.into_iter().flatten().collect() }
+    meshed.into_iter().flatten().collect()
 }
 
 /// Meshes `face` of `model` against `edges`, its edges' samples, to the limits they were sampled to.
