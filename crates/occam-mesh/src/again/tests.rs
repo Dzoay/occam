@@ -4,6 +4,7 @@ use occam_topo::Changes;
 use occam_units::{Angle, Length};
 
 use super::*;
+use crate::edges::sample_edges;
 use crate::merge::{Mesh, mesh};
 use crate::part::mesh_part;
 use crate::remesh::remesh;
@@ -45,7 +46,7 @@ fn a_face_changed_is_meshed_again_with_each_face_along_an_edge_whose_samples_cha
     let (sharp, _) = model(&[plane_and_cylinder(1.0), disc_drawn(1.0)]);
     let [plane, cylinder, disc] = sharp.ids::<Face>()[..] else { panic!("three faces") };
     let again = again(&Exec::serial(), &gentle, &sharp, at());
-    assert_eq!(again.faces, [plane, cylinder], "the plane, untouched, along the line whose samples changed");
+    assert_eq!(again.faces, [plane, cylinder], "the plane, drawn from the line, whose record the bend changed too");
     let disc_edges = users(&sharp, &[disc]).into_keys().map(Id::entity);
     let kept: Vec<EntityRef> = [disc.entity()].into_iter().chain(disc_edges).collect();
     assert_eq!(again.kept, kept, "the disc and its circle");
@@ -78,4 +79,36 @@ fn every_face_is_meshed_again_after_an_empty_model_and_the_same_at_four_threads(
     assert_eq!(all, Again { faces: snapshot.ids::<Face>(), kept: Vec::new() });
     let (sharp, _) = model(&[plane_and_cylinder(1.0), disc_drawn(1.0)]);
     assert_eq!(again(&four, &snapshot, &sharp, at()), again(&Exec::serial(), &snapshot, &sharp, at()));
+}
+
+#[test]
+fn an_edge_has_moved_where_its_samples_differ_to_the_bit_or_it_had_none() {
+    let (snapshot, _) = model(&[plane_and_cylinder(2.0)]);
+    let all: Samples = sample_edges(&Exec::serial(), &snapshot, at())
+        .iter()
+        .map(|(edge, samples)| (edge, samples.cloned().map_err(Report::clone)))
+        .collect();
+    assert_eq!(moved(&all, &all), [], "the same samples");
+    let first = *all.keys().next().unwrap();
+    let mut nudged = all.clone();
+    if let Some(Ok(samples)) = nudged.get_mut(&first) {
+        samples.params[1] = samples.params[1].next_up();
+    }
+    assert_eq!(moved(&all, &nudged), [first], "a parameter one bit apart");
+    let mut fewer = all.clone();
+    fewer.remove(&first);
+    assert_eq!(moved(&fewer, &all), [first], "an edge not sampled before");
+    assert_eq!(moved(&all, &fewer), [], "only the edges sampled now");
+}
+
+#[test]
+fn the_edges_wanted_are_sampled_as_the_whole_model_samples_them_and_no_others() {
+    let (snapshot, edges) = model(&[plane_and_cylinder(1.0), disc_drawn(1.0)]);
+    let whole = sample_edges(&Exec::serial(), &snapshot, at());
+    let wanted: BTreeSet<Id<Edge>> = edges[0].iter().copied().collect();
+    let got = sampled(&Exec::serial(), &snapshot, &wanted, at());
+    assert_eq!(got.keys().copied().collect::<BTreeSet<_>>(), wanted, "the plane's and the cylinder's edges alone");
+    for (edge, samples) in &got {
+        assert_eq!(samples.as_ref().ok(), whole.get(*edge).and_then(Result::ok), "{edge:?}");
+    }
 }

@@ -39,9 +39,8 @@ pub fn again(exec: &Exec, before: &Snapshot, after: &Snapshot, limits: Limits) -
     let first: Vec<Id<Face>> = faces.iter().copied().filter(|&face| drawn_from(after, face, &touched)).collect();
     let edges_of = |face: Id<Face>| after.view(face).map(View::<Face>::edges).unwrap_or_default();
     let wanted: BTreeSet<Id<Edge>> = first.iter().flat_map(|&face| edges_of(face)).collect();
-    let (was, now) = (sampled(exec, before, &wanted, limits), sampled(exec, after, &wanted, limits));
-    let moved = now.iter().filter(|(edge, samples)| !same(was.get(edge).map(Result::as_ref), samples.as_ref()));
-    let along = moved.flat_map(|(edge, _)| users.get(edge).into_iter().flatten().copied());
+    let moved = moved(&sampled(exec, before, &wanted, limits), &sampled(exec, after, &wanted, limits));
+    let along = moved.iter().flat_map(|edge| users.get(edge).into_iter().flatten().copied());
     let again: BTreeSet<Id<Face>> = first.into_iter().chain(along).collect();
     let kept_faces = faces.iter().filter(|face| !again.contains(face)).map(|face| face.entity());
     let only_kept = |faces: &Vec<Id<Face>>| faces.iter().all(|face| !again.contains(face));
@@ -50,18 +49,25 @@ pub fn again(exec: &Exec, before: &Snapshot, after: &Snapshot, limits: Limits) -
     Again { faces: again.into_iter().collect(), kept }
 }
 
+/// Edges with their samples or the reports refusing them, by id.
+type Samples = BTreeMap<Id<Edge>, Result<EdgeSamples, Report>>;
+
 /// The edges of `model` in `wanted` that a face uses, each sampled on `exec` to `limits` as [`crate::mesh`] samples it
 /// there, its step read from every face along it, by id.
-fn sampled(
-    exec: &Exec,
-    model: &Snapshot,
-    wanted: &BTreeSet<Id<Edge>>,
-    limits: Limits,
-) -> BTreeMap<Id<Edge>, Result<EdgeSamples, Report>> {
+fn sampled(exec: &Exec, model: &Snapshot, wanted: &BTreeSet<Id<Edge>>, limits: Limits) -> Samples {
     let faces_of = |edge: Id<Edge>| model.view(edge).map(View::<Edge>::faces).unwrap_or_default();
     let bent: BTreeSet<Id<Face>> = wanted.iter().flat_map(|&edge| faces_of(edge)).collect();
     let bent: Vec<Id<Face>> = bent.into_iter().collect();
     sample_some(exec, model, &bent, &|edge| wanted.contains(&edge), limits).into_iter().collect()
+}
+
+/// The edges of `now` whose samples, or refusal, are not what `was` holds for them to the bit, in id order: an edge
+/// `was` does not hold among them.
+fn moved(was: &Samples, now: &Samples) -> Vec<Id<Edge>> {
+    let differs = |(edge, samples): &(&Id<Edge>, &Result<EdgeSamples, Report>)| {
+        !same(was.get(*edge).map(Result::as_ref), samples.as_ref())
+    };
+    now.iter().filter(differs).map(|(edge, _)| *edge).collect()
 }
 
 #[cfg(test)]
