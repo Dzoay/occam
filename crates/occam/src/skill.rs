@@ -124,6 +124,15 @@ mod tests {
     }
 
     #[test]
+    fn an_installation_that_carries_a_report_is_not_ok() {
+        let report = Report::new(Code::SkillPresent, Fault::InvalidInput);
+        assert!(installed(Some(Install::Written), vec![]).ok());
+        assert!(!installed(Some(Install::Written), vec![report.clone()]).ok(), "done, but a report stands");
+        assert!(!installed(None, vec![]).ok(), "nothing done");
+        assert!(!installed(None, vec![report]).ok());
+    }
+
+    #[test]
     fn the_skill_is_given_whole_in_json() {
         let said = json_of(&skill_json("---\nname: occam\n---\n# A skill\n"));
         assert_eq!(said, json!({"schema": 2, "ok": true, "skill": "---\nname: occam\n---\n# A skill\n"}));
