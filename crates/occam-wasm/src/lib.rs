@@ -2,7 +2,7 @@
 //! The browser build: a thin facade over the `occam` crate. A JavaScript caller passes numbers, in millimetres and radians, and
 //! requests as JSON text, and gets the one JSON form of the result or the report (L8, L25).
 
-use occam::{Answered, DistanceQuery, Encoding, EntityKind, Exec, distance_json, ran_json};
+use occam::{Answered, DistanceQuery, Encoding, EntityKind, EntityRef, Exec, Pick, distance_json, ran_json};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A model in the browser, as the editing worker keeps it (P10). Its requests run as the command line's do: one that goes
@@ -105,6 +105,36 @@ impl Session {
         let at = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
         let part = self.session.mesh_part(&Exec::serial(), deflection, angle, at(first)..at(end));
         Ok(Meshed { meshed: part.map_err(|r| Answered::Refused(r).json())? })
+    }
+
+    /// What a ray hits first in the model's mesh made to a chordal `deflection` in millimetres and an `angle` in
+    /// radians, as `occam pick --json` gives it: `ray` is six numbers, where it starts and its direction, in
+    /// millimetres in the model's frame, and an edge is hit within `tolerance` millimetres of it. The mesh is the one
+    /// [`Session::mesh`] gives, made the first time and kept for the next pick at the same limits, so a mesh worker
+    /// picks against the CPU mesh, never the GPU's.
+    ///
+    /// # Errors
+    ///
+    /// The reports refusing the limits, the ray or the tolerance, in the commands' one JSON form.
+    pub fn pick(&mut self, deflection: f64, angle: f64, ray: &[f64], tolerance: f64) -> Result<String, String> {
+        let at = |k: usize| ray.get(k).copied().unwrap_or(f64::NAN);
+        let asked = Pick { from: [at(0), at(1), at(2)], direction: [at(3), at(4), at(5)], tolerance };
+        let picked = self.session.pick(&Exec::serial(), deflection, angle, asked);
+        picked.map(|picked| picked.json()).map_err(|r| Answered::Refused(r).json())
+    }
+
+    /// The samples of the edge `edge`, written as its id, in the mesh [`Session::pick`] picks against: three numbers a
+    /// point, in millimetres, what the page draws a selected or highlighted edge through. None for an id that is not
+    /// an edge a face uses.
+    ///
+    /// # Errors
+    ///
+    /// The reports refusing the limits, in the commands' one JSON form.
+    pub fn samples(&mut self, deflection: f64, angle: f64, edge: &str) -> Result<Vec<f64>, String> {
+        let Some(edge) = EntityRef::parse(edge).filter(|id| id.kind == EntityKind::Edge) else { return Ok(Vec::new()) };
+        let samples = self.session.samples(&Exec::serial(), deflection, angle, edge);
+        let samples = samples.map_err(|r| Answered::Refused(r).json())?;
+        Ok(samples.unwrap_or_default().into_iter().flatten().collect())
     }
 }
 
@@ -319,6 +349,32 @@ mod tests {
         let refused =
             serde_json::from_str::<serde_json::Value>(&opened.again(&first, 0.1, 0.0).err().unwrap()).unwrap();
         assert_eq!(refused["reports"][0]["code"], "mesh.limit-not-positive");
+    }
+
+    #[test]
+    fn a_session_picks_what_a_ray_hits_first_and_gives_an_edges_samples() {
+        let mut session = Session::new();
+        let _ = session.run(BOX);
+        let picked: serde_json::Value =
+            serde_json::from_str(&session.pick(0.1, 0.35, &[0.5, 1.0, 9.0, 0.0, 0.0, -1.0], 0.0).unwrap()).unwrap();
+        assert_eq!((&picked["ok"], &picked["point"]), (&serde_json::json!(true), &serde_json::json!([0.5, 1.0, 3.0])));
+        assert!(picked["entity"].as_str().unwrap().starts_with("face:"), "{picked}");
+        let edge: serde_json::Value =
+            serde_json::from_str(&session.pick(0.1, 0.35, &[0.5, 0.01, 9.0, 0.0, 0.0, -1.0], 0.05).unwrap()).unwrap();
+        let id = edge["entity"].as_str().unwrap();
+        assert!(id.starts_with("edge:"), "{edge}");
+        let samples = session.samples(0.1, 0.35, id).unwrap();
+        assert!(samples.len() >= 6 && samples.chunks(3).all(|p| p[1..] == [0.0, 3.0]), "{samples:?}");
+        assert_eq!(session.samples(0.1, 0.35, "face:0/1").unwrap(), Vec::<f64>::new(), "a face has none");
+        let missed: serde_json::Value =
+            serde_json::from_str(&session.pick(0.1, 0.35, &[0.5, 1.0, 9.0, 0.0, 0.0, 1.0], 0.0).unwrap()).unwrap();
+        assert_eq!(
+            (&missed["entity"], &missed["reports"][0]["code"]),
+            (&serde_json::Value::Null, &serde_json::json!("mesh.ray-missed"))
+        );
+        let refused = session.pick(0.1, 0.35, &[0.0; 3], 0.0).err().unwrap();
+        let refused: serde_json::Value = serde_json::from_str(&refused).unwrap();
+        assert_eq!(refused["reports"][0]["code"], "input.no-direction", "a ray of three numbers has no direction");
     }
 
     #[test]

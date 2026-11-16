@@ -1,10 +1,11 @@
 // A mesh worker, one of the page's pool, kept alive between requests. It loads its own copy of each model the editing
 // worker publishes, read-only, and meshes the ranges of its faces the page deals it, one call at a time, transferring
-// the flat arrays back with what refused any of them.
+// the flat arrays back with what refused any of them. It also picks against its model's whole CPU mesh, made the
+// first time it is asked and kept, and gives the samples of the edges the page outlines.
 
 import { Session } from "occam-wasm";
 
-import type { FromMesher, KernelReport, Part, ToMesher } from "../protocol.ts";
+import type { Answer, Ask, FromMesher, KernelReport, Part, ToMesher } from "../protocol.ts";
 import { kernelReport, own } from "../protocol.ts";
 import { kernel, said } from "./kernel.ts";
 
@@ -23,10 +24,15 @@ function reports(summary: string): KernelReport[] {
   return [...answers.flatMap((answer) => (answer.report ? [answer.report] : [])), ...rest].map(kernelReport);
 }
 
-function mesh(call: Mesh): Part {
-  if (!held || held.model !== call.model) throw new Error(`this worker holds no model ${call.model}`);
+/** The session that holds model `model`, as a call or an ask names it. */
+function holding(model: number): Session {
+  if (!held || held.model !== model) throw new Error(`this worker holds no model ${model}`);
   if (!held.session) throw new Error(held.refused);
-  const meshed = held.session.mesh_part(call.deflection, call.angle, call.first, call.end);
+  return held.session;
+}
+
+function mesh(call: Mesh): Part {
+  const meshed = holding(call.model).mesh_part(call.deflection, call.angle, call.first, call.end);
   try {
     return {
       positions: meshed.positions(),
@@ -41,7 +47,35 @@ function mesh(call: Mesh): Part {
   }
 }
 
+/**
+ * What a ray hits, with edges within a few pixels at the depth of the face it hits first, or at `fallback` along it
+ * where it hits none: one pick with no tolerance finds that depth, and a second picks with the tolerance there.
+ */
+function pick(ask: Extract<Ask, { kind: "pick" }>): Answer {
+  const session = holding(ask.model);
+  const ray = Float64Array.from(ask.ray);
+  const first = JSON.parse(session.pick(ask.deflection, ask.angle, ray, 0)) as { distance?: number };
+  const along = typeof first.distance === "number" ? first.distance : ask.fallback;
+  return { kind: "picked", ask: ask.ask, answer: session.pick(ask.deflection, ask.angle, ray, ask.slope * along) };
+}
+
+function samples(ask: Extract<Ask, { kind: "samples" }>): Answer {
+  const session = holding(ask.model);
+  const edges = ask.edges.map((id) => ({ id, points: session.samples(ask.deflection, ask.angle, id) }));
+  return { kind: "sampled", ask: ask.ask, edges };
+}
+
 async function answer(message: ToMesher): Promise<void> {
+  if (message.kind === "pick" || message.kind === "samples") {
+    try {
+      await kernel();
+      const answered = message.kind === "pick" ? pick(message) : samples(message);
+      port.postMessage(answered, answered.kind === "sampled" ? answered.edges.map((edge) => edge.points.buffer) : []);
+    } catch (error) {
+      port.postMessage({ kind: "unanswered", ask: message.ask, reason: said(error) }, []);
+    }
+    return;
+  }
   if (message.kind === "load") {
     held?.session?.free();
     held = null;

@@ -30,7 +30,14 @@ declare module "occam-wasm" {
     mesh_part(deflection: number, angle: number, first: number, end: number): Meshed;
     /** Throws the reports refusing the bytes, as JSON text. */
     static open(native: Uint8Array): Session;
+    /**
+     * What a ray of six numbers, its start and its direction, hits first in the model's mesh, edges within `tolerance`,
+     * in the one JSON form `occam pick --json` gives; throws the reports refusing the limits or the ray, as JSON text.
+     */
+    pick(deflection: number, angle: number, ray: Float64Array, tolerance: number): string;
     run(request: string): string;
+    /** The samples of the edge `edge`, three numbers a point; none for an id that is not an edge a face uses. */
+    samples(deflection: number, angle: number, edge: string): Float64Array<ArrayBuffer>;
     take_saved(): Uint8Array<ArrayBuffer> | undefined;
   }
 

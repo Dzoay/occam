@@ -33,7 +33,12 @@ fn a_port_asked_for_and_in_use_is_taken_and_any_other_bind_error_did_not_start_t
 
 /// What the viewer shows: the model of `digest`, if one read whole, and the reports `refused`.
 fn shown(digest: Option<u64>, refused: &[Report]) -> Shown {
-    Shown { good: digest.map(|digest| (digest, Bytes::new())), refused: refused.to_vec(), stopping: false }
+    Shown {
+        good: digest.map(|digest| (digest, Bytes::new())),
+        refused: refused.to_vec(),
+        stopping: false,
+        marks: Default::default(),
+    }
 }
 
 #[test]
@@ -85,4 +90,39 @@ fn the_watch_ends_at_its_first_look_once_the_viewer_is_stopping() {
     let looking = watch(&app, Watcher::new(app.model.clone()));
     let ended = runtime.block_on(async { tokio::time::timeout(Duration::from_secs(2), looking).await });
     assert!(ended.is_ok(), "it ended, an hour of idle time from stopping by itself");
+}
+
+#[test]
+fn a_page_is_sent_the_selection_then_the_highlight_each_once_until_it_changes() {
+    let mut sent = Sent::default();
+    let mut now = Shown { marks: ["s1".into(), "h1".into()], ..Shown::default() };
+    assert_eq!(sent.marked(&now), Some(("selection", "s1".to_owned())));
+    assert_eq!(sent.marked(&now), Some(("highlight", "h1".to_owned())));
+    assert_eq!(sent.marked(&now), None, "each sent once");
+    now.marks[1] = "h2".into();
+    assert_eq!(sent.marked(&now), Some(("highlight", "h2".to_owned())), "only what changed");
+    assert_eq!(sent.marked(&now), None);
+}
+
+#[test]
+fn a_page_is_first_shown_the_selection_and_the_highlight_beside_the_model() {
+    let dir = std::env::temp_dir().join(format!("occam-first-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let model = dir.join("part.occam");
+    let selection = Selection::new(7, vec![occam::EntityRef::new(occam::EntityKind::Face, 1, 1)]).json();
+    std::fs::write(dir.join("part.occam.selection"), &selection).unwrap();
+    let shown = first(&model, &mut Watcher::new(model.clone()));
+    assert_eq!(shown.marks, [selection, Selection::none_json()], "the selection there, and no highlight");
+    assert_eq!(shown.refused.iter().map(|r| r.code).collect::<Vec<_>>(), [Code::ModelMissing], "and no model yet");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn marks_taken_in_say_whether_either_changed() {
+    let mut shown = Shown::default();
+    let marks = ["s".to_owned(), "h".to_owned()];
+    assert!(shown.mark(marks.clone()), "new");
+    assert_eq!(shown.marks, marks);
+    assert!(!shown.mark(marks.clone()), "the same again");
+    assert!(shown.mark(["s".to_owned(), "h2".to_owned()]), "the highlight alone");
 }

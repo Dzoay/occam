@@ -27,4 +27,8 @@ export const refusals = signal<readonly KernelReport[]>([]);
 export const watched = signal<readonly KernelReport[]>([]);
 /** The selected ids, in the order they were selected. */
 export const selection = signal<readonly string[]>([]);
+/** The ids the agent highlights with `occam highlight`, drawn in a second colour, apart from the selection. */
+export const highlight = signal<readonly string[]>([]);
+/** Why `occam view` refused the selection the page posted last, if it did: it was made on an older model. */
+export const refusedSelection = signal<KernelReport | null>(null);
 export const status = signal<Status>({ faces: 0, triangles: 0, pending: 0, fallback: false });

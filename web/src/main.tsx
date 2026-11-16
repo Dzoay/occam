@@ -1,6 +1,7 @@
 // The page: Preact draws the controls into `#ui`; the viewer draws into `#view` from its own frame loop; the kernel
-// runs in workers, an editing worker and a pool of mesh workers, and never on this thread. Served by `occam view`,
-// which marks its `<html>` as `data-live`, the page follows the model file through the server's events.
+// runs in workers, an editing worker and a pool of mesh workers, and never on this thread. A click picks in a mesh
+// worker. Served by `occam view`, which marks its `<html>` as `data-live`, the page follows the model file through the
+// server's events, and posts the selection back.
 //
 // `?upload-bound=<bytes>` sets how much a frame may upload, `?workers=<n>` how many mesh workers there are,
 // `?deflection=<mm>` and `?angle=<rad>` what each model is meshed to, and `?inspect` installs what the tests read.
@@ -14,6 +15,7 @@ import { INSPECT_USAGE, Inspector } from "./inspect.ts";
 import { attach } from "./input.ts";
 import { Kernel } from "./kernel.ts";
 import { Live } from "./live.ts";
+import { Picking } from "./pick.ts";
 import type { Limits, Meshing } from "./pool.ts";
 import { report } from "./report.ts";
 import { failure, notice, refusals } from "./state.ts";
@@ -76,15 +78,24 @@ async function start(): Promise<void> {
     deflection: asked(params, "deflection", positive, LIMITS.deflection),
     angle: asked(params, "angle", positive, LIMITS.angle),
   };
-  attach(canvas, viewer);
+  const served = document.documentElement.hasAttribute("data-live");
+  let live: Live | null = null;
+  const picking = new Picking(viewer, kernel.pool, limits, served ? (digest, ids) => void live?.post(digest, ids) : null);
+  live = served ? new Live(kernel, viewer, limits, () => picking.refresh()) : null;
+  attach(canvas, viewer, (x, y, add) => void picking.click(x, y, add));
   render(<App actions={viewer} />, ui);
-  const live = document.documentElement.hasAttribute("data-live") ? new Live(kernel, viewer, limits) : null;
   live?.start();
   inspector?.install(viewer, gpu, {
-    run: (request) => follow(kernel, viewer, limits, request),
+    run: async (request) => {
+      const ran = await follow(kernel, viewer, limits, request);
+      picking.refresh();
+      return ran;
+    },
     calls: () => kernel.pool.last,
     workers: kernel.pool.size,
     live: () => live && { digest: live.drawn?.digest ?? null, models: live.models },
+    picked: () => picking.last,
+    post: async (digest, ids) => live?.post(digest, ids),
   });
 }
 

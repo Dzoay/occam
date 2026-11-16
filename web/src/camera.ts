@@ -1,5 +1,6 @@
 // The camera, in `f64`: it orbits a target, pans across the view and zooms towards the target. Its matrix is built
-// relative to the page's origin, as the vertices are, and only then rounded to `f32`.
+// relative to the page's origin, as the vertices are, and only then rounded to `f32`. A click's ray is built from it in
+// `f64` too, in the model's frame, and never from anything the GPU drew.
 
 import { type Bounds, type Vec3, centre, radius } from "./mesh.ts";
 
@@ -83,6 +84,17 @@ export class Camera {
 
   centre(point: Vec3): void {
     this.target = point;
+  }
+
+  /**
+   * The ray through the point `(x, y)` of the view, each from -1 to 1 across it and up positive, as the projection
+   * draws it: from the eye, in the model's frame, in `f64`, its direction one millimetre forward and the rest across.
+   */
+  ray(x: number, y: number, aspect: number): { from: Vec3; direction: Vec3 } {
+    const forward = add([0, 0, 0], this.backward(), -1);
+    const [right, up] = this.axes();
+    const slope = Math.tan(FIELD_OF_VIEW / 2);
+    return { from: this.eye(), direction: add(add(forward, right, x * slope * aspect), up, y * slope) };
   }
 
   /** The column-major view-projection relative to `origin`, its near and far planes holding `box`. */

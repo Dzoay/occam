@@ -2,8 +2,8 @@
 //! The tests' models, written through `Edit` as any caller would: sheets of faces, each loop running anticlockwise in
 //! its face's parameters, each edge's uses round its ring in the order the faces give them, and each vertex's star in
 //! the order the edges give their ends. A flat disc, with its circle drawn in its parameters or not; P9's bicubic patch
-//! with a collapsed row; half a sphere, whose loop crosses each pole; and a plane meeting a quarter of a cylinder along
-//! a line, so that one edge is shared by a flat face and a bent one.
+//! with a collapsed row; half a sphere, whose loop crosses each pole; a unit square; and that square meeting a quarter
+//! of a cylinder along a line, so that one edge is shared by a flat face and a bent one.
 
 #![expect(clippy::arithmetic_side_effects, reason = "small indices in test models")]
 
@@ -256,36 +256,32 @@ fn cylinder_frame(radius: f64, height: f64) -> Placement<Local, World> {
     up.then(&turn(Vec3::new(0.0, 0.0, 1.0), PI)).then(&shift)
 }
 
-/// The unit square in the plane `z = 0`, facing +Z, and a quarter of a cylinder of `radius` that leaves it along its
-/// edge at `x = 0`, tangent to it there, and bends down: a sheet of two faces whose shared edge is straight.
-pub(crate) fn plane_and_cylinder(radius: f64) -> Layout {
-    let points = vec![
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::new(1.0, 0.0, 0.0),
-        Vec3::new(1.0, 1.0, 0.0),
-        Vec3::new(0.0, 1.0, 0.0),
-        Vec3::new(-radius, 0.0, -radius),
-        Vec3::new(-radius, 1.0, -radius),
-    ];
-    let arc = |height: f64, ends| {
-        let circle = Circle::placed(&cylinder_frame(radius, height), Length::from_millimetres(radius)).unwrap();
-        Piece { curve: Arc::new(circle), range: (0.0, FRAC_PI_2), ends }
-    };
-    let edges = vec![
-        straight(&points, (0, 1)),
-        straight(&points, (1, 2)),
-        straight(&points, (2, 3)),
-        straight(&points, (0, 3)),
-        arc(0.0, (4, 0)),
-        arc(1.0, (5, 3)),
-        straight(&points, (4, 5)),
-    ];
-    let flat = vec![
+/// The unit square in the plane `z = 0`, facing +Z: one face bounded by four straight edges.
+pub(crate) fn square() -> Layout {
+    let points =
+        vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+    let edges = [(0, 1), (1, 2), (2, 3), (0, 3)].map(|ends| straight(&points, ends)).into();
+    let sides = vec![
         side(0, false, uv_line((0.0, 0.0), (1.0, 0.0))),
         side(1, false, uv_line((1.0, 0.0), (0.0, 1.0))),
         side(2, false, uv_line((1.0, 1.0), (-1.0, 0.0))),
         side(3, true, uv_line((0.0, 0.0), (0.0, 1.0))),
     ];
+    let flat = Patch { surface: Arc::new(Plane::placed(&Placement::identity())), sides, witness: (0.5, 0.5) };
+    Layout { points, edges, faces: vec![flat] }
+}
+
+/// [`square`], and a quarter of a cylinder of `radius` that leaves it along its edge at `x = 0`, tangent to it there,
+/// and bends down: a sheet of two faces whose shared edge is straight.
+pub(crate) fn plane_and_cylinder(radius: f64) -> Layout {
+    let mut layout = square();
+    layout.points.extend([Vec3::new(-radius, 0.0, -radius), Vec3::new(-radius, 1.0, -radius)]);
+    let arc = |height: f64, ends| {
+        let circle = Circle::placed(&cylinder_frame(radius, height), Length::from_millimetres(radius)).unwrap();
+        Piece { curve: Arc::new(circle), range: (0.0, FRAC_PI_2), ends }
+    };
+    let bottom = straight(&layout.points, (4, 5));
+    layout.edges.extend([arc(0.0, (4, 0)), arc(1.0, (5, 3)), bottom]);
     let bent = vec![
         side(4, false, uv_line((0.0, 0.0), (1.0, 0.0))),
         side(3, false, uv_line((FRAC_PI_2, 0.0), (0.0, 1.0))),
@@ -293,9 +289,6 @@ pub(crate) fn plane_and_cylinder(radius: f64) -> Layout {
         side(6, true, uv_line((0.0, 0.0), (0.0, 1.0))),
     ];
     let cylinder = Cylinder::placed(&cylinder_frame(radius, 0.0), Length::from_millimetres(radius)).unwrap();
-    let faces = vec![
-        Patch { surface: Arc::new(Plane::placed(&Placement::identity())), sides: flat, witness: (0.5, 0.5) },
-        Patch { surface: Arc::new(cylinder), sides: bent, witness: (FRAC_PI_2 / 2.0, 0.5) },
-    ];
-    Layout { points, edges, faces }
+    layout.faces.push(Patch { surface: Arc::new(cylinder), sides: bent, witness: (FRAC_PI_2 / 2.0, 0.5) });
+    layout
 }

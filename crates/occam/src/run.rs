@@ -16,6 +16,7 @@ use occam_topo::{Changes, Edit, Snapshot};
 use occam_units::Tolerance;
 
 use crate::describe::{self, Source};
+use crate::selection::Carried;
 
 pub use wire::ran_json;
 pub(crate) use wire::report_value;
@@ -85,6 +86,11 @@ pub struct Ran {
     pub done: Vec<Done>,
     /// Why it stopped short, if it did.
     pub failed: Option<Failed>,
+    /// What became of each id the person had selected, where the command line carried the selection over: none if
+    /// there was no selection, or it was stale, or the run changed nothing.
+    pub selection: Option<Vec<Carried>>,
+    /// Whether the command line cleared the highlight, which named what the agent was about to change.
+    pub highlight_cleared: bool,
 }
 
 impl Ran {
@@ -115,7 +121,8 @@ fn refused(model: Option<&Snapshot>, units: DisplayUnits, reports: Vec<Report>) 
     let sources: Vec<Source<'_>> = model.into_iter().map(Source::Model).collect();
     let reports = reports.into_iter().map(|r| describe::report(r, &sources)).collect();
     let failed = Some(Failed { step: None, reports });
-    Ran { model: model.cloned(), units, tolerance: None, done: Vec::new(), failed }
+    let (selection, highlight_cleared) = (None, false);
+    Ran { model: model.cloned(), units, tolerance: None, done: Vec::new(), failed, selection, highlight_cleared }
 }
 
 /// What a step that ran gives: the model it left, what it made, what it changed, and what it measured.
@@ -161,7 +168,8 @@ pub(crate) fn run_request(
         }
     }
     let failed = describe::describe_all(&models, &mut done, stopped);
-    Ran { model: Some(current), units, tolerance: Some(tolerance), done, failed }
+    let (selection, highlight_cleared) = (None, false);
+    Ran { model: Some(current), units, tolerance: Some(tolerance), done, failed, selection, highlight_cleared }
 }
 
 /// Does `step` on `model` and commits it, or, for a measure, which changes nothing, measures `model`; if it fails, gives

@@ -27,6 +27,7 @@ flowchart LR
 |---|---|
 | `occam view --model part.occam` | Starts the model's server if none runs, prints the page's address, opens it, and returns |
 | `occam view --model part.occam --status`, `--stop` | Says whether the model's server runs and where; stops it |
+| `occam pick --model part.occam --from 45,20,5 --towards 30,20,5` | The id a ray hits first, as a click in the page picks |
 | `occam selection --model part.occam` | Describes what the person has selected, as `describe` does |
 | `occam highlight --model part.occam edge:41/1 ...` | Shows the agent's ids in the page; `--clear` removes them |
 | `occam skill --install` | Copies the occam skill into this project's `.claude/skills/` |
@@ -60,7 +61,10 @@ flowchart LR
   twin](files.md), whichever form the file is in, naming its digest in `x-occam-digest`; `events`, a stream of
   server-sent events, `model` when another model reads whole and `refused` when the file does not, each carrying what
   the server says of the model (its digest, its reports and the pages open); `status`, the same, for the command line;
-  and a post to `stop`. Highlight and selection events, and a post of the selection, come with `view.select`.
+  a post to `stop`; and a post to `selection`, the page's selection, which it writes as the selection file, or refuses
+  with 409 and `view.selection-stale` if it was made on another model than the one the server shows. It also sends
+  `selection` and `highlight` events, each carrying its file's JSON, or `{"schema", "digest": null, "ids": []}` where
+  there is none, when a page opens and each time the file changes.
 
 ## The page
 
@@ -71,22 +75,39 @@ flowchart LR
   face keeps its block and what was reported of it. One model is fetched and meshed at a time.
 - **View controls** move the camera over the same mesh: orbit, pan, zoom, centre on the selection, fit the model to the
   window.
-- **Selection.** A click picks against the CPU mesh (an edge wins over its faces within a few pixels) and selects what
-  it hit; shift-click adds or removes. The page posts the ids with the digest of the model it shows.
-- **Highlight** draws the agent's ids in a second colour, apart from the selection.
+- **Selection.** A click, the left button let go where it went down, picks against the CPU mesh and selects what it
+  hit; shift-click adds or removes it, and a click on nothing clears the selection. The page builds the ray in `f64`
+  from the camera, from the eye through the pixel, and asks one mesh worker, which meshes its model whole the first
+  time and keeps the mesh and its box trees; no GPU buffer is read. An edge wins over its faces within 4 pixels at the
+  depth of the face the ray hits, or at the camera's target where it hits none: the worker picks once with no
+  tolerance to find that depth, then with the tolerance there, and the answer is `occam pick`'s for that ray and
+  tolerance. The page posts the ids with the digest of the model they were picked on, shows them so that a person
+  can copy them, and draws the faces selected in a colour of their own and the edges as lines through their samples.
+- **Highlight** draws the agent's ids in a second colour, apart from the selection, once the model the highlight was
+  made on is drawn. Each face's mark, selected or highlighted, is a number in a storage buffer that its draw reads.
 
 ## The selection file
 
-- **JSON beside the model:** the model's digest and a list of ids, in the order they were selected. Each writer writes a
-  temporary file and renames it over the old one, so a reader never sees half a file.
-- **`occam selection`** describes each id against the model. If the file's digest is not the model's, the selection is
-  stale: it says so, with the remedy of selecting again, and describes nothing.
+- **JSON beside the model,** `part.occam.selection`: the model's digest and a list of ids, in the order they were
+  selected, each once, as `{"schema": 2, "digest": "0123456789abcdef", "ids": ["face:9/1", "edge:12/1"]}`, the digest
+  as the server writes it, sixteen hexadecimal digits. Each writer writes a temporary file and renames it over the
+  old one, so a reader never sees half a file.
+- **`occam selection`** describes each id against the model, in `describe`'s JSON form; with no file, it answers no
+  ids. If the file's digest is not the model's, the selection is stale: it is refused with `view.selection-stale`,
+  whose remedy is `select-again`, and describes nothing.
 - **Carried over by `occam run`.** After a run commits, it maps each selected id through the run's
-  [changes](operations.md): an entity changed keeps its id, one replaced becomes those that replaced it, one deleted
-  drops out. It writes the file again with the new digest, and its result says what became of each id. It does this
-  only if the file's digest was the model's before the run, so a stale selection is never made to look fresh.
-- **A post for an older model is refused,** so the page fetches the new model and the person selects again.
-- **The highlight file** has the same form. `occam run` clears it, since it named what the agent was about to change.
+  [changes](operations.md), step by step: an entity changed keeps its id, one replaced becomes those that replaced it,
+  one deleted drops out. Replaced means deleted with a lineage of `split`, `trimmed` or `merged`; what a `copied` or
+  `swept` lineage names is new, so a body copied stays selected and a face a sweep took drops out. It writes the file
+  again with the new digest, and its result says what became of each id, as `"selection": [{"entity", "now"}]`, `now`
+  empty for one dropped, and in words, a line each. It does this only if the file's digest was the model's before the
+  run, so a stale selection is never made to look fresh.
+- **A post for an older model is refused,** so the page fetches the new model and the person selects again: the page
+  shows the report and drops its selection.
+- **The highlight file,** `part.occam.highlight`, has the same form. `occam highlight` writes the ids that name
+  something live and refuses the rest alone; `occam run` removes the file once it changes the model, since it named
+  what the agent was about to change, and its result says `"highlight-cleared": true`. A run that changes nothing,
+  such as a measure, clears nothing.
 
 ## What waits
 
