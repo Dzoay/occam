@@ -512,6 +512,21 @@ exclude_re = [
     # keeping either is the same number.
     "occam-intersect/src/hybrid\\.rs:349:57: replace > with >= in finish$",
     "occam-intersect/src/traverse\\.rs:127:31: replace > with >= in clear$",
+    # What the tolerance cannot tell apart (intersection.resolution), by line. Ties that give the same number or the same
+    # answer either way: the larger of a leaf's two sizes, of a station's two half steps, of two bounds merged, and of an
+    # eigenvalue's two sizes, where the two are equal; a node exactly half a step from a station; a second curve's start
+    # exactly the band from the first. Normals square to each other give no finite slope, so no model, whichever way
+    # one is turned. Two rulings through an apex built the other way round are the same two, and `way` is 1 or -1. The
+    # pencil's relative curvature negated has eigenvalues of the same sizes, which are all a bound reads.
+    "occam-intersect/src/branch\\.rs:49:(15|26): replace > with >= in crosses$",
+    "occam-intersect/src/hybrid\\.rs:217:27: replace > with >= in against_parts$",
+    "occam-intersect/src/resolution\\.rs:89:24: replace < with <= in Near::sizes$",
+    "occam-intersect/src/resolution\\.rs:151:61: replace < with <= in Near::between$",
+    "occam-intersect/src/tangency\\.rs:71:22: replace > with >= in twin$",
+    "occam-intersect/src/tangency\\.rs:166:44: replace > with >= in contacts$",
+    "occam-intersect/src/closed/conic\\.rs:132:79: replace \\+ with - in through_apex$",
+    "occam-intersect/src/closed/conic\\.rs:132:94: replace \\* with / in through_apex$",
+    "occam-intersect/src/pencil/emit\\.rs:148:49: delete - in touch$",
     # Picking's ties, by line. A triangle as near as the nearest face crossed, of the same face, is that face at that
     # distance: taking it or keeping the one held gives the same. Where an edge's segment comes as near the ray as the
     # one held, as far along it, of the same edge and from the same sample, it is the same segment, whose nearest point
