@@ -67,10 +67,13 @@ fmt:
 web-deps:
     if [ ! web/node_modules/.package-lock.json -nt web/package-lock.json ]; then npm ci --prefix web --no-audit --no-fund; fi
 
-# Build the viewer with esbuild into web/dist, or the directory given: `just web-build <directory>`
+# Build the viewer with esbuild into web/dist, or the directory given: `just web-build <directory>`; its workers' kernel is occam-wasm, built for the browser with simd128
+[env("CARGO_TARGET_DIR", target)]
 [group('build')]
 web-build *args: web-deps
-    node web/build.mjs "$@"
+    CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo build --quiet -p occam-wasm --release --target wasm32-unknown-unknown
+    wasm-bindgen --target web --out-dir "$CARGO_TARGET_DIR/occam-web" "$CARGO_TARGET_DIR/simd/wasm32-unknown-unknown/release/occam_wasm.wasm"
+    OCCAM_WASM_JS="$CARGO_TARGET_DIR/occam-web" node web/build.mjs "$@"
 
 # Type-check docs/sketch, the compiled sketch of the seams in docs/ARCHITECTURE.md, which no workspace build includes
 [env("CARGO_TARGET_DIR", target)]
@@ -96,14 +99,15 @@ clippy:
 web-check: web-deps
     web/node_modules/.bin/tsc --noEmit -p web
 
-# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, and its reports against the catalogue
+# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, and its workers' meshes against the native `occam mesh`
 [env("CARGO_TARGET_DIR", target)]
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
 [group('gates')]
 web-test: web-build
     mkdir -p "$CARGO_TARGET_DIR"
     cargo run --quiet -p occam-report --example catalogue > "$CARGO_TARGET_DIR/occam-catalogue.json"
-    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" node --test --test-timeout=300000 web/test/viewer.test.mjs
+    cargo build --quiet -p occam-cli
+    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" OCCAM="$CARGO_TARGET_DIR/debug/occam" node --test --test-timeout=300000 web/test/viewer.test.mjs
 
 # What headless Chromium gives the viewer's tests: its WebGPU adapter, its GPU status, and whether a read-back works
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]

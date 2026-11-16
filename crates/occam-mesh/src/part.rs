@@ -1,0 +1,43 @@
+//! Source: original
+//! Some of a model's faces meshed alone, as a mesh worker in the browser meshes a range of them
+//! (docs/architecture/browser.md). Each edge they use is sampled as [`crate::mesh`] samples it, its step read from every
+//! face along it, in the part or not, so each face's block is the whole mesh's bit for bit, and the parts of a model's
+//! faces, laid end to end in id order, are the buffers its whole mesh gives. Each part is checked watertight as far as
+//! it reaches.
+
+use std::collections::BTreeSet;
+
+use occam_math::Exec;
+use occam_topo::{Edge, Face, Id, Snapshot, View};
+
+use crate::edges::{Edges, sample_some};
+use crate::faces::{Faces, mesh_some};
+use crate::limits::Limits;
+use crate::merge::{Mesh, merge};
+use crate::watertight::within;
+
+/// `faces` of `model`, taken in id order, meshed on `exec` to `limits` and merged into a mesh of their own, numbered
+/// from its start: the edges they use, each sampled as [`crate::mesh`] samples it, their blocks, which hold the bits
+/// the whole mesh's blocks of those faces hold, the reports refusing any of them, and what checking the part
+/// watertight as far as it reaches found. A segment along an edge that a face outside the part uses may be used once,
+/// a face outside the part is no hole, and only a shell whose faces are all in the part has its Euler characteristic
+/// counted. Every face of `model`, as one part, gives the mesh [`crate::mesh`] gives; the same bits at any thread count.
+#[must_use]
+pub fn mesh_part(exec: &Exec, model: &Snapshot, limits: Limits, faces: &[Id<Face>]) -> Mesh {
+    let part: BTreeSet<Id<Face>> = faces.iter().copied().collect();
+    let edges_of = |face: Id<Face>| model.view(face).map(View::<Face>::edges).unwrap_or_default();
+    let wanted: BTreeSet<Id<Edge>> = part.iter().flat_map(|&face| edges_of(face)).collect();
+    // Every face along a wanted edge, in id order, for its bending: the step `sample_edges` gives the edge.
+    let faces_of = |edge: Id<Edge>| model.view(edge).map(View::<Edge>::faces).unwrap_or_default();
+    let bent: BTreeSet<Id<Face>> = wanted.iter().flat_map(|&edge| faces_of(edge)).collect();
+    let bent: Vec<Id<Face>> = bent.into_iter().collect();
+    let edges = Edges::new(sample_some(exec, model, &bent, &|edge| wanted.contains(&edge), limits), limits);
+    let ordered: Vec<Id<Face>> = part.iter().copied().collect();
+    let meshed = Faces::new(mesh_some(exec, model, &ordered, &edges));
+    let mut merged = merge(edges, &meshed);
+    merged.open = within(model, &merged, &|face| part.contains(&face));
+    merged
+}
+
+#[cfg(test)]
+mod tests;
