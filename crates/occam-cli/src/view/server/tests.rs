@@ -103,3 +103,26 @@ fn a_page_is_sent_the_selection_then_the_highlight_each_once_until_it_changes() 
     assert_eq!(sent.marked(&now), Some(("highlight", "h2".to_owned())), "only what changed");
     assert_eq!(sent.marked(&now), None);
 }
+
+#[test]
+fn a_page_is_first_shown_the_selection_and_the_highlight_beside_the_model() {
+    let dir = std::env::temp_dir().join(format!("occam-first-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let model = dir.join("part.occam");
+    let selection = Selection::new(7, vec![occam::EntityRef::new(occam::EntityKind::Face, 1, 1)]).json();
+    std::fs::write(dir.join("part.occam.selection"), &selection).unwrap();
+    let shown = first(&model, &mut Watcher::new(model.clone()));
+    assert_eq!(shown.marks, [selection, Selection::none_json()], "the selection there, and no highlight");
+    assert_eq!(shown.refused.iter().map(|r| r.code).collect::<Vec<_>>(), [Code::ModelMissing], "and no model yet");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn marks_taken_in_say_whether_either_changed() {
+    let mut shown = Shown::default();
+    let marks = ["s".to_owned(), "h".to_owned()];
+    assert!(shown.mark(marks.clone()), "new");
+    assert_eq!(shown.marks, marks);
+    assert!(!shown.mark(marks.clone()), "the same again");
+    assert!(shown.mark(["s".to_owned(), "h2".to_owned()]), "the highlight alone");
+}

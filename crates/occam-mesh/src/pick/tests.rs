@@ -10,7 +10,7 @@ use occam_units::Angle;
 use super::*;
 use crate::limits::Limits;
 use crate::merge::mesh;
-use crate::testing::{disc_drawn, model, plane_and_cylinder, sphere_half};
+use crate::testing::{disc_drawn, model, plane_and_cylinder, sphere_half, square};
 
 fn at() -> Limits {
     Limits::new(Length::from_millimetres(0.01), Angle::from_radians(0.35)).unwrap()
@@ -91,7 +91,7 @@ fn an_edge_of_the_face_hit_wins_where_the_ray_hits_within_the_tolerance_of_it_ho
     let start = landing - unit * 2.0;
     let grazing = ray([start.x, start.y, start.z], way);
     let face = picker.first_face(&grazing).unwrap();
-    let near = approach(&grazing, picker.segment((0, 0)), 0);
+    let near = approach(&grazing, picker.segment((0, 0)), (0, 0));
     assert!(near.along > face.0 + 0.01 && near.apart <= 0.01, "{near:?} past {face:?}");
     assert_eq!(picked(&picker, &grazing, 0.01), edges[0]);
     assert_eq!(picked(&picker, &grazing, 0.004), square, "where the hit is beyond the tolerance of it");
@@ -198,3 +198,71 @@ fn the_tree_finds_the_face_trying_every_triangle_finds_and_the_same_rays_give_th
 
 /// The hash of every hit of [`rays`] within 0.05 mm, as x86-64 gives it.
 const HITS: u64 = 424_818_428_837_515_450;
+
+/// The remedy's point of a ray from `start` straight up, past the unit square, which it misses.
+fn aimed(start: [f64; 3]) -> Option<[f64; 3]> {
+    let (snapshot, _) = model(&[square()]);
+    let report = hit(&ready(&Exec::serial(), &snapshot), &ray(start, [0.0, 0.0, 1.0]), 0.0).unwrap_err();
+    report.remedy(RemedyKind::AimAt).and_then(|remedy| match remedy.value("point")?.value {
+        occam_report::Value::Point(point) => Some(point),
+        occam_report::Value::Scalar(_) => None,
+    })
+}
+
+#[test]
+fn a_ray_that_misses_is_aimed_at_the_centre_nearest_its_way_and_where_two_tie_at_the_first() {
+    // The square is two triangles either side of its diagonal from (0, 0) to (1, 1), the first below it: their
+    // centres are at (2/3, 1/3) and (1/3, 2/3). Straight up from above the square, the way to the farther centre is
+    // the nearer the ray's.
+    assert_eq!(aimed([0.9, 0.1, 3.0]), Some([1.0 / 3.0, 2.0 / 3.0, 0.0]), "the second triangle's centre, the farther");
+    assert_eq!(aimed([0.2, 0.7, 3.0]), Some([2.0 / 3.0, 1.0 / 3.0, 0.0]), "the first's");
+    assert_eq!(aimed([0.5, 0.5, 3.0]), Some([2.0 / 3.0, 1.0 / 3.0, 0.0]), "as far from both: the first");
+    assert_eq!(
+        aimed([5.0, 0.5, 0.0]),
+        None,
+        "from a start in their plane, a ray towards either centre crosses neither"
+    );
+}
+
+#[test]
+fn an_edge_level_with_the_face_hit_within_the_tolerance_wins_though_another_face_owns_it() {
+    // A disc of radius 0.5 in the square's plane: down 0.002 outside its rim, the ray hits the square, 0.36 from the
+    // square's own edges, and passes the disc's rim, which is no edge of the square, within the tolerance there.
+    let (snapshot, edges) = model(&[plane_and_cylinder(2.0), disc_drawn(0.5)]);
+    let picker = ready(&Exec::serial(), &snapshot);
+    let down = ray([0.355, 0.355, 5.0], [0.0, 0.0, -1.0]);
+    assert_eq!(picker.first_face(&down), Some((5.0, 0)), "the square, 5 along");
+    assert_eq!(picked(&picker, &down, 0.01), edges[1][0].entity(), "the disc's rim");
+    assert_eq!(picked(&picker, &down, 0.001), snapshot.ids::<Face>()[0].entity(), "out of reach: the square");
+}
+
+#[test]
+fn a_segment_comes_nearest_a_ray_where_the_two_are_square_and_a_ray_along_it_at_its_start() {
+    let (a, b) = (Vec3::new(1.0, 2.0, 3.0), Vec3::new(4.0, 6.0, 3.0));
+    let across = approach(&ray([2.5, 4.0, 10.0], [0.0, 0.0, -1.0]), [a, b], (7, 2));
+    assert_eq!(across, Near { edge: 7, sample: 2, apart: 0.0, along: 7.0, point: Vec3::new(2.5, 4.0, 3.0) });
+    let beyond = approach(&ray([7.0, 10.0, 5.0], [0.0, 0.0, -1.0]), [a, b], (0, 0));
+    assert_eq!((beyond.point, beyond.along, beyond.apart), (b, 2.0, 5.0), "past its end, at its end");
+    // Along the segment's line, a millionth of a degree off it: one millimetre across, the two never come square.
+    let (from, to) = (Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0));
+    let along = ray([-1.0, -0.01, 0.0], [1.0, 1e-9, 0.0]);
+    let start = approach(&along, [from, to], (0, 0));
+    assert!(start.along < 1.5 && start.point.x < 1e-9, "at its start, not its end: {start:?}");
+    let none = approach(&ray([0.0, 3.0, 4.0], [1.0, 0.0, 0.0]), [from, from], (0, 0));
+    assert_eq!((none.point, none.along, none.apart), (from, 0.0, 5.0), "a segment of no length is its start");
+}
+
+#[test]
+fn a_point_is_as_far_from_a_segment_as_from_its_nearest_point_on_it() {
+    let (a, b) = (Vec3::new(1.0, 2.0, 3.0), Vec3::new(4.0, 6.0, 3.0));
+    let away = Vec3::new(1.6, -1.2, 0.0);
+    for (p, at) in [
+        (a + (b - a) * 0.5, "its middle"),
+        (b + Vec3::new(1.2, 1.6, 0.0), "past b"),
+        (a - Vec3::new(1.2, 1.6, 0.0), "before a"),
+    ] {
+        let off = if at == "its middle" { p + away } else { p };
+        assert!((apart(off, a, b) - 2.0).abs() < 1e-12, "{at}: {}", apart(off, a, b));
+    }
+    assert_eq!(apart(Vec3::new(1.0, 2.0, 8.0), a, a), 5.0, "from a segment of no length, its start");
+}

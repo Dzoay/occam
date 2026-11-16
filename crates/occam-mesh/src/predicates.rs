@@ -109,8 +109,16 @@ pub(crate) fn orient(a: P2, b: P2, c: P2) -> Option<Side> {
 /// the four, [`Side::Within`] where they lie in one plane, and `None` where a coordinate is not finite or beyond the
 /// range the exact stage is exact for. Decided from plain arithmetic beyond Shewchuk's first bound, and otherwise by
 /// `occam-math`'s filter and exact stage.
-#[expect(clippy::similar_names, reason = "the differences and products as Shewchuk names them")]
 pub(crate) fn orient3d(a: P3, b: P3, c: P3, d: P3) -> Option<Side> {
+    let (det, permanent) = volume(a, b, c, d);
+    beyond(det, ORIENT3D_BOUND * permanent, permanent)
+        .or_else(|| decided(&Volume, [a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2], d[0], d[1], d[2]]))
+}
+
+/// Six times the signed volume of `a`, `b`, `c` and `d` in plain arithmetic, and its permanent, which Shewchuk's bound
+/// is taken of: each written as he writes them.
+#[expect(clippy::similar_names, reason = "the differences and products as Shewchuk names them")]
+fn volume(a: P3, b: P3, c: P3, d: P3) -> (f64, f64) {
     let (adx, ady, adz) = (a[0] - d[0], a[1] - d[1], a[2] - d[2]);
     let (bdx, bdy, bdz) = (b[0] - d[0], b[1] - d[1], b[2] - d[2]);
     let (cdx, cdy, cdz) = (c[0] - d[0], c[1] - d[1], c[2] - d[2]);
@@ -120,8 +128,7 @@ pub(crate) fn orient3d(a: P3, b: P3, c: P3, d: P3) -> Option<Side> {
     let permanent = (bdxcdy.abs() + cdxbdy.abs()) * adz.abs()
         + (cdxady.abs() + adxcdy.abs()) * bdz.abs()
         + (adxbdy.abs() + bdxady.abs()) * cdz.abs();
-    beyond(det, ORIENT3D_BOUND * permanent, permanent)
-        .or_else(|| decided(&Volume, [a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2], d[0], d[1], d[2]]))
+    (det, permanent)
 }
 
 /// Where `d` lies against the circle through `a`, `b`, `c`, which run anticlockwise: [`Side::Above`] certainly inside
@@ -196,6 +203,13 @@ mod tests {
         assert_eq!(EPSILON, epsilon, "2^-53");
         assert_eq!(ORIENT_BOUND, (3.0 + 16.0 * epsilon) * epsilon);
         assert_eq!(INCIRCLE_BOUND, (10.0 + 96.0 * epsilon) * epsilon);
+        assert_eq!(ORIENT3D_BOUND, (7.0 + 56.0 * epsilon) * epsilon);
+    }
+
+    #[test]
+    fn the_volume_and_its_permanent_are_shewchuks() {
+        // Differences (2, 3, 5), (-7, 11, 13), (17, -19, 23) from d; products 133, 187, 51, -38, 22, -21.
+        assert_eq!(volume([3.0, 4.0, 6.0], [-6.0, 12.0, 14.0], [18.0, -18.0, 24.0], [1.0, 1.0, 1.0]), (1876.0, 3746.0));
     }
 
     #[test]

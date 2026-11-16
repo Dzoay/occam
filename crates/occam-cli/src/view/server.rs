@@ -112,8 +112,7 @@ pub fn serve(model: &Path, port: Option<u16>, idle: Duration) -> Said {
         token: state::token(),
     };
     let mut watcher = Watcher::new(model.to_path_buf());
-    let mut shown = Shown { marks: marks(model), ..Shown::default() };
-    shown.take(watcher.first());
+    let shown = first(model, &mut watcher);
     let file = state::path(model);
     let runtime = tokio::runtime::Builder::new_current_thread().enable_io().enable_time().build();
     let (Ok(runtime), Ok(())) = (runtime, listener.set_nonblocking(true)) else {
@@ -148,6 +147,14 @@ fn unbound(error: &std::io::Error, port: Option<u16>, model: &Path) -> Report {
         Some(port) if error.kind() == std::io::ErrorKind::AddrInUse => port_taken(port),
         _ => super::not_started(model),
     }
+}
+
+/// What the pages are shown first: the model as `watcher`'s first look at `model` finds it, and the selection and the
+/// highlight beside it.
+fn first(model: &Path, watcher: &mut Watcher) -> Shown {
+    let mut shown = Shown { marks: marks(model), ..Shown::default() };
+    shown.take(watcher.first());
+    shown
 }
 
 /// What the server says when it cannot listen: `report`'s JSON, for `occam view` to read.

@@ -123,3 +123,23 @@ fn a_stale_selection_is_refused_with_the_remedy_of_selecting_again() {
     );
     assert_eq!((report.code, report.remedies[0].kind), (Code::SelectionStale, RemedyKind::SelectAgain));
 }
+
+#[test]
+fn a_selected_id_that_one_other_replaced_is_said_to_be_it_now() {
+    let ran = crate::run(None, &request(r#"{"op": "box", "size": [1, 1, 1]}"#));
+    let carried = vec![
+        Carried { was: id("face:1/1"), now: vec![id("face:7/1")] },
+        Carried { was: id("face:2/1"), now: vec![id("face:2/1")] },
+        Carried { was: id("face:3/1"), now: vec![id("face:8/1"), id("face:9/1")] },
+    ];
+    let words = ran_words(&Ran { selection: Some(carried), ..ran });
+    let said: Vec<&str> = words.iter().map(|(_, line)| line.as_str()).collect();
+    assert_eq!(
+        said[said.len() - 3..],
+        [
+            "face:1/1 was selected and is now face:7/1, which the selection names instead.",
+            "face:2/1 stays selected.",
+            "face:3/1 was selected and is now face:8/1 face:9/1, which the selection names instead.",
+        ]
+    );
+}

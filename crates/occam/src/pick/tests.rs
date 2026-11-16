@@ -145,3 +145,19 @@ fn a_ray_or_a_tolerance_that_cannot_be_picked_with_is_refused_by_name() {
         Code::LimitNotPositive
     );
 }
+
+#[test]
+fn a_pick_at_other_limits_picks_the_mesh_made_to_them_not_the_one_kept() {
+    let request = r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [{"op": "cylinder", "radius": 4, "height": 10}]}"#;
+    let made = |deflection: f64| {
+        let mut session = Session::new(Encoding::Json);
+        let _ = session.run(request);
+        let asked = Pick { from: [9.0, 1.0, 5.0], direction: [-1.0, 0.0, 0.0], tolerance: 0.0 };
+        (session.pick(&Exec::serial(), deflection, 0.35, asked).unwrap(), session)
+    };
+    let ((fine, mut session), (coarse, _)) = (made(0.05), made(1.0));
+    assert_ne!(fine.hit.as_ref().unwrap().point, coarse.hit.as_ref().unwrap().point, "another chord of the cylinder");
+    let asked = Pick { from: [9.0, 1.0, 5.0], direction: [-1.0, 0.0, 0.0], tolerance: 0.0 };
+    assert_eq!(session.pick(&Exec::serial(), 1.0, 0.35, asked).unwrap(), coarse, "after a pick at 0.05");
+    assert_eq!(session.pick(&Exec::serial(), 0.05, 0.35, asked).unwrap(), fine, "and back");
+}

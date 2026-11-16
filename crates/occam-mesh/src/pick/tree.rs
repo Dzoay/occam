@@ -168,4 +168,33 @@ mod tests {
         assert_eq!(visited(&tree, [-1.0, 0.5, 0.5], [1.0, 0.0, 0.0], 0.0).len(), 16, "along all of them");
         assert_eq!(visited(&Tree::new(&[]), [0.0; 3], [1.0, 0.0, 0.0], 1.0), [] as [u32; 0], "an empty tree");
     }
+
+    #[test]
+    fn a_tree_splits_along_the_axis_its_centres_spread_furthest_on_the_first_where_two_tie_ordered_by_their_centres() {
+        // Eight unit boxes, item `k` at x = 3k mod 8 and y = 100 + (5k + 2) mod 8: x and y spread alike, and their
+        // orders and the items' own are three different orders. The first axis of the two splits them by x into
+        // items {0, 1, 3, 6} and {2, 4, 5, 7}; by y they would go {0, 3, 5, 6} and {1, 2, 4, 7}, and by number
+        // {0, 1, 2, 3} and {4, 5, 6, 7}.
+        let corner = |k: u32| Vec3::new(f64::from(3 * k % 8), 100.0 + f64::from((5 * k + 2) % 8), 0.0);
+        let boxes: Vec<Bounds> = (0..8).map(|k| (corner(k), corner(k) + Vec3::new(1.0, 1.0, 1.0))).collect();
+        let tree = Tree::new(&boxes);
+        assert_eq!(visited(&tree, [3.5, 107.5, 5.0], [0.0, 0.0, -1.0], 0.0), [0, 1, 3, 6], "down through item 1");
+        assert_eq!(visited(&tree, [4.5, 106.5, 5.0], [0.0, 0.0, -1.0], 0.0), [2, 4, 5, 7], "down through item 4");
+    }
+
+    #[test]
+    fn a_box_grown_by_the_reach_holds_its_faces_and_a_ray_that_starts_on_its_far_face_leaving_it_still_crosses_it() {
+        // The box's tallest coordinate, 10, above every start's, sets how much more than the reach it grows, as the
+        // code reckons it.
+        let bounds = (Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 10.0));
+        let grown = 0.5 + 10.0 * 1e-12;
+        let down = |x: f64| Ray::new([x, 0.5, 5.0], [0.0, 0.0, -1.0]).unwrap();
+        assert!(crosses(&down(0.0 - grown), bounds, 0.5) && crosses(&down(1.0 + grown), bounds, 0.5), "on its faces");
+        assert!(!crosses(&down(-0.6), bounds, 0.5) && !crosses(&down(1.6), bounds, 0.5), "beyond them");
+        let leaving = Ray::new([1.0 + grown, 0.5, 5.0], [1.0, 0.0, 0.0]).unwrap();
+        assert!(crosses(&leaving, bounds, 0.5), "where it starts, on the far face");
+        let arriving = Ray::new([1.0 + grown, 0.5, 5.0], [-1.0, 0.0, 0.0]).unwrap();
+        assert!(crosses(&arriving, bounds, 0.5));
+        assert!(!crosses(&Ray::new([1.6, 0.5, 5.0], [1.0, 0.0, 0.0]).unwrap(), bounds, 0.5), "beyond it, leaving");
+    }
 }

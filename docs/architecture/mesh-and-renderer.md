@@ -95,8 +95,8 @@ answer at any thread count and on every target.
   own edges within the tolerance of where the ray crosses it; so the seam at the back of a cylinder does not win over
   its front. Of the edges that win, the one nearest the ray wins, then the one nearest along it, then the smaller id.
 - **A ray that hits nothing** is `mesh.ray-missed`, whose `aim-at` remedy is the centre of the triangle that lies
-  nearest the ray's way, seen from its start, of those whose plane the start is clear of: a ray from the same start
-  towards it hits.
+  nearest the ray's way, seen from its start, of those that the ray from the start towards their centre crosses, built
+  as `occam pick --towards` builds it: following the remedy is sure to hit.
 
 ```mermaid
 flowchart LR

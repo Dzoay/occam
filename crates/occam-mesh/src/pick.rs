@@ -22,7 +22,7 @@ use occam_report::{Code, EntityRef, Fault, Input, NamedValue, Remedy, RemedyKind
 use occam_topo::{Edge, Face, Id};
 use occam_units::{Length, Point, Vec3, World};
 
-use crate::limits::higher;
+use crate::limits::{higher, lower};
 use crate::merge::{Mesh, span};
 use crate::predicates::{P3, orient3d};
 use tree::{Bounds, Tree, ZERO, around};
@@ -194,7 +194,7 @@ impl Picker {
         let mut nearest: BTreeMap<u32, Near> = BTreeMap::new();
         self.segment_tree.visit(ray, reach, |k| {
             let Some(&segment) = self.segments.get(place(k)) else { return };
-            let near = approach(ray, self.segment(segment), segment.0);
+            let near = approach(ray, self.segment(segment), segment);
             if near.apart <= reach && nearest.get(&segment.0).is_none_or(|held| near.before(held)) {
                 nearest.insert(segment.0, near);
             }
@@ -214,7 +214,7 @@ impl Picker {
     }
 
     /// The report for `ray`, which hits nothing within `reach`, with the remedy of aiming at the centre of the
-    /// triangle that lies nearest its way, if one lies off the plane its start is in.
+    /// triangle that lies nearest its way, if a ray towards one crosses it.
     fn missed(&self, ray: &Ray, reach: f64) -> Report {
         let [x, y, z] = [ray.origin.x, ray.origin.y, ray.origin.z];
         let report = Report::new(Code::RayMissed, Fault::InvalidInput)
@@ -226,18 +226,19 @@ impl Picker {
         report.with_remedy(remedy)
     }
 
-    /// The centre of the triangle whose way from the ray's start is nearest the ray's, of those whose plane the start
-    /// is clear of; the first such where two tie.
+    /// The centre of the triangle whose way from the ray's start is nearest the ray's, of those that the ray from the
+    /// start towards their centre crosses, built as `occam pick --towards` builds it, so that following the remedy is
+    /// sure to hit: the first such where two tie. A start in a triangle's plane, or at its centre, crosses none.
     fn aim(&self, ray: &Ray) -> Option<Vec3> {
         let mut best: Option<(f64, Vec3)> = None;
         for triangle in &self.triangles {
             let [a, b, c] = triangle.corners;
-            let normal = (b - a).cross(c - a);
-            let (centre, size) = ((a + b + c) * (1.0 / 3.0), normal.norm());
+            let centre = (a + b + c) * (1.0 / 3.0);
             let way = centre - ray.origin;
-            let clear = (ray.origin - a).dot(normal).abs() > 1e-9 * size * (1.0 + way.norm());
+            let Ok(towards) = Ray::new(coordinates(ray.origin), coordinates(way)) else { continue };
+            let crossed = Line::of(&towards).crossing(&towards, &triangle.corners).is_some();
             let cosine = way.dot(ray.direction) / way.norm();
-            if clear && size > 0.0 && cosine.is_finite() && best.is_none_or(|(most, _)| cosine > most) {
+            if crossed && best.is_none_or(|(most, _)| cosine > most) {
                 best = Some((cosine, centre));
             }
         }
@@ -280,57 +281,49 @@ impl Line {
     }
 }
 
-/// Where an edge comes nearest a ray: the edge's place, how far apart, how far along the ray, and the point on the
-/// edge.
+/// Where an edge comes nearest a ray: the edge's place and that of the segment's first sample, how far apart, how far
+/// along the ray, and the point on the edge.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Near {
     edge: u32,
+    sample: u32,
     apart: f64,
     along: f64,
     point: Vec3,
 }
 
 impl Near {
-    /// Whether this is nearer the ray than `other`, then nearer along it, then of the edge with the smaller place.
+    /// Whether this is nearer the ray than `other`, then nearer along it, then of the edge with the smaller place, then
+    /// of its segment with the smaller place: two segments that tie, meeting at a sample, are told apart by it.
     fn before(&self, other: &Self) -> bool {
-        (self.apart, self.along, self.edge) < (other.apart, other.along, other.edge)
+        (self.apart, self.along, self.edge, self.sample) < (other.apart, other.along, other.edge, other.sample)
     }
 }
 
-/// Where the segment from `a` to `b` of the edge at `edge` comes nearest the ray, at or after its start.
-fn approach(ray: &Ray, [a, b]: [Vec3; 2], edge: u32) -> Near {
+/// `s` held to the segment, from 0 to 1, NaN as 0: what a quotient over a segment of no length gives.
+fn unit(s: f64) -> f64 {
+    lower(1.0, higher(0.0, s))
+}
+
+/// Where the segment from `a` to `b`, from sample `sample` of the edge at `edge`, comes nearest the ray, at or after
+/// its start. Where the ray runs exactly along the segment, every point of it is as near, and its start's is taken;
+/// a segment of no length is its start.
+fn approach(ray: &Ray, [a, b]: [Vec3; 2], (edge, sample): (u32, u32)) -> Near {
     let (along_edge, from) = (b - a, ray.origin - a);
     let (square, cosine) = (along_edge.dot(along_edge), along_edge.dot(ray.direction));
     let (ahead, behind) = (along_edge.dot(from), ray.direction.dot(from));
-    let unit = |s: f64| {
-        if s > 1.0 {
-            1.0
-        } else if s > 0.0 {
-            s
-        } else {
-            0.0
-        }
-    };
     let gap = square - cosine * cosine;
-    let s = if square > 0.0 && gap > square * 1e-15 { unit((ahead - behind * cosine) / gap) } else { 0.0 };
+    let s = if gap > 0.0 { unit((ahead - behind * cosine) / gap) } else { 0.0 };
     let t = higher(0.0, s * cosine - behind);
-    let s = if square > 0.0 { unit((ahead + t * cosine) / square) } else { 0.0 };
+    let s = unit((ahead + t * cosine) / square);
     let point = a + along_edge * s;
-    Near { edge, apart: (ray.at(t) - point).norm(), along: t, point }
+    Near { edge, sample, apart: (ray.at(t) - point).norm(), along: t, point }
 }
 
 /// How far `p` is from the segment from `a` to `b`.
 fn apart(p: Vec3, a: Vec3, b: Vec3) -> f64 {
     let along = b - a;
-    let square = along.dot(along);
-    let s = if square > 0.0 { (p - a).dot(along) / square } else { 0.0 };
-    let s = if s > 1.0 {
-        1.0
-    } else if s > 0.0 {
-        s
-    } else {
-        0.0
-    };
+    let s = unit((p - a).dot(along) / along.dot(along));
     (p - (a + along * s)).norm()
 }
 
