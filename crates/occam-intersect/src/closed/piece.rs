@@ -95,6 +95,13 @@ fn made(plan: Plan) -> Option<Piece> {
     })
 }
 
+impl Plan {
+    /// The curve it is made as, whole: `None` where that cannot be made of its numbers.
+    pub(crate) fn curve(self) -> Option<Arc<dyn Curve>> {
+        Some(made(self)?.curve())
+    }
+}
+
 /// The curves `plan` is made as: one, or a circle's arcs between the poles of either surface it passes through, each
 /// decided. `None` where a curve cannot be made of its numbers.
 pub(super) fn pieces(plan: Plan, charts: [&Chart; 2], decide: &mut Decisions) -> Result<Option<Vec<Made>>, Undecided> {

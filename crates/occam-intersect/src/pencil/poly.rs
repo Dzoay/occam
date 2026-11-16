@@ -1,9 +1,11 @@
 //! Source: original
-//! The real roots of a polynomial of low degree, isolated by the roots of its derivative and refined by Newton's method
-//! inside each bracket, falling back to bisection where a step would leave it. Between two neighbouring roots of the
-//! derivative the polynomial is monotone, so it has at most one root there, and a sign change finds it. A root of even
+//! The real roots of a polynomial of low degree, each isolated between neighbouring roots of its derivative, where the
+//! polynomial is monotone and so changes sign at most once, then halved down to neighbouring numbers. A root of even
 //! multiplicity, which touches zero without crossing, is not found here: the pencil method finds those as the critical
 //! points they are, and decides them against the band.
+
+/// Halvings of a bracket: enough to take any bracket the bound gives down to neighbouring numbers.
+const HALVINGS: u32 = 200;
 
 /// `p` at `t`, by Horner's rule; `p` holds the coefficients from the constant up.
 pub(super) fn at(p: &[f64], t: f64) -> f64 {
@@ -21,54 +23,34 @@ fn trimmed(p: &[f64]) -> &[f64] {
     p.get(..degree).unwrap_or(&[])
 }
 
-/// The root of `p` between `lo` and `hi`, where `p` changes sign: Newton's step where it stays inside the bracket,
-/// halving it otherwise, until the bracket is as narrow as the numbers allow.
-fn bracketed(p: &[f64], dp: &[f64], (mut lo, mut hi): (f64, f64)) -> f64 {
-    let rising = at(p, hi) > 0.0;
-    let mut t = 0.5 * lo + 0.5 * hi;
-    for _ in 0..200 {
-        let value = at(p, t);
-        if value == 0.0 {
-            return t;
-        }
-        if (value > 0.0) == rising {
-            hi = t;
+/// The root of `p` between `lo` and `hi`, at which it has opposite signs, by halving the bracket. Where `p` is zero at
+/// the middle, the middle is the root, and it stays an end of the bracket whichever half is kept.
+fn bracketed(p: &[f64], (mut lo, mut hi): (f64, f64)) -> f64 {
+    let low_below = at(p, lo).is_sign_negative();
+    for _ in 0..HALVINGS {
+        let mid = 0.5 * lo + 0.5 * hi;
+        if at(p, mid).is_sign_negative() == low_below {
+            lo = mid;
         } else {
-            lo = t;
+            hi = mid;
         }
-        let newton = t - value / at(dp, t);
-        let next = if lo < newton && newton < hi { newton } else { 0.5 * lo + 0.5 * hi };
-        if next.to_bits() == t.to_bits() || hi - lo <= 4.0 * f64::EPSILON * (lo.abs() + hi.abs()) {
-            return next;
-        }
-        t = next;
     }
-    t
+    0.5 * lo + 0.5 * hi
 }
 
-/// The real roots of `p`, ascending, each once: those where it changes sign.
+/// The real roots of `p` where it changes sign, ascending, each once. Every root lies strictly within `Σ |cᵢ / cₙ|`,
+/// the leading coefficient's one included, as Cauchy's bound `1 + max |cᵢ / cₙ|` does, and so, by Gauss and Lucas,
+/// does every root of the derivative.
 pub(super) fn real_roots(p: &[f64]) -> Vec<f64> {
     let p = trimmed(p);
-    let (Some(lead), degree) = (p.last().copied(), p.len().saturating_sub(1)) else { return Vec::new() };
-    match degree {
-        0 => return Vec::new(),
-        1 => return vec![-p.first().copied().unwrap_or(0.0) / lead],
-        _ => {}
-    }
-    let dp = derivative(p);
-    let bound = 1.0 + p.iter().map(|c| (c / lead).abs()).fold(0.0, |a, x| if x > a { x } else { a });
-    let mut points = vec![-bound];
-    points.extend(real_roots(&dp).into_iter().filter(|t| -bound < *t && *t < bound));
-    points.push(bound);
+    let Some(lead) = p.last().copied() else { return Vec::new() };
+    let bound = p.iter().map(|c| (c / lead).abs()).sum::<f64>();
+    let points: Vec<f64> = std::iter::once(-bound).chain(real_roots(&derivative(p))).chain([bound]).collect();
     let mut roots = Vec::new();
     for pair in points.windows(2) {
         let [lo, hi] = [pair.first().copied().unwrap_or(0.0), pair.last().copied().unwrap_or(0.0)];
-        let (below, above) = (at(p, lo), at(p, hi));
-        if below == 0.0 && roots.last().is_none_or(|r: &f64| *r < lo) {
-            roots.push(lo);
-        }
-        if (below < 0.0 && above > 0.0) || (below > 0.0 && above < 0.0) {
-            roots.push(bracketed(p, &dp, (lo, hi)));
+        if at(p, lo) * at(p, hi) < 0.0 {
+            roots.push(bracketed(p, (lo, hi)));
         }
     }
     roots
@@ -100,6 +82,29 @@ mod tests {
                 assert!((g - w).abs() <= 1e-12 * (1.0 + w.abs()), "{want:?}: {got:?}");
             }
         }
+    }
+
+    #[test]
+    fn a_polynomial_is_its_value_by_horners_rule() {
+        assert_eq!(at(&[1.0, 2.0, 3.0], 2.0), 17.0);
+        assert_eq!(at(&[-4.0, 0.5], 3.0), -2.5);
+        assert_eq!(at(&[], 3.0), 0.0);
+    }
+
+    #[test]
+    fn a_triple_root_crosses_and_is_found_a_double_root_touches_and_is_not() {
+        let triple = real_roots(&[0.0, 0.0, 0.0, 1.0]);
+        assert!(triple.len() == 1 && triple[0].abs() <= 1e-15, "t³: {triple:?}");
+        // (t − 1)²: its derivative's root is exactly 1, where it touches zero, which is no change of sign.
+        assert_eq!(real_roots(&[1.0, -2.0, 1.0]), [] as [f64; 0]);
+        // (t − 1)² (t + 2): only the simple root.
+        let simple = real_roots(&[2.0, -3.0, 0.0, 1.0]);
+        assert!(simple.len() == 1 && (simple[0] + 2.0).abs() <= 1e-15, "{simple:?}");
+        // Negated, it is negative before its double root, where it is zero: no bracket ends there.
+        let negated = real_roots(&[-2.0, 3.0, 0.0, -1.0]);
+        assert!(negated.len() == 1 && (negated[0] + 2.0).abs() <= 1e-15, "{negated:?}");
+        let line = real_roots(&[-3.0, 2.0]);
+        assert!(line.len() == 1 && (line[0] - 1.5).abs() <= 1e-15, "{line:?}");
     }
 
     #[test]

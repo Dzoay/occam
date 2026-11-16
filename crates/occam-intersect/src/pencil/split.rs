@@ -9,38 +9,18 @@
 //! rulings they share, the rulings of one along the other's asymptotic cone.
 
 use occam_geom::Analytic;
-use occam_math::{Side, sin_cos, sinh_cosh};
+use occam_math::Side;
 use occam_units::{Direction, Point, Vec3};
 
 use super::quadric::{Natural, Ruling};
 use super::{Pair, cut};
-use crate::closed::{Found, Plan, cross3, exact3, minus, norm3, solve, square_to, unit};
+use crate::closed::{Found, Plan, cross3, exact3, minus, norm3, solve, unit};
 use crate::decide::{Decisions, Undecided};
 
-/// Points of each conic or line, in the world, to hold it to the other surface.
+/// Points of each conic or line, in the world, to hold it to the other surface: at parameters spread over a closed
+/// conic's turn, and along an open curve from its vertex.
 fn samples(plan: &Plan) -> Vec<Vec3> {
-    let turn = [0.3, 1.9, 3.4, 5.0].map(sin_cos);
-    match *plan {
-        Plan::Line { at, along } | Plan::Ruling { apex: at, along } => {
-            vec![at, at + unit(along), at - unit(along) * 2.0]
-        }
-        Plan::Circle { centre, normal, radius } => {
-            let x = square_to(unit(normal));
-            let y = unit(normal).cross(x);
-            turn.iter().map(|(s, c)| centre + (x * *c + y * *s) * radius).collect()
-        }
-        Plan::Ellipse { centre, x, y, radii } => {
-            turn.iter().map(|(s, c)| centre + x * (radii.0 * c) + y * (radii.1 * s)).collect()
-        }
-        Plan::Parabola { vertex, x, y, focal } => {
-            [-1.0, 0.0, 1.5].iter().map(|t| vertex + x * (t * t / (4.0 * focal)) + y * *t).collect()
-        }
-        Plan::Hyperbola { centre, x, y, radii } => [-0.7, 0.0, 0.9]
-            .map(sinh_cosh)
-            .iter()
-            .map(|(sinh, cosh)| centre + x * (radii.0 * cosh) + y * (radii.1 * sinh))
-            .collect(),
-    }
+    plan.curve().map_or_else(Vec::new, |c| [0.3, 0.9, 1.9, 2.6].map(|t| c.point(t).to_vec3()).to_vec())
 }
 
 /// The section of the plane through `at` facing `normal`, both in the pair's frame, with surface `r`, every point of
@@ -125,6 +105,19 @@ fn ruled(pair: &Pair, plan: Plan, decide: &mut Decisions) -> Result<Plan, Undeci
     Ok(plan)
 }
 
+/// The points of the line where the two planes meet that lie on both surfaces: where a member of rank two has
+/// conjugate planes, the real points of the curve.
+pub(super) fn touches(pair: &Pair, planes: [(Vec3, Vec3); 2], decide: &mut Decisions) -> Result<Vec<Vec3>, Undecided> {
+    let (r, o) = cut(pair);
+    let mut out = Vec::new();
+    for at in crossings(pair, r, planes, decide)? {
+        if pair.quadric(o).holds(at - pair.origin, decide)? == Side::Within {
+            out.push(at);
+        }
+    }
+    Ok(out)
+}
+
 /// The conics of the member whose planes are `planes`, and where they cross: `Ok(Err)` where a plane has no section.
 pub(super) fn conics(
     pair: &Pair,
@@ -151,9 +144,8 @@ pub(super) fn rulings(pair: &Pair, decide: &mut Decisions) -> Result<Result<Foun
     if alpha.0.iter().all(|c| c.abs() <= 1e-13) {
         return Ok(Err("one cone"));
     }
-    let small = 1e-14 * alpha.size();
-    let mut candidates = alpha.roots(small);
-    candidates.extend(alpha.rate().roots(small));
+    let mut candidates = alpha.roots();
+    candidates.extend(alpha.rate().roots());
     let apex = pair.surfaces[0].at();
     let mut found = Found { contacts: vec![apex], ..Found::default() };
     let mut ways: Vec<Vec3> = Vec::new();
@@ -166,4 +158,60 @@ pub(super) fn rulings(pair: &Pair, decide: &mut Decisions) -> Result<Result<Foun
         found.curves.push(Plan::Ruling { apex, along: g });
     }
     Ok(Ok(found))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{ball, unplaced, upright};
+    use super::*;
+    use crate::closed::tests::{O, X, Z, tol, v};
+
+    fn decide() -> Decisions {
+        Decisions::new(tol())
+    }
+
+    /// Whether `got` are `want`, within 1e-12.
+    fn near(got: &[Vec3], want: &[Vec3]) -> bool {
+        got.len() == want.len() && got.iter().zip(want).all(|(g, w)| (*g - *w).norm() <= 1e-12)
+    }
+
+    #[test]
+    fn a_split_holds_where_its_conics_lie_on_the_other_surface_and_not_where_they_miss_it_by_more_than_the_band() {
+        let planes = [(Z, v(0.0, 0.0, 0.8)), (Z, v(0.0, 0.0, -0.8))];
+        assert!(holds(&unplaced(upright(O, Z, 0.6), ball(O, 1.0)), planes, &mut decide()).unwrap());
+        let leaning = unplaced(upright(O, v(1e-9, 0.0, 1.0), 0.6), ball(O, 1.0));
+        assert!(!holds(&leaning, planes, &mut decide()).unwrap(), "a nanoradian off");
+    }
+
+    #[test]
+    fn the_planes_common_line_crosses_a_surface_where_its_quadric_vanishes_along_it() {
+        // The cylinder of radius 1 about Z, with a sphere about (2, 0, 4), so that the pair's frame is about (1, 0, 2).
+        let pair = unplaced(upright(O, Z, 1.0), ball(v(2.0, 0.0, 4.0), 1.0));
+        let through = |p: Vec3, along: Vec3| {
+            let n1 = unit(along.cross(Z));
+            let n2 = unit(along.cross(n1));
+            [(n1, p - pair.origin), (n2, p - pair.origin)]
+        };
+        // The line through `p` along `u` meets it where `|(p + t u)ₓᵧ|² = 1`.
+        let (p, u) = (v(0.3, -0.4, 0.7), unit(v(1.0, 2.0, 0.5)));
+        let quadratic = [u.x * u.x + u.y * u.y, p.x * u.x + p.y * u.y, p.x * p.x + p.y * p.y - 1.0];
+        let [bend, slope, value] = quadratic;
+        let at = |sign: f64| p + u * ((-slope + sign * (slope * slope - bend * value).sqrt()) / bend);
+        let got = crossings(&pair, 0, through(p, u), &mut decide()).unwrap();
+        assert!(near(&got, &[at(-1.0), at(1.0)]), "{got:?}");
+        let tangent = unit(v(0.0, 1.0, 0.5));
+        let got = crossings(&pair, 0, through(v(1.0, 0.0, 0.3), tangent), &mut decide()).unwrap();
+        assert!(near(&got, &[v(1.0, 0.0, 0.3)]), "touching it: {got:?}");
+        assert_eq!(crossings(&pair, 0, through(v(2.0, 0.0, 0.3), tangent), &mut decide()).unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn where_conjugate_planes_meet_the_curve_has_its_only_real_points() {
+        // The cylinder of radius 1 about Z and the sphere of radius 1 about (2, 0, 0) touch at (1, 0, 0).
+        let pair = unplaced(upright(v(0.0, 0.0, 5.0), Z, 1.0), ball(v(2.0, 0.0, 0.0), 1.0));
+        let along_y = |p: Vec3| [(X, p - pair.origin), (Z, p - pair.origin)];
+        assert!(near(&touches(&pair, along_y(X), &mut decide()).unwrap(), &[X]));
+        let off = touches(&pair, along_y(v(0.5, 0.0, 0.0)), &mut decide()).unwrap();
+        assert!(off.is_empty(), "crossing the cylinder off the sphere: {off:?}");
+    }
 }

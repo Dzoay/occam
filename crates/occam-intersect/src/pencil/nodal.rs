@@ -19,7 +19,7 @@ use occam_units::{Point, Vec3};
 
 use super::Pair;
 use super::eigen::eigen;
-use super::quadric::{Natural, Quadric};
+use super::quadric::Quadric;
 use super::roots::Members;
 use super::trig::Trig;
 
@@ -63,53 +63,44 @@ fn on_rulings(quadric: &Quadric, [g0, gc, gs]: [Vec3; 3], h: Vec3) -> (Trig, Tri
 }
 
 /// The 3×3 part of the pencil's member at `phi`, the cone whose vertex is the node, and the surface its rulings are cut
-/// by: the other where the member is one of the pair, and else a sphere before a cylinder before a cone.
+/// by: the second where the member is the first of the pair, and else the first. Where the curve is bounded no ruling
+/// of the cone runs along a surface's asymptotic cone, so either surface meets each ruling again at a finite point.
 fn cone_and_cut(pair: &Pair, phi: f64) -> ([Vec3; 3], usize) {
-    let (sin, cos) = sin_cos(phi);
-    let m = Members::of(pair).part(phi);
-    if sin.abs() <= 1e-9 {
-        return (m, 1);
-    }
-    if cos.abs() <= 1e-9 {
-        return (m, 0);
-    }
-    let rank = |s: &Natural| match s {
-        Natural::Sphere { .. } => 0,
-        Natural::Cylinder { .. } => 1,
-        Natural::Cone { .. } => 2,
-    };
-    (m, usize::from(rank(&pair.surfaces[1]) < rank(&pair.surfaces[0])))
+    (Members::of(pair).part(phi), usize::from(sin_cos(phi).0.abs() <= 1e-9))
 }
 
 /// The rulings `g₀, g_c, g_s` of the cone with 3×3 part `m`: `None` where it is no real cone, its part definite.
-fn rulings(m: [Vec3; 3]) -> Result<Option<[Vec3; 3]>, &'static str> {
+/// None of its eigenvalues is zero, since its vertex is a point.
+fn rulings(m: [Vec3; 3]) -> Option<[Vec3; 3]> {
     let (mu, vectors) = eigen(m.map(|r| [r.x, r.y, r.z]));
     let e = vectors.map(|[x, y, z]| Vec3::new(x, y, z));
-    let largest = mu.iter().fold(0.0, |a: f64, x| if x.abs() > a { x.abs() } else { a });
-    if mu.iter().any(|x| x.abs() <= 1e-9 * largest) {
-        return Err("a node whose cone is flat");
-    }
     let positive = mu.iter().filter(|x| **x > 0.0).count();
     if positive == 0 || positive == 3 {
-        return Ok(None);
+        return None;
     }
     let odd = mu.iter().position(|x| (*x > 0.0) == (positive == 1)).unwrap_or(0);
     let scaled = |i: usize| e.get(i).copied().unwrap_or(e[0]) * (1.0 / mu.get(i).copied().unwrap_or(1.0).abs().sqrt());
     let rest: Vec<usize> = (0..3).filter(|i| *i != odd).collect();
-    Ok(Some([scaled(odd), scaled(rest.first().copied().unwrap_or(0)), scaled(rest.last().copied().unwrap_or(0))]))
+    Some([scaled(odd), scaled(rest.first().copied().unwrap_or(0)), scaled(rest.last().copied().unwrap_or(0))])
 }
 
 /// The nodal quartic of `pair` with its node `at`, in the world, the vertex of the pencil's member at `phi`.
 pub(super) fn node(pair: &Pair, at: Vec3, phi: f64) -> Result<Nodal, &'static str> {
     let p0 = at - pair.origin;
     let (cone, cut) = cone_and_cut(pair, phi);
-    let Some(ways) = rulings(cone)? else { return Ok(Nodal { curve: None, at }) };
+    let Some(ways) = rulings(cone) else { return Ok(Nodal { curve: None, at }) };
     let quadric = pair.quadric(cut);
     let (alpha, beta) = on_rulings(&quadric, ways, quadric.half_gradient(p0));
-    if !alpha.roots(1e-14 * alpha.size()).is_empty() {
+    if !alpha.roots().is_empty() {
         return Err("a nodal quartic that reaches infinity");
     }
-    let start = beta.roots(1e-15 * beta.size()).first().copied().unwrap_or(0.0);
+    // The curve starts at the node, on a ruling through it along which `β` is zero: one of its roots, or, at a cusp, its
+    // double root, where it touches zero without crossing and is least.
+    let least = |best: (f64, f64), theta: f64| {
+        let size = beta.at(theta).abs();
+        if size < best.1 { (theta, size) } else { best }
+    };
+    let start = beta.roots().into_iter().chain(beta.rate().roots()).fold((0.0, f64::INFINITY), least).0;
     let coordinate = |pick: fn(Vec3) -> f64| {
         let ruling = Trig(ways.iter().map(|v| pick(*v)).collect());
         alpha.scaled(pick(p0)).plus(&beta.times(&ruling).scaled(-2.0))
@@ -131,8 +122,8 @@ pub(super) fn node(pair: &Pair, at: Vec3, phi: f64) -> Result<Nodal, &'static st
             weights.push(weight);
         }
     }
-    let sign = if weights.first().copied().unwrap_or(0.0) < 0.0 { -1.0 } else { 1.0 };
-    let weights: Vec<f64> = weights.into_iter().map(|w| w * sign).collect();
+    let flip = weights.first().is_some_and(|w| w.is_sign_negative());
+    let weights: Vec<f64> = weights.into_iter().map(|w| if flip { -w } else { w }).collect();
     if weights.iter().any(|w| *w <= 0.0) {
         return Err("a nodal quartic whose weights change sign");
     }

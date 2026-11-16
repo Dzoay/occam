@@ -36,12 +36,14 @@ fn computed(x: f64) -> Interval {
     Interval::new(x, 4.0 * f64::EPSILON * x.abs())
 }
 
-/// The 4×4 matrix of a quadric, as its 3×3 part `m`, its linear part `q` and its constant `c`.
+/// The 4×4 matrix of a quadric, as its 3×3 part `m`, its linear part `q` and its constant `c`, and a cone's apex,
+/// the one point of the surface where its gradient vanishes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Quadric {
     pub(super) m: [Vec3; 3],
     pub(super) q: Vec3,
     pub(super) c: f64,
+    pub(super) apex: Option<Vec3>,
 }
 
 impl Quadric {
@@ -78,47 +80,32 @@ impl Quadric {
         [a.x, b.y, c.z, a.y, a.z, b.z, self.q.x, self.q.y, self.q.z, self.c]
     }
 
-    /// Whether `p` lies on it within the length band: its value there, a polynomial in its numbers and `p`'s, decided
-    /// against the band times the size of its gradient.
+    /// Whether `p` lies on it within the length band: within the band of a cone's apex, where its gradient vanishes
+    /// and its value is no distance, or else its value there, a polynomial in its numbers and `p`'s, decided against
+    /// the band times the size of its gradient.
     ///
     /// # Errors
     ///
     /// [`Undecided`] where the band cannot tell.
     pub(super) fn holds(&self, p: Vec3, decide: &mut Decisions) -> Result<Side, Undecided> {
-        let slope = 2.0 * self.half_gradient(p).norm();
-        let size = self.m.iter().map(|row| row.dot(*row)).sum::<f64>().sqrt();
-        if slope <= 1e-9 * size * (1.0 + p.norm())
-            && let Some(vertex) = self.vertex()
+        if let Some(apex) = self.apex
+            && decide.length(norm3(minus(exact3(p), exact3(apex))))? == Side::Within
         {
-            return decide.length(norm3(minus(exact3(p), exact3(vertex))));
+            return Ok(Side::Within);
         }
         let inputs = numbers(self.entries(), [p.x, p.y, p.z]);
-        decide.length_of(&AtPoint, inputs, slope)
-    }
-
-    /// Its vertex, where its 3×3 part is invertible and its gradient vanishes: `M v = −q`, by Cramer's rule.
-    fn vertex(&self) -> Option<Vec3> {
-        let [a, b, c] = self.m;
-        let det = a.dot(b.cross(c));
-        if det.abs() <= 1e-12 * (a.norm() * b.norm() * c.norm()) {
-            return None;
-        }
-        let solve = |x: Vec3, y: Vec3, z: Vec3| x.dot(y.cross(z)) / det;
-        let (ca, cb, cc) = (Vec3::new(a.x, b.x, c.x), Vec3::new(a.y, b.y, c.y), Vec3::new(a.z, b.z, c.z));
-        let rhs = -self.q;
-        Some(Vec3::new(solve(rhs, cb, cc), solve(ca, rhs, cc), solve(ca, cb, rhs)))
+        decide.length_of(&AtPoint, inputs, 2.0 * self.half_gradient(p).norm())
     }
 
     /// Whether the unit direction `g` lies on its asymptotic cone within the angle band: `gᵀ M g`, decided against the
-    /// band times twice the size of `M g` across `g`, how fast it changes as `g` turns, or a thousandth of `M`'s size
-    /// where that is smaller, as along a principal direction, where `g` is far from the cone if it has one at all.
+    /// band times twice the size of `M g`, how fast it changes as `g` turns near the cone, where `M g` is across `g`;
+    /// or a thousandth of `M`'s size where that is smaller, as along a cylinder's axis, where it is zero to rounding.
     ///
     /// # Errors
     ///
     /// [`Undecided`] where the band cannot tell.
     pub(super) fn toward(&self, g: Vec3, decide: &mut Decisions) -> Result<Side, Undecided> {
-        let mg = self.times(g);
-        let turning = 2.0 * (mg - g * g.dot(mg)).norm();
+        let turning = 2.0 * self.times(g).norm();
         let size = self.m.iter().map(|row| row.dot(*row)).sum::<f64>().sqrt();
         let inputs = numbers(self.entries(), [g.x, g.y, g.z]);
         decide.angle_of(&Toward, inputs, if turning > 1e-3 * size { turning } else { 1e-3 * size })
@@ -126,7 +113,7 @@ impl Quadric {
 
     /// The quadric whose 3×3 part is `m` with `q` and `c` placed for the point `at`: `(X − at)ᵀ m (X − at) + k`.
     fn about(m: [Vec3; 3], at: Vec3, k: f64) -> Self {
-        let mut quadric = Self { m, q: Vec3::new(0.0, 0.0, 0.0), c: 0.0 };
+        let mut quadric = Self { m, q: Vec3::new(0.0, 0.0, 0.0), c: 0.0, apex: None };
         let moved = quadric.times(at);
         quadric.q = -moved;
         quadric.c = at.dot(moved) + k;
@@ -223,7 +210,10 @@ impl Natural {
             Self::Cylinder { at, axis, radius } => {
                 Quadric::about(minus_outer(1.0, axis), at - origin, -radius * radius)
             }
-            Self::Cone { apex, axis, cos, .. } => Quadric::about(minus_outer(cos * cos, axis), apex - origin, 0.0),
+            Self::Cone { apex, axis, cos, .. } => Quadric {
+                apex: Some(apex - origin),
+                ..Quadric::about(minus_outer(cos * cos, axis), apex - origin, 0.0)
+            },
         }
     }
 
@@ -314,17 +304,17 @@ impl Ruling {
         Some(Self { kind, origin: at - origin, x, y: unit(z.cross(x)), z })
     }
 
-    /// `u(θ)`, and its rate.
-    fn out(&self, theta: f64) -> (Vec3, Vec3) {
+    /// `u(θ)`.
+    fn out(&self, theta: f64) -> Vec3 {
         let (sin, cos) = sin_cos(theta);
-        (self.x * cos + self.y * sin, self.y * cos - self.x * sin)
+        self.x * cos + self.y * sin
     }
 
     /// `G(θ)`.
     pub(super) fn direction(&self, theta: f64) -> Vec3 {
         match self.kind {
             Kind::Upright { .. } => self.z,
-            Kind::Slanted { sin, cos } => self.out(theta).0 * sin + self.z * cos,
+            Kind::Slanted { sin, cos } => self.out(theta) * sin + self.z * cos,
         }
     }
 
@@ -332,7 +322,7 @@ impl Ruling {
     #[cfg(test)]
     pub(super) fn point(&self, theta: f64, v: f64) -> Vec3 {
         let base = match self.kind {
-            Kind::Upright { radius } => self.origin + self.out(theta).0 * radius,
+            Kind::Upright { radius } => self.origin + self.out(theta) * radius,
             Kind::Slanted { .. } => self.origin,
         };
         base + self.direction(theta) * v
@@ -390,4 +380,91 @@ impl Along {
 #[cfg(test)]
 pub(super) fn sine_between(a: [Interval; 3], b: [Interval; 3]) -> Interval {
     norm3(cross3(a, b))
+}
+
+#[cfg(test)]
+mod tests {
+    use occam_units::{Angle, Length, Tolerance};
+
+    use super::*;
+
+    /// Decisions at bands of 1e-9 of a length and of an angle.
+    fn decide() -> Decisions {
+        Decisions::new(Tolerance::new(Length::from_millimetres(1e-9), Angle::from_radians(1e-9)).unwrap())
+    }
+
+    fn v(x: f64, y: f64, z: f64) -> Vec3 {
+        Vec3::new(x, y, z)
+    }
+
+    /// The cone of half-angle 0.5 about Z with its apex at `(5, 0, 0)`, in a frame whose origin is the world's.
+    fn cone() -> (Quadric, f64, f64) {
+        let (sin, cos) = sin_cos(0.5);
+        (Natural::Cone { apex: v(5.0, 0.0, 0.0), axis: v(0.0, 0.0, 1.0), sin, cos }.quadric(v(0.0, 0.0, 0.0)), sin, cos)
+    }
+
+    #[test]
+    fn a_point_is_on_a_cone_at_its_apex_and_along_it_and_off_it_by_more_than_the_band() {
+        let (q, sin, cos) = cone();
+        let mut d = decide();
+        assert_eq!(q.holds(v(5.0, 0.0, 0.0), &mut d), Ok(Side::Within), "the apex");
+        assert_eq!(q.holds(v(5.0 + 0.5e-9, 0.0, 0.0), &mut d), Ok(Side::Within), "within the band of the apex");
+        assert_eq!(q.holds(v(5.0 + 1e-3, 0.0, 0.0), &mut d), Ok(Side::Above), "off the apex across the axis");
+        let moved =
+            Natural::Cone { apex: v(5.0, 0.0, 0.0), axis: v(0.0, 0.0, 1.0), sin, cos }.quadric(v(1.0, 2.0, 3.0));
+        assert_eq!(moved.holds(v(4.0, -2.0, -3.0), &mut d), Ok(Side::Within), "its apex, in a frame about (1, 2, 3)");
+        let on = v(5.0 + 2.0 * sin, 0.0, 2.0 * cos);
+        let out = v(cos, 0.0, -sin);
+        assert_eq!(q.holds(on, &mut d), Ok(Side::Within));
+        assert_eq!(q.holds(on + out * 0.5e-9, &mut d), Ok(Side::Within));
+        assert_eq!(q.holds(on + out * 3e-9, &mut d), Ok(Side::Above));
+        assert_eq!(q.holds(on - out * 3e-9, &mut d), Ok(Side::Below));
+    }
+
+    #[test]
+    fn a_spheres_centre_is_not_on_it_and_a_cylinders_points_are_decided_by_their_distance() {
+        let mut d = decide();
+        let sphere = Natural::Sphere { centre: v(1.0, 2.0, 3.0), radius: 2.0 }.quadric(v(0.0, 0.0, 0.0));
+        assert_eq!(sphere.holds(v(1.0, 2.0, 3.0), &mut d), Ok(Side::Below), "its centre is inside it");
+        assert_eq!(sphere.holds(v(3.0 + 3e-9, 2.0, 3.0), &mut d), Ok(Side::Above));
+        let axis = v(1.0, 2.0, 2.0) * (1.0 / 3.0);
+        let cylinder = Natural::Cylinder { at: v(0.0, 1.0, 0.0), axis, radius: 0.5 }.quadric(v(0.5, 0.0, 0.0));
+        let across = unit(axis.cross(v(1.0, 0.0, 0.0)));
+        let on = v(0.0, 1.0, 0.0) + axis * 7.0 + across * 0.5 - v(0.5, 0.0, 0.0);
+        assert_eq!(cylinder.holds(on, &mut d), Ok(Side::Within));
+        assert_eq!(cylinder.holds(on + across * 3e-9, &mut d), Ok(Side::Above));
+        assert_eq!(cylinder.holds(on - across * 0.5e-9, &mut d), Ok(Side::Within));
+    }
+
+    #[test]
+    fn a_direction_is_on_a_cones_asymptotic_cone_within_the_angle_band_and_off_it_beyond() {
+        let (q, _, _) = cone();
+        let mut d = decide();
+        let at = |angle: f64| {
+            let (s, c) = sin_cos(angle);
+            v(s * 0.6, s * 0.8, c)
+        };
+        assert_eq!(q.toward(at(0.5), &mut d), Ok(Side::Within));
+        assert_eq!(q.toward(at(0.5 + 0.3e-9), &mut d), Ok(Side::Within));
+        assert_eq!(q.toward(at(0.5 + 3e-9), &mut d), Ok(Side::Above), "outside its opening");
+        assert_eq!(q.toward(at(0.5 + 1.5e-9), &mut d), Ok(Side::Above), "half a band beyond it");
+        assert_eq!(q.toward(at(0.5 - 1.5e-9), &mut d), Ok(Side::Below));
+        assert_eq!(q.toward(at(0.5 - 3e-9), &mut d), Ok(Side::Below), "inside it");
+        let sphere = Natural::Sphere { centre: v(0.0, 0.0, 0.0), radius: 1.0 }.quadric(v(0.0, 0.0, 0.0));
+        assert_eq!(sphere.toward(v(0.0, 0.0, 1.0), &mut d), Ok(Side::Above), "a sphere has no asymptotic cone");
+        let cylinder = Natural::Cylinder { at: v(0.0, 0.0, 0.0), axis: v(0.0, 0.0, 1.0), radius: 1.0 };
+        let cylinder = cylinder.quadric(v(0.0, 0.0, 0.0));
+        assert_eq!(cylinder.toward(v(0.0, 0.0, 1.0), &mut d), Ok(Side::Within), "its axis");
+        // Off its axis by δ, `gᵀ M g = sin² δ`, decided against a thousandth of its size, √2, where `2 sin δ` is less.
+        let off_axis = |angle: f64| {
+            let (s, c) = sin_cos(angle);
+            v(s, 0.0, c)
+        };
+        assert_eq!(cylinder.toward(off_axis(1e-6), &mut d), Ok(Side::Within), "1e-12 against 1.41e-12");
+        assert_eq!(cylinder.toward(off_axis(3e-6), &mut d), Ok(Side::Above), "9e-12 against 1.41e-12");
+        // Where `2 sin δ`, 1e-3, is less than the floor, the floor is what the band is taken of.
+        let mut wide =
+            Decisions::new(Tolerance::new(Length::from_millimetres(1e-9), Angle::from_radians(2e-4)).unwrap());
+        assert_eq!(cylinder.toward(off_axis(5e-4), &mut wide), Ok(Side::Within), "2.5e-7 against 2.83e-7");
+    }
 }

@@ -12,8 +12,8 @@ mod touch;
 
 use std::sync::Arc;
 
-use occam_geom::{Sphere, Surface};
-use occam_units::{Direction, Placement, Vec3, World};
+use occam_geom::{Analytic, Sphere, Surface};
+use occam_units::{Direction, Placement, Point, Vec3, World};
 
 use super::{Class, Pair, Pencil, classify};
 use crate::closed::tests::{SIZE, Want, contact_maps, frame_by, from_curve, lies_on_both, mm, nearer, tol};
@@ -34,6 +34,27 @@ fn alone(a: &dyn Surface, b: &dyn Surface) -> Section {
 fn class(a: &dyn Surface, b: &dyn Surface) -> Class {
     let pair = Pair::new(a.analytic(tol()).unwrap(), b.analytic(tol()).unwrap()).unwrap();
     classify(&pair, &mut Decisions::new(tol())).unwrap()
+}
+
+/// The pair of `a` and `b` as they are given, in the world, placed by nothing.
+pub(super) fn unplaced(a: Analytic, b: Analytic) -> Pair {
+    Pair::new(a, b).unwrap()
+}
+
+/// The sphere about `centre`.
+pub(super) fn ball(centre: Vec3, radius: f64) -> Analytic {
+    Analytic::Sphere { centre: Point::from_vec3(centre), radius: mm(radius) }
+}
+
+/// The cylinder about the axis through `at` along `axis`.
+pub(super) fn upright(at: Vec3, axis: Vec3, radius: f64) -> Analytic {
+    Analytic::Cylinder { on_axis: Point::from_vec3(at), axis: Direction::normalised(axis), radius: mm(radius) }
+}
+
+/// The cone of both nappes with its apex at `apex`, opening along `axis` by `half`.
+pub(super) fn opening(apex: Vec3, axis: Vec3, half: f64) -> Analytic {
+    let half_angle = occam_units::Angle::from_radians(half);
+    Analytic::Cone { apex: Point::from_vec3(apex), axis: Direction::normalised(axis), half_angle }
 }
 
 /// A case: its name, its two surfaces, what it gives in its own frame, and the placement that takes that to the world.

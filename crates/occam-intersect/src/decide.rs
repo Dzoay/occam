@@ -135,11 +135,6 @@ impl Decisions {
         Self { tol, tally: Tally { decided: 0, exact: 0, undecided: 0 }, failures: Vec::new() }
     }
 
-    /// The tolerance the decisions are made at.
-    pub(crate) const fn tolerance(&self) -> Tolerance {
-        self.tol
-    }
-
     /// Where the length `value` lies against the length band.
     ///
     /// # Errors
@@ -257,6 +252,19 @@ mod tests {
             assert_eq!(got, Err(want), "{length}");
         }
         assert_eq!(decide.tally, Tally { decided: 0, exact: 0, undecided: 3 });
+    }
+
+    #[test]
+    fn an_undecided_scaled_value_is_reported_as_the_length_it_stands_for() {
+        let tol = Tolerance::new(Length::from_millimetres(BAND), occam_units::Angle::from_radians(1e-9)).unwrap();
+        let mut decisions = Decisions::new(tol);
+        // A value of twice the band, scaled by two, is the band itself, with half its radius.
+        let got = decisions.length_of(&Formed, [Interval::new(2.0 * BAND, 1e-12)], 2.0);
+        assert_eq!(got, Err(Undecided));
+        let [report] = decisions.failures.as_slice() else { panic!("{:?}", decisions.failures) };
+        let value = |name: &str| report.value(name).and_then(occam_report::NamedValue::number);
+        assert_eq!((value("quantity"), value("radius"), value("band")), (Some(BAND), Some(5e-13), Some(BAND)));
+        assert_eq!(decisions.length_of(&Formed, [Interval::new(BAND, 1e-12)], 2.0), Ok(Side::Within));
     }
 
     #[test]

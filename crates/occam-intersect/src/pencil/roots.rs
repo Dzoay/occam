@@ -12,7 +12,7 @@
 //! infinity is a direction on both asymptotic cones. Each of these is decided on certified intervals of polynomials in
 //! the matrices' entries, through occam-math's predicates, against the band.
 
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::TAU;
 
 use occam_math::{Interval, Predicate, Ring, Side, sin_cos};
 use occam_units::Vec3;
@@ -45,8 +45,9 @@ pub(crate) enum Multiple {
     AtInfinity { phi: f64 },
     /// Rank two: two real planes, each a unit normal and a point, in the pair's frame.
     Planes { planes: [(Vec3, Vec3); 2] },
-    /// Rank two, two planes that are complex conjugates, meeting in a real line.
-    Conjugate,
+    /// Rank two, two planes that are complex conjugates, meeting in a real line, as the two real planes through it
+    /// where both are finite.
+    Conjugate { line: Option<[(Vec3, Vec3); 2]> },
     /// Rank one: a plane counted twice, along whose conic the surfaces are tangent.
     Double,
 }
@@ -188,17 +189,20 @@ enum Place {
     Off,
 }
 
-/// Whether `vertex`, a member's, lies on both surfaces, within the band: a point on the surface whose gradient is the
-/// larger there, since a point of the member on one is on the other, or a direction on its asymptotic cone.
+/// Whether `vertex`, a member's, a unit vector, lies on both surfaces, within the band: a point on the surface whose
+/// gradient is the larger there, since a point of the member on one is on the other, or a direction on both asymptotic
+/// cones.
 fn place(pair: &Pair, vertex: [f64; 4], decide: &mut Decisions) -> Result<Place, Undecided> {
     let (point, weight) = (Vec3::new(vertex[0], vertex[1], vertex[2]), vertex[3]);
     let quadrics = [pair.quadric(0), pair.quadric(1)];
-    if weight.abs() <= 1e-9 * point.norm() {
+    if weight.abs() <= 1e-9 {
         let way = unit(point);
-        let steep = |q: &Quadric| (q.times(way) - way * way.dot(q.times(way))).norm();
-        let on = usize::from(steep(&quadrics[1]) > steep(&quadrics[0]));
-        let side = quadrics.get(on).map_or(Ok(Side::Above), |q| q.toward(way, decide))?;
-        return Ok(if side == Side::Within { Place::Infinite } else { Place::Off });
+        for q in &quadrics {
+            if q.toward(way, decide)? != Side::Within {
+                return Ok(Place::Off);
+            }
+        }
+        return Ok(Place::Infinite);
     }
     let at = point * (1.0 / weight);
     let gradient = |q: &Quadric| q.half_gradient(at).norm();
@@ -227,46 +231,62 @@ fn vertex(
 /// The planes `√|μ₃| e₃ ± √|μ₄| e₄` of a member of rank two, or none where they are conjugate or one is at infinity.
 fn planes(values: [f64; 4], vectors: [[f64; 4]; 4]) -> Option<[(Vec3, Vec3); 2]> {
     let ([_, _, mu3, mu4], [_, _, e3, e4]) = (values, vectors);
-    if mu3 * mu4 >= 0.0 {
+    if mu3.signum() == mu4.signum() {
         return None;
     }
-    let (k3, k4) = (mu3.abs().sqrt(), mu4.abs().sqrt());
-    let plane = |sign: f64| {
-        let l: [f64; 4] = std::array::from_fn(|i| {
-            k3 * e3.get(i).copied().unwrap_or(0.0) + sign * k4 * e4.get(i).copied().unwrap_or(0.0)
-        });
-        let normal = Vec3::new(l[0], l[1], l[2]);
-        let size = normal.norm();
-        (size > 1e-9).then(|| (normal * (1.0 / size), normal * (-l[3] / (size * size))))
-    };
-    Some([plane(1.0)?, plane(-1.0)?])
+    let (p, q) = (e3.map(|x| x * mu3.abs().sqrt()), e4.map(|x| x * mu4.abs().sqrt()));
+    let at = |e: [f64; 4], i: usize| e.get(i).copied().unwrap_or(0.0);
+    let plane = |f: fn(f64, f64) -> f64| plane_of(std::array::from_fn(|i| f(at(p, i), at(q, i))));
+    Some([plane(|p, q| p + q)?, plane(|p, q| p - q)?])
 }
 
-/// Whether every member of the pencil of `pair` is singular, its determinant zero throughout: two members chosen
-/// apart from any special one are singular, and their vertices, finite and not far, lie on both surfaces within the
-/// band.
+/// How many of a unit-size member's eigenvalues are more than a millionth: its rank.
+fn rank(values: [f64; 4]) -> usize {
+    values.iter().filter(|v| v.abs() > 1e-6).count()
+}
+
+/// Whether a unit-size member is singular: its least eigenvalue no more than a thousandth of a millionth.
+fn degenerate(values: [f64; 4]) -> bool {
+    values[0].abs() <= 1e-9
+}
+
+/// Whether `value` of a trigonometric polynomial of size `size` is near zero: no more than a thousandth of its size.
+fn near_zero(value: f64, size: f64) -> bool {
+    value.abs() <= 1e-3 * size
+}
+
+/// How far from the middle of `pair` a vertex may be and still be decided as a point: a thousand times the distance
+/// between the points its surfaces are placed by, and one more.
+fn reach(pair: &Pair) -> f64 {
+    1e3 * (1.0 + (pair.surfaces[0].at() - pair.surfaces[1].at()).norm())
+}
+
+/// Whether the unit `vertex` is at infinity or beyond `reach`.
+fn far([x, y, z, w]: [f64; 4], reach: f64) -> bool {
+    w.abs() * reach <= Vec3::new(x, y, z).norm()
+}
+
+/// Whether every member of the pencil of `pair` is singular, its determinant zero throughout: four members chosen
+/// apart from any special one are singular, and the vertices of the first two of them that are not far lie on both
+/// surfaces within the band.
 pub(crate) fn every_member_singular(pair: &Pair, decide: &mut Decisions) -> Result<bool, Undecided> {
     let members = Members::of(pair);
-    let reach = 1e3 * (1.0 + (pair.surfaces[0].at() - pair.surfaces[1].at()).norm());
-    let mut probed = 0_u32;
+    let mut vertices = Vec::new();
     for phi in [0.7, 2.1, 1.3, 2.7] {
-        let (values, vectors) = eigen(members.at(phi));
-        if values[0].abs() > 1e-9 * values[3].abs() {
+        let (values, vectors) = eigen(unit_size(members.at(phi)));
+        if !degenerate(values) {
             return Ok(false);
         }
-        let [x, y, z, w] = vectors[0];
-        if w.abs() * reach <= Vec3::new(x, y, z).norm() {
-            continue;
-        }
-        if matches!(place(pair, vectors[0], decide)?, Place::Off) {
+        vertices.push(vectors[0]);
+    }
+    let reach = reach(pair);
+    let near: Vec<[f64; 4]> = vertices.into_iter().filter(|v| !far(*v, reach)).take(2).collect();
+    for vertex in &near {
+        if matches!(place(pair, *vertex, decide)?, Place::Off) {
             return Ok(false);
-        }
-        probed = probed.saturating_add(1);
-        if probed == 2 {
-            return Ok(true);
         }
     }
-    Ok(false)
+    Ok(near.len() == 2)
 }
 
 /// In a pencil whose every member is singular, the member of rank two, where the sum of the principal 3×3 minors
@@ -274,7 +294,7 @@ pub(crate) fn every_member_singular(pair: &Pair, decide: &mut Decisions) -> Resu
 pub(crate) fn singular_planes(pair: &Pair, decide: &mut Decisions) -> Result<Option<[(Vec3, Vec3); 2]>, Undecided> {
     let members = Members::of(pair);
     let minors = members.minors();
-    for phi in minors.roots(1e-14 * minors.size()) {
+    for phi in minors.roots() {
         let (values, vectors) = eigen(members.at(phi));
         if let Some(two) = planes(values, vectors)
             && holds(pair, two, decide)?
@@ -285,38 +305,41 @@ pub(crate) fn singular_planes(pair: &Pair, decide: &mut Decisions) -> Result<Opt
     Ok(None)
 }
 
+/// The plane `e · X = 0`, as a unit normal and a point, where it is finite.
+fn plane_of(e: [f64; 4]) -> Option<(Vec3, Vec3)> {
+    let normal = Vec3::new(e[0], e[1], e[2]);
+    let size = normal.norm();
+    (size > 1e-9).then(|| (normal * (1.0 / size), normal * (-e[3] / (size * size))))
+}
+
+/// The real line of a member of rank two whose planes are conjugate, `e₃ · X = 0 = e₄ · X`, as those two planes.
+fn line([_, _, e3, e4]: [[f64; 4]; 4]) -> Option<[(Vec3, Vec3); 2]> {
+    Some([plane_of(e3)?, plane_of(e4)?])
+}
+
 /// The multiple roots of the pencil of `pair`, each with what its member is.
 pub(crate) fn multiple(pair: &Pair, decide: &mut Decisions) -> Result<Vec<Multiple>, Undecided> {
     let members = Members::of(pair);
     let det = members.determinant();
     let size = det.size();
-    let turn = |phi: f64| {
-        let half = phi.rem_euclid(PI);
-        if half >= PI - 1e-9 { half - PI } else { half }
-    };
     let (first, second) = (det.rate(), det.rate().rate());
     let third = second.rate();
-    let mut critical: Vec<f64> =
-        [first, second, third].iter().flat_map(|d| d.roots(1e-14 * d.size())).map(turn).collect();
+    let mut critical: Vec<f64> = [first, second, third].iter().flat_map(Trig::roots).collect();
     critical.sort_by(f64::total_cmp);
-    critical.dedup_by(|a, b| (*a - *b).abs() <= 1e-9);
     let mut found = Vec::new();
     for phi in critical {
-        if det.at(phi).abs() > 1e-3 * size {
+        if !near_zero(det.at(phi), size) {
             continue;
         }
-        let m = members.at(phi);
+        let m = unit_size(members.at(phi));
         let (values, vectors) = eigen(m);
-        let largest = values[3].abs();
-        let multiple = if values[1].abs() > 1e-6 * largest {
-            vertex(pair, (phi, m), vectors[0], decide)?
-        } else if values[2].abs() <= 1e-6 * largest {
-            Some(Multiple::Double)
-        } else {
-            match planes(values, vectors) {
-                None => Some(Multiple::Conjugate),
+        let multiple = match rank(values) {
+            0 | 1 => Some(Multiple::Double),
+            2 => match planes(values, vectors) {
+                None => Some(Multiple::Conjugate { line: line(vectors) }),
                 Some(two) => holds(pair, two, decide)?.then_some(Multiple::Planes { planes: two }),
-            }
+            },
+            _ => vertex(pair, (phi, m), vectors[0], decide)?,
         };
         if let Some(one) = multiple
             && !found.iter().any(|f| same(f, &one))
@@ -327,8 +350,8 @@ pub(crate) fn multiple(pair: &Pair, decide: &mut Decisions) -> Result<Vec<Multip
     Ok(found)
 }
 
-/// Whether two multiple roots are one, found from two candidates near it: one vertex, one direction's member, one
-/// pair of planes, or one of each kind with no place.
+/// Whether two multiple roots are one, found from two candidates near it, or from `φ` and `φ + π`, whose members are
+/// one: one vertex, one direction's member, one pair of planes, or one of each kind with no place.
 fn same(a: &Multiple, b: &Multiple) -> bool {
     match (a, b) {
         (Multiple::Vertex { at, .. }, Multiple::Vertex { at: other, .. }) => {
@@ -340,7 +363,102 @@ fn same(a: &Multiple, b: &Multiple) -> bool {
             (alike(&planes[0], &other[0]) && alike(&planes[1], &other[1]))
                 || (alike(&planes[0], &other[1]) && alike(&planes[1], &other[0]))
         }
-        (Multiple::Conjugate, Multiple::Conjugate) | (Multiple::Double, Multiple::Double) => true,
+        (Multiple::Conjugate { .. }, Multiple::Conjugate { .. }) | (Multiple::Double, Multiple::Double) => true,
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::f64::consts::PI;
+
+    use super::super::quadric::Natural;
+    use super::super::tests::{ball, opening, unplaced, upright};
+    use super::*;
+    use crate::closed::tests::{O, X, Z, tol, v};
+
+    const Y: Vec3 = v(0.0, 1.0, 0.0);
+
+    #[test]
+    fn two_roots_are_one_where_their_vertices_their_directions_or_their_planes_agree() {
+        let vertex = |at: Vec3| Multiple::Vertex { phi: 0.0, at, kind: Singular::Crossing };
+        let at = v(3.0, 0.0, 0.0);
+        assert!(same(&vertex(at), &vertex(at + Y * 3.6e-7)), "within a ten-millionth of 1 + |at|");
+        assert!(!same(&vertex(at), &vertex(at + Y * 4.4e-7)));
+        assert!(!same(&vertex(at), &vertex(at * 1.5)));
+        let infinite = |phi: f64| Multiple::AtInfinity { phi };
+        assert!(same(&infinite(0.3), &infinite(0.3 + PI)), "a half turn on is the same member");
+        assert!(same(&infinite(0.3), &infinite(0.3 + 5e-8)));
+        assert!(!same(&infinite(0.3), &infinite(0.3 + 2e-7)));
+        let planes = |a: Vec3, b: Vec3| Multiple::Planes { planes: [(a, O), (b, O)] };
+        assert!(same(&planes(Z, X), &planes(Z * -1.0, X)), "a normal either way");
+        assert!(same(&planes(Z, X), &planes(X, Z)), "in either order");
+        assert!(!same(&planes(Z, X), &planes(Z, Y)));
+        assert!(!same(&planes(Z, X), &planes(Y, Z)));
+        let conjugate = Multiple::Conjugate { line: None };
+        assert!(same(&conjugate, &conjugate) && same(&Multiple::Double, &Multiple::Double));
+        assert!(!same(&Multiple::Double, &conjugate) && !same(&vertex(at), &infinite(0.3)));
+    }
+
+    #[test]
+    fn a_member_of_rank_two_gives_its_real_planes_and_the_line_of_its_conjugate_ones() {
+        assert_eq!(plane_of([0.0, 0.0, 2.0, -6.0]), Some((Z, v(0.0, 0.0, 3.0))));
+        assert_eq!(plane_of([0.0, 0.0, 0.0, 1.0]), None, "the plane at infinity");
+        assert_eq!(plane_of([1e-9, 0.0, 0.0, 1.0]), None, "a normal no longer than 1e-9 is taken for none");
+        let vectors = |e3: [f64; 4], e4: [f64; 4]| [[0.0; 4], [0.0; 4], e3, e4];
+        let real = vectors([1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]);
+        let both = Some([(X, v(-0.5, 0.0, 0.0)), (X, v(0.5, 0.0, 0.0))]);
+        assert_eq!(planes([0.0, 0.0, -4.0, 1.0], real), both, "x = ±1/2, from 4x² − 1");
+        assert_eq!(planes([0.0, 0.0, 4.0, 1.0], real), None, "4x² + 1 has no real plane");
+        let line_of = vectors([1.0, 0.0, 0.0, -1.0], [0.0, 0.0, 2.0, -6.0]);
+        assert_eq!(line(line_of), Some([(X, X), (Z, v(0.0, 0.0, 3.0))]));
+        assert_eq!(line(vectors([1.0, 0.0, 0.0, -1.0], [0.0, 0.0, 0.0, 1.0])), None);
+    }
+
+    #[test]
+    fn a_members_rank_and_what_is_near_zero_and_far_are_decided_by_fixed_fractions() {
+        assert_eq!(unit_size([[3.0, 4.0, 0.0, 0.0], [0.0; 4], [0.0; 4], [0.0; 4]])[0], [0.6, 0.8, 0.0, 0.0]);
+        assert_eq!(rank([0.0, 1e-6, 0.5, 1.0]), 2, "a millionth is zero");
+        assert_eq!(rank([1e-7, 2e-6, 0.5, 1.0]), 3);
+        assert_eq!(rank([0.0, 0.0, 0.0, 1.0]), 1);
+        assert!(degenerate([1e-9, 0.1, 0.5, 1.0]) && degenerate([5e-10, 0.1, 0.5, 1.0]));
+        assert!(!degenerate([2e-9, 0.1, 0.5, 1.0]));
+        assert!(near_zero(1.0, 1000.0) && near_zero(-1.0, 1000.0) && near_zero(0.5, 1000.0));
+        assert!(!near_zero(1.5, 1000.0));
+        assert!(far([0.0, 0.0, 1.0, 0.5], 2.0) && far([0.0, 0.0, 1.0, 0.0], 2.0), "at its reach, and at infinity");
+        assert!(!far([0.0, 0.0, 1.0, 0.6], 2.0));
+        let pair = unplaced(ball(v(1.0, 0.0, 0.0), 1.0), upright(v(1.0, 3.0, 0.0), Z, 1.0));
+        assert_eq!(reach(&pair), 4000.0, "a thousand times 1 + 3");
+    }
+
+    #[test]
+    fn a_vertex_at_infinity_is_a_direction_on_both_asymptotic_cones() {
+        // The cylinder about X and a cone one of whose rulings runs along X.
+        let (s, c) = sin_cos(0.5);
+        let pair = unplaced(upright(O, X, 1.0), opening(v(0.0, 0.0, 5.0), v(c, s, 0.0), 0.5));
+        let mut decide = Decisions::new(tol());
+        let toward = |g: Vec3| [g.x, g.y, g.z, 0.0];
+        assert!(matches!(place(&pair, toward(X), &mut decide), Ok(Place::Infinite)), "along both");
+        assert!(matches!(place(&pair, toward(v(c, s, 0.0)), &mut decide), Ok(Place::Off)), "along the cone's axis");
+        assert!(matches!(place(&pair, toward(Z), &mut decide), Ok(Place::Off)), "along neither");
+    }
+
+    /// A cone's vertex on a sphere through the origin tangent there to the plane z = 0, the cone's form on that plane
+    /// `x² + 2xy + (1 + δ) y²`, and its slope out of the plane `0.1 x + 0.2 y`.
+    fn kind(delta: f64) -> Singular {
+        let on = Natural::Sphere { centre: v(0.0, 0.0, 1.0), radius: 1.0 }.quadric(O);
+        let m = [v(1.0, -1.0, 0.1), v(-1.0, 1.0 + delta, 0.2), v(0.1, 0.2, 0.0)];
+        singular(m, &on, O, &mut Decisions::new(tol())).unwrap()
+    }
+
+    #[test]
+    fn a_vertex_is_a_cusp_where_its_tangent_cone_is_tangent_to_the_plane_within_the_band_of_its_slope() {
+        // The slope is the form's trace 2 + δ times the slope along x + y, where the form is least, 0.3/√2: 4.24e-13
+        // of the angle band of 1e-12.
+        assert_eq!(kind(0.0), Singular::Cusp);
+        assert_eq!(kind(3.5e-13), Singular::Cusp);
+        assert_eq!(kind(-3.5e-13), Singular::Cusp);
+        assert_eq!(kind(1e-12), Singular::Isolated);
+        assert_eq!(kind(-1e-12), Singular::Crossing);
     }
 }

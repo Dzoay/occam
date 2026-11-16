@@ -28,7 +28,7 @@ pub(super) fn touches(
     let critical = along.critical();
     let scale = along.delta.size() * along.alpha.size();
     let flat = critical.size() <= 1e-13 * scale;
-    let candidates = if flat { vec![0.0] } else { critical.roots(1e-13 * scale) };
+    let candidates = if flat { vec![0.0] } else { critical.roots() };
     let mut found: Vec<Touch> = Vec::new();
     for theta in candidates {
         let v = along.middle(theta);

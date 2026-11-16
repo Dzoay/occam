@@ -52,6 +52,9 @@ enum Class {
     Node { phi: f64, at: Vec3, kind: Singular },
     /// A double root of rank two: two conics, or a ruling and a conic, each a plane's in the pair's frame.
     Split { planes: [(Vec3, Vec3); 2] },
+    /// A double root of rank two whose planes are conjugate: no real curve, and only the points of their real line
+    /// that are on both surfaces, where the line is finite.
+    Conjugate { line: Option<[(Vec3, Vec3); 2]> },
     /// A determinant zero for every member, at the vertex two cones share: their common rulings.
     Lines,
     /// A degenerate pencil this method does not parametrize.
@@ -134,11 +137,7 @@ fn cut(pair: &Pair) -> (usize, usize) {
 fn smooth(pair: &Pair) -> Class {
     let Some((_, o, ruling)) = pair.ruled() else { return Class::Other("no ruled member") };
     let alpha = ruling.along(&pair.quadric(o)).alpha;
-    if alpha.roots(1e-14 * alpha.size()).is_empty() {
-        Class::Smooth
-    } else {
-        Class::Other("a quartic that reaches infinity")
-    }
+    if alpha.roots().is_empty() { Class::Smooth } else { Class::Other("a quartic that reaches infinity") }
 }
 
 /// The class of the pencil of `pair`, from the multiple roots of its determinant.
@@ -163,7 +162,7 @@ fn classify(pair: &Pair, decide: &mut Decisions) -> Result<Class, Undecided> {
         [Multiple::AtInfinity { .. }] => Class::Other("a quartic with its node at infinity"),
         [Multiple::AtInfinity { .. }, Multiple::Vertex { .. }]
         | [Multiple::Vertex { .. }, Multiple::AtInfinity { .. }] => Class::Other("a ruling and a cubic"),
-        [Multiple::Conjugate] => Class::Other("two conjugate conics"),
+        [Multiple::Conjugate { line }] => Class::Conjugate { line: *line },
         [Multiple::Double] => Class::Other("surfaces tangent along a conic"),
         _ => Class::Other("more than one degenerate member"),
     })

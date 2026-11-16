@@ -41,7 +41,7 @@ fn head(pair: &Pair, ruling: &Ruling, along: &Along) -> Vec<f64> {
 /// The loops of a smooth quartic on `ruling`: `None` where one cannot be made of its numbers.
 pub(super) fn loops(pair: &Pair, ruling: &Ruling, along: &Along) -> Option<Vec<Quartic>> {
     let delta = five(&along.delta);
-    let roots = along.delta.roots(1e-15 * along.delta.size());
+    let roots = along.delta.roots();
     let whole = std::f64::consts::TAU;
     let make = |root: &[f64]| -> Option<Quartic> {
         let numbers: Vec<f64> =
