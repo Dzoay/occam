@@ -1,6 +1,6 @@
 # Mesh and renderer
 
-[Architecture](../ARCHITECTURE.md) › Mesh and renderer · crate `occam-mesh` · sketch [`mesh.rs`](../sketch/src/mesh.rs)
+[Architecture](../ARCHITECTURE.md) › Mesh and renderer · crate [`occam-mesh`](../../crates/occam-mesh/src/lib.rs)
 
 Triangles for display: shared edges first, so neighbouring faces meet exactly, then faces, then a check.
 
@@ -16,7 +16,9 @@ flowchart LR
   face.
 - **Point location uses the exact predicates** on real coordinates.
 - **Chordal error is measured** to the triangle.
-- **The watertight check runs on every output,** in production too.
+- **The watertight check runs on every output,** in production too. It matches vertices by position, not by index, as a
+  pole or an apex holds two at one place: every segment is used once each way, or once along a sheet's rim, and each
+  shell's mesh has its faces' Euler characteristic. A face that did not mesh is a named hole.
 - **Each face's mesh is its own vertex block,** with a normal per vertex from the surface. Along a shared edge its
   positions are that edge's samples, so neighbours hold the same bits there: no cracks, no welding.
 
