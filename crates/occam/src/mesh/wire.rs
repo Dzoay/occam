@@ -10,7 +10,7 @@ use occam_report::{DisplayUnits, NamedValue, Quantity, SCHEMA};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use super::{Meshed, Placed};
+use super::{Again, Meshed, Placed};
 use crate::run::report_value;
 use crate::session::{answer, line};
 
@@ -31,6 +31,14 @@ struct MeshedWire<'a> {
 struct LimitsWire {
     deflection: f64,
     angle: f64,
+}
+
+impl Again {
+    /// Its one JSON form: the places of the faces to mesh again, and the ids of what keeps its mesh.
+    #[must_use]
+    pub fn json(&self) -> String {
+        json!({"schema": SCHEMA, "faces": self.faces, "kept": self.kept}).to_string()
+    }
 }
 
 impl Meshed {

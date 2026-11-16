@@ -73,3 +73,41 @@ clap_lex transitive clap
 heck transitive clap
 serde_json occam-cli serde
 serde_json occam-wasm serde
+# axum and tokio for `occam view`, with futures-util (docs/decisions/2026-11-14-axum-and-tokio-for-the-viewer.md), native
+# only. Licences: MIT for axum, axum-core, bytes, http-body, http-body-util, hyper, hyper-util, mio, slab, tokio,
+# tokio-macros, tower, tower-layer and tower-service; MIT OR Apache-2.0 for atomic-waker, futures-core, futures-task,
+# futures-util, http, httparse, httpdate, libc, mime, percent-encoding, pin-project-lite, smallvec, socket2,
+# windows-link and windows-sys; MIT AND BSD-3-Clause for matchit; Apache-2.0 for sync_wrapper; and Apache-2.0 WITH
+# LLVM-exception OR Apache-2.0 OR MIT for wasi.
+axum occam-cli axum-and-tokio-for-the-viewer
+futures-util occam-cli axum-and-tokio-for-the-viewer
+tokio occam-cli axum-and-tokio-for-the-viewer
+atomic-waker transitive axum-and-tokio-for-the-viewer
+axum-core transitive axum-and-tokio-for-the-viewer
+bytes transitive axum-and-tokio-for-the-viewer
+futures-core transitive axum-and-tokio-for-the-viewer
+futures-task transitive axum-and-tokio-for-the-viewer
+http transitive axum-and-tokio-for-the-viewer
+httparse transitive axum-and-tokio-for-the-viewer
+http-body transitive axum-and-tokio-for-the-viewer
+http-body-util transitive axum-and-tokio-for-the-viewer
+httpdate transitive axum-and-tokio-for-the-viewer
+hyper transitive axum-and-tokio-for-the-viewer
+hyper-util transitive axum-and-tokio-for-the-viewer
+libc transitive axum-and-tokio-for-the-viewer
+matchit transitive axum-and-tokio-for-the-viewer
+mime transitive axum-and-tokio-for-the-viewer
+mio transitive axum-and-tokio-for-the-viewer
+percent-encoding transitive axum-and-tokio-for-the-viewer
+pin-project-lite transitive axum-and-tokio-for-the-viewer
+slab transitive axum-and-tokio-for-the-viewer
+smallvec transitive axum-and-tokio-for-the-viewer
+socket2 transitive axum-and-tokio-for-the-viewer
+sync_wrapper transitive axum-and-tokio-for-the-viewer
+tokio-macros transitive axum-and-tokio-for-the-viewer
+tower transitive axum-and-tokio-for-the-viewer
+tower-layer transitive axum-and-tokio-for-the-viewer
+tower-service transitive axum-and-tokio-for-the-viewer
+wasi transitive axum-and-tokio-for-the-viewer
+windows-link transitive axum-and-tokio-for-the-viewer
+windows-sys transitive axum-and-tokio-for-the-viewer

@@ -5,7 +5,7 @@
 import { Session } from "occam-wasm";
 
 import type { FromMesher, KernelReport, Part, ToMesher } from "../protocol.ts";
-import { own } from "../protocol.ts";
+import { kernelReport, own } from "../protocol.ts";
 import { kernel, said } from "./kernel.ts";
 
 const port = own<ToMesher, FromMesher>();
@@ -14,20 +14,13 @@ let held: { readonly model: number; readonly session: Session | null; readonly r
 
 type Mesh = Extract<ToMesher, { kind: "mesh" }>;
 
-/** What the page shows of a report in occam's JSON form. */
-function shown(report: Record<string, unknown>): KernelReport {
-  const entities = Array.isArray(report.entities) ? report.entities.map(String) : [];
-  const reason = typeof report.reason === "string" ? { reason: report.reason } : {};
-  return { code: String(report.code), message: String(report.message), entities, ...reason };
-}
-
 /** The reports a call's summary holds: each face's refusal, in id order, then the rest. */
 function reports(summary: string): KernelReport[] {
   const { answers, reports: rest } = JSON.parse(summary) as {
     answers: { report?: Record<string, unknown> }[];
     reports: Record<string, unknown>[];
   };
-  return [...answers.flatMap((answer) => (answer.report ? [answer.report] : [])), ...rest].map(shown);
+  return [...answers.flatMap((answer) => (answer.report ? [answer.report] : [])), ...rest].map(kernelReport);
 }
 
 function mesh(call: Mesh): Part {

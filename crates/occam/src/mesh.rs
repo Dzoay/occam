@@ -73,6 +73,27 @@ impl Meshed {
     }
 }
 
+/// What a page that drew one model must mesh again to draw the next (`occam_mesh::again`): the faces to mesh again,
+/// counted in id order as [`crate::Session::mesh_part`] counts them, and what keeps its mesh from the model before.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Again {
+    /// The faces to mesh again, each by its place in the model's faces in id order, rising.
+    pub faces: Vec<usize>,
+    /// Every face that keeps its block or its refusal, in id order, then each edge only those faces use, in id order:
+    /// what the mesh before reported of these still holds, and what it reported of anything else does not.
+    pub kept: Vec<EntityRef>,
+}
+
+impl Again {
+    /// What `model` must mesh again of what `before` drew, meshed to `limits` on `exec`.
+    pub(crate) fn new(exec: &occam_math::Exec, before: &Snapshot, model: &Snapshot, limits: Limits) -> Self {
+        let again = occam_mesh::again(exec, before, model, limits);
+        let wanted: BTreeSet<Id<Face>> = again.faces.into_iter().collect();
+        let faces = model.ids::<Face>().into_iter().enumerate().filter(|(_, face)| wanted.contains(face));
+        Self { faces: faces.map(|(at, _)| at).collect(), kept: again.kept }
+    }
+}
+
 /// The limits of a mesh from its deflection in millimetres and its angle in radians.
 ///
 /// # Errors

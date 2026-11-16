@@ -2,7 +2,8 @@
 // its own copy, and its faces are cut into about 64 ranges, dealt out one at a time to whichever worker comes free, so
 // uneven faces balance and no call runs long. The parts come back as transferred flat arrays and are laid end to end in
 // id order, each numbered from its own start, so no index is rewritten. That assembly is display-only: each call's
-// output is deterministic, and the parts laid end to end are the buffers `occam mesh` gives the same model.
+// output is deterministic, and the parts laid end to end are the buffers `occam mesh` gives the same model. A model
+// that follows another may mesh only some of its faces, the rest keeping the blocks the last one gave them.
 
 import type { FaceRange, Mesh } from "./mesh.ts";
 import type { FromMesher, KernelReport, Part, ToMesher } from "./protocol.ts";
@@ -47,6 +48,32 @@ export function cut(faces: number, calls = CALLS): Call[] {
     end: Math.min(faces, (k + 1) * size),
     worker: null,
   }));
+}
+
+/** `faces`, rising places among a model's faces, cut into runs of consecutive places of at most one size, about `calls`. */
+export function cutSome(faces: readonly number[], calls = CALLS): Call[] {
+  const size = Math.max(1, Math.ceil(faces.length / calls));
+  const runs: { first: number; end: number }[] = [];
+  for (const face of faces) {
+    const last = runs.at(-1);
+    if (last && last.end === face && last.end - last.first < size) last.end = face + 1;
+    else runs.push({ first: face, end: face + 1 });
+  }
+  return runs.map(({ first, end }) => ({ first, end, worker: null }));
+}
+
+/** A face's block cut from `mesh` as a part of its own, for a face that keeps it, its slot and generation `ids`. */
+export function kept(mesh: Mesh, face: FaceRange, ids: readonly [number, number]): Part {
+  const { first, count } = face.vertices;
+  const triangles = face.triangles;
+  return {
+    positions: mesh.positions.slice(first * 3, (first + count) * 3),
+    normals: mesh.normals.slice(first * 3, (first + count) * 3),
+    uvs: mesh.uvs.slice(first * 2, (first + count) * 2),
+    indices: mesh.indices.slice(triangles.first * 3, (triangles.first + triangles.count) * 3),
+    table: Uint32Array.of(ids[0], ids[1], 0, count, 0, triangles.count),
+    reports: [],
+  };
 }
 
 function joined<T extends Float64Array<ArrayBuffer> | Uint32Array<ArrayBuffer>>(arrays: T[], make: (n: number) => T): T {
@@ -101,6 +128,8 @@ class Job {
     readonly ids: Uint32Array,
     readonly calls: Call[],
     readonly limits: Limits,
+    /** The blocks of the faces that keep them, each with its place among the faces. */
+    readonly keeping: readonly (readonly [number, Part])[],
     readonly finish: (meshing: Meshing | null) => void,
   ) {
     this.parts = calls.map(() => null);
@@ -147,15 +176,23 @@ export class Pool {
 
   /**
    * Gives each worker its own copy of a model, `twins` one each, and meshes its faces, whose slots and generations are
-   * `ids`, to `limits`. Resolves with the parts laid end to end, or with null if another model came first.
+   * `ids`, to `limits`: those whose places `only` gives, if it is given, the rest keeping the blocks `keeping` gives
+   * them. Resolves with the parts laid end to end, or with null if another model came first.
    */
-  mesh(twins: readonly ArrayBuffer[], ids: Uint32Array, limits: Limits): Promise<Meshing | null> {
+  mesh(
+    twins: readonly ArrayBuffer[],
+    ids: Uint32Array,
+    limits: Limits,
+    only: readonly number[] | null = null,
+    keeping: readonly (readonly [number, Part])[] = [],
+  ): Promise<Meshing | null> {
     if (twins.length !== this.size) throw new Error(`${twins.length} copies of the model for ${this.size} workers`);
     this.model += 1;
     this.job?.finish(null);
     this.workers.forEach((worker, k) => this.post(worker, { kind: "load", model: this.model, twin: twins[k] }, [twins[k]]));
     return new Promise((resolve) => {
-      const job = new Job(this.model, ids, cut(ids.length / 2), limits, resolve);
+      const calls = only ? cutSome(only) : cut(ids.length / 2);
+      const job = new Job(this.model, ids, calls, limits, keeping, resolve);
       this.job = job;
       this.last = job.calls;
       if (job.left === 0) this.done(job);
@@ -220,7 +257,9 @@ export class Pool {
 
   private done(job: Job): void {
     if (this.job === job) this.job = null;
-    const parts = job.parts.filter((part): part is Part => part !== null);
+    const meshed = job.calls.map(({ first }, call) => [first, job.parts[call]] as const);
+    const placed = [...meshed, ...job.keeping].filter((pair): pair is readonly [number, Part] => pair[1] !== null);
+    const parts = placed.sort(([a], [b]) => a - b).map(([, part]) => part);
     job.finish({ model: job.model, ...assemble(parts), calls: job.calls, failed: job.failed() });
   }
 }

@@ -1,5 +1,6 @@
 // The page: Preact draws the controls into `#ui`; the viewer draws into `#view` from its own frame loop; the kernel
-// runs in workers, an editing worker and a pool of mesh workers, and never on this thread.
+// runs in workers, an editing worker and a pool of mesh workers, and never on this thread. Served by `occam view`,
+// which marks its `<html>` as `data-live`, the page follows the model file through the server's events.
 //
 // `?upload-bound=<bytes>` sets how much a frame may upload, `?workers=<n>` how many mesh workers there are,
 // `?deflection=<mm>` and `?angle=<rad>` what each model is meshed to, and `?inspect` installs what the tests read.
@@ -12,6 +13,7 @@ import { acquire } from "./gpu.ts";
 import { INSPECT_USAGE, Inspector } from "./inspect.ts";
 import { attach } from "./input.ts";
 import { Kernel } from "./kernel.ts";
+import { Live } from "./live.ts";
 import type { Limits, Meshing } from "./pool.ts";
 import { report } from "./report.ts";
 import { failure, notice, refusals } from "./state.ts";
@@ -76,10 +78,13 @@ async function start(): Promise<void> {
   };
   attach(canvas, viewer);
   render(<App actions={viewer} />, ui);
+  const live = document.documentElement.hasAttribute("data-live") ? new Live(kernel, viewer, limits) : null;
+  live?.start();
   inspector?.install(viewer, gpu, {
     run: (request) => follow(kernel, viewer, limits, request),
     calls: () => kernel.pool.last,
     workers: kernel.pool.size,
+    live: () => live && { digest: live.drawn?.digest ?? null, models: live.models },
   });
 }
 

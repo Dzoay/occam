@@ -25,6 +25,10 @@ text_enum! {
         TurnOnWebgpu = "turn-on-webgpu",
         /// Reload the viewer's page.
         ReloadPage = "reload-page",
+        /// Make the model `occam view` watches by running a request on it.
+        MakeModel = "make-model",
+        /// Ask `occam view` for no port, so that it listens on a free one.
+        UseAnyPort = "use-any-port",
     }
 }
 
@@ -50,6 +54,10 @@ impl RemedyKind {
                 "Turn on WebGPU and hardware acceleration in the browser's settings; in Chromium, chrome://gpu says why WebGPU is off."
             }
             Self::ReloadPage => "Reload the page.",
+            Self::MakeModel => {
+                "Make the model by running a request on it with `occam run --model`; the viewer draws it once it is written."
+            }
+            Self::UseAnyPort => "Leave out --port, so that the viewer listens on a free port.",
         }
     }
 
@@ -63,7 +71,7 @@ impl RemedyKind {
             Self::MeetAt => &["point"],
             Self::UseCircle => &["centre", "radius", "normal"],
             Self::UseDeflection => &["deflection"],
-            Self::UseWebgpuBrowser | Self::TurnOnWebgpu | Self::ReloadPage => &[],
+            Self::UseWebgpuBrowser | Self::TurnOnWebgpu | Self::ReloadPage | Self::MakeModel | Self::UseAnyPort => &[],
         }
     }
 }

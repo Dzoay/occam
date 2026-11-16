@@ -248,3 +248,42 @@ fn answers_in_words_go_one_line_each_the_refused_ones_apart() {
     assert_eq!(listed, [(true, "body: body:0/1".to_string())]);
     assert_eq!(Answered::Checked(Vec::new()).words(), [(true, "The model is sound.".to_string())]);
 }
+
+#[test]
+fn a_model_opened_from_its_twin_has_the_digest_it_was_saved_with_whichever_encoding_it_came_in() {
+    let session = boxed(Encoding::Json);
+    let digest = session.digest().unwrap();
+    assert_eq!(digest, session.model().unwrap().digest());
+    let twin = session.encoded(Encoding::Binary).unwrap().unwrap();
+    assert!(twin.starts_with(occam_io::MAGIC), "the binary twin, though the session saves JSON");
+    assert_eq!(Session::open(&twin, &Exec::serial()).unwrap().digest(), Some(digest));
+    let json = session.encoded(Encoding::Json).unwrap().unwrap();
+    assert_eq!(Session::open(&json, &Exec::serial()).unwrap().digest(), Some(digest));
+    assert_eq!(
+        (Session::new(Encoding::Binary).digest(), Session::new(Encoding::Json).encoded(Encoding::Binary)),
+        (None, None)
+    );
+}
+
+#[test]
+fn a_model_given_after_another_is_meshed_again_only_where_it_differs() {
+    let boxed = boxed(Encoding::Binary);
+    let twin = boxed.encoded(Encoding::Binary).unwrap().unwrap();
+    let mut grown = Session::open(&twin, &Exec::serial()).unwrap();
+    let (ran, _) = grown
+        .run(&in_millimetres(r#"[{"op": "cylinder", "radius": 2, "height": 5, "frame": {"origin": [20, 0, 0]}}]"#));
+    assert!(ran.failed.is_none(), "{:?}", ran.failed);
+    let again = grown.again(&boxed, &Exec::serial(), 0.1, 0.35).unwrap();
+    assert_eq!(again.faces, [6, 7, 8, 9], "the cylinder's four faces, after the box's six");
+    let edges = boxed.list(&[EntityKind::Edge]).remove(0).entities;
+    let kept: Vec<EntityRef> = (0..6).map(|slot| EntityRef::new(EntityKind::Face, slot, 1)).chain(edges).collect();
+    assert_eq!(again.kept, kept, "the box's faces and the edges they alone use");
+    let texts: Vec<String> = kept.iter().map(|id| id.text()).collect();
+    assert_eq!(json_of(&again.json()), json!({"schema": 2, "faces": [6, 7, 8, 9], "kept": texts}));
+    let nothing = grown.again(&grown, &Exec::serial(), 0.1, 0.35).unwrap();
+    assert_eq!(nothing.faces, Vec::<usize>::new(), "a model given again as it was");
+    let all = grown.again(&Session::new(Encoding::Binary), &Exec::serial(), 0.1, 0.35).unwrap();
+    assert_eq!((all.faces, all.kept), ((0..10).collect(), Vec::new()), "after no model, every face");
+    let refused = grown.again(&boxed, &Exec::serial(), 0.0, 0.35).unwrap_err();
+    assert_eq!(refused.iter().map(|r| r.code).collect::<Vec<_>>(), [Code::LimitNotPositive]);
+}

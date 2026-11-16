@@ -16,6 +16,15 @@ path = "src/main.rs"
 clap = { version = "4.6.7", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 occam = { path = "../occam" }
 
+# `occam view`'s server, on this machine only (docs/decisions/2026-11-14-axum-and-tokio-for-the-viewer.md). Native
+# only: tokio's `net` does not build for wasm, which has no `occam view`. axum without its default features but HTTP/1
+# and tokio; tokio with what the server uses, a runtime on one thread with threads for blocking work, sockets, timers
+# and channels; futures-util for the stream of events.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+futures-util = { version = "0.3.34", default-features = false }
+tokio = { version = "1.54.1", features = ["rt", "net", "time", "sync"] }
+
 [dev-dependencies]
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
