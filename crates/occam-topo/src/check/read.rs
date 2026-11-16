@@ -132,6 +132,28 @@ fn kept<T: Copy + Ord>(items: &[T], following: T) -> BTreeSet<T> {
     items.iter().copied().chain([following]).collect()
 }
 
+/// A small set kept as a sorted list, whose space is reused from one set to the next, so that a run of checks that
+/// gathers one for each entity allocates only while the sets grow.
+#[derive(Debug)]
+pub(crate) struct Sorted<T>(Vec<T>);
+
+impl<T> Default for Sorted<T> {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl<T: Ord> Sorted<T> {
+    /// What `fill` adds to an empty list, in order, each once.
+    pub(crate) fn of(&mut self, fill: impl FnOnce(&mut Vec<T>)) -> &[T] {
+        self.0.clear();
+        fill(&mut self.0);
+        self.0.sort_unstable();
+        self.0.dedup();
+        &self.0
+    }
+}
+
 /// The list from `first` by a `next` field, if there is a first.
 pub(crate) fn list<K: Kind>(
     model: &Model,
@@ -217,16 +239,16 @@ pub(crate) fn body_kind(model: &Model, id: Id<Body>) -> Option<BodyKind> {
     get(model, id).map(|b| b.kind)
 }
 
-/// The shells an edge's uses lie in, each once.
-pub(crate) fn edge_shells(model: &Model, id: Id<Edge>) -> BTreeSet<Id<Shell>> {
-    let Some(edge) = get(model, id) else { return BTreeSet::new() };
-    radial(model, edge).items().into_iter().filter_map(|u| use_shell(model, u)).collect()
+/// Adds the shells an edge's uses lie in to `out`, once for each use.
+pub(crate) fn edge_shells(model: &Model, id: Id<Edge>, out: &mut Vec<Id<Shell>>) {
+    let Some(edge) = get(model, id) else { return };
+    out.extend(radial(model, edge).items().into_iter().filter_map(|u| use_shell(model, u)));
 }
 
-/// The edges round a vertex's star, each once.
-pub(crate) fn vertex_edges(model: &Model, id: Id<Vertex>) -> BTreeSet<Id<Edge>> {
+/// Adds the edges round a vertex's star to `out`, once for each place.
+pub(crate) fn vertex_edges(model: &Model, id: Id<Vertex>, out: &mut Vec<Id<Edge>>) {
     let star_place = get(model, id).and_then(|v| v.star);
-    star_place.map(|place| star(model, place).items().into_iter().map(|p| p.edge).collect()).unwrap_or_default()
+    out.extend(star_place.into_iter().flat_map(|place| star(model, place).items()).map(|p| p.edge));
 }
 
 #[cfg(test)]
@@ -271,6 +293,17 @@ mod tests {
         let before = sets();
         let walk = walk(0, chain(n, last));
         (walk, sets().saturating_sub(before))
+    }
+
+    #[test]
+    fn a_sorted_set_is_what_was_added_last_in_order_each_once_in_the_space_it_had() {
+        let mut set = Sorted::default();
+        assert_eq!(set.of(|items| items.extend([3, 1, 2, 3, 1])), [1, 2, 3]);
+        assert_eq!(set.of(|items| items.extend([5, 4])), [4, 5], "nothing is kept from the set before");
+        assert_eq!(set.of(|_| {}), [0_u8; 0]);
+        let room = set.0.capacity();
+        assert_eq!(set.of(|items| items.extend([9, 8, 7, 6, 5])), [5, 6, 7, 8, 9]);
+        assert_eq!(set.0.capacity(), room, "as many items again fit in the space it had");
     }
 
     #[test]

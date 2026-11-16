@@ -28,6 +28,8 @@ struct Added {
     lists: BTreeSet<(EntityRef, EntityKind)>,
     /// Each place of a star added that came round, from which any walk gives the same places.
     places: BTreeSet<Around>,
+    /// The space an entity's links are read into, reused from one entity to the next.
+    links: Vec<EntityRef>,
 }
 
 impl Added {
@@ -99,10 +101,9 @@ fn add_uses(model: &Model, first: Id<EdgeUse>, out: &mut BTreeSet<EntityRef>) {
 
 /// Adds what `entity` links to in `model`, and the lists and rings it sits in there, each unless `added` holds it.
 fn around(model: &Model, entity: EntityRef, out: &mut BTreeSet<EntityRef>, added: &mut Added) {
-    let mut links = Vec::new();
     note();
-    model.links(entity, &mut links);
-    out.extend(links);
+    model.links(entity, &mut added.links);
+    out.extend(added.links.drain(..));
     match entity.kind {
         EntityKind::EdgeUse => typed::<EdgeUse>(entity).into_iter().for_each(|id| use_around(model, id, out, added)),
         EntityKind::Edge => typed::<Edge>(entity).into_iter().for_each(|id| edge_around(model, id, out, added)),

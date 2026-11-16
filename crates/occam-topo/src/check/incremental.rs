@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use occam_report::{EntityKind, EntityRef, Reason, Report};
 
 use super::failed;
-use super::read::{body_kind, edge_shells, get, list, loop_shell, typed, uses_from, vertex_edges};
+use super::read::{Sorted, body_kind, edge_shells, get, list, loop_shell, typed, uses_from, vertex_edges};
 use super::shell::{edge_faces, face_edges, genus as whole_shell_genus, loops, reach, whole_genus};
 use crate::edit::Edit;
 use crate::kind::{Body, Edge, EdgeUse, Face, Id, Loop, Shell, Vertex};
@@ -62,18 +62,31 @@ const fn weight(kind: EntityKind) -> i64 {
     }
 }
 
-/// The shells `entity` counts in, in `model`: a vertex once in each shell its edges lie in.
-fn shells_of(model: &Model, entity: EntityRef) -> BTreeSet<Id<Shell>> {
-    match entity.kind {
-        EntityKind::Face => typed::<Face>(entity).and_then(|f| get(model, f)).map(|f| f.shell).into_iter().collect(),
-        EntityKind::Loop => typed::<Loop>(entity).and_then(|l| loop_shell(model, l)).into_iter().collect(),
-        EntityKind::Edge => typed::<Edge>(entity).map(|e| edge_shells(model, e)).unwrap_or_default(),
+/// The space [`shells_of`] reuses from one entity to the next.
+#[derive(Default)]
+struct Shells {
+    /// The shells an entity counts in.
+    found: Sorted<Id<Shell>>,
+    /// The edges round a vertex.
+    edges: Sorted<Id<Edge>>,
+}
+
+/// The shells `entity` counts in, in `model`, each once and in order: a vertex once in each shell its edges lie in.
+fn shells_of<'s>(model: &Model, entity: EntityRef, space: &'s mut Shells) -> &'s [Id<Shell>] {
+    let Shells { found, edges } = space;
+    found.of(|out| match entity.kind {
+        EntityKind::Face => out.extend(typed::<Face>(entity).and_then(|f| get(model, f)).map(|f| f.shell)),
+        EntityKind::Loop => out.extend(typed::<Loop>(entity).and_then(|l| loop_shell(model, l))),
+        EntityKind::Edge => typed::<Edge>(entity).into_iter().for_each(|e| edge_shells(model, e, out)),
         EntityKind::Vertex => {
-            let edges = typed::<Vertex>(entity).map(|v| vertex_edges(model, v)).unwrap_or_default();
-            edges.into_iter().flat_map(|e| edge_shells(model, e)).collect()
+            let vertex = typed::<Vertex>(entity);
+            let edges = edges.of(|edges| vertex.into_iter().for_each(|v| vertex_edges(model, v, edges)));
+            for &e in edges {
+                edge_shells(model, e, out);
+            }
         }
-        _ => BTreeSet::new(),
-    }
+        _ => {}
+    })
 }
 
 /// Adds the vertices, edges, faces and loops whose shells may change with `entity`, in `model`.
@@ -119,10 +132,11 @@ pub(crate) fn genus(touched: &Touched<'_>, out: &mut Vec<Report>) {
         touched.models().into_iter().for_each(|m| counted(m, entity, &mut entities));
     }
     let mut change: BTreeMap<Id<Shell>, i64> = BTreeMap::new();
+    let mut space = Shells::default();
     for entity in entities {
         let w = weight(entity.kind);
         for (model, sign) in [(touched.base, -1), (touched.next, 1)] {
-            for shell in shells_of(model, entity) {
+            for &shell in shells_of(model, entity, &mut space) {
                 let c = change.entry(shell).or_default();
                 *c = c.saturating_add(w.saturating_mul(sign));
             }
