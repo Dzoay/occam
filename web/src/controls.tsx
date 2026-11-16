@@ -3,11 +3,14 @@
 
 import type { KernelReport } from "./protocol.ts";
 import type { Report } from "./report.ts";
-import { failure, highlight, notice, refusals, refusedSelection, selection, status, watched } from "./state.ts";
+import { failure, highlight, meshShown, notice, refusals, refusedSelection, selection, status, watched }
+  from "./state.ts";
 
 export interface Actions {
   fit(): void;
   centreOnSelection(): void;
+  /** Draws each face's triangle edges over its shading, or stops. */
+  showMesh(on: boolean): void;
 }
 
 function megabytes(bytes: number): string {
@@ -24,6 +27,20 @@ function Status() {
   );
 }
 
+/** The "Show mesh" toggle, off at first: each face's triangle edges over its shading, for display alone. */
+function ShowMesh({ actions }: { actions: Actions }) {
+  return (
+    <label class="toggle" title="Draw each face's triangle edges over its shading">
+      <input
+        type="checkbox"
+        checked={meshShown.value}
+        onChange={(event) => actions.showMesh(event.currentTarget.checked)}
+      />
+      Show mesh
+    </label>
+  );
+}
+
 function Controls({ actions }: { actions: Actions }) {
   return (
     <div class="controls" role="toolbar" aria-label="View">
@@ -36,6 +53,7 @@ function Controls({ actions }: { actions: Actions }) {
       >
         Centre
       </button>
+      <ShowMesh actions={actions} />
       <Status />
     </div>
   );
