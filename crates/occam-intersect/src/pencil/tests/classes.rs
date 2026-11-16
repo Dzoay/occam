@@ -4,6 +4,8 @@
 //! plane that touches the cone along a ruling. Then a cross-check on P5's pairs: where the pencil has a multiple root
 //! of rank three or two with real crossings, the touches found on the rulings agree.
 
+use std::f64::consts::TAU;
+
 use occam_geom::Curve;
 use occam_math::{atan2, sin_cos};
 
@@ -106,12 +108,7 @@ fn the_touches_on_the_rulings_agree_with_the_multiple_roots_where_those_are_real
 }
 
 #[test]
-fn a_ruling_and_a_cubic_and_a_tangency_along_a_conic_are_classified_and_reported() {
-    let (sa, ca) = sin_cos(0.4);
-    let (g, across) = (v(sa, 0.0, ca), v(0.0, 1.0, 0.0));
-    // A cylinder whose ruling through the cone's apex is the cone's ruling, but turned off its tangent plane.
-    let tube = cylinder(across * 0.5, g, 0.5);
-    assert_eq!(class(tube.as_ref(), cone(O, Z, 0.4).as_ref()), Class::Other("a ruling and a cubic"));
+fn a_tangency_along_a_conic_is_classified_and_reported() {
     let inscribed = (sphere(O, 1.0), cylinder(O, Z, 1.0));
     assert_eq!(class(inscribed.0.as_ref(), inscribed.1.as_ref()), Class::Other("surfaces tangent along a conic"));
 }
@@ -207,9 +204,15 @@ fn a_nodal_quartic_read_a_half_turn_on_is_the_same_member_and_the_same_curve() {
         let Ok(Class::Node { phi, at, .. }) = super::super::classify(&pair, &mut Decisions::new(tol())) else {
             panic!("not a node")
         };
-        let [one, other] = [phi, phi + std::f64::consts::PI].map(|turn| super::super::nodal::node(&pair, at, turn));
-        let (Ok(one), Ok(other)) = (one, other) else { panic!("a node read a half turn on is refused") };
-        let (Some(one), Some(other)) = (one.curve, other.curve) else { continue };
+        let [one, other] = [phi, phi + std::f64::consts::PI].map(|turn| {
+            let node = super::super::nodal::node(&pair, at, turn, &mut Decisions::new(tol())).unwrap();
+            (node.fan.is_some(), node.fan.as_ref().and_then(|f| f.spline(&pair, (node.start, node.start + TAU))))
+        });
+        assert_eq!(one.0, other.0, "a node read a half turn on has a curve, or has none");
+        let (Some(one), Some(other)) = (one.1, other.1) else {
+            assert!(!one.0, "a nodal quartic with no B-spline");
+            continue;
+        };
         let range = Curve::range(&one);
         for i in 0..=32 {
             let p = one.point(range.lo + (range.hi - range.lo) * f64::from(i) / 32.0).to_vec3();

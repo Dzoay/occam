@@ -43,7 +43,9 @@ on three families before it freezes (L21).
 `intersection` adds a **loop of a smooth quartic**, `Quartic`, where two quadrics meet: on the rulings of a cylinder or
 a cone, `v = (−β ± √Δ) / α`, its two signs joined smoothly by an angle between two roots of `Δ`, or one sign round a
 whole turn where `Δ` has none. It is exact and periodic, with rates to any order from Taylor series of the same form,
-and its box comes from the form in intervals. It has no rational form, so `to_bspline` gives none.
+and its box comes from the form in intervals. It has no rational form, so `to_bspline` gives none. Where `α` vanishes,
+as where the loop reaches infinity, the sign that passes it is read as `−γ / (β ± √Δ)`, the same number without the
+cancellation.
 
 ## Splines in lanes
 

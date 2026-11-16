@@ -14,25 +14,31 @@ use occam_units::{Affine, Angle, Direction, Length, Placement, Tolerance};
 
 use super::classes::{circumscribing, cusp};
 use super::degenerate::{equal_crossing, shared_apex, tangent_along_a_ruling, viviani};
-use super::{Case, Class, Seeded, alone, check, class};
+use super::{Case, Class, Seeded, alone, check, class, extent};
 use crate::closed::tests::{O, Z, at_scale, cylinder, sphere, v};
 use crate::{Budget, Methods, Pencil, Section};
 
 /// The scales a part is made at: radii of a thousandth of a millimetre to a hundred metres.
-const SCALES: [f64; 4] = [1e-3, 1.0, 1e3, 1e5];
+pub(super) const SCALES: [f64; 4] = [1e-3, 1.0, 1e3, 1e5];
+
+/// `surface` scaled by `k` about the world's origin.
+pub(super) fn grown(surface: &Arc<dyn Surface>, k: f64) -> Arc<dyn Surface> {
+    surface.moved(&Affine::similarity(Placement::identity(), k).unwrap()).unwrap().0
+}
 
 /// `case` with both its surfaces scaled by `k` about the world's origin.
 fn scaled(case: Case, k: f64) -> Case {
-    let map = Affine::similarity(Placement::identity(), k).unwrap();
-    let grow = |s: &Arc<dyn Surface>| s.moved(&map).unwrap().0;
-    Case { a: grow(&case.a), b: grow(&case.b), ..case }
+    Case { a: grown(&case.a, k), b: grown(&case.b, k), ..case }
 }
 
 /// What a class is, by name.
-fn kind(class: &Class) -> &'static str {
+pub(super) fn kind(class: &Class) -> &'static str {
     match class {
         Class::Smooth => "smooth",
+        Class::Reaching => "reaching",
         Class::Node { .. } => "node",
+        Class::AtInfinity => "node at infinity",
+        Class::RulingAndCubic => "ruling and cubic",
         Class::Split { .. } => "split",
         Class::Lines => "lines",
         Class::Conjugate { .. } => "conjugate",
@@ -112,7 +118,7 @@ fn nudged(k: f64, band: f64) -> Section {
     let a: Arc<dyn Surface> = Arc::new(Cylinder::placed(&Placement::identity(), mm(small)).unwrap());
     let b: Arc<dyn Surface> = Arc::new(Cylinder::placed(&Placement::identity().then(&across), mm(large)).unwrap());
     let tol = Tolerance::new(mm(band * (large - small)), Angle::from_radians(1e-12)).unwrap();
-    Methods::new(vec![Box::new(Pencil)]).section(a.as_ref(), b.as_ref(), tol, Budget { steps: 4 })
+    Methods::new(vec![Box::new(Pencil::within(extent()))]).section(a.as_ref(), b.as_ref(), tol, Budget { steps: 4 })
 }
 
 /// 2⁻⁴⁰.
