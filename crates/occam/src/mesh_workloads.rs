@@ -133,16 +133,20 @@ impl PerfParts {
     ///
     /// What [`synthetic`] refuses, which it does not for these parts.
     pub fn new() -> Result<Self, Vec<Report>> {
-        let model = synthetic(&Exec::serial(), PERF_TARGET, P9_SEED)?;
-        let meshed = perf_mesh(&Exec::serial(), &model).map_err(|report| vec![report])?;
+        Self::of(synthetic(&Exec::serial(), PERF_TARGET, P9_SEED)?).map_err(|report| vec![report])
+    }
+
+    /// `model`, meshed on one thread to make the picker.
+    fn of(model: Snapshot) -> Result<Self, Report> {
+        let meshed = perf_mesh(&Exec::serial(), &model)?;
         Ok(Self { picker: Picker::new(&meshed), rays: pick_rays(&meshed), model })
     }
 
-    /// The parts meshed whole on one thread, as [`perf_mesh`]: the mesh's digest, or 0 for a mesh not whole.
+    /// The parts meshed whole on one thread, as [`perf_mesh`]: the mesh's digest, which holds what it refused and
+    /// left open too.
     #[must_use]
     pub fn mesh(&self) -> u64 {
-        let meshed = perf_mesh(&Exec::serial(), &self.model);
-        meshed.ok().filter(|m| m.refused.is_empty() && m.open.is_empty()).map_or(0, |m| m.digest())
+        perf_mesh(&Exec::serial(), &self.model).map_or(0, |meshed| meshed.digest())
     }
 
     /// Each ray picked with edges within a hundredth of a millimetre: a digest of what each hit and how far along.

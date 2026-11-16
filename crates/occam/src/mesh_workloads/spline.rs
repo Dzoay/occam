@@ -6,7 +6,7 @@
 //!
 //! A panel's hole is a circle in its top's parameters. The kernel has no curve that is a surface's image of another,
 //! so the hole's edge is a cubic B-spline through the top at [`HOLE_POINTS`] angles round the circle, as an imported
-//! model's would be, and it records how far it strays from the top between them.
+//! model's would be, and the commit measures how far it strays from the top between them.
 #![expect(
     clippy::arithmetic_side_effects,
     reason = "indices into a panel's 7 by 7 poles and a quilt's lattice of at most 36 by 36"
@@ -115,21 +115,13 @@ fn on_hole(top: &dyn Surface, angle: f64) -> Point<World> {
     top.point(UvPoint::new(u + radius * cos, v + radius * sin))
 }
 
-/// The hole's edge fitted through `top` at [`HOLE_POINTS`] angles, its parameter the angle, and how far it strays
-/// from the top half way between them.
-fn hole_edge(top: &dyn Surface) -> Result<(BsplineCurve, f64), Report> {
+/// The hole's edge fitted through `top` at [`HOLE_POINTS`] angles, its parameter the angle. How far it strays from the
+/// top between them, the commit measures.
+fn hole_edge(top: &dyn Surface) -> Result<BsplineCurve, Report> {
     let step = TAU / f64::from(HOLE_POINTS);
     let angles: Vec<f64> = (0..=HOLE_POINTS).map(|k| step * f64::from(k)).collect();
     let points: Vec<Point<World>> = angles.iter().map(|&angle| on_hole(top, angle)).collect();
-    let form = interpolate(3, &angles, &points)?;
-    let fitted = SplineCurve::new(&form)?;
-    let mut strays = 0.0;
-    for &angle in angles.iter().skip(1) {
-        let half = angle - 0.5 * step;
-        let off = (Curve::point(&fitted, half).to_vec3() - on_hole(top, half).to_vec3()).norm();
-        strays = if off > strays { off } else { strays };
-    }
-    Ok((form, strays))
+    interpolate(3, &angles, &points)
 }
 
 /// The panel's twelve points: the top's corners, the bottom's, and where the hole's edge begins and is half way round,
@@ -154,14 +146,14 @@ const HOLE_ENDS: [(usize, usize); 4] = [(8, 9), (9, 8), (10, 11), (11, 10)];
 /// The plumb line whose ends are `ends`, `height` long.
 fn plumb_piece(points: &[Point<World>; 12], ends: (usize, usize), height: f64) -> Result<Piece, Report> {
     let top = points.get(ends.0).copied().ok_or_else(missing)?;
-    Ok(Piece { curve: plumb(top), range: (0.0, height), ends, deviation: 0.0 })
+    Ok(Piece { curve: plumb(top), range: (0.0, height), ends })
 }
 
 /// The panel's eighteen edges: the top's four sides, the bottom's, the four corners' plumb lines, the hole's halves at
 /// the top and at the bottom, and its two plumb lines.
 fn panel_edges(
     sides: &[BsplineCurve; 4],
-    (hole, strays): (&BsplineCurve, f64),
+    hole: &BsplineCurve,
     points: &[Point<World>; 12],
     height: f64,
 ) -> Result<Vec<Piece>, Report> {
@@ -169,7 +161,7 @@ fn panel_edges(
     let forms: Vec<BsplineCurve> = sides.iter().cloned().chain(lowered_sides).collect();
     let mut edges = Vec::new();
     for (form, &ends) in forms.iter().zip(&SIDE_ENDS) {
-        edges.push(Piece { curve: curve(form)?, range: (0.0, 1.0), ends, deviation: 0.0 });
+        edges.push(Piece { curve: curve(form)?, range: (0.0, 1.0), ends });
     }
     for &ends in PLUMB_ENDS.iter().take(4) {
         edges.push(plumb_piece(points, ends, height)?);
@@ -177,7 +169,7 @@ fn panel_edges(
     let lower = lowered_curve(hole, height);
     let halves = [(hole, (0.0, PI)), (hole, (PI, TAU)), (&lower, (0.0, PI)), (&lower, (PI, TAU))];
     for ((form, range), &ends) in halves.into_iter().zip(&HOLE_ENDS) {
-        edges.push(Piece { curve: curve(form)?, range, ends, deviation: strays });
+        edges.push(Piece { curve: curve(form)?, range, ends });
     }
     for &ends in PLUMB_ENDS.iter().skip(4) {
         edges.push(plumb_piece(points, ends, height)?);
@@ -252,9 +244,9 @@ pub(crate) fn panel(frame: &Frame, size: (f64, f64, f64), phase: f64) -> Result<
         panel_curve(&poles, (0..n).map(|i| last * n + i)),
         panel_curve(&poles, (0..n).map(|j| j * n)),
     ];
-    let (hole, strays) = hole_edge(&top)?;
+    let hole = hole_edge(&top)?;
     let points = panel_points(&poles, [on_hole(&top, 0.0), on_hole(&top, PI)], height)?;
-    let edges = panel_edges(&sides, (&hole, strays), &points, height)?;
+    let edges = panel_edges(&sides, &hole, &points, height)?;
     let faces = panel_faces(Arc::new(top), bottom, &sides, &hole, height)?;
     Ok(Solid { points: points.to_vec(), edges, faces })
 }
@@ -339,18 +331,8 @@ pub(crate) fn quilt(frame: &Frame, across: (u32, u32), radius: f64, degree: u32,
         for i in 0..nu {
             let along = quilt_curve(&lattice, d, |k| (d * i + k, d * j))?;
             let round = quilt_curve(&lattice, d, |k| (d * i, d * j + k))?;
-            solid.edges.push(Piece {
-                curve: along,
-                range: (0.0, 1.0),
-                ends: (vertex(i, j), vertex(i + 1, j)),
-                deviation: 0.0,
-            });
-            solid.edges.push(Piece {
-                curve: round,
-                range: (0.0, 1.0),
-                ends: (vertex(i, j), vertex(i, j + 1)),
-                deviation: 0.0,
-            });
+            solid.edges.push(Piece { curve: along, range: (0.0, 1.0), ends: (vertex(i, j), vertex(i + 1, j)) });
+            solid.edges.push(Piece { curve: round, range: (0.0, 1.0), ends: (vertex(i, j), vertex(i, j + 1)) });
         }
     }
     for j in 0..nv {

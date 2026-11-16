@@ -68,6 +68,23 @@ fn outward(surface: &dyn Surface, uv: UvPoint, reversed: bool) -> Vec3 {
     if reversed { normal * -1.0 } else { normal }
 }
 
+/// Where a triangle's turn is read, in its face's parameters: its corners, the middles of its sides and its middle.
+fn samples([one, two, three]: [UvPoint; 3]) -> [UvPoint; 7] {
+    let mid = |s: UvPoint, t: UvPoint| UvPoint::new(f64::midpoint(s.u(), t.u()), f64::midpoint(s.v(), t.v()));
+    let centre = UvPoint::new((one.u() + two.u() + three.u()) / 3.0, (one.v() + two.v() + three.v()) / 3.0);
+    [one, two, three, mid(one, two), mid(two, three), mid(three, one), centre]
+}
+
+/// A triangle's angle at each corner, in radians.
+fn angles([a, b, c]: [Vec3; 3]) -> [f64; 3] {
+    [between(b - a, c - a), between(c - b, a - b), between(a - c, b - c)]
+}
+
+/// `total` over `count`, or 0 for none.
+fn mean(total: f64, count: usize) -> f64 {
+    if count > 0 { total / f64::from(u32::try_from(count).unwrap_or(u32::MAX)) } else { 0.0 }
+}
+
 /// The triangle `corners`, at `uvs` on `surface`, measured.
 fn measured(surface: &dyn Surface, reversed: bool, corners: [Point<World>; 3], uvs: [UvPoint; 3]) -> Triangle {
     let [a, b, c] = corners.map(Point::to_vec3);
@@ -80,13 +97,9 @@ fn measured(surface: &dyn Surface, reversed: bool, corners: [Point<World>; 3], u
         sides: Vec::new(),
         capped: false,
     };
-    let [one, two, three] = uvs;
-    let mid = |s: UvPoint, t: UvPoint| UvPoint::new(f64::midpoint(s.u(), t.u()), f64::midpoint(s.v(), t.v()));
-    let centre = UvPoint::new((one.u() + two.u() + three.u()) / 3.0, (one.v() + two.v() + three.v()) / 3.0);
-    let samples = [one, two, three, mid(one, two), mid(two, three), mid(three, one), centre];
-    let turn = samples.iter().map(|&uv| between(normal, outward(surface, uv, reversed))).fold(0.0, f64::max_finite);
-    let angles = [between(b - a, c - a), between(c - b, a - b), between(a - c, b - c)];
-    let smallest = angles.into_iter().fold(PI, f64::min_finite) * 180.0 / PI;
+    let turn =
+        samples(uvs).iter().map(|&uv| between(normal, outward(surface, uv, reversed))).fold(0.0, f64::max_finite);
+    let smallest = angles([a, b, c]).into_iter().fold(PI, f64::min_finite) * 180.0 / PI;
     Triangle { deviation: deviation(&mesh, surface), turn, area: 0.5 * normal.norm(), smallest }
 }
 
@@ -160,8 +173,7 @@ pub fn quality(exec: &Exec, model: &Arc<Snapshot>, mesh: &Arc<Mesh>) -> Vec<Qual
     }
     let mut table: Vec<Quality> = core::iter::once(all).chain(families.into_values()).collect();
     for row in &mut table {
-        let count = f64::from(u32::try_from(row.triangles).unwrap_or(u32::MAX));
-        row.mean_smallest = if row.triangles > 0 { row.mean_smallest / count } else { 0.0 };
+        row.mean_smallest = mean(row.mean_smallest, row.triangles);
     }
     table
 }
@@ -188,6 +200,80 @@ mod tests {
         assert_eq!(measured(&plane, true, [a.0, b.0, c.0], [a.1, b.1, c.1]).turn, PI);
         let sliver = measured(&plane, false, [a.0, b.0, b.0], [a.1, b.1, b.1]);
         assert_eq!((sliver.turn, sliver.area, sliver.smallest), (PI, 0.0, 0.0));
+    }
+
+    fn uv(u: f64, v: f64) -> UvPoint {
+        UvPoint::new(u, v)
+    }
+
+    #[test]
+    fn a_triangle_is_read_at_its_corners_the_middles_of_its_sides_and_its_middle() {
+        let read = samples([uv(0.0, 0.0), uv(6.0, 0.0), uv(0.0, 3.0)]).map(|p| (p.u(), p.v()));
+        assert_eq!(read, [(0.0, 0.0), (6.0, 0.0), (0.0, 3.0), (3.0, 0.0), (3.0, 1.5), (0.0, 1.5), (2.0, 1.0)]);
+        let off = samples([uv(1.0, 2.0), uv(7.0, 5.0), uv(4.0, 11.0)]).map(|p| (p.u(), p.v()));
+        assert_eq!(off[3..], [(4.0, 3.5), (5.5, 8.0), (2.5, 6.5), (4.0, 6.0)]);
+    }
+
+    #[test]
+    fn a_three_four_five_triangle_away_from_the_origin_has_its_three_angles_at_its_corners() {
+        let at = |x: f64, y: f64| Vec3::new(x, y, 2.0);
+        let found = angles([at(1.0, 1.0), at(4.0, 1.0), at(1.0, 5.0)]).map(|a| a * 180.0 / PI);
+        let want = [90.0, 53.130_102_354_155_98, 36.869_897_645_844_02];
+        for (got, want) in found.iter().zip(want) {
+            assert!((got - want).abs() < 1e-9, "{found:?}");
+        }
+    }
+
+    #[test]
+    fn a_mean_of_nothing_is_nought() {
+        assert_eq!(mean(0.0, 0), 0.0);
+        assert_eq!(mean(6.0, 3), 2.0);
+    }
+
+    #[test]
+    fn the_higher_and_lower_of_two_zeros_keep_the_first() {
+        assert!(0.0_f64.max_finite(-0.0).is_sign_positive());
+        assert!((-0.0_f64).min_finite(0.0).is_sign_negative());
+        assert_eq!(1.0_f64.max_finite(2.0), 2.0);
+        assert_eq!(1.0_f64.min_finite(2.0), 1.0);
+    }
+
+    fn triangle(deviation: f64, turn: f64, area: f64, smallest: f64) -> Triangle {
+        Triangle { deviation, turn, area, smallest }
+    }
+
+    #[test]
+    fn a_face_s_triangles_count_against_the_limits_only_past_them() {
+        // At a deflection of 0.1 and an angle of 0.35: two out by twice and four times the deflection; one exactly at
+        // each limit and at 20 degrees; and three past the angle, smallest angles 0.5, 1 and 0.2 degrees, two of them
+        // slivers.
+        let triangles = [
+            triangle(0.2, 0.1, 2.0, 45.0),
+            triangle(0.4, 0.2, 0.0625, 30.0),
+            triangle(0.1, 0.35, 1.0, 20.0),
+            triangle(0.0, 3.0, 0.5, 0.5),
+            triangle(0.05, 0.5, 0.25, 1.0),
+            triangle(0.01, 0.4, 0.125, 0.2),
+        ];
+        let mut got = Quality { smallest: 180.0, ..Quality::default() };
+        gather(&mut got, &triangles, (0.1, 0.35));
+        let want = Quality {
+            family: String::new(),
+            faces: 1,
+            triangles: 6,
+            deviation: 4.0,
+            over_deflection: 2,
+            turn: 3.0,
+            over_angle: 3,
+            over_angle_slivers: 2,
+            area: 3.9375,
+            area_over_angle: 0.875,
+            smallest: 0.2,
+            mean_smallest: 0.0,
+            under_20: 3,
+        };
+        assert!((got.mean_smallest - 96.7).abs() < 1e-12, "{got:?}");
+        assert_eq!(Quality { mean_smallest: 0.0, ..got }, want);
     }
 
     #[test]

@@ -14,13 +14,12 @@ use occam_topo::{
 };
 use occam_units::{Direction, Length, Point, UvPoint, Vec3, World};
 
-/// An edge: a piece of `curve` over `range`, from point `ends.0` to point `ends.1`, straying `deviation` millimetres
-/// from the faces that use it.
+/// An edge: a piece of `curve` over `range`, from point `ends.0` to point `ends.1`. How far it strays from its faces
+/// is left to the commit, which measures it.
 pub(crate) struct Piece {
     pub curve: Arc<dyn Curve>,
     pub range: (f64, f64),
     pub ends: (usize, usize),
-    pub deviation: f64,
 }
 
 /// A use of edge `edge`, against it if `reversed`, with its curve in the face's parameters.
@@ -181,7 +180,7 @@ fn write_edges(
             (after(star(a)?, Around { edge, end: End::Start })?, after(star(b)?, Around { edge, end: End::Finish })?);
         let (first_use, role) = (ring.first().copied(), EdgeRole::Ordinary);
         let ends = (at(vertices, a)?, at(vertices, b)?);
-        let deviation = Length::from_millimetres(piece.deviation);
+        let deviation = Length::from_millimetres(0.0);
         edit.set(edge, EdgeRecord { curve, range: piece.range, ends, around, first_use, role, deviation, born })?;
     }
     for ((&point, &vertex), star) in solid.points.iter().zip(vertices).zip(&stars) {
