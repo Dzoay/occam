@@ -1,5 +1,7 @@
 # cargo-mutants, run by `gates mutants` (L13, L14). A mutant of changed code that no test catches fails the gate unless
-# it is excluded here, and every exclusion says why no test can catch it.
+# it is excluded here, and every exclusion says why no test can catch it. The gate, and `just preflight`, also refuse an
+# `exclude_re` entry that excludes no mutant of the workspace, as one by line does once an edit moves its mutant: re-point
+# it to the mutant's line, after reading that the code there is still equivalent, or drop it if the code is gone.
 
 gitignore = true
 # A mutant must be caught by any workspace test. `gates mutants` tests occam-xtask's own mutants on its own tests alone.

@@ -1,6 +1,7 @@
 //! The repository and the programs around it. Every input a gate's pure check is given arrives through here. Process
 //! glue only: the gates' own runs exercise it, and `.cargo/mutants.toml` excludes it.
 
+use std::num::NonZero;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs, thread};
@@ -187,6 +188,43 @@ impl Repo {
         }
         let (ok, listing, errors) = self.captured(&mut command, env!("CARGO"))?;
         if ok { Ok(listing) } else { Err(failed(errors)) }
+    }
+
+    /// The workspace's mutants as `cargo mutants --list` names them, one listing under each of `configs`, the text of a
+    /// configuration each. They are written to `mutants.out/exclusions` at the root, which git ignores, and listed side
+    /// by side, as many at once as the machine has threads.
+    pub fn mutants_listings(&self, configs: &[String]) -> Result<Vec<String>, Finding> {
+        let dir = self.root.join("mutants.out").join("exclusions");
+        fs::create_dir_all(&dir).map_err(|e| io(&dir.display().to_string(), &e))?;
+        let jobs: Vec<(PathBuf, &String)> =
+            configs.iter().enumerate().map(|(k, config)| (dir.join(format!("{k}.toml")), config)).collect();
+        let width = thread::available_parallelism().map_or(1, NonZero::get);
+        let mut listings = Vec::with_capacity(jobs.len());
+        for chunk in jobs.chunks(width) {
+            let listed: Vec<Result<String, Finding>> = thread::scope(|scope| {
+                let running: Vec<_> =
+                    chunk.iter().map(|(file, config)| scope.spawn(|| self.mutants_listing(file, config))).collect();
+                let lost = || Err(Finding::new("repo.thread", "", "a listing's thread panicked", "run it again"));
+                running.into_iter().map(|job| job.join().unwrap_or_else(|_| lost())).collect()
+            });
+            for listing in listed {
+                listings.push(listing?);
+            }
+        }
+        Ok(listings)
+    }
+
+    /// `cargo mutants --list` of the whole workspace under the configuration `config`, written to `file` first.
+    fn mutants_listing(&self, file: &Path, config: &str) -> Result<String, Finding> {
+        fs::write(file, config).map_err(|e| io(&file.display().to_string(), &e))?;
+        let mut command = Command::new(env!("CARGO"));
+        command.args(["mutants", "--list", "--workspace", "--config"]).arg(file);
+        let (ok, listing, errors) = self.captured(&mut command, "cargo-mutants")?;
+        if ok {
+            return Ok(listing);
+        }
+        let remedy = format!("run `cargo mutants --list --config {}` and fix what it reports", file.display());
+        Err(Finding::new("mutants.listing-failed", ".cargo/mutants.toml", errors, remedy))
     }
 
     /// One cargo-mutants pass over `diff`. What it writes stays in `mutants.out/<pass>` at the root, which git ignores,
