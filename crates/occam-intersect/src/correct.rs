@@ -138,6 +138,12 @@ impl<'s> Pair<'s> {
         Here { at, p, q }
     }
 
+    /// `station`, in the order the surfaces were given, in the trace's own order.
+    pub(crate) fn here(&self, station: &Station) -> Here {
+        let (p, q) = if self.swapped { (station.on_b, station.on_a) } else { (station.on_a, station.on_b) };
+        Here { at: station.at.to_vec3(), p, q }
+    }
+
     /// A station in the order the surfaces were given.
     pub(crate) fn station(&self, here: &Here) -> Station {
         let (on_a, on_b) = if self.swapped { (here.q, here.p) } else { (here.p, here.q) };

@@ -402,19 +402,19 @@ exclude_re = [
     # The trace's normal where a surface's derivatives lose a direction, by line. The declared line it lies on is asked
     # for only there, which is only on such a line, at its own parameter, put there exactly by the march: the parameter
     # is the line's to the bit, and any tolerance at or above nought finds the same line.
-    "occam-intersect/src/correct\\.rs:158:40: replace \\* with (\\+|/) in Pair<'s>::normal_of$",
-    "occam-intersect/src/correct\\.rs:158:47: replace \\+ with \\* in Pair<'s>::normal_of$",
+    "occam-intersect/src/correct\\.rs:164:40: replace \\* with (\\+|/) in Pair<'s>::normal_of$",
+    "occam-intersect/src/correct\\.rs:164:47: replace \\+ with \\* in Pair<'s>::normal_of$",
     # The trace's foot, by line. Its damping, 1e-12 of the rates' size, keeps the normal equations solvable where a rate
     # vanishes, as at a pole, where the right-hand side's entry vanishes with it, so that parameter's step is nought
     # whatever the damping's sign; elsewhere it moves a step by 1e-12 of itself, which the next step takes back.
-    "occam-intersect/src/correct\\.rs:307:43: replace \\+ with - in foot$",
-    "occam-intersect/src/correct\\.rs:308:(35|83): replace \\+ with - in foot$",
+    "occam-intersect/src/correct\\.rs:313:43: replace \\+ with - in foot$",
+    "occam-intersect/src/correct\\.rs:314:(35|83): replace \\+ with - in foot$",
     # Its stop, by line, which only spares Gauss-Newton steps once one moves the point by less than rounding: stopping
     # at another such step, or after all sixteen, gives the same foot to rounding. For the analytic families the two
     # rates are square to each other, so the step's two parts make the same length added or taken away.
-    "occam-intersect/src/correct\\.rs:311:21: replace \\+ with - in foot$",
-    "occam-intersect/src/correct\\.rs:311:48: replace \\* with / in foot$",
-    "occam-intersect/src/correct\\.rs:311:55: replace \\+ with (-|\\*) in foot$",
+    "occam-intersect/src/correct\\.rs:317:21: replace \\+ with - in foot$",
+    "occam-intersect/src/correct\\.rs:317:48: replace \\* with / in foot$",
+    "occam-intersect/src/correct\\.rs:317:55: replace \\+ with (-|\\*) in foot$",
     # The trace's edges, by line. A range is finite at both its ends or at neither (no family has one with one end
     # finite: domain.rs), so one end's being infinite is both's. A range's ends are never equal, so which is above the
     # other is never a tie. A range that comes round or has no end gives no breach in `against`, so taking it for one
@@ -481,23 +481,24 @@ exclude_re = [
     # middle alone (occam-math's interval subtraction of exact numbers), so two gaps with one middle are one interval.
     "occam-intersect/src/pieces\\.rs:50:16: replace > with >= in spread$",
     "occam-intersect/src/traverse\\.rs:112:61: replace > with >= in apart$",
-    # A chord's foot, by line. A chord of no length gives 0 / 0, not a number, which the clamp below takes to the
-    # start, as the other branch does. At either end of the clamp both branches give the same parameter, 1, or a zero
-    # of either sign, which moves the foot at most by the sign of a zero, and no distance sees that.
-    "occam-intersect/src/tube\\.rs:35:27: replace > with >= in Chord::foot$",
-    "occam-intersect/src/tube\\.rs:(36:22|38:21): replace > with >= in Chord::foot$",
+    # How far along a chord its foot is, by line. A chord of no length gives 0 / 0, not a number, which the clamp below
+    # takes to the start, as the other branch does. At either end of the clamp both branches give the same parameter,
+    # 1, or a zero of either sign, which moves the foot at most by the sign of a zero, and no distance sees that, nor
+    # the cubic through the chord's stations, whose terms are the same at either.
+    "occam-intersect/src/tube\\.rs:53:27: replace > with >= in Chord::along$",
+    "occam-intersect/src/tube\\.rs:(54:14|56:21): replace > with >= in Chord::along$",
     # The tube, by line. A chord's two ends at one coordinate give the same cubes in either order. Where the bends
     # either side of a chord are equal, or its sag is the tracer's, keeping either gives the same number. A closed
     # trace of one station has one chord from it to itself at the tracer's sag either way, which is the chord its lone
     # station is given otherwise; an open trace's extra span has no station after it, and is dropped.
-    "occam-intersect/src/tube\\.rs:95:18: replace < with <= in Tube::file$",
-    "occam-intersect/src/tube\\.rs:(142:47|143:16): replace > with >= in Tube::radius$",
-    "occam-intersect/src/tube\\.rs:153:31: replace && with \\|\\| in Tube::add$",
-    "occam-intersect/src/tube\\.rs:153:47: replace > with >= in Tube::add$",
+    "occam-intersect/src/tube\\.rs:117:18: replace < with <= in Tube::file$",
+    "occam-intersect/src/tube\\.rs:(164:47|165:16): replace > with >= in Tube::radius$",
+    "occam-intersect/src/tube\\.rs:175:31: replace && with \\|\\| in Tube::add$",
+    "occam-intersect/src/tube\\.rs:175:47: replace > with >= in Tube::add$",
     # The hybrid, by line. A trace of one station gives one piece of one station, which the fit returns from at once
     # with nothing, so fitting it or not is the same. A box's reach either side of its middle: where the two are equal,
     # keeping either is the same number.
-    "occam-intersect/src/hybrid\\.rs:349:57: replace > with >= in finish$",
+    "occam-intersect/src/hybrid\\.rs:357:57: replace > with >= in finish$",
     "occam-intersect/src/traverse\\.rs:127:31: replace > with >= in clear$",
     # What the tolerance cannot tell apart (intersection.resolution), by line. Ties that give the same number or the same
     # answer either way: the larger of a leaf's two sizes, of a station's two half steps, of two bounds merged, and of an
@@ -506,7 +507,7 @@ exclude_re = [
     # one is turned. The pencil's relative curvature negated has eigenvalues of the same sizes, which are all a bound
     # reads.
     "occam-intersect/src/branch\\.rs:49:(15|26): replace > with >= in crosses$",
-    "occam-intersect/src/hybrid\\.rs:217:27: replace > with >= in against_parts$",
+    "occam-intersect/src/hybrid\\.rs:218:27: replace > with >= in against_parts$",
     "occam-intersect/src/resolution\\.rs:89:24: replace < with <= in Near::sizes$",
     "occam-intersect/src/resolution\\.rs:151:61: replace < with <= in Near::between$",
     "occam-intersect/src/tangency\\.rs:71:22: replace > with >= in twin$",

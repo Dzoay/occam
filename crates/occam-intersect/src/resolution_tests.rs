@@ -174,8 +174,9 @@ const GAPS: [f64; 12] = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1
 
 /// The closed forms, the pencil method and the hybrid, as `booleans` asks them, with P5's longest step, `0.03` of its
 /// scale, and leaves a quarter of it, three times P5's, which the starts of second curves and of near touches make up
-/// for, so that the sweep is quick. The tracer's sag, which sets the tube about a curve found, is below the closest
-/// two curves the band tells apart here, `2 √(2 band / 2)`.
+/// for, so that the sweep is quick. The tracer's sag is below the closest two curves the band tells apart here,
+/// `2 √(2 band / 2)`. The tube about a curve found no longer depends on it, as a point inside it is confirmed on the
+/// curve within the band, and the sweep passes at ten times this sag too.
 fn methods() -> Methods {
     let tracer = Tracer { tol: tol(), sag: mm(1e-5), longest: mm(0.03 * SCALE), steps: 20_000 };
     let hybrid = Hybrid { tracer, leaf: mm(0.25 * SCALE) };
