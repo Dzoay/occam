@@ -39,6 +39,13 @@ impl Work {
         Self { left: budget.steps }
     }
 
+    /// Spends all that is left and gives [`Spent`]: for a method whose work would grow past what it may hold at once,
+    /// which no budget meant for it should reach.
+    pub(crate) const fn exhaust(&mut self) -> Spent {
+        self.left = 0;
+        Spent(())
+    }
+
     /// Spends `steps` of the budget, or, when fewer are left, spends nothing and gives [`Spent`].
     ///
     /// # Errors

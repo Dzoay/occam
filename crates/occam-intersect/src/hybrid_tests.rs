@@ -21,7 +21,7 @@ use occam_units::{
 use crate::decide::Decide;
 use crate::on::On;
 use crate::trace_tests::{BAND, ball, gap, level, mm, moved, nurbs_cylinder, point, tol, tracer, upright};
-use crate::traverse::{DEPTH, held, traverse};
+use crate::traverse::{DEPTH, FRONTIER, Traversal, held, traverse};
 use crate::{Answer, Budget, Contact, Hybrid, Method, Methods, Section, SurfacePair, Tracer, Work, sections};
 
 /// A turn and a shift that align nothing with an axis, as P5 placed every case.
@@ -214,8 +214,8 @@ fn starts(a: &dyn Surface, b: &dyn Surface, method: Hybrid) -> Vec<Vec3> {
     let on = On::Here(a, b);
     let held = held(a, b, tol()).unwrap();
     let mut decide = Decide::new(BAND);
-    let traversal =
-        traverse(on, (held, method.leaf.millimetres()), &mut Work::of(within(25_000)), &mut decide).unwrap();
+    let (mut traversal, mut work) = (Traversal::default(), Work::of(within(25_000)));
+    traverse(on, (held, method.leaf.millimetres(), FRONTIER), &mut work, &mut decide, &mut traversal).unwrap();
     crate::hybrid::starts(on, held, tol(), traversal.leaves, &mut decide)
 }
 

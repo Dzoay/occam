@@ -34,7 +34,7 @@ use crate::on::On;
 use crate::pieces::{Piece, middle};
 use crate::section::{Contact, Section};
 use crate::trace::{End, ROUND, Start, Trace, Tracer, Uncertain, Which};
-use crate::traverse::{Cell, DEPTH, Held, held, traverse};
+use crate::traverse::{Cell, DEPTH, FRONTIER, Held, Traversal, held, traverse};
 use crate::tube::Tube;
 
 /// How far past a leaf's edges, as a part of each side, a point found from it is still its own.
@@ -115,14 +115,11 @@ impl Hybrid {
         let Some(held) = held(a, b, tol) else { return Ok(Answer::Declined) };
         let tracer = Tracer { tol, ..self.tracer };
         let mut decide = Decide::new(tol.band().millimetres());
-        let traversal = traverse(on, (held, self.leaf.millimetres()), work, &mut decide);
-        let traversal = match traversal {
-            Ok(traversal) => traversal,
-            Err(spent) => {
-                section.tally = section.tally.merged(decide.tally);
-                return Err(spent);
-            }
-        };
+        let mut traversal = Traversal::default();
+        if let Err(spent) = traverse(on, (held, self.leaf.millimetres(), FRONTIER), work, &mut decide, &mut traversal) {
+            section.tally = section.tally.merged(decide.tally);
+            return Err(spent);
+        }
         let mut notes = Notes { uncertain: traversal.uncertain, ..Notes::default() };
         notes.unresolved = traversal.unresolved.iter().filter_map(|cell| where_is(on, cell)).collect();
         let leaves = leaves(on, held, tol, traversal.leaves, &mut decide, &mut notes);

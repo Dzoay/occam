@@ -12,6 +12,10 @@
 //! outward and the lengths formed in interval arithmetic, so the rounding margin is in both. A part is kept where any
 //! test cannot be decided, and the decision is given back. A cell still larger than a leaf whose parts can be halved
 //! no further, each [`DEPTH`] times halved or as fine as its numbers go, is unresolved.
+//!
+//! Each cell is paid for from the budget as it is queued, before it is made, and a level holds at most [`FRONTIER`]
+//! cells: a level that would hold more stops the subdivision as spent. So its memory is bounded by the budget and by
+//! that, whatever the pair, and a subdivision that never ends runs out of steps at once.
 
 use std::sync::Arc;
 
@@ -27,6 +31,10 @@ use crate::pieces::Piece;
 use crate::trace::{Uncertain, Which};
 
 pub(crate) use crate::pieces::DEPTH;
+
+/// The most cells the subdivision queues at once, about 60 MB of them. A level that would hold more stops the
+/// subdivision as spent: no budget meant for one pair should reach it, so its memory stays bounded whatever the budget.
+pub(crate) const FRONTIER: usize = 1 << 18;
 
 /// How a pair is subdivided.
 #[derive(Clone, Copy, Debug)]
@@ -60,6 +68,8 @@ pub(crate) struct Traversal {
     pub unresolved: Vec<Cell>,
     /// The decisions the band could not make.
     pub uncertain: Vec<Uncertain>,
+    /// The most cells it queued at once, for the next level.
+    pub widest: usize,
 }
 
 /// Whether every parameter of `surface`'s domain has finite ends.
@@ -201,20 +211,35 @@ fn made(on: On<'_>, jobs: Vec<Job>) -> Vec<Cell> {
     })
 }
 
-/// The subdivision of `on`'s pair, held as `held`, to leaves at most `leaf` across. Each cell tested spends a step of
-/// `work`.
+/// Queues `halves` for the next level, paid for from `work` as they are queued, so that no level holds a cell its budget
+/// has not paid for, nor more than `most`.
 ///
 /// # Errors
 ///
-/// [`Spent`] when `work` cannot pay for the next level.
+/// [`Spent`] when `work` cannot pay for them, or the level would hold more than `most`, which spends what is left.
+fn queue(jobs: &mut Vec<Job>, halves: [Job; 2], work: &mut Work, most: usize) -> Result<(), Spent> {
+    if jobs.len().saturating_add(halves.len()) > most {
+        return Err(work.exhaust());
+    }
+    work.spend(2)?;
+    jobs.extend(halves);
+    Ok(())
+}
+
+/// The subdivision of `on`'s pair, held as `held`, to leaves at most `leaf` across, into `out`. Each cell spends a step
+/// of `work` as it is queued, and a level holds at most `most` cells.
+///
+/// # Errors
+///
+/// [`Spent`] when `work` cannot pay for a cell, or a level would hold more than `most`. `out` keeps what was found.
 pub(crate) fn traverse(
     on: On<'_>,
-    (held, leaf): (Held, f64),
+    (held, leaf, most): (Held, f64, usize),
     work: &mut Work,
     decide: &mut Decide,
-) -> Result<Traversal, Spent> {
+    out: &mut Traversal,
+) -> Result<(), Spent> {
     let (a, b) = on.surfaces();
-    let mut out = Traversal::default();
     let root = |surface: &dyn Surface| Some(Piece::whole(surface, whole(surface)));
     let (mut level, other) = match held {
         Held::Both => (vec![Cell { a: root(a), b: root(b) }], None),
@@ -225,32 +250,34 @@ pub(crate) fn traverse(
             (vec![Cell { a: None, b: root(b) }], bounded(a).then(|| a.bounds(whole(a))))
         }
     };
+    work.spend(1)?;
     for _ in 0..=DEPTH.saturating_mul(2) {
-        work.spend(u32::try_from(level.len()).unwrap_or(u32::MAX))?;
         let mut jobs = Vec::new();
-        for cell in kept(level, held, other.as_ref(), decide, &mut out) {
+        for cell in kept(level, held, other.as_ref(), decide, out) {
             match (small(&cell, leaf), split(&cell)) {
                 (true, _) => out.leaves.push(cell),
-                (false, Some(halves)) => jobs.extend(halves),
+                (false, Some(halves)) => queue(&mut jobs, halves, work, most)?,
                 (false, _) => out.unresolved.push(cell),
             }
         }
+        out.widest = out.widest.max(jobs.len());
         level = made(on, jobs);
         if level.is_empty() {
             break;
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use std::f64::consts::TAU;
 
-    use occam_geom::{Circle, Extrusion};
+    use occam_geom::{Circle, Cylinder, Extrusion};
     use occam_units::{Direction, Length, Point};
 
     use super::*;
+    use crate::methods::Budget;
     use crate::trace_tests::{level, mm, moved, nurbs_cylinder, tol};
 
     fn cube(low: [f64; 3], high: [f64; 3]) -> Bounds {
@@ -330,6 +357,30 @@ mod tests {
         assert!(
             small(&Cell { a: None, b: Some(small_part) }, 1.0) && !small(&Cell { a: Some(large_part), b: None }, 1.0)
         );
+    }
+
+    #[test]
+    fn a_subdivision_without_end_stops_spent_holding_no_more_cells_than_it_paid_for_or_may_hold() {
+        // A rational cylinder on its analytic twin with leaves of nothing: every part meets the twin and none is ever
+        // small, so every cell is halved and each level holds twice the cells of the one before.
+        let (twin, rational) = (Cylinder::placed(&moved([0.0; 3]), mm(2.0)).unwrap(), nurbs_cylinder((0.0, TAU)));
+        let held = held(&twin, &rational, tol()).unwrap();
+        let widest = |steps: u32, most: usize| {
+            let (mut decide, mut out) = (Decide::new(1e-7), Traversal::default());
+            let got = traverse(
+                On::Here(&twin, &rational),
+                (held, 0.0, most),
+                &mut Work::of(Budget { steps }),
+                &mut decide,
+                &mut out,
+            );
+            assert!(got.is_err(), "it ends spent");
+            out.widest
+        };
+        let paid = widest(100, FRONTIER);
+        assert!(paid > 16 && paid <= 100, "no more than the budget pays for: {paid}");
+        let held = widest(100_000, 32);
+        assert!(held > 16 && held <= 32, "no more than it may hold: {held}");
     }
 
     #[test]

@@ -120,7 +120,8 @@ fn keep(mut found: Vec<Found>, sink: &mut Sink<'_>) {
 }
 
 /// The leaves, pairs of pieces whose boxes come within the band of each other, small enough or split as far as they
-/// go, each solved as it is reached and what it finds added to `found`.
+/// go, each solved as it is reached and what it finds added to `found`. Depth first, a pair taken for each two put
+/// back, so the stack holds at most one pair a level, the sink's depth and one more, whatever the budget.
 fn leaves(span: Span, work: &mut Work, sink: &mut Sink<'_>, found: &mut Vec<Found>) -> Result<(), Spent> {
     let (curve, surface, tol) = (sink.curve, sink.surface, sink.tol);
     let first = Cell {
