@@ -37,14 +37,14 @@ fn culprit<T: Copy>(walk: &Walk<T>) -> Option<T> {
 
 /// Checks a list `owner` holds: that it ends, or comes round if `ring`, failing with `broken` naming where it went wrong,
 /// and that each entry `named` it. Gives the entries if the list is sound.
-fn holds<K: Kind>(
+fn holds<'w, K: Kind>(
     out: &mut Vec<Report>,
     owner: EntityRef,
-    walk: &Walk<Id<K>>,
+    walk: &'w Walk<Id<K>>,
     ring: bool,
     broken: Reason,
     named: impl Fn(Id<K>) -> bool,
-) -> Option<Vec<Id<K>>> {
+) -> Option<&'w [Id<K>]> {
     let Some(items) = walk.sound(ring) else {
         let at = culprit(walk).map(Id::entity);
         out.push(failed(broken, &[owner].into_iter().chain(at).collect::<Vec<_>>()));
@@ -53,7 +53,7 @@ fn holds<K: Kind>(
     for &item in items.iter().filter(|&&item| !named(item)) {
         out.push(failed(Reason::ListedElsewhere, &[owner, item.entity()]));
     }
-    Some(items.to_vec())
+    Some(items)
 }
 
 /// Every invariant of one entity that reads its record and its neighbours' records, then those that read their

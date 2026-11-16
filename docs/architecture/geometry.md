@@ -28,7 +28,7 @@ the second, `eval_second`, which a surface swept from it reads in lanes.
 | `highest_derivative` | `None` for every order; a mesh's is 1. An order above it is refused, and its rungs are NaN |
 | `eval_batch(uv, order, out, scratch, level)` | One surface at many points. The caller owns outputs and scratch, so nothing allocates once they have grown. A bit per point in `out`: defined or not |
 | `invert`, `closest` | A foot's parameters; the full closest-point solve, by default the point at `invert`'s parameters. Both report where the solver stopped |
-| `domain`, `bounds(patch)`, `degeneracies` | Each parameter's kind; a conservative box; poles and apexes, declared at construction |
+| `domain`, `bounds(patch)`, `degeneracies` | Each parameter's kind; a conservative box that shrinks with its patch, a B-spline's the hull of the patch's own poles; poles and apexes, declared at construction |
 | `family`, `batch_key`, `content` | For sorting calls and ordering pairs. `content` is the canonical bits, never a pointer |
 | `shape` | The form name and parameters a [description](reports.md) shows |
 | `analytic`, `to_bspline(patch)`, `triangles` | What it can present. Each defaults to nothing, so a new family edits no list. A B-spline is [over a patch](../decisions/2026-11-11-to-bspline-over-a-range.md), never an unbounded one |
@@ -43,7 +43,9 @@ on three families before it freezes (L21).
 `intersection` adds a **loop of a smooth quartic**, `Quartic`, where two quadrics meet: on the rulings of a cylinder or
 a cone, `v = (−β ± √Δ) / α`, its two signs joined smoothly by an angle between two roots of `Δ`, or one sign round a
 whole turn where `Δ` has none. It is exact and periodic, with rates to any order from Taylor series of the same form,
-and its box comes from the form in intervals. It has no rational form, so `to_bspline` gives none.
+and its box comes from the form in intervals. It has no rational form, so `to_bspline` gives none. Where `α` vanishes,
+as where the loop reaches infinity, the sign that passes it is read as `−γ / (β ± √Δ)`, the same number without the
+cancellation.
 
 ## Splines in lanes
 

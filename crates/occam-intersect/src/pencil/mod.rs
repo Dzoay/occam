@@ -14,10 +14,17 @@
 //!   one plane is tangent along it (`split`);
 //! - a determinant that vanishes for every member, two cones with one apex: their common rulings.
 //!
+//! Three classes reach infinity. Where two cones share a ruling direction, the smooth quartic, or the nodal one where
+//! one's apex is on the other, runs to infinity along it. A cylinder along a ruling direction of a cone meets it in a
+//! quartic with its node at infinity, rational, one point on each of the cylinder's rulings (`fan`); and where it passes
+//! the cone's apex, in that ruling and a cubic, one point on each of the cone's rulings. Each is given within the
+//! extent asked, in bounded pieces: the smooth quartic's loops and the rational B-splines of the others.
+//!
 //! Singular points are kept as contacts. A degenerate pencil of any other kind is reported, not fitted.
 
 mod eigen;
 mod emit;
+mod fan;
 mod nodal;
 mod poly;
 mod quadric;
@@ -31,7 +38,7 @@ mod trig;
 use occam_geom::{Analytic, Chart, Surface};
 use occam_math::Side;
 use occam_report::{Code, Fault, NamedValue, Reason, Report};
-use occam_units::{Tolerance, Vec3};
+use occam_units::{Bounds, Tolerance, Vec3};
 
 use self::quadric::{Natural, Quadric, Ruling};
 use self::roots::{Multiple, Singular};
@@ -40,14 +47,37 @@ use crate::decide::{Decisions, Undecided};
 use crate::methods::{Answer, Method, Spent, Work};
 use crate::section::Section;
 
-/// Levin's pencil method, which answers the pairs of spheres, cylinders and cones the closed forms leave.
-pub struct Pencil;
+/// Levin's pencil method, which answers the pairs of spheres, cylinders and cones the closed forms leave. A section
+/// that reaches infinity is given within an extent, a box of the world, as bounded pieces: they hold every point of it
+/// in the box and reach a little past it, and a loop of it that never leaves the box is given whole. A line stays
+/// whole.
+pub struct Pencil {
+    extent: Bounds,
+}
+
+impl Pencil {
+    /// The pencil method, giving a section that reaches infinity within `extent`, such as the box of the faces a
+    /// boolean meets.
+    #[must_use]
+    pub const fn within(extent: Bounds) -> Self {
+        Self { extent }
+    }
+}
 
 /// What a pencil is, as its classification finds it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Class {
     /// Four simple roots: a smooth quartic, in as many loops as it has.
     Smooth,
+    /// Four simple roots, and a ruling of the ruled cone along the other's asymptotic cone: a smooth quartic that
+    /// reaches infinity there.
+    Reaching,
+    /// A double root of rank three whose vertex is at infinity, along the axis of the pair's cylinder: a quartic with its
+    /// node at infinity, one point on each of the cylinder's rulings.
+    AtInfinity,
+    /// A double root of rank three at the pair's cylinder, its vertex at infinity, and one at the pair's cone, its apex
+    /// on the cylinder: the ruling through the apex along the cylinder's axis, and a cubic.
+    RulingAndCubic,
     /// A double or triple root of rank three at `phi`, whose cone has its vertex `at`, in the world, on both surfaces.
     Node { phi: f64, at: Vec3, kind: Singular },
     /// A double root of rank two: two conics, or a ruling and a conic, each a plane's in the pair's frame.
@@ -115,7 +145,6 @@ impl Pair {
         self.quadrics.get(i).copied().unwrap_or(self.quadrics[0])
     }
 
-    #[cfg(test)]
     fn surface(&self, i: usize) -> Natural {
         self.surfaces.get(i).copied().unwrap_or(self.surfaces[0])
     }
@@ -145,12 +174,28 @@ fn cut(pair: &Pair) -> (usize, usize) {
     if rank(&pair.surfaces[1]) < rank(&pair.surfaces[0]) { (1, 0) } else { (0, 1) }
 }
 
-/// A smooth quartic, unless the ruled surface is a cone some of whose rulings run along the other's asymptotic cone,
-/// so that the curve reaches infinity.
-fn smooth(pair: &Pair) -> Class {
-    let Some((_, o, ruling)) = pair.ruled() else { return Class::Other("no ruled member") };
-    let alpha = ruling.along(&pair.quadric(o)).alpha;
-    if alpha.roots().is_empty() { Class::Smooth } else { Class::Other("a quartic that reaches infinity") }
+/// A smooth quartic, which reaches infinity where the ruled surface is a cone some of whose rulings run along the
+/// other's asymptotic cone: where `α`, the other quadric's part along them, crosses zero or touches it, each decided
+/// against the angle band.
+fn smooth(pair: &Pair, decide: &mut Decisions) -> Result<Class, Undecided> {
+    let Some((_, o, ruling)) = pair.ruled() else { return Ok(Class::Other("no ruled member")) };
+    let other = pair.quadric(o);
+    let alpha = ruling.along(&other).alpha;
+    Ok(if other.reached(&alpha, |theta| ruling.direction(theta), decide)? { Class::Reaching } else { Class::Smooth })
+}
+
+/// Whether the pair is a cylinder and a cone, the only pair whose node at infinity is the vertex of one of its own
+/// surfaces: a sphere has no direction at infinity, two cylinders with one are parallel, and the vertex of a cylinder
+/// along a direction two cones share is no surface of theirs.
+///
+/// Only a cylinder and a cone have a node at infinity and one vertex on both surfaces besides. The quartic is then
+/// a line through both singular points and a cubic. Every line on a cone passes its apex, so for two cones the line
+/// would pass both apexes, each on the other cone, two vertices, and for any other pair there is no node at infinity.
+fn cylinder_and_cone(pair: &Pair) -> bool {
+    let cylinder = |s: &Natural| matches!(s, Natural::Cylinder { .. });
+    let cone = |s: &Natural| matches!(s, Natural::Cone { .. });
+    let [a, b] = &pair.surfaces;
+    (cylinder(a) && cone(b)) || (cone(a) && cylinder(b))
 }
 
 /// The class of the pencil of `pair`, from the multiple roots of its determinant.
@@ -168,13 +213,15 @@ fn classify(pair: &Pair, decide: &mut Decisions) -> Result<Class, Undecided> {
         });
     }
     let found = roots::multiple(pair, decide)?;
+    let ruled = cylinder_and_cone(pair);
     Ok(match found.as_slice() {
-        [] => smooth(pair),
+        [] => smooth(pair, decide)?,
         [Multiple::Vertex { phi, at, kind }] => Class::Node { phi: *phi, at: pair.world(*at), kind: *kind },
         [Multiple::Planes { planes }] => Class::Split { planes: *planes },
-        [Multiple::AtInfinity { .. }] => Class::Other("a quartic with its node at infinity"),
+        [Multiple::AtInfinity { .. }] if ruled => Class::AtInfinity,
+        [Multiple::AtInfinity { .. }] => Class::Other("a quartic with its node at infinity on no cylinder"),
         [Multiple::AtInfinity { .. }, Multiple::Vertex { .. }]
-        | [Multiple::Vertex { .. }, Multiple::AtInfinity { .. }] => Class::Other("a ruling and a cubic"),
+        | [Multiple::Vertex { .. }, Multiple::AtInfinity { .. }] => Class::RulingAndCubic,
         [Multiple::Conjugate { line }] => Class::Conjugate { line: *line },
         [Multiple::Double] => Class::Other("surfaces tangent along a conic"),
         _ => Class::Other("more than one degenerate member"),
@@ -207,7 +254,8 @@ impl Method for Pencil {
         let answer = match classify(&pair, &mut decide) {
             Ok(Class::Parallel) => Answer::Declined,
             Ok(class) => {
-                if let Ok(Err(_)) = emit::built(&pair, class, [&ca, &cb], &mut decide, section) {
+                let ball = fan::Ball::of(&pair, self.extent);
+                if let Ok(Err(_)) = emit::built(&pair, class, ([&ca, &cb], ball), &mut decide, section) {
                     section.failures.push(not_here());
                 }
                 Answer::Answered

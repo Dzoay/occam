@@ -13,7 +13,7 @@ use occam_math::{atan2, sin_cos};
 use occam_report::{Code, Fault, Reason};
 use occam_units::{Angle, Direction, Length, Placement, Tolerance};
 
-use super::{Case, Class, Seeded, alone, both, check, class, cone_by, cylinder_by, sphere_along};
+use super::{Case, Class, Seeded, alone, both, check, class, cone_by, cylinder_by, extent, sphere_along};
 use crate::closed::tests::{O, SIZE, Want, X, Z, cone, cylinder, from_curve, nearer, section, sphere, v};
 use crate::{Budget, Methods, Pencil, Section};
 
@@ -110,7 +110,7 @@ fn nudged(band: f64) -> Section {
     let b: Arc<dyn Surface> =
         Arc::new(Cylinder::placed(&Placement::identity().then(&across), mm(1.0 + NUDGE)).unwrap());
     let tol = Tolerance::new(mm(band), Angle::from_radians(1e-12)).unwrap();
-    Methods::new(vec![Box::new(Pencil)]).section(a.as_ref(), b.as_ref(), tol, Budget { steps: 4 })
+    Methods::new(vec![Box::new(Pencil::within(extent()))]).section(a.as_ref(), b.as_ref(), tol, Budget { steps: 4 })
 }
 
 /// 2⁻⁴⁰.
@@ -187,20 +187,13 @@ fn swapping_a_pair_gives_the_same_section_with_its_images_swapped() {
 
 #[test]
 fn a_degenerate_pencil_this_method_does_not_parametrize_is_reported_and_not_fitted() {
-    let (sa, ca) = sin_cos(0.4);
-    let (g, n) = (v(sa, 0.0, ca), v(ca, 0.0, -sa));
-    // Axes 0.7 apart, less than the two half-angles together, so that the circles of their directions cross.
-    let leaning = v(sin_cos(0.7).0, 0.0, sin_cos(0.7).1);
-    let cases = [
-        ("node_at_infinity", cylinder(n * 2.0, g, 0.5), cone(O, Z, 0.4), "a quartic with its node at infinity"),
-        ("reaches_infinity", cone(O, Z, 0.5), cone(v(2.0, 0.0, 0.0), leaning, 0.5), "a quartic that reaches infinity"),
-    ];
-    for (name, a, b, why) in cases {
-        assert_eq!(class(a.as_ref(), b.as_ref()), Class::Other(why), "{name}");
-        let got = both(a.as_ref(), b.as_ref());
-        assert_eq!((got.method, got.curves.len()), (Some("pencil"), 0), "{name}: answered, so not fitted");
-        let [report] = got.failures.as_slice() else { panic!("{name}: {:?}", got.failures) };
-        let kind = (report.code, report.fault, report.reason);
-        assert_eq!(kind, (Code::Incomplete, Some(Fault::NotImplemented), Some(Reason::PairNotSupported)), "{name}");
-    }
+    // A sphere inscribed in a cylinder, tangent along a circle, which the closed forms answer first.
+    let (a, b) = (sphere(O, 1.0), cylinder(O, Z, 1.0));
+    let name = "tangent along a conic";
+    assert_eq!(class(a.as_ref(), b.as_ref()), Class::Other("surfaces tangent along a conic"), "{name}");
+    let got = alone(a.as_ref(), b.as_ref());
+    assert_eq!((got.method, got.curves.len()), (Some("pencil"), 0), "{name}: answered, so not fitted");
+    let [report] = got.failures.as_slice() else { panic!("{name}: {:?}", got.failures) };
+    let kind = (report.code, report.fault, report.reason);
+    assert_eq!(kind, (Code::Incomplete, Some(Fault::NotImplemented), Some(Reason::PairNotSupported)), "{name}");
 }

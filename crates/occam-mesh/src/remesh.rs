@@ -12,6 +12,11 @@
 //! rewritten, and each is a face's, as the checker lets no edge be both a loop's and a wire's, so that face is touched.
 //! An edge sampled again is compared with its old samples to the bit, and every face along one whose samples changed is
 //! meshed again with the touched faces.
+//!
+//! Repair ([`crate::repair`]) cuts an edge where a face along it collided, from the face and its edges' first samples
+//! alone. A face meshed again that collides cuts its edges, and each face along an edge cut is meshed again too: every
+//! other face's boundary is as it was, and cut nothing, where the mesh before cut no edge. A mesh before that did cut
+//! one does not say which face cut it, and the model is meshed whole.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,7 +26,9 @@ use occam_topo::{Changes, Edge, Face, Id, Loop, Snapshot, View};
 
 use crate::edges::{EdgeSamples, Edges, sample_some};
 use crate::faces::{FaceMesh, Faces, mesh_some};
+use crate::limits::Limits;
 use crate::merge::{Mesh, merge};
+use crate::repair::{Meshed, repaired};
 use crate::watertight::watertight;
 
 /// A model meshed again from its mesh before.
@@ -46,6 +53,9 @@ pub fn remesh<'a>(
     before: &Mesh,
     changes: impl IntoIterator<Item = &'a Changes>,
 ) -> Remeshed {
+    if !before.edges.repaired().is_empty() {
+        return whole(exec, model, before.edges.limits());
+    }
     let written = changes.into_iter().flat_map(|c| c.created.iter().chain(&c.changed));
     let touched: BTreeSet<EntityRef> = written.copied().collect();
     let faces = model.ids::<Face>();
@@ -54,11 +64,40 @@ pub fn remesh<'a>(
     let (edges, sampled, moved) = resampled(exec, model, before, &users, &first);
     let along = moved.iter().flat_map(|e| users.get(e).into_iter().flatten().copied());
     let meshed: Vec<Id<Face>> = first.into_iter().chain(along).collect::<BTreeSet<_>>().into_iter().collect();
-    let mut again: Meshes = mesh_some(exec, model, &meshed, &edges).into_iter().collect();
+    let (edges, again) = repaired(exec, model, &meshed, edges, &[]);
+    let (mut again, meshed, sampled) = along_cuts(exec, model, (&edges, &users), (again, meshed, sampled));
     let each = |face: &Id<Face>| again.remove(face).or_else(|| kept.remove(face)).map(|mesh| (*face, mesh));
     let mut mesh = merge(edges, &Faces::new(faces.iter().filter_map(each).collect()));
     mesh.open = watertight(model, &mesh);
     Remeshed { mesh, meshed, sampled }
+}
+
+/// `model` meshed whole on `exec` to `limits`, every face meshed again and every edge sampled again: what a mesh before
+/// that repair cut gives, as which of its cuts still hold cannot be told from it.
+fn whole(exec: &Exec, model: &Snapshot, limits: Limits) -> Remeshed {
+    let mesh = crate::merge::mesh(exec, model, limits);
+    let sampled = mesh.edges.iter().map(|(edge, _)| edge).collect();
+    Remeshed { mesh, meshed: model.ids::<Face>(), sampled }
+}
+
+/// The faces meshed again, `meshed`, with `again`, their meshes, and the edges sampled again, `sampled`, joined by each
+/// face along an edge repair cut, meshed on `exec` against `edges`, and each edge cut; `users` gives the faces along
+/// each edge. A face meshed before cut no edge, as no face of a mesh before did, and its boundary is as it was.
+fn along_cuts(
+    exec: &Exec,
+    model: &Snapshot,
+    (edges, users): (&Edges, &BTreeMap<Id<Edge>, Vec<Id<Face>>>),
+    (again, meshed, sampled): (Meshed, Vec<Id<Face>>, Vec<Id<Edge>>),
+) -> (Meshes, Vec<Id<Face>>, Vec<Id<Edge>>) {
+    let cut = edges.repaired();
+    let first: BTreeSet<Id<Face>> = meshed.iter().copied().collect();
+    let along: BTreeSet<Id<Face>> =
+        cut.iter().flat_map(|e| users.get(e).into_iter().flatten().copied()).filter(|f| !first.contains(f)).collect();
+    let along: Vec<Id<Face>> = along.into_iter().collect();
+    let again: Meshes = again.into_iter().chain(mesh_some(exec, model, &along, edges)).collect();
+    let meshed = first.into_iter().chain(along).collect::<BTreeSet<_>>().into_iter().collect();
+    let sampled = sampled.into_iter().chain(cut.iter().copied()).collect::<BTreeSet<_>>().into_iter().collect();
+    (again, meshed, sampled)
 }
 
 /// Faces with their meshes or the reports refusing them, by id.

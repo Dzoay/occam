@@ -11,16 +11,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use occam_report::{EntityKind, EntityRef, NamedValue, Quantity, Reason, Report};
 
 use super::read::{
-    Walk, body_kind, end_vertex, first_use, get, list, loop_face, note, radial, star, typed, use_body, use_ends,
-    use_shell, uses_from,
+    Sorted, Walk, body_kind, end_vertex, first_use, get, list, loop_face, note, radial, star, typed, use_body,
+    use_ends, use_shell, uses_from,
 };
 use super::{culprit, failed, holds};
 use crate::kind::{Body, Edge, EdgeUse, Face, Id, Loop, Shell, Vertex, Wire};
 use crate::records::{Around, BodyKind, End, UseOwner};
 use crate::snapshot::Model;
 
-/// What a sound list or ring holds, or `None` for one that is not sound.
-type Held<T> = Option<BTreeSet<T>>;
+/// What a sound list or ring holds, in order, or `None` for one that is not sound.
+type Held<T> = Option<Vec<T>>;
 
 /// The lists and rings a run of checks on one model has walked, each by what holds it, so that each member of a long
 /// list finds itself in the list walked once. The model does not change during the run, so the list walked once is the
@@ -39,21 +39,40 @@ pub(crate) struct Walked {
     radial: BTreeMap<Id<Edge>, Held<Id<EdgeUse>>>,
     /// Each vertex's star, `None` for a vertex with none.
     stars: BTreeMap<Id<Vertex>, Option<Held<Around>>>,
+    /// The space the checks reuse for the small sets they gather.
+    sets: Sets,
 }
 
-/// What the list `key` names holds, walked by `walk` unless `walked` has it.
+/// The space the checks of one entity reuse from one entity to the next, for the small sets they gather.
+#[derive(Default)]
+struct Sets {
+    /// The links of an entity that are not live.
+    dead: Sorted<EntityRef>,
+    /// The shells of an edge's uses.
+    shells: Sorted<Id<Shell>>,
+    /// The bodies of an edge's uses.
+    bodies: Sorted<Id<Body>>,
+}
+
+/// What the list `key` names holds, in order, walked by `walk` unless `walked` has it.
 fn held<K: Ord, T: Ord + Copy>(
     walked: &mut BTreeMap<K, Held<T>>,
     key: K,
     walk: impl FnOnce() -> Option<Vec<T>>,
-) -> Option<&BTreeSet<T>> {
-    walked.entry(key).or_insert_with(|| walk().map(BTreeSet::from_iter)).as_ref()
+) -> Option<&[T]> {
+    walked.entry(key).or_insert_with(|| walk().map(sorted)).as_deref()
+}
+
+/// `items`, in order.
+fn sorted<T: Ord>(mut items: Vec<T>) -> Vec<T> {
+    items.sort_unstable();
+    items
 }
 
 /// Every invariant of `entity`, each list or ring it sits in found in `walked` or walked and kept there. If any of its
 /// links is not live, that alone is reported, as the rest would follow from it.
 pub(crate) fn check(model: &Model, walked: &mut Walked, entity: EntityRef, out: &mut Vec<Report>) {
-    if dead_links(model, entity, out) {
+    if dead_links(model, entity, &mut walked.sets.dead, out) {
         return;
     }
     match entity.kind {
@@ -75,18 +94,19 @@ pub(crate) fn check(model: &Model, walked: &mut Walked, entity: EntityRef, out: 
 }
 
 /// Reports each link of `entity` to an entity that is not live, each once, in id order; says whether there was one.
-fn dead_links(model: &Model, entity: EntityRef, out: &mut Vec<Report>) -> bool {
-    let mut links = Vec::new();
+fn dead_links(model: &Model, entity: EntityRef, dead: &mut Sorted<EntityRef>, out: &mut Vec<Report>) -> bool {
     note();
-    model.links(entity, &mut links);
-    let dead: BTreeSet<EntityRef> = links.into_iter().filter(|&link| !model.is_live(link)).collect();
+    let dead = dead.of(|links| {
+        model.links(entity, links);
+        links.retain(|&link| !model.is_live(link));
+    });
     out.extend(dead.iter().map(|&link| failed(Reason::DeadLink, &[entity, link])));
     !dead.is_empty()
 }
 
-/// Reports `id` if `listed`, a sound list of its owner's, does not hold it.
-fn listed<K: crate::kind::Kind>(out: &mut Vec<Report>, id: Id<K>, owner: EntityRef, listed: Option<&BTreeSet<Id<K>>>) {
-    if listed.is_some_and(|items| !items.contains(&id)) {
+/// Reports `id` if `listed`, a sound list of its owner's in order, does not hold it.
+fn listed<K: crate::kind::Kind>(out: &mut Vec<Report>, id: Id<K>, owner: EntityRef, listed: Option<&[Id<K>]>) {
+    if listed.is_some_and(|items| items.binary_search(&id).is_err()) {
         out.push(failed(Reason::NotListed, &[id.entity(), owner]));
     }
 }
@@ -112,7 +132,7 @@ fn body(model: &Model, id: Id<Body>, out: &mut Vec<Report>) {
 fn shell(model: &Model, walked: &mut Walked, id: Id<Shell>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
     let shells = held(&mut walked.shells, record.body, || {
-        list(model, get(model, record.body).and_then(|b| b.first_shell), |s| s.next).sound(false).map(<[_]>::to_vec)
+        list(model, get(model, record.body).and_then(|b| b.first_shell), |s| s.next).into_sound(false)
     });
     listed(out, id, record.body.entity(), shells);
     if get(model, record.face).map(|f| f.shell) != Some(id) {
@@ -131,14 +151,14 @@ fn face(model: &Model, id: Id<Face>, out: &mut Vec<Report>) {
 fn a_loop(model: &Model, walked: &mut Walked, id: Id<Loop>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
     let loops = held(&mut walked.loops, record.face, || {
-        list(model, get(model, record.face).map(|f| f.outer), |l| l.next).sound(false).map(<[_]>::to_vec)
+        list(model, get(model, record.face).map(|f| f.outer), |l| l.next).into_sound(false)
     });
     listed(out, id, record.face.entity(), loops);
     let uses = uses_from(model, record.first);
     let owner = UseOwner::Loop(id);
     let named = |u: Id<EdgeUse>| get(model, u).map(|r| r.owner) == Some(owner);
     if let Some(items) = holds(out, id.entity(), &uses, true, Reason::LoopNotClosed, named) {
-        meet(model, &items, true, out);
+        meet(model, items, true, out);
     }
 }
 
@@ -146,7 +166,7 @@ fn a_loop(model: &Model, walked: &mut Walked, id: Id<Loop>, out: &mut Vec<Report
 fn wire(model: &Model, walked: &mut Walked, id: Id<Wire>, out: &mut Vec<Report>) {
     let Some(record) = get(model, id) else { return };
     let wires = held(&mut walked.wires, record.body, || {
-        list(model, get(model, record.body).and_then(|b| b.first_wire), |w| w.next).sound(false).map(<[_]>::to_vec)
+        list(model, get(model, record.body).and_then(|b| b.first_wire), |w| w.next).into_sound(false)
     });
     listed(out, id, record.body.entity(), wires);
     let uses = uses_from(model, record.first);
@@ -154,7 +174,7 @@ fn wire(model: &Model, walked: &mut Walked, id: Id<Wire>, out: &mut Vec<Report>)
     let owner = UseOwner::Wire(id);
     let named = |u: Id<EdgeUse>| get(model, u).map(|r| r.owner) == Some(owner);
     if let Some(items) = holds(out, id.entity(), &uses, ring, Reason::ListBroken, named) {
-        meet(model, &items, ring, out);
+        meet(model, items, ring, out);
     }
 }
 
@@ -184,18 +204,19 @@ fn a_use(model: &Model, walked: &mut Walked, id: Id<EdgeUse>, out: &mut Vec<Repo
     let owner = owner_entity(record.owner);
     let sound = held(&mut walked.uses, owner, || {
         let uses = uses_from(model, first_use(model, record.owner)?);
-        let sound = match record.owner {
-            UseOwner::Loop(_) => uses.sound(true),
-            UseOwner::Wire(_) => uses.sound(false).or_else(|| uses.sound(true)),
+        // A loop's uses come round; a wire's end, or come round.
+        let ring = match record.owner {
+            UseOwner::Loop(_) => true,
+            UseOwner::Wire(_) => matches!(uses, Walk::Ring(_)),
         };
-        sound.map(<[_]>::to_vec)
+        uses.into_sound(ring)
     });
     listed(out, id, owner, sound);
     let Some(edge) = get(model, record.edge) else { return };
     if edge.first_use.is_none() {
         out.push(failed(Reason::NotListed, &[id.entity(), record.edge.entity()]));
     } else {
-        let ring = held(&mut walked.radial, record.edge, || radial(model, edge).sound(true).map(<[_]>::to_vec));
+        let ring = held(&mut walked.radial, record.edge, || radial(model, edge).into_sound(true));
         listed(out, id, record.edge.entity(), ring);
     }
 }
@@ -210,9 +231,10 @@ fn edge(model: &Model, walked: &mut Walked, id: Id<Edge>, out: &mut Vec<Report>)
         let place = Around { edge: id, end };
         let ring = walked.stars.entry(vertex).or_insert_with(|| {
             let start = get(model, vertex).and_then(|v| v.star)?;
-            Some(star(model, start).sound(true).map(|places| places.iter().copied().collect()))
+            Some(star(model, start).into_sound(true).map(sorted))
         });
-        let missing = ring.as_ref().is_none_or(|ring| ring.as_ref().is_some_and(|places| !places.contains(&place)));
+        let missing =
+            ring.as_ref().is_none_or(|ring| ring.as_ref().is_some_and(|places| places.binary_search(&place).is_err()));
         if missing {
             unlisted.insert(vertex);
         }
@@ -224,14 +246,14 @@ fn edge(model: &Model, walked: &mut Walked, id: Id<Edge>, out: &mut Vec<Report>)
     let ring = radial(model, record);
     let named = |u: Id<EdgeUse>| get(model, u).map(|r| r.edge) == Some(id);
     if let Some(uses) = holds(out, id.entity(), &ring, true, Reason::ListBroken, named) {
-        use_counts(model, id, &uses, out);
+        use_counts(model, id, uses, &mut walked.sets, out);
     }
 }
 
 /// The uses of edge `id`: in one shell, or one wire body, as many as its body's kind allows, two of them opposed.
-fn use_counts(model: &Model, id: Id<Edge>, uses: &[Id<EdgeUse>], out: &mut Vec<Report>) {
-    let shells: BTreeSet<Id<Shell>> = uses.iter().filter_map(|&u| use_shell(model, u)).collect();
-    let bodies: BTreeSet<Id<Body>> = uses.iter().filter_map(|&u| use_body(model, u)).collect();
+fn use_counts(model: &Model, id: Id<Edge>, uses: &[Id<EdgeUse>], sets: &mut Sets, out: &mut Vec<Report>) {
+    let shells = sets.shells.of(|shells| shells.extend(uses.iter().filter_map(|&u| use_shell(model, u))));
+    let bodies = sets.bodies.of(|bodies| bodies.extend(uses.iter().filter_map(|&u| use_body(model, u))));
     let in_loops = uses.iter().filter(|&&u| get(model, u).is_some_and(|r| matches!(r.owner, UseOwner::Loop(_))));
     let mixed = (1..uses.len()).contains(&in_loops.count());
     if mixed || shells.len() > 1 || bodies.len() > 1 {

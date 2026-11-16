@@ -58,14 +58,7 @@ detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes af
 
 ## Steps
 
-### `view.hardening`
-
-The mesher held against [P9's](../evidence/2026-11-09-p9.md) adversarial catalogue. Repair names the edges that
-collided, and is tried only where finer samples can cure the failure.
-
-*Failing test first:* P9's adversarial catalogue rebuilt as models, including the edge of 1e-8 mm and the gap of
-1e-7 mm that its grid failed: each meshes within its deflection, measured to the triangle, or is named with its reason;
-repair cures the cases finer samples can, and names the rest.
+Every step is done; the exit gate above is checked on the milestone's PR.
 
 ## Open questions for the user
 

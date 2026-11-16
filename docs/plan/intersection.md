@@ -56,34 +56,6 @@ source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted
 
 ## Steps
 
-
-### `intersection.hybrid`
-
-The general method: subdivision for start points, then the trace. A breadth-first traversal splits parameter boxes and
-rejects pairs whose `bounds` miss each other, with a rounding margin (Lane and Riesenfeld 1980; Houghton et al. 1985;
-Barnhill and Kersey 1990). Where one side is analytic, a pair is also rejected when that side's implicit function cannot
-change sign over the other's box ([P8](../evidence/2026-11-09-p8.md)). Each leaf gives at most one start point. Points
-are cached and filtered in parallel, and duplicates are found within a tube as wide as the chord's sag, or
-`sqrt(tolerance)` near a tangency. A leaf the budget cannot resolve is reported. Lattice seeding alone is not offered,
-because it returned 256 of 577 curves with no warning.
-
-*Failing test first:* P5's 625-component surface against a plane gives all 577 curves; a curve through a corner shared
-by both subdivisions is found once; a rational cylinder against its analytic twin is reported as an unresolved overlap,
-not answered with curves; the output is the same bits at 1 and N threads.
-
-### `intersection.unbounded`
-
-The sections of a quadric pair that run to infinity, which `intersection.quadrics` detects, classifies and reports as
-not implemented ([decision](../decisions/2026-11-15-unbounded-branches-in-their-own-step.md)): two cones that share a
-ruling direction, a quartic with its node at infinity, and a ruling with a cubic. The first is a branch of a smooth
-quartic from a root of the discriminant to infinity; the other two are rational and unbounded, one point on each ruling,
-with a pole where the ruling's coefficient vanishes. The step chooses their form, an unbounded family under the frozen
-traits or bounded pieces up to an extent the caller gives, and the seam does not change.
-
-*Failing test first:* each of the three classes, built by construction under rigid placements, gives curves on both
-surfaces within the band over the extent asked, its images mapping onto them; none is reported as not implemented, and
-swapping the pair swaps the images.
-
 ### `intersection.resolution`
 
 What the tolerance cannot tell apart (O24). A loop smaller than `d` comes back as `BelowResolution { at, bound }`,

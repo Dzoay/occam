@@ -44,14 +44,47 @@ fn closest(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
     a + ab * (vb / whole) + ac * (vc / whole)
 }
 
-/// How far `p` is from the triangle `a`, `b`, `c`: from its nearest corner where the triangle has no area to speak
-/// of, so that the region test's divisions have nothing to divide by.
+/// How thin a triangle may be, as twice its area over its longest side squared, for the region test: 2^-13. Its dot
+/// products are of the size of the longest side to the fourth, and their differences of twice the area squared, so a
+/// thinner triangle's are lost to rounding (the catalogue's sliver walls: 20 long and 1e-5 high, a point on one was
+/// read as 0.28 from it). At this ratio they are good to 2^-26 of themselves.
+const THIN: f64 = 1.0 / 8192.0;
+
+/// Whether the triangle `a`, `b`, `c` is thick enough for the region test: twice its area more than [`THIN`] times its
+/// longest side squared. One with no area, or whose numbers are not, is not.
+fn thick(a: Vec3, b: Vec3, c: Vec3) -> bool {
+    let twice = (b - a).cross(c - a).norm();
+    let longest = higher(higher((b - a).dot(b - a), (c - b).dot(c - b)), (a - c).dot(a - c));
+    twice > THIN * longest
+}
+
+/// How far `p` is from the triangle `a`, `b`, `c`: by the region test where it is [`thick`], and otherwise by
+/// [`sliver`].
 pub(crate) fn distance(p: Vec3, [a, b, c]: [Vec3; 3]) -> f64 {
-    let off = (p - closest(p, a, b, c)).norm();
-    if off.is_finite() {
-        return off;
+    if thick(a, b, c) {
+        return (p - closest(p, a, b, c)).norm();
     }
-    [a, b, c].into_iter().map(|corner| (p - corner).norm()).fold(f64::INFINITY, lower)
+    sliver(p, [a, b, c])
+}
+
+/// How far `p` is from the triangle `a`, `b`, `c`, read through cross products, which keep a thin triangle's area: from
+/// its plane where `p` lies over it, each corner pair turning about `p` as the triangle does, and otherwise from the
+/// nearest of its sides; from its nearest side where it has no area at all.
+fn sliver(p: Vec3, [a, b, c]: [Vec3; 3]) -> f64 {
+    let normal = (b - a).cross(c - a);
+    let over = [(a, b), (b, c), (c, a)].into_iter().all(|(s, t)| (s - p).cross(t - p).dot(normal) >= 0.0);
+    let height = ((p - a).dot(normal) / normal.norm()).abs();
+    if over && height.is_finite() {
+        return height;
+    }
+    [(a, b), (b, c), (c, a)].into_iter().map(|(s, t)| to_segment(p, s, t)).fold(f64::INFINITY, lower)
+}
+
+/// How far `p` is from the segment from `a` to `b`: from `a` itself where they are one point.
+fn to_segment(p: Vec3, a: Vec3, b: Vec3) -> f64 {
+    let along = b - a;
+    let at = higher(0.0, lower(1.0, (p - a).dot(along) / along.dot(along)));
+    (p - (a + along * at)).norm()
 }
 
 /// The point a fraction `(i, j, k) / n` of the way to each of `corners`, in a face's parameters.
@@ -119,11 +152,57 @@ mod tests {
     }
 
     #[test]
-    fn a_triangle_with_no_area_is_measured_from_its_nearest_corner() {
+    fn a_point_on_a_sliver_is_no_distance_from_it_and_one_beside_it_as_far_as_it_is() {
+        // A wall 20 long and from 1e-5 to 1e-11 high, as P9's sliver walls are triangulated: in the dot products of
+        // the region test, of size 400, the wall's area squared is lost to rounding.
+        for height in [1e-5, 1e-7, 1e-9, 1e-11] {
+            let corners = [Vec3::new(40.0, 0.0, 0.0), Vec3::new(40.0, 20.0, 0.0), Vec3::new(40.0, 20.0, height)];
+            let on = |[i, j, k]: [u32; 3]| {
+                let [a, b, c] = corners;
+                (a * f64::from(i) + b * f64::from(j) + c * f64::from(k)) * (1.0 / 8.0)
+            };
+            for at in grid(8) {
+                assert!(distance(on(at), corners) < 1e-12, "{height}: {at:?}");
+                let beside = on(at) + Vec3::new(3e-3, 0.0, 0.0);
+                assert!((distance(beside, corners) - 3e-3).abs() < 1e-12, "{height}: {at:?}");
+            }
+            assert!((distance(Vec3::new(40.0, 10.0, -1e-3), corners) - 1e-3).abs() < 1e-12, "{height}: under it");
+            assert!((distance(Vec3::new(40.0, 25.0, 0.0), corners) - 5.0).abs() < 1e-12, "{height}: past its end");
+        }
+    }
+
+    #[test]
+    fn a_triangle_is_thick_where_twice_its_area_is_more_than_2_to_the_minus_13_of_its_longest_side_squared() {
+        // Exactly at the bound, in exact numbers: twice the area is 4 * 2^-11, and the longest side squared 16.
+        let tip = 1.0 / 2048.0;
+        assert!(!thick(Vec3::new(0.0, 0.0, 0.0), Vec3::new(4.0, 0.0, 0.0), Vec3::new(2.0, tip, 0.0)), "at the bound");
+        assert!(!thick(A, A, B), "no area");
+        assert!(!thick(A, B, Vec3::new(f64::NAN, 0.0, 0.0)), "not a number");
+        // A side of 4 along `along` and an apex `h` off it along `off`, tilted so that every side has a part along
+        // every axis, and moved 1000 either way along each: a side's length read as anything else, as `|b|^2 - |a|^2`,
+        // is thousands where it should be 16, or below the next side's.
+        let (along, off) = (Vec3::new(2.0, 1.0, 2.0) * (1.0 / 3.0), Vec3::new(1.0, 2.0, -2.0) * (1.0 / 3.0));
+        let away = [1000.0, -1000.0];
+        let offsets =
+            away.into_iter().flat_map(|k| [Vec3::new(k, 0.0, 0.0), Vec3::new(0.0, k, 0.0), Vec3::new(0.0, 0.0, k)]);
+        for at in offsets.chain([Vec3::new(0.0, 0.0, 0.0)]) {
+            let triangle = |h: f64| (at, at + along * 4.0, at + along * 2.0 + off * h);
+            let (a, b, c) = triangle(4.0 / 4096.0);
+            assert!(thick(a, b, c), "twice the area 2^-12 of the longest squared, at {at:?}");
+            assert!(thick(b, c, a) && thick(c, a, b), "whichever corner comes first, at {at:?}");
+            let (a, b, c) = triangle(4.0 / 16384.0);
+            assert!(!thick(a, b, c), "2^-14, at {at:?}");
+            assert!(!thick(b, c, a) && !thick(c, a, b), "whichever corner comes first, at {at:?}");
+        }
+    }
+
+    #[test]
+    fn a_triangle_with_no_area_is_measured_from_its_nearest_side() {
         assert_eq!(distance(Vec3::new(1.0, 1.0, 0.0), [A, A, A]), 2.0_f64.sqrt());
-        // Two corners at one place: the region test divides nought by nought, and the nearest corner answers.
+        // Two corners at one place: a segment, and the point is as far from it as from the line it lies on.
         let (a, c) = (Vec3::new(1.0, 0.0, 0.0), Vec3::new(3.0, 0.0, 0.0));
-        assert_eq!(distance(Vec3::new(1.5, 1.0, 0.0), [a, a, c]), 1.25_f64.sqrt());
+        assert_eq!(distance(Vec3::new(1.5, 1.0, 0.0), [a, a, c]), 1.0);
+        assert_eq!(distance(Vec3::new(4.0, 0.0, 0.0), [a, c, a]), 1.0, "beyond its end");
     }
 
     #[test]

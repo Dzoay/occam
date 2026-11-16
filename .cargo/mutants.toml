@@ -447,20 +447,20 @@ exclude_re = [
     # polynomial is as far from zero, either starts its half-angle's parameter without losing a root; and of two
     # rulings along which `β` is as near zero, either starts a nodal quartic at its node. A cone's 3×3 part has no eigenvalue that is zero, its vertex being a point, so none is on the fence.
     "occam-intersect/src/pencil/roots\\.rs:223:49: replace > with >= in place$",
-    "occam-intersect/src/pencil/mod\\.rs:99:78: replace > with >= in Pair::length$",
+    "occam-intersect/src/pencil/mod\\.rs:129:78: replace > with >= in Pair::length$",
     "occam-intersect/src/pencil/quadric\\.rs:111:53: replace > with >= in Quadric::toward$",
     "occam-intersect/src/pencil/trig\\.rs:137:21: replace > with >= in Trig::roots$",
-    "occam-intersect/src/pencil/nodal\\.rs:101:17: replace < with <= in node$",
-    "occam-intersect/src/pencil/nodal\\.rs:(77:45|81:42): replace > with >= in rulings$",
+    "occam-intersect/src/pencil/nodal\\.rs:87:17: replace < with <= in node$",
+    "occam-intersect/src/pencil/nodal\\.rs:(62:45|66:42): replace > with >= in rulings$",
     # By line. A smooth quartic's `Δ` has no double root, which would be a singular point of the curve, a node or a
     # point by itself, so between two neighbouring roots it is zero nowhere, its middle included.
-    "occam-intersect/src/pencil/smooth\\.rs:59:68: replace > with >= in loops$",
+    "occam-intersect/src/pencil/smooth\\.rs:103:68: replace > with >= in loops$",
     # By line. The angles a polynomial's roots start from may be any nine apart round the turn: one of degree four at
     # most that is not zero is not zero at all nine, and the start half a turn from the one where it is farthest from
     # zero loses no root. Dividing by a ninth of a turn gives nine others, as distinct round it.
     "occam-intersect/src/pencil/trig\\.rs:135:51: replace \\* with / in Trig::roots$",
     # occam-geom's fields, by line. The lesser and greater of two values that are equal are either.
-    "occam-geom/src/field\\.rs:170:30: replace < with <= in holding$",
+    "occam-geom/src/field\\.rs:189:30: replace < with <= in holding$",
     # occam-geom's laps, by line. The least and greatest of angles that are equal are either. A crossing is on the
     # axis, neither ahead nor behind, only where the curve passes through it, which a curve read along does not. At a
     # point on the plane through the axis at `at`, `east cos + north sin` is its signed distance from the axis, and
@@ -477,17 +477,9 @@ exclude_re = [
     # The hits' boxes and sizes, by line: of two radii, coordinates or sizes that are equal, either is the larger.
     "occam-intersect/src/distance\\.rs:30:33: replace < with <= in between$",
     "occam-intersect/src/distance\\.rs:96:77: replace > with >= in around$",
-    "occam-intersect/src/subdivide\\.rs:139:53: replace > with >= in leaves$",
+    "occam-intersect/src/subdivide\\.rs:150:53: replace > with >= in leaves$",
     # A unit axis with nothing of it across Z lies along Z one way or the other, so `along` is 1 or -1 there, never 0.
     "occam-intersect/src/distance\\.rs:122:21: replace > with >= in canonical$",
-    # The subdivision's backstops, by line. A pair of pieces is a leaf once both its boxes are a sixty-fourth of the
-    # first pair's larger one, or no longer shrink when halved. A family's box halves with its piece, or stays as it
-    # was, so that comes within a few halvings, long before the fortieth, and long before a piece of the span or the
-    # patch is two neighbouring doubles: a box that shrank more slowly would multiply the pairs and spend the budget
-    # first either way.
-    "occam-intersect/src/subdivide\\.rs:141:72: replace < with <= in leaves$",
-    "occam-intersect/src/subdivide\\.rs:163:(38|47): replace < with <= in split$",
-    "occam-intersect/src/subdivide\\.rs:164:(48|57|88|97): replace < with <= in split$",
     # The fit's ties, by line. Where two numbers are equal, keeping either gives the same number: the largest
     # coordinate a fit's floor is taken from, a fit at its floor, and an image's largest step to a foot. Where the
     # largest gap is found twice, or an image's gap equals the curve's fit, the fit reached is the same, and the place
@@ -497,6 +489,29 @@ exclude_re = [
     "occam-intersect/src/fit\\.rs:406:28: replace > with >= in floored$",
     "occam-intersect/src/fit\\.rs:431:48: replace > with >= in image_fit$",
     "occam-intersect/src/fit\\.rs:521:42: replace > with >= in fit_piece$",
+    # The hybrid's ties, by line. Where two numbers are equal, keeping either gives the same number: the furthest a
+    # corner of a part is from its middle, and the largest gap between two boxes, whose radius is the rounding of its
+    # middle alone (occam-math's interval subtraction of exact numbers), so two gaps with one middle are one interval.
+    "occam-intersect/src/pieces\\.rs:50:16: replace > with >= in spread$",
+    "occam-intersect/src/traverse\\.rs:112:61: replace > with >= in apart$",
+    # A chord's foot, by line. A chord of no length gives 0 / 0, not a number, which the clamp below takes to the
+    # start, as the other branch does. At either end of the clamp both branches give the same parameter, 1, or a zero
+    # of either sign, which moves the foot at most by the sign of a zero, and no distance sees that.
+    "occam-intersect/src/tube\\.rs:35:27: replace > with >= in Chord::foot$",
+    "occam-intersect/src/tube\\.rs:(36:22|38:21): replace > with >= in Chord::foot$",
+    # The tube, by line. A chord's two ends at one coordinate give the same cubes in either order. Where the bends
+    # either side of a chord are equal, or its sag is the tracer's, keeping either gives the same number. A closed
+    # trace of one station has one chord from it to itself at the tracer's sag either way, which is the chord its lone
+    # station is given otherwise; an open trace's extra span has no station after it, and is dropped.
+    "occam-intersect/src/tube\\.rs:95:18: replace < with <= in Tube::file$",
+    "occam-intersect/src/tube\\.rs:(142:47|143:16): replace > with >= in Tube::radius$",
+    "occam-intersect/src/tube\\.rs:153:31: replace && with \\|\\| in Tube::add$",
+    "occam-intersect/src/tube\\.rs:153:47: replace > with >= in Tube::add$",
+    # The hybrid, by line. A trace of one station gives one piece of one station, which the fit returns from at once
+    # with nothing, so fitting it or not is the same. A box's reach either side of its middle: where the two are equal,
+    # keeping either is the same number.
+    "occam-intersect/src/hybrid\\.rs:321:57: replace > with >= in finish$",
+    "occam-intersect/src/traverse\\.rs:127:31: replace > with >= in clear$",
     # Picking's ties, by line. A triangle as near as the nearest face crossed, of the same face, is that face at that
     # distance: taking it or keeping the one held gives the same. Where an edge's segment comes as near the ray as the
     # one held, as far along it, of the same edge and from the same sample, it is the same segment, whose nearest point
@@ -508,4 +523,10 @@ exclude_re = [
     # holds back more volumes for the exact stage, which gives the same side; it changes the cost, never the answer.
     # (Dividing by the permanent instead is caught: far out it lets a volume plain arithmetic turns over through.)
     "occam-mesh/src/predicates\\.rs:114:32: replace \\* with \\+ in orient3d$",
+    # Which faces repair looks at (view.hardening), by line. `crossed` keeps for repair only the faces refused because
+    # their boundaries cross. Any other face it let through, meshed or refused for another reason, gets no cut from
+    # `cuts`, whose first try finds its boundary triangulates, cannot be drawn, or fails where no cut can part it. So
+    # letting every face through, or every refusal, changes the cost, never the answer.
+    "occam-mesh/src/repair\\.rs:103:5: replace crossed -> bool with true$",
+    "occam-mesh/src/repair\\.rs:105:65: replace && with \\|\\| in crossed$",
 ]

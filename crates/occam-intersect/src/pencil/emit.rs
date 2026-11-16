@@ -1,19 +1,25 @@
 //! Source: original
 //! What the pencil method puts in the section: each class's curves, made, with their images on both surfaces, and its
 //! singular points as contacts. Lines and conics are made and imaged by the closed forms' own code. A quartic's loop and
-//! a nodal quartic's B-spline are read through each surface's chart by occam-geom's image family, counting the turns
-//! they make about the chart's axis, and each is first cut where it passes a point at which a chart's parameters are
-//! undefined: a sphere's pole or a cone's apex.
+//! a rational quartic's or cubic's B-spline are read through each surface's chart by occam-geom's image family,
+//! counting the turns they make about the chart's axis, and each is first cut where it passes a point at which a
+//! chart's parameters are undefined: a sphere's pole or a cone's apex.
+//!
+//! A section that reaches infinity is given within the extent asked, in bounded pieces that reach past it: a quartic's
+//! loops where their ruling parameter is within its reach, and a rational curve's stretches inside its ball. A line
+//! stays whole, as a line is everywhere else.
 
+use std::f64::consts::TAU;
 use std::sync::Arc;
 
 use occam_geom::{Chart, Curve, Image, ParametricCurve, TrimmedCurve, Wrap};
 use occam_math::Side;
 use occam_units::{Point, Vec3};
 
-use super::quadric::Natural;
+use super::fan::{Ball, Fan};
+use super::quadric::{Kind, Natural, Ruling};
 use super::{Class, Pair, nodal, smooth, split};
-use crate::closed::{Found, emit, exact3, minus, norm3};
+use crate::closed::{Found, Plan, emit, exact3, minus, norm3};
 use crate::decide::{Decisions, Undecided};
 use crate::section::{Contact, Section, SectionCurve};
 
@@ -136,42 +142,133 @@ fn conics(
     Ok(if emit(found, charts, decide, section)? { Ok(()) } else { Err("a conic with no image") })
 }
 
-/// Puts what `class` is into `section`: `Ok(Err)`, with nothing put, where this method does not parametrize it.
+/// The curves a class is made of, or why it has none here.
+type Made = Result<Result<Vec<SectionCurve>, &'static str>, Undecided>;
+
+/// Where an image is undefined, and the charts the images are read through.
+type Charts<'a> = (&'a [Vec3], [&'a Chart; 2]);
+
+/// The curves of `fan` over `stretches`, each a B-spline cut where an image is undefined and imaged.
+fn fanned(pair: &Pair, fan: &Fan, stretches: Vec<(f64, f64)>, charts: Charts<'_>, decide: &mut Decisions) -> Made {
+    let mut out = Vec::new();
+    for stretch in stretches {
+        let Some(c) = fan.spline(pair, stretch) else { return Ok(Err("a rational curve with no B-spline")) };
+        let Some(made) = pieces(&c, |lo, hi| TrimmedCurve::new(c.clone(), lo, hi).ok(), charts, decide)? else {
+            return Ok(Err("a rational curve with no image"));
+        };
+        out.extend(made);
+    }
+    Ok(Ok(out))
+}
+
+/// A smooth quartic's loops, each whole, or, where it reaches infinity, within `ball`.
+fn quartics(
+    pair: &Pair,
+    (ruling, o): (&Ruling, usize),
+    ball: Option<Ball>,
+    charts: Charts<'_>,
+    decide: &mut Decisions,
+) -> Made {
+    let along = ruling.along(&pair.quadric(o));
+    let Some(loops) = smooth::loops(pair, ruling, &along) else { return Ok(Err("a loop with no form")) };
+    let mut out = Vec::new();
+    for whole in &loops {
+        let parts = ball.map_or_else(|| vec![(0.0, TAU)], |b| smooth::within(whole, (ruling, &along), pair.origin, b));
+        for (lo, hi) in parts {
+            let part = if hi - lo >= TAU { Some(whole.quartic) } else { whole.quartic.trimmed(lo, hi).ok() };
+            let Some(q) = part else { return Ok(Err("a loop with no part")) };
+            let Some(made) = pieces(&q, |lo, hi| q.trimmed(lo, hi).ok(), charts, decide)? else {
+                return Ok(Err("a loop with no image"));
+            };
+            out.extend(made);
+        }
+    }
+    Ok(Ok(out))
+}
+
+/// A nodal quartic, its node a contact: round the whole turn from the node, or, where it reaches infinity, within
+/// `ball`.
+fn nodal(
+    pair: &Pair,
+    (phi, at): (f64, Vec3),
+    ball: Ball,
+    charts: Charts<'_>,
+    decide: &mut Decisions,
+    section: &mut Section,
+) -> Made {
+    let nodal = nodal::node(pair, at, phi, decide)?;
+    let made = match &nodal.fan {
+        None => Vec::new(),
+        Some(fan) => {
+            let stretches = if nodal.reaching { fan.within(ball) } else { vec![(nodal.start, nodal.start + TAU)] };
+            match fanned(pair, fan, stretches, charts, decide)? {
+                Ok(made) => made,
+                Err(why) => return Ok(Err(why)),
+            }
+        }
+    };
+    section.contacts.push(contact(nodal.at, charts.1));
+    Ok(Ok(made))
+}
+
+/// A quartic with its node at infinity, along the axis of `ruling`, the pair's cylinder: one point on each of its
+/// rulings, within `ball`.
+fn at_infinity(
+    pair: &Pair,
+    (ruling, o): (&Ruling, usize),
+    ball: Ball,
+    charts: Charts<'_>,
+    decide: &mut Decisions,
+) -> Made {
+    let Kind::Upright { radius } = ruling.kind else { return Ok(Err("a node at infinity with no cylinder")) };
+    let along = ruling.along(&pair.quadric(o));
+    let fan = Fan::along([ruling.origin, ruling.x * radius, ruling.y * radius], ruling.z, (&along.beta, &along.gamma));
+    fanned(pair, &fan, fan.within(ball), charts, decide)
+}
+
+/// The ruling of the pair's cone, surface `o`, through its apex along the axis of `ruling`, the pair's cylinder, which
+/// it crosses there, and the cubic: one point on each of the cone's rulings, within `ball`.
+fn ruling_and_cubic(
+    pair: &Pair,
+    (ruling, o): (&Ruling, usize),
+    ball: Ball,
+    (charts, decide): (Charts<'_>, &mut Decisions),
+    section: &mut Section,
+) -> Made {
+    let (Some(cone), Natural::Cone { apex, .. }) = (Ruling::of(&pair.surface(o), pair.origin), pair.surface(o)) else {
+        return Ok(Err("a ruling and a cubic with no cone"));
+    };
+    let (Kind::Slanted { sin, cos }, Kind::Upright { .. }) = (cone.kind, ruling.kind) else {
+        return Ok(Err("a ruling and a cubic with no cone and cylinder"));
+    };
+    let along = cone.along(&pair.quadric(1_usize.saturating_sub(o)));
+    let fan = Fan::through(cone.origin, [cone.z * cos, cone.x * sin, cone.y * sin], (&along.alpha, &along.beta));
+    let cubic = match fanned(pair, &fan, fan.within(ball), charts, decide)? {
+        Ok(cubic) => cubic,
+        Err(why) => return Ok(Err(why)),
+    };
+    let line = Found { curves: vec![Plan::Ruling { apex, along: ruling.z }], contacts: vec![apex], ..Found::default() };
+    Ok(conics(Ok(line), charts.1, decide, section)?.map(|()| cubic))
+}
+
+/// Puts what `class` is into `section`, a section that reaches infinity within `ball`: `Ok(Err)`, with nothing put,
+/// where this method does not parametrize it.
 pub(super) fn built(
     pair: &Pair,
     class: Class,
-    charts: [&Chart; 2],
+    (charts, ball): ([&Chart; 2], Ball),
     decide: &mut Decisions,
     section: &mut Section,
 ) -> Result<Result<(), &'static str>, Undecided> {
     let points = undefined(pair, charts);
+    let at = (points.as_slice(), charts);
     let Some((_, o, ruling)) = pair.ruled() else { return Ok(Err("no ruled member")) };
-    let curves = match class {
-        Class::Smooth => {
-            let along = ruling.along(&pair.quadric(o));
-            let Some(loops) = smooth::loops(pair, &ruling, &along) else { return Ok(Err("a loop with no form")) };
-            let mut out = Vec::new();
-            for q in loops {
-                let Some(made) = pieces(&q, |lo, hi| q.trimmed(lo, hi).ok(), (&points, charts), decide)? else {
-                    return Ok(Err("a loop with no image"));
-                };
-                out.extend(made);
-            }
-            out
-        }
-        Class::Node { phi, at, .. } => {
-            let nodal = match nodal::node(pair, at, phi) {
-                Ok(nodal) => nodal,
-                Err(why) => return Ok(Err(why)),
-            };
-            let made = match nodal.curve {
-                None => Some(Vec::new()),
-                Some(c) => pieces(&c, |lo, hi| TrimmedCurve::new(c.clone(), lo, hi).ok(), (&points, charts), decide)?,
-            };
-            let Some(made) = made else { return Ok(Err("a nodal quartic with no image")) };
-            section.contacts.push(contact(nodal.at, charts));
-            made
-        }
+    let made = match class {
+        Class::Smooth => quartics(pair, (&ruling, o), None, at, decide)?,
+        Class::Reaching => quartics(pair, (&ruling, o), Some(ball), at, decide)?,
+        Class::Node { phi, at: node, .. } => nodal(pair, (phi, node), ball, at, decide, section)?,
+        Class::AtInfinity => at_infinity(pair, (&ruling, o), ball, at, decide)?,
+        Class::RulingAndCubic => ruling_and_cubic(pair, (&ruling, o), ball, (at, decide), section)?,
         Class::Split { planes } => return conics(split::conics(pair, planes, decide)?, charts, decide, section),
         Class::Lines => return conics(split::rulings(pair, decide)?, charts, decide, section),
         Class::Conjugate { line } => {
@@ -180,13 +277,12 @@ pub(super) fn built(
                 None => Vec::new(),
             };
             section.contacts.extend(points.into_iter().map(|at| contact(at, charts)));
-            Vec::new()
+            Ok(Vec::new())
         }
-        Class::Other(why) => return Ok(Err(why)),
-        Class::Parallel => Vec::new(),
+        Class::Other(why) => Err(why),
+        Class::Parallel => Ok(Vec::new()),
     };
-    section.curves.extend(curves);
-    Ok(Ok(()))
+    Ok(made.map(|curves| section.curves.extend(curves)))
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@ use crate::bspline::{
 use crate::domain::{Domain, ParamRange, UvBox, UvMap, Wrap};
 use crate::foot::foot;
 use crate::identity::{BatchKey, Content, FamilyName, Shape};
-use crate::knots::{Rows, canonical, transposed};
+use crate::knots::{Rows, canonical, of_spans, transposed};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
 use crate::restore::{Numbers, knots as saved_knots, poles as saved_poles};
 use crate::spline::{CAPACITIES, index, moved_pole, surface_quotient, triangle};
@@ -258,18 +258,22 @@ impl SplineSurface {
         (window, (samples(nu, p), samples(nv, q)))
     }
 
-    /// The poles of the spans that `patch` covers, as points.
-    fn hull(&self, patch: UvBox) -> impl Iterator<Item = Point<World>> + '_ {
-        let ((p, q), (u0, u1), (v0, v1)) =
-            (self.degree, ordered(patch.lo.u(), patch.hi.u()), ordered(patch.lo.v(), patch.hi.v()));
-        let (first, last) = (self.spans(u0, v0), self.spans(u1, v1));
-        let columns = first.0.saturating_sub(p)..=last.0;
-        (first.1.saturating_sub(q)..=last.1)
-            .flat_map(move |j| {
-                let row = j.saturating_mul(self.count.0);
-                columns.clone().filter_map(move |i| self.poles.get(row.saturating_add(i)))
-            })
-            .map(|[x, y, z, w]| Point::from_vec3(Vec3::new(x / w, y / w, z / w)))
+    /// The homogeneous poles of the part `us` by `vs` of the surface, each pair in order, and how many knots were
+    /// inserted to find them: the poles of the spans the part covers alone, each end of the part inserted until it
+    /// repeats as often as the degree (Piegl and Tiller, section 5.2), so that they hold the part and close in on it as
+    /// it shrinks. A parameter whose ends are equal is not cut.
+    fn part(&self, us: (f64, f64), vs: (f64, f64)) -> (Vec<[f64; 4]>, usize) {
+        let ((p, q), (first, last)) = (self.degree, (self.spans(us.0, vs.0), self.spans(us.1, vs.1)));
+        let (from, row) = (first.0.saturating_sub(p), |j: usize| j.saturating_mul(self.count.0));
+        let rows = (first.1.saturating_sub(q)..=last.1).map(|j| {
+            self.poles.get(row(j).saturating_add(from)..=row(j).saturating_add(last.0)).unwrap_or_default().to_vec()
+        });
+        let in_u = Rows { knots: of_spans(&self.knots_u, p, (first.0, last.0)), degree: p, poles: rows.collect() };
+        let (in_u, by_u) = in_u.cut(us.0, us.1);
+        let in_v =
+            Rows { knots: of_spans(&self.knots_v, q, (first.1, last.1)), degree: q, poles: transposed(&in_u.poles) };
+        let (in_v, by_v) = in_v.cut(vs.0, vs.1);
+        (in_v.poles.concat(), by_u.saturating_add(by_v))
     }
 }
 
@@ -319,14 +323,16 @@ impl Parametric for SplineSurface {
         self.domain
     }
 
-    /// The box of the poles of the spans the patch covers, which hold it where every weight is positive, padded for
-    /// rounding. A patch outside the domain gives all of space.
+    /// The box of the patch's own poles, which hold it where every weight is positive, padded for the rounding of its
+    /// points and of the knots inserted to find the poles. A patch outside the domain gives all of space.
     fn bounds(&self, patch: UvBox) -> Bounds {
         if !(self.domain.contains(patch.lo) && self.domain.contains(patch.hi)) {
             return everything();
         }
-        let terms = number(self.degree.0.saturating_add(self.degree.1).saturating_add(2));
-        Bounds::of(self.hull(patch)).map_or_else(everything, |hull| padded(hull, terms))
+        let (poles, inserted) = self.part(ordered(patch.lo.u(), patch.hi.u()), ordered(patch.lo.v(), patch.hi.v()));
+        let terms = number(self.degree.0.saturating_add(self.degree.1).saturating_add(2).saturating_add(inserted));
+        let points = poles.iter().map(|[x, y, z, w]| Point::from_vec3(Vec3::new(x / w, y / w, z / w)));
+        Bounds::of(points).map_or_else(everything, |hull| padded(hull, terms))
     }
 
     fn invert(
@@ -614,6 +620,38 @@ mod tests {
         assert!(conformance::slack(&s, window, 60) < 25.0, "the hull of the poles is near the surface");
         let outside = UvBox::new(window.lo, UvPoint::new(window.hi.u() + 0.5, window.hi.v()));
         assert!(Surface::bounds(&s, outside).contains(point(1e300, -1e300, 1e300)));
+    }
+
+    #[test]
+    fn a_box_inside_one_knot_span_closes_in_on_its_part_and_holds_it() {
+        // Inside a span every pole the span uses holds the whole span; the part's own poles close in on the part.
+        let size = |b: &Bounds| (b.high().to_vec3() - b.low().to_vec3()).norm();
+        for s in surfaces() {
+            let ((p, q), (knots_u, knots_v)) = (s.degree, (&s.knots_u, &s.knots_v));
+            let span = UvBox::new(UvPoint::new(knots_u[p], knots_v[q]), UvPoint::new(knots_u[p + 1], knots_v[q + 1]));
+            let whole_span = size(&Surface::bounds(&s, span));
+            for k in [2.0, 4.0, 8.0] {
+                let at = |f: f64, lo: f64, hi: f64| lo + (hi - lo) * f;
+                let corner = |f: f64| UvPoint::new(at(f, span.lo.u(), span.hi.u()), at(f, span.lo.v(), span.hi.v()));
+                let part = UvBox::new(corner(0.3), corner(0.3 + 1.0 / k));
+                let held = Surface::bounds(&s, part);
+                assert!(
+                    size(&held) <= 2.0 / k * whole_span,
+                    "{:?} at a {k}th: {} against {whole_span}",
+                    s.degree,
+                    size(&held)
+                );
+                for i in 0..=8 {
+                    for j in 0..=8 {
+                        let uv = UvPoint::new(
+                            at(f64::from(i) / 8.0, part.lo.u(), part.hi.u()),
+                            at(f64::from(j) / 8.0, part.lo.v(), part.hi.v()),
+                        );
+                        assert!(held.contains(s.point(uv)), "{:?} at a {k}th: {held:?} misses {uv:?}", s.degree);
+                    }
+                }
+            }
+        }
     }
 
     #[test]

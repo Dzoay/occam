@@ -1,10 +1,11 @@
 //! Source: original
 //! Where pieces meet, on numbers whose answers are known: a segment and a circle, and two circles, at two points, at
 //! the one where they touch, and nowhere; an arc's point square to a slanting segment; an end exactly as far from where
-//! two pieces meet as counts as away from it; two pieces that meet at both ends and run along each other; and the limits
-//! of `least` and of how finely an arc is cut.
+//! two pieces meet as counts as away from it; two pieces that meet at both ends and run along each other; an arc tangent
+//! to a segment that turns back along it, and tangent pieces that do not; and the limits of `least` and of how finely an
+//! arc is cut.
 
-use core::f64::consts::{FRAC_1_SQRT_2, PI, SQRT_2};
+use core::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI, SQRT_2};
 
 use super::tests::{circle, seg};
 use super::*;
@@ -85,6 +86,26 @@ fn pieces_that_meet_at_both_ends_and_run_along_each_other_meet_at_the_middle_of_
     assert!(close(met, [1.0, 1.0]), "an arc and the same back: {met:?}");
     let other = Flat::Arc { c: [1.0, 0.0], r: 1.0, from: PI, sweep: PI };
     assert_eq!(meet_elsewhere(half, other, &ends, band), None, "the two halves of a circle");
+}
+
+#[test]
+fn pieces_that_run_along_each_other_from_where_they_meet_meet_at_the_middle_of_one() {
+    // An arc of radius 1e7 tangent to the segment where it ends turns back along it, s^2 / 2e7 from it at s back from
+    // (2, 0): 5e-8 at the segment's middle, inside the band, where they neither cross nor have an end.
+    let (band, corner, r) = (1e-7, [[2.0, 0.0]], 1e7);
+    let line = seg([0.0, 0.0], [2.0, 0.0]);
+    let back = Flat::Arc { c: [2.0, r], r, from: -FRAC_PI_2, sweep: -3e-7 };
+    assert_eq!(meet_elsewhere(line, back, &corner, band), Some([1.0, 0.0]), "the first piece's middle");
+    let (first, second) = (back.reversed(), line.reversed());
+    let met = meet_elsewhere(first, second, &[first.end()], band);
+    assert_eq!(met, Some([1.0, 0.0]), "the second piece's middle, run the other way");
+    // Tangent where they meet and nowhere else near: the same arc going on, a cusp, and the end of a slot.
+    let on = Flat::Arc { c: [2.0, r], r, from: -FRAC_PI_2, sweep: 3e-7 };
+    assert_eq!(meet_elsewhere(line, on, &corner, band), None, "going on past the end");
+    let cusp = Flat::Arc { c: [2.0, 1.0], r: 1.0, from: -FRAC_PI_2, sweep: -FRAC_PI_2 };
+    assert_eq!(meet_elsewhere(line, cusp, &corner, band), None, "turning back away from it");
+    let round = Flat::Arc { c: [2.0, 1.0], r: 1.0, from: -FRAC_PI_2, sweep: PI };
+    assert_eq!(meet_elsewhere(line, round, &corner, band), None, "round the end of a slot");
 }
 
 #[test]

@@ -11,8 +11,10 @@
 //! Each face is then meshed against [`Edges`] by [`mesh_faces`]: its boundary drawn in its parameters through its
 //! edges' samples, triangulated with exact decisions on the coordinates as they are, not P9's integer grid, and
 //! refined until it is within the deflection measured to the triangle ([`deviation`] measures it), with a floor for
-//! conical points and a cap of [`Limits::TRIANGLES_PER_FACE`]. A face that will not mesh is refused by name, with its
-//! reason, and its neighbours are meshed as if it were not there.
+//! conical points and a cap of [`Limits::TRIANGLES_PER_FACE`]. Where a face's boundary, through its edges' samples,
+//! crosses itself and finer samples can part it, the mesh is repaired: only the pieces of the edges that collided are
+//! cut, and the faces along them meshed again, within [`Limits::REPAIRS_PER_FACE`] tries ([`Edges::repaired`]). A face
+//! that will not mesh is refused by name, with its reason, and its neighbours are meshed as if it were not there.
 //!
 //! [`mesh`] does all of it: [`merge`] merges the faces by index into one [`Mesh`], each face's vertices a [`Block`] of
 //! its own, welding nothing, and [`watertight`] checks every output, in release builds too, matching vertices by
@@ -47,6 +49,7 @@ mod predicates;
 pub mod probe;
 mod refine;
 mod remesh;
+mod repair;
 #[cfg(test)]
 mod testing;
 /// The tests' models, built outside the tests only for the determinism probe, which nothing that ships turns on.
