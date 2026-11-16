@@ -109,7 +109,7 @@ web-test: web-build
     cargo build --quiet -p occam-cli
     OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" OCCAM="$CARGO_TARGET_DIR/debug/occam" node --test --test-timeout=300000 web/test/viewer.test.mjs web/test/demo.test.mjs
 
-# The live agent test, by hand on your own key and account, never in CI: headless Claude Code on Haiku, pinned, with the occam skill, builds a plate with a hole as headless Chromium follows the page, then stands a cylinder on the face selected there; scored as the scripted demo is, everything kept for docs/evidence/. `--dry-run`: a stand-in plays the agent, and no model is asked
+# The live agent test, by hand on your own key and account, never in CI: headless Claude Code on Haiku, pinned, with the occam skill, builds a plate with a hole as headless Chromium follows the page, then stands a cylinder on the face selected there; scored as the scripted demo is, everything kept for docs/evidence/. `--dry-run`: a stand-in plays the agent, and no model is asked; `--score KIT --why REASON`: a kit scored again from its logs
 [env("CARGO_TARGET_DIR", target)]
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
 [group('tools')]

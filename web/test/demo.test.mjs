@@ -15,8 +15,11 @@ import { chromium } from "playwright";
 
 import { INIT, evidence } from "./demo/evidence.mjs";
 import {
+  FIRST,
   PERMISSIONS,
+  SECOND,
   answer,
+  callChecks,
   callsIn,
   drawn,
   facts,
@@ -29,8 +32,10 @@ import {
   scripted,
   scriptedAgent,
   selectTop,
+  shownBy,
   valueOf,
 } from "./demo/harness.mjs";
+import { record, rescore, words } from "./demo/record.mjs";
 
 /** The flags that give headless Chromium its software WebGPU adapter: `just web-test` gives them, and says why. */
 const WEBGPU = (process.env.OCCAM_WEBGPU_FLAGS ?? "").split(/\s+/).filter(Boolean);
@@ -51,9 +56,10 @@ after(async () => {
 
 /**
  * The demo played through with the agent's calls scripted, the cylinder standing where `place(description)` says on
- * the face selected: the score, what the page saw and the calls logged. The viewer is stopped and the kit removed after.
+ * the face selected: the score, what the page saw and the calls logged. `kept(kit, result)` is awaited with the kit
+ * before the viewer is stopped and the kit removed.
  */
-async function played(place) {
+async function played(place, kept = async () => {}) {
   const root = await mkdtemp(join(tmpdir(), "occam-demo-"));
   const demo = await kit(root, OCCAM);
   let follower;
@@ -67,16 +73,19 @@ async function played(place) {
     const plate = await drawn(follower, OCCAM, demo.model);
     const first = await facts(demo, "first");
     const selected = await selectTop(follower, demo);
-    const shown = (id) => follower.page.waitForFunction((ids) => window.occamViewer.highlight().join() === ids, id);
-    await scripted.act(scriptedAgent(demo, 2), shown, place);
+    const lit = (id) => follower.page.waitForFunction((ids) => window.occamViewer.highlight().join() === ids, id);
+    await scripted.act(scriptedAgent(demo, 2), lit, place);
     const digest = await drawn(follower, OCCAM, demo.model);
     const second = await facts(demo, "second");
     const calls = callsIn(await readFile(demo.log, "utf8"));
-    const scored = await score({ before: first, after: second, selected, follower, digest, calls });
+    const shown = await shownBy(follower);
+    const scored = score({ before: first, after: second, selected, seen: follower.seen, shown, digest, calls });
     await follower.stop();
     assert.deepEqual(follower.errors, []);
     await follower.page.close();
-    return { scored, calls, seen: follower.seen, selected, digests: [plate, digest] };
+    const result = { scored, calls, seen: follower.seen, selected, shown, digests: [plate, digest] };
+    await kept(demo, result);
+    return result;
   } finally {
     await follower?.stop();
     await answer(OCCAM, ["view", "--model", demo.model, "--stop"]);
@@ -84,8 +93,20 @@ async function played(place) {
   }
 }
 
+/** The kit of a scripted run, recorded as the live run records one, then scored again from its logs: what that kept. */
+async function recordedAndRescored(demo, { scored, seen, selected, shown }) {
+  const prompts = [FIRST, SECOND].map((text, k) => ({ text, model: "scripted", calls: k + 1, ended: null }));
+  const kept = { dry: true, started: "now", model: "scripted", prompts, opened: "browser", selected, shown, scored };
+  assert.deepEqual(await record(demo.root, kept, OCCAM, seen), [], "its evidence names no home directory");
+  return rescore(demo.root, OCCAM, "A test of re-scoring.");
+}
+
 test("the demo, its agent scripted: a plate built as the page follows, its top face clicked, a cylinder stood on its centre", async () => {
-  const { scored, calls, seen, selected, digests } = await played(middleOf);
+  let again;
+  const keep = async (demo, result) => {
+    again = await recordedAndRescored(demo, result);
+  };
+  const { scored, calls, seen, selected, digests } = await played(middleOf, keep);
   assert.deepEqual(scored.checks.filter((check) => !check.pass), [], "every check passes, those noted only too");
   assert.equal(scored.pass, true);
   assert.equal(scored.checks.length, 18);
@@ -96,6 +117,9 @@ test("the demo, its agent scripted: a plate built as the page follows, its top f
   assert.match(calls[1].files[0].text, /"extrude"/, "with the request it ran");
   assert.ok(seen.some((now) => now.highlight.join() === selected.id), "the page showed the highlight");
   assert.deepEqual(seen.at(-1).selection, [selected.id], "and keeps the selection, carried over by the run");
+  const name = (checks) => checks.map((check) => [check.name, check.pass]);
+  assert.deepEqual(name(again.scored.checks), name(scored.checks), "scored again from its logs, the same");
+  assert.deepEqual(again.rescored.map((r) => [r.why, r.was]), [["A test of re-scoring.", { pass: true, failed: [] }]]);
 });
 
 test("a cylinder stood on the plane's origin, the face's corner, fails the score where it misses the centre", async () => {
@@ -162,4 +186,52 @@ test("the evidence keeps the agent's transcript without the person's setup, thei
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a call for help is no step: the order checks skip it, and still fail a run before the viewer", () => {
+  /** The wrapper's log of `calls`, each `[prompt, argv, request]`, every call answered. */
+  const log = (calls) =>
+    calls
+      .map(([prompt, argv, request], k) => {
+        const file = request ? `--- file ${argv.split(" ").at(-1)}\n${request}\n` : "";
+        return `=== call ${k + 1} prompt ${prompt} now\ncwd: $KIT/case\nargv: ${argv}\n${file}--- stdout\n\n--- stderr\n\n--- exit 0\n`;
+      })
+      .join("");
+  const checked = (calls) =>
+    Object.fromEntries(callChecks({ calls: callsIn(log(calls)), selected: { id: "face:7/1" } }).map(([name, pass]) => [name, pass]));
+  const [viewer, order] = ["the agent started the viewer before its first run", "it read the selection, highlighted it, then ran"];
+  const plate = [1, "run --model part.occam plate.json", '{"op": "extrude"}'];
+  const cylinder = [2, "run --model part.occam cylinder.json", '{"op": "cylinder"}'];
+  const helped = checked([
+    [1, "run --help"],
+    [1, "view --model part.occam"],
+    plate,
+    [2, "selection --help"],
+    [2, "help highlight"],
+    [2, "selection --model part.occam"],
+    [2, "highlight --model part.occam face:7/1"],
+    [2, "run -h"],
+    cylinder,
+  ]);
+  assert.deepEqual([helped[viewer], helped[order]], [true, true], "the live rerun's calls, help first");
+  const early = checked([[1, "run --help"], plate, [1, "view --model part.occam"]]);
+  assert.equal(early[viewer], false, "a run before the viewer still fails");
+  const unread = checked([[1, "view --model part.occam"], plate, [2, "highlight --model part.occam face:7/1"], [2, "selection --help"], cylinder]);
+  assert.equal(unread[order], false, "asking how to read the selection is not reading it");
+});
+
+test("a re-scored kit says so in its score, why, and what the scoring before it gave", () => {
+  const kept = {
+    started: "then",
+    model: "claude-haiku-5-5",
+    prompts: [{ text: FIRST, model: "claude-haiku-5-5", calls: 5, ended: { num_turns: 10, total_cost_usd: 0.004 } }],
+    opened: "browser",
+    scored: { pass: true, checks: [{ name: "the page shows the cylinder", pass: true, required: true, carried: true }] },
+    rescored: [{ at: "now", why: "The scorer took a help call for a run.", was: { pass: false, failed: ["the agent started the viewer before its first run"] } }],
+  };
+  const said = words(kept);
+  assert.match(said, /Re-scored now from the kit's logs, no agent run again: The scorer took a help call for a run\./);
+  assert.match(said, /The scoring before it: Fail, failing: the agent started the viewer before its first run\./);
+  assert.match(said, /\| the page shows the cylinder \| pass \(as observed in the run\) \|/);
+  assert.match(said, /\*\*Pass\.\*\*/);
 });

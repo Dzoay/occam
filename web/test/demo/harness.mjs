@@ -298,10 +298,13 @@ export function callsIn(log) {
     });
 }
 
-/** Everything the score reads of the model in `kit` now, from a copy named `name` in the logs. */
-export async function facts(kit, name) {
+/**
+ * Everything the score reads of the model in `kit` now, or of the model file `from`, from a copy named `name` in the
+ * logs, which a re-score reads again.
+ */
+export async function facts(kit, name, from = kit.model) {
   const copy = join(kit.logs, `${name}.occam`);
-  await copyFile(kit.model, copy);
+  if (from !== copy) await copyFile(from, copy);
   const listed = await answer(kit.occam, ["list", "--model", copy, "--kind", "body,face"]);
   const [bodies, faces] = (listed.answers ?? []).map((kind) => kind.entities);
   const described = await answer(kit.occam, ["describe", "--model", copy, ...(faces ?? [])]);
@@ -373,23 +376,33 @@ function cylinderChecks({ before, after, selected }) {
 }
 
 /** The page after the second prompt: it drew the model the file holds, the new faces among those it drew. */
-async function pageChecks({ before, after, follower, digest }) {
-  const shown = await follower.page.evaluate(() => ({ digest: window.occamViewer.live()?.digest, faces: window.occamViewer.faces().map((f) => f.id) }));
+function pageChecks({ before, after, seen, shown, digest }) {
   const made = Object.keys(after.faces).filter((id) => !(id in before.faces));
-  const digests = [...new Set(follower.seen.map((seen) => seen.digest).filter(Boolean))];
+  const digests = [...new Set(seen.map((now) => now.digest).filter(Boolean))];
+  const drawn = shown?.digest === digest && made.length > 0 && made.every((id) => shown.faces.includes(id));
   return [
     ["the page drew each model, the plate and then the cylinder beside it", digests.length >= 2 && digests.at(-1) === digest, digests],
-    ["the page shows the cylinder", shown.digest === digest && made.length > 0 && made.every((id) => shown.faces.includes(id)), made],
+    ["the page shows the cylinder", drawn, made],
   ];
 }
 
-/** What the agent did, from the wrapper's log: the viewer started first, and the selection read and highlighted before the run that changed it. */
-function callChecks({ calls, selected }) {
+/** What the page shows now: the digest of the model drawn, and the faces it draws. */
+export const shownBy = (follower) =>
+  follower.page.evaluate(() => ({ digest: window.occamViewer.live()?.digest, faces: window.occamViewer.faces().map((f) => f.id) }));
+
+/** Whether a call is one of the agent's steps: not refused, and not a call for help, which changes nothing. */
+const step = (call) => !call.refused && call.argv[0] !== "help" && !call.argv.some((arg) => arg === "--help" || arg === "-h");
+
+/**
+ * What the agent did, from the wrapper's log: the viewer started first, and the selection read and highlighted before
+ * the run that changed it. Calls for help are no steps, and are skipped. Rows of `[name, pass, detail, required]`.
+ */
+export function callChecks({ calls, selected }) {
   const command = (call) => call.argv[0];
-  const first = calls.filter((call) => call.prompt === 1 && !call.refused);
+  const first = calls.filter((call) => call.prompt === 1 && step(call));
   const viewed = first.findIndex((call) => command(call) === "view" && !call.argv.includes("--stop") && !call.argv.includes("--status"));
   const ran = first.findIndex((call) => command(call) === "run");
-  const second = calls.filter((call) => call.prompt === 2 && !call.refused);
+  const second = calls.filter((call) => call.prompt === 2 && step(call));
   const read = second.findIndex((call) => command(call) === "selection");
   const lit = second.findIndex((call, k) => k > read && command(call) === "highlight" && call.argv.includes(selected.id) && call.exit === 0);
   const made = second.findIndex((call) => command(call) === "run" && call.exit === 0 && call.files.some((f) => f.text.includes('"cylinder"')));
@@ -403,15 +416,16 @@ function callChecks({ calls, selected }) {
 }
 
 /**
- * The demo scored, as both tests score it. `before` and `after` are the facts after each prompt, `selected` what the
- * person selected, `follower` the page, `digest` the model's digest at the end and `calls` the wrapper's log read
- * back. A check marked `required: false` is noted and does not decide the pass.
+ * The demo scored, as both tests score it, and from a kit's logs again. `before` and `after` are the facts after each
+ * prompt, `selected` what the person selected, `seen` what the page showed as it changed and `shown` what it showed at
+ * the end (`shownBy`), `digest` the model's digest at the end and `calls` the wrapper's log read back. A check marked
+ * `required: false` is noted and does not decide the pass.
  */
-export async function score({ before, after, selected, follower, digest, calls }) {
+export function score({ before, after, selected, seen, shown, digest, calls }) {
   const rows = [
     ...plateChecks({ before, selected }),
     ...cylinderChecks({ before, after, selected }),
-    ...(await pageChecks({ before, after, follower, digest })),
+    ...pageChecks({ before, after, seen, shown, digest }),
     ...callChecks({ calls, selected }),
   ];
   const checks = rows.map(([name, pass, detail, required = true]) => ({ name, pass: Boolean(pass), required, detail }));

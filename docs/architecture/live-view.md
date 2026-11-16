@@ -132,7 +132,9 @@ flowchart LR
   scripted demo's agent is held to the same permissions. It is scored as the scripted demo is and keeps the kit, the
   transcripts and the score in `~/.cache/occam-agent-demo/`, with a copy in `evidence/` for `docs/evidence/` that
   drops the person's installed skills, plugins and commands, their account's state and this machine's paths.
-  `--dry-run` has a stand-in play the agent, held to the permissions its command line gives.
+  `--dry-run` has a stand-in play the agent, held to the permissions its command line gives. `--score KIT --why
+  REASON` scores a kit again from its logs with the scorer as it is now, and its score says it was re-scored, why,
+  and what the scoring before gave. A call for help is no step in the order the score checks.
 
 ## What waits
 
