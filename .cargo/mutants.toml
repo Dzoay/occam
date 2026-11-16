@@ -338,41 +338,41 @@ exclude_re = [
     # exactly a sphere's radius, which is clamped to it either way, and a collapsing line exactly a quarter from where
     # a chart is read, which reading there or half a unit on reads alike.
     "image\\.rs:\\d+:\\d+: replace (< with <=|> with >=) in extremes$",
-    "image\\.rs:344:50: replace < with <= in Image<C>::window$",
-    "image\\.rs:345:(36|75): replace > with >= in Image<C>::window$",
-    "image\\.rs:37[57]:\\d+: replace (> with >=|< with <=) in Image<C>::heights$",
+    "image\\.rs:378:50: replace < with <= in Image<C>::window$",
+    "image\\.rs:379:(36|75): replace > with >= in Image<C>::window$",
+    "image\\.rs:41[02]:\\d+: replace (> with >=|< with <=) in Image<C>::heights$",
     "chart\\.rs:121:77: replace < with <= in Chart::of$",
     # By line. `side` is 1 or -1, so dividing by it is multiplying by it.
-    "image\\.rs:204:(26|50): replace \\* with / in Image<C>::local$",
-    "image\\.rs:304:97: replace \\* with / in Image<C>::by_series$",
+    "image\\.rs:237:(26|50): replace \\* with / in Image<C>::local$",
+    "image\\.rs:338:97: replace \\* with / in Image<C>::by_series$",
     # No range has exactly one end finite (`ParamRange`): a window and a chart's spread take a range whole, or else
     # without end both ways.
-    "image\\.rs:335:38: replace && with \\|\\| in Image<C>::window$",
+    "image\\.rs:369:38: replace && with \\|\\| in Image<C>::window$",
     "chart\\.rs:\\d+:\\d+: replace && with \\|\\| in spread$",
     # By line. A window's samples run evenly from `-reach` to `reach` about its centre, the same either way round. And
     # one that stops once its ends are more than 2 further than its nearest sample, not twice as far: either stops only
     # with both ends further than a sample inside, which holds the nearest point of a line's image, whose distance is
     # convex; for a parabola's or a hyperbola's, how much further is a margin against a second dip beyond the window,
     # and every case tried finds the same point with either.
-    "image\\.rs:343:37: replace \\+ with - in Image<C>::window$",
-    "image\\.rs:345:(42|81): replace \\* with \\+ in Image<C>::window$",
+    "image\\.rs:377:37: replace \\+ with - in Image<C>::window$",
+    "image\\.rs:379:(42|81): replace \\* with \\+ in Image<C>::window$",
     # By line. A smaller pad, a part in 10^12 over 1 + |x| or of |x| alone: a box is from the corners of the curve's,
     # which hold its points with the curve's own padding, and where a corner is a point of the curve the image gives it
     # the same parameters by the same arithmetic, so no point falls between the pads.
-    "image\\.rs:147:30: replace \\* with / in padded$",
-    "image\\.rs:147:37: replace \\+ with \\* in padded$",
+    "image\\.rs:151:30: replace \\* with / in padded$",
+    "image\\.rs:151:37: replace \\+ with \\* in padded$",
     # By line. At order 2 the rungs give both rates, and the series' rates past the second are none. Each corner's ends
     # picked the other way round are the same eight corners in another order. And a curve's box is finite, or endless
     # in every coordinate: `Bounds::of` refuses a point not finite in each, and the box given then is everything's.
-    "image\\.rs:416:18: replace > with >= in <impl ParametricParamCurve for Image<C>>::derivatives$",
-    "image\\.rs:433:65: replace == with != in <impl ParametricParamCurve for Image<C>>::bounds$",
-    "image\\.rs:439:(52|71): replace && with \\|\\| in <impl ParametricParamCurve for Image<C>>::bounds$",
+    "image\\.rs:451:18: replace > with >= in <impl ParametricParamCurve for Image<C>>::derivatives$",
+    "image\\.rs:468:65: replace == with != in <impl ParametricParamCurve for Image<C>>::bounds$",
+    "image\\.rs:474:(52|71): replace && with \\|\\| in <impl ParametricParamCurve for Image<C>>::bounds$",
     # By line. Where the axis meets a conic's plane exactly on the conic, the conic passes through the axis, where its
     # angle jumps by a half turn round it or beside it alike: the closed forms cut such a circle at the pole and make
     # each arc's image beside it. And a conic's plane is asked which way it faces only where the axis passes inside the
     # conic, so crosses the plane: the normal's part along the axis is never nought.
-    "image\\.rs:118:56: replace < with <= in round$",
-    "image\\.rs:124:42: replace < with <= in round$",
+    "image\\.rs:122:56: replace < with <= in round$",
+    "image\\.rs:128:42: replace < with <= in round$",
     # By line. A collapsing line is a sphere's pole or a cone's apex: a sphere's are half a turn apart, so a reading
     # within a quarter of one is as far from both half a unit either side. A cylinder presents the point of its axis at
     # `v` = 0, so the origin's shift along the axis is nought to rounding either way. A cone's chart is read more than a
@@ -439,4 +439,21 @@ exclude_re = [
     # The trace's projections, by line. A move of no length, or none that is finite, gives a point that is not a number;
     # its foot stays at the seed, whose gap is the base's, so the search gives the base, as returning it at once does.
     "occam-intersect/src/project\\.rs:69:28: replace \\|\\| with && in search$",
+    # occam-intersect's pencil method, by line. Ties that give the same answer either way: of two surfaces whose
+    # gradients are equal at a member's vertex, either holds it, and at a singular point of their curve the two share
+    # their tangent plane; a direction's band taken of how fast it turns or of a thousandth of the quadric's size, where
+    # those are equal; of two angles where a polynomial is as far from zero, either starts its half-angle's parameter
+    # without losing a root; and of two rulings along which `β` is as near zero, either starts a nodal quartic at its
+    # node. A cone's 3×3 part has no eigenvalue that is zero, its vertex being a point, so none is on the fence.
+    "occam-intersect/src/pencil/roots\\.rs:209:49: replace > with >= in place$",
+    "occam-intersect/src/pencil/quadric\\.rs:111:53: replace > with >= in Quadric::toward$",
+    "occam-intersect/src/pencil/trig\\.rs:137:21: replace > with >= in Trig::roots$",
+    "occam-intersect/src/pencil/nodal\\.rs:101:17: replace < with <= in node$",
+    "occam-intersect/src/pencil/nodal\\.rs:(77:45|81:42): replace > with >= in rulings$",
+    # By line. The angles a polynomial's roots start from may be any nine apart round the turn: one of degree four at
+    # most that is not zero is not zero at all nine, and the start half a turn from the one where it is farthest from
+    # zero loses no root. Dividing by a ninth of a turn gives nine others, as distinct round it.
+    "occam-intersect/src/pencil/trig\\.rs:135:51: replace \\* with / in Trig::roots$",
+    # occam-geom's fields, by line. The lesser and greater of two values that are equal are either.
+    "occam-geom/src/field\\.rs:170:30: replace < with <= in holding$",
 ]
