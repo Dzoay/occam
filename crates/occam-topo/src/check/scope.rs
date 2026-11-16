@@ -28,13 +28,15 @@ struct Added {
     lists: BTreeSet<(EntityRef, EntityKind)>,
     /// Each place of a star added that came round, from which any walk gives the same places.
     places: BTreeSet<Around>,
+    /// The space an entity's links are read into, reused from one entity to the next.
+    links: Vec<EntityRef>,
 }
 
 impl Added {
     /// Adds each item of the list `holder` holds of kind `K`, walked by `walk`, unless it is added already.
     fn list<K: Kind>(&mut self, out: &mut BTreeSet<EntityRef>, holder: EntityRef, walk: impl FnOnce() -> Walk<Id<K>>) {
         if self.lists.insert((holder, K::ENTITY)) {
-            add(out, &walk());
+            add(out, walk());
         }
     }
 
@@ -44,10 +46,10 @@ impl Added {
             return;
         }
         let places = star(model, start);
-        out.extend(places.items().into_iter().map(|p| p.edge.entity()));
-        if let Walk::Ring(ring) = places {
-            self.places.extend(ring);
+        if let Walk::Ring(ring) = &places {
+            self.places.extend(ring.iter().copied());
         }
+        out.extend(places.items().into_iter().map(|p| p.edge.entity()));
     }
 }
 
@@ -80,7 +82,7 @@ pub(crate) fn scope(edit: &Edit) -> BTreeSet<EntityRef> {
 }
 
 /// Adds each item of `walk`.
-fn add<K: Kind>(out: &mut BTreeSet<EntityRef>, walk: &Walk<Id<K>>) {
+fn add<K: Kind>(out: &mut BTreeSet<EntityRef>, walk: Walk<Id<K>>) {
     out.extend(walk.items().into_iter().map(Id::entity));
 }
 
@@ -99,10 +101,9 @@ fn add_uses(model: &Model, first: Id<EdgeUse>, out: &mut BTreeSet<EntityRef>) {
 
 /// Adds what `entity` links to in `model`, and the lists and rings it sits in there, each unless `added` holds it.
 fn around(model: &Model, entity: EntityRef, out: &mut BTreeSet<EntityRef>, added: &mut Added) {
-    let mut links = Vec::new();
     note();
-    model.links(entity, &mut links);
-    out.extend(links);
+    model.links(entity, &mut added.links);
+    out.extend(added.links.drain(..));
     match entity.kind {
         EntityKind::EdgeUse => typed::<EdgeUse>(entity).into_iter().for_each(|id| use_around(model, id, out, added)),
         EntityKind::Edge => typed::<Edge>(entity).into_iter().for_each(|id| edge_around(model, id, out, added)),

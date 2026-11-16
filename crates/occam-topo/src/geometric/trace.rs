@@ -205,7 +205,8 @@ impl<'a> Trace<'a> {
     /// Samples every piece at `STEPS` even steps, its ends included.
     fn sample(&mut self) -> Result<(), Untraced> {
         let (mut scratch, mut seed) = (Scratch::default(), None);
-        let mut samples = Vec::new();
+        let each = usize::try_from(STEPS).unwrap_or(0).saturating_add(1);
+        let mut samples = Vec::with_capacity(self.pieces.len().saturating_mul(each));
         for (index, piece) in self.pieces.iter().enumerate() {
             for k in 0..=STEPS {
                 let t = along(piece.from, piece.to, k);
@@ -309,6 +310,9 @@ impl Metric {
 /// The segments a loop is drawn with near a point, and the least clearance they leave it.
 type Segments = (Vec<[UvPoint; 2]>, f64);
 
+/// The halves of a step waiting to be drawn, each with how many times it was halved.
+type Halves = Vec<(Sample, Sample, u32)>;
+
 /// The least of the clearances so far and `here`, where a clearance that cannot be measured stays so.
 fn least(so_far: f64, here: f64) -> f64 {
     if so_far.is_nan() {
@@ -370,10 +374,10 @@ impl Trace<'_> {
     }
 
     /// The point of piece `a.piece` halfway between `a` and `b` in the edge's parameter, carried to follow on from `a`.
-    fn between(&self, a: Sample, b: Sample) -> Option<Sample> {
+    fn between(&self, a: Sample, b: Sample, scratch: &mut Scratch) -> Option<Sample> {
         let source = self.pieces.get(a.piece)?.source;
         let t = a.t.midpoint(b.t);
-        let uv = self.point(source, t, Some(a.uv), &mut Scratch::default())?;
+        let uv = self.point(source, t, Some(a.uv), scratch)?;
         let uv = if self.given(a.piece) { uv } else { Self::nearest(self.charts, uv, a.uv) };
         Some(Sample { piece: a.piece, t, uv })
     }
@@ -381,12 +385,21 @@ impl Trace<'_> {
     /// The step from `a` to `b` as segments, halved while how far its arc may stray from its chord leaves it unsure
     /// whether the loop comes within `band` of the metric's point, each with the least clearance it leaves, spending
     /// one of the halvings `left` on each. A joint between pieces, or round from the last sample to the first, is a
-    /// straight segment. A step still unsure when none are left leaves a clearance that cannot be measured.
-    fn refine(&self, (a, b, joint): (Sample, Sample, bool), metric: Metric, band: f64, out: (&mut Segments, &mut u32)) {
-        let (out, left) = out;
-        let mut stack = vec![(a, b, 0_u32)];
+    /// straight segment. A step still unsure when none are left leaves a clearance that cannot be measured. The halves
+    /// waiting to be drawn and the space for finding points are the caller's, reused from step to step; the halves are
+    /// all drawn by the time it returns.
+    fn refine(
+        &self,
+        (a, b, joint): (Sample, Sample, bool),
+        metric: Metric,
+        band: f64,
+        out: (&mut Segments, &mut u32),
+        reused: (&mut Halves, &mut Scratch),
+    ) {
+        let ((out, left), (stack, scratch)) = (out, reused);
+        stack.push((a, b, 0_u32));
         while let Some((a, b, depth)) = stack.pop() {
-            let mid = if joint { None } else { self.between(a, b) };
+            let mid = if joint { None } else { self.between(a, b, scratch) };
             let chord = metric.distance(metric.q, a.uv, b.uv);
             let sag = mid.map_or(0.0, |m| metric.distance(m.uv, a.uv, b.uv));
             let unsure = chord - sag <= band && band < chord + sag;
@@ -418,14 +431,17 @@ impl Trace<'_> {
             return Place { winding: None, clearance: f64::NAN };
         }
         let metric = Metric { q, scale };
-        let mut out = (Vec::new(), f64::INFINITY);
+        // A segment for each step at least, and at most one half waiting at each depth but the deepest, which has two.
+        let mut out = (Vec::with_capacity(self.samples.len()), f64::INFINITY);
+        let deepest = usize::try_from(DEEPEST).unwrap_or(0).saturating_add(1);
+        let (mut stack, mut scratch) = (Vec::with_capacity(deepest), Scratch::default());
         let closing = self.samples.last().copied().zip(self.samples.first().copied()).map(|(a, b)| (a, b, true));
         let steps = self.samples.windows(2).filter_map(|pair| match pair {
             [a, b] => Some((*a, *b, a.piece != b.piece)),
             _ => None,
         });
         for step in steps.chain(closing) {
-            self.refine(step, metric, band, (&mut out, &mut halvings));
+            self.refine(step, metric, band, (&mut out, &mut halvings), (&mut stack, &mut scratch));
         }
         Place { winding: winding::number(&out.0, q), clearance: out.1 }
     }
