@@ -40,6 +40,11 @@ trimmed. Surfaces: plane, cylinder, cone, sphere, torus, B-spline and Bézier, r
 trimmed. Parameter curves of the same kinds. Plus **mesh-backed surfaces**, because the `geometry` exit proves its seam
 on three families before it freezes (L21).
 
+`intersection` adds a **loop of a smooth quartic**, `Quartic`, where two quadrics meet: on the rulings of a cylinder or
+a cone, `v = (−β ± √Δ) / α`, its two signs joined smoothly by an angle between two roots of `Δ`, or one sign round a
+whole turn where `Δ` has none. It is exact and periodic, with rates to any order from Taylor series of the same form,
+and its box comes from the form in intervals. It has no rational form, so `to_bspline` gives none.
+
 ## Splines in lanes
 
 A B-spline family evaluates a batch in lanes where its points share a knot span, as a tessellator's grid does: the
@@ -123,6 +128,9 @@ held to its points, so that a surface parametrized otherwise has none. An angle 
 continuous, so an image does not jump where the parameter comes round, and an image round the axis has an open range,
 since it comes round in space and not in the parameters. Its first two rates are closed forms of the curve's, and
 higher ones come from Taylor series of the same forms. The section's closed forms give their curves these images.
+A curve that may go round the axis any number of times, as a quartic's loop does, is read `along` it: two readings of
+the angle, from a direction and from its opposite, each count the turns they gain where the curve crosses the half-plane
+behind them, found once when the image is made, and the one read is the one whose jumps are a quarter turn away.
 
 `join_edge` joins a parameter curve to its edge's curve in space. They agree when the surface over the one runs along
 the other within the band the same way: starts meet, ends meet, and samples of each have a foot on the other within

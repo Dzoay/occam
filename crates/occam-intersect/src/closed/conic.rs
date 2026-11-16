@@ -9,10 +9,10 @@
 use occam_math::{Interval, Side, sin_cos};
 use occam_units::Vec3;
 
-use super::decide::{Decide, Undecided};
 use super::meet::{Flat, Meeting, Shape, meet};
 use super::piece::{Plan, square_to};
 use super::{Found, along, cross3, exact3, norm3, unit};
+use crate::decide::{Decisions, Undecided};
 
 /// A plane, as a point on it and the unit normal it faces.
 pub(super) type Flatness = (Vec3, Vec3);
@@ -21,7 +21,7 @@ pub(super) type Flatness = (Vec3, Vec3);
 pub(super) type About = (Vec3, Vec3, f64);
 
 /// Two planes: their line, or none, or the one plane they both are.
-pub(super) fn planes((o1, n1): Flatness, (o2, n2): Flatness, decide: &mut Decide) -> Result<Found, Undecided> {
+pub(super) fn planes((o1, n1): Flatness, (o2, n2): Flatness, decide: &mut Decisions) -> Result<Found, Undecided> {
     let turn = norm3(cross3(exact3(n1), exact3(n2)));
     if decide.angle(turn)? == Side::Within {
         let gap = along(exact3(o2), exact3(o1), exact3(n1));
@@ -38,7 +38,7 @@ fn lines(
     one: Shape,
     other: Shape,
     (p, w, n, z): (Vec3, Vec3, Vec3, Vec3),
-    decide: &mut Decide,
+    decide: &mut Decisions,
 ) -> Result<Found, Undecided> {
     Ok(match meet(&one, &other, decide)? {
         Meeting::Apart => Found::default(),
@@ -56,7 +56,7 @@ fn lines(
 pub(super) fn plane_cylinder(
     (origin, normal): Flatness,
     (on_axis, axis, radius): About,
-    decide: &mut Decide,
+    decide: &mut Decisions,
 ) -> Result<Found, Undecided> {
     let cosine = along(exact3(normal), [Interval::exact(0.0); 3], exact3(axis));
     let across = unit(normal.cross(axis));
@@ -85,7 +85,7 @@ fn computed(x: f64) -> Interval {
 pub(super) fn plane_cone(
     (origin, normal): Flatness,
     (apex, axis, half): About,
-    decide: &mut Decide,
+    decide: &mut Decisions,
 ) -> Result<Found, Undecided> {
     let (sin, cos) = sin_cos(half);
     let cosine = along(exact3(normal), [Interval::exact(0.0); 3], exact3(axis));
@@ -135,7 +135,7 @@ fn through_apex(kind: Side, a: Vec3, (e1, e2): (Vec3, Vec3), ratio: f64) -> Foun
 }
 
 /// Two cylinders whose axes are parallel and apart, as their circles in the cross-section through the first's axis.
-pub(super) fn cylinders((p1, z, r1): About, (p2, _, r2): About, decide: &mut Decide) -> Result<Found, Undecided> {
+pub(super) fn cylinders((p1, z, r1): About, (p2, _, r2): About, decide: &mut Decisions) -> Result<Found, Undecided> {
     let w = square_to(z);
     let n = z.cross(w);
     let (from, to) = (exact3(p1), exact3(p2));

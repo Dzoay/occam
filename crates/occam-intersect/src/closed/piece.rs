@@ -13,12 +13,12 @@ use occam_geom::{
 use occam_math::{Side, atan2};
 use occam_units::{Direction, Point, Vec3};
 
-use super::decide::{Decide, Undecided};
 use super::{along, exact3, unit};
+use crate::decide::{Decisions, Undecided};
 
 /// A curve a closed form found, before it is made.
 #[derive(Clone, Copy, Debug)]
-pub(super) enum Plan {
+pub(crate) enum Plan {
     /// The line through `at` along `along`.
     Line { at: Vec3, along: Vec3 },
     /// The line through a cone's `apex` along `along`, its parameter the distance from the apex.
@@ -53,7 +53,7 @@ enum Piece {
 }
 
 /// A unit axis square to the unit `normal`: the world axis least along it, with its part along it taken away.
-pub(super) fn square_to(normal: Vec3) -> Vec3 {
+pub(crate) fn square_to(normal: Vec3) -> Vec3 {
     let world = [Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 1.0)];
     let least = world.into_iter().fold((world[0], f64::INFINITY), |best, axis| {
         let size = axis.dot(normal).abs();
@@ -95,9 +95,16 @@ fn made(plan: Plan) -> Option<Piece> {
     })
 }
 
+impl Plan {
+    /// The curve it is made as, whole: `None` where that cannot be made of its numbers.
+    pub(crate) fn curve(self) -> Option<Arc<dyn Curve>> {
+        Some(made(self)?.curve())
+    }
+}
+
 /// The curves `plan` is made as: one, or a circle's arcs between the poles of either surface it passes through, each
 /// decided. `None` where a curve cannot be made of its numbers.
-pub(super) fn pieces(plan: Plan, charts: [&Chart; 2], decide: &mut Decide) -> Result<Option<Vec<Made>>, Undecided> {
+pub(super) fn pieces(plan: Plan, charts: [&Chart; 2], decide: &mut Decisions) -> Result<Option<Vec<Made>>, Undecided> {
     let Some(piece) = made(plan) else { return Ok(None) };
     let Piece::Circle(circle, ring, _) = piece else { return Ok(made_all(vec![piece], charts)) };
     let n = ring.x.cross(ring.y);

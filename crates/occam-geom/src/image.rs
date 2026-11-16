@@ -24,6 +24,7 @@ use crate::chart::{Chart, Form, Meridian};
 use crate::curve::ParametricCurve;
 use crate::domain::{ParamMap, ParamRange, UvBox, UvMap, Wrap};
 use crate::identity::{Content, FamilyName, Shape};
+use crate::laps::{Laps, across};
 use crate::nearest::nearest_by;
 use crate::param_curve::{ParametricParamCurve, UvClosest};
 use crate::restore::wrap_code;
@@ -37,6 +38,9 @@ enum Turn {
     /// The curve goes once round the axis: the direction to it from `centre`, its centre in the chart's frame across
     /// the axis, is within a quarter turn of `at + rate t`, and `rate` is 1 or −1.
     Round { at: f64, rate: f64, centre: (f64, f64) },
+    /// The curve goes round the axis any number of times, but not through it: its angle is counted in whole turns
+    /// from where it crosses the plane through the axis at `at`.
+    Laps(Laps),
 }
 
 /// A curve in space as a curve in a surface's parameters, through the surface's chart.
@@ -63,7 +67,7 @@ fn splat<R: Real>(v: Vec3) -> Vec3<R> {
 /// The angle of `(x, y)` measured from the direction at the angle `from`, from minus to plus a half turn.
 #[inline(always)]
 #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
-fn angle_from<R: Real>(from: R, x: R, y: R) -> R {
+pub(crate) fn angle_from<R: Real>(from: R, x: R, y: R) -> R {
     let (sin, cos) = sin_cos(from);
     atan2(y * cos - x * sin, x * cos + y * sin)
 }
@@ -183,12 +187,41 @@ impl<C: ParametricCurve + Clone> Image<C> {
         Some(Self::made(curve, chart, turn, start))
     }
 
+    /// The image through `chart` of `curve`, whose range is finite, which may go round a turned chart's axis any
+    /// number of times but does not pass through it, as a loop of a quartic or an arc of one ending at a sphere's
+    /// pole or a cone's apex: its angle starts at the chart's own angle of its start, and is kept continuous by
+    /// counting where it crosses the plane through the axis a quarter turn on from there, so that it starts on neither
+    /// half of that plane. On a cone it is on the nappe of its middle, since its ends may be at the apex. `None` where
+    /// its range is not finite or it crosses that plane more than eight times.
+    #[must_use]
+    pub fn along(curve: C, chart: Chart) -> Option<Self> {
+        let range = curve.range();
+        if !(range.lo.is_finite() && range.hi.is_finite()) {
+            return None;
+        }
+        let (start, middle) = (curve.eval_point(range.lo), curve.eval_point(0.5 * range.lo + 0.5 * range.hi));
+        let Form::Turned { origin, x, y, .. } = chart.0 else { return Some(Self::beside(curve, chart, start)) };
+        let nappe = middle.to_vec3();
+        let low = below(&chart, nappe);
+        let side = if low { -1.0 } else { 1.0 };
+        let at = angle_of(&chart, start.to_vec3(), low) + FRAC_PI_2;
+        let point = |t: f64| across((curve.eval_point(t).to_vec3() - origin) * side, (x, y));
+        let laps = Laps::counted(point, (range.lo, range.hi), at)?;
+        Some(Self::made(curve, chart, Turn::Laps(laps), nappe))
+    }
+
     fn made(curve: C, chart: Chart, turn: Turn, reference: Vec3) -> Self {
         let (low, tube) = (below(&chart, reference), tube(&chart, reference));
         let range = curve.range();
         let mut image = Self { curve, chart, turn, below: low, tube, after: UvMap::IDENTITY, range };
-        // Beside the axis the image is the point's parameters alone, so a whole periodic curve's ends meet there too.
-        let comes_round = matches!(turn, Turn::Beside { .. }) && range.wrap == Wrap::Periodic;
+        // Beside the axis the image is the point's parameters alone, so a whole periodic curve's ends meet there too,
+        // and so they do for one that goes round the axis and back as often, its turns counted to none.
+        let comes_round = range.wrap == Wrap::Periodic
+            && match turn {
+                Turn::Beside { .. } => true,
+                Turn::Laps(laps) => laps.winding() == 0.0,
+                Turn::Round { .. } => false,
+            };
         if range.wrap != Wrap::Open && !comes_round {
             image.range = ParamRange { wrap: Wrap::Open, ..range };
         }
@@ -224,6 +257,7 @@ impl<C: ParametricCurve + Clone> Image<C> {
                 let toward = ahead + angle_from(ahead, east - R::splat(centre.0), north - R::splat(centre.1));
                 toward + angle_from(toward, east, north)
             }
+            Turn::Laps(laps) => laps.angle(t, east, north),
         };
         let rho = (east * east + north * north).sqrt();
         let along = match meridian {
@@ -359,6 +393,7 @@ impl<C: ParametricCurve + Clone> Image<C> {
                 let (a, b) = extremes([at + rate * lo, at + rate * hi].into_iter());
                 (a - TAU, b + TAU)
             }
+            Turn::Laps(laps) => laps.span,
         }
     }
 
@@ -478,8 +513,9 @@ impl<C: ParametricCurve + Clone> ParametricParamCurve for Image<C> {
         self.curve.content(out);
         self.chart.push(out);
         let turn = match self.turn {
-            Turn::Beside { at } => [0.0, at, 0.0, 0.0, 0.0],
-            Turn::Round { at, rate, centre } => [1.0, at, rate, centre.0, centre.1],
+            Turn::Beside { at } => vec![0.0, at, 0.0, 0.0, 0.0],
+            Turn::Round { at, rate, centre } => vec![1.0, at, rate, centre.0, centre.1],
+            Turn::Laps(_) => vec![2.0],
         };
         let rest =
             [f64::from(u8::from(self.below)), self.tube, self.range.lo, self.range.hi, wrap_code(self.range.wrap)];
@@ -681,6 +717,89 @@ mod tests {
         let image = &cases.iter().find(|c| c.0 == "cylinder_ellipse").map(|c| &c.1).unwrap();
         let (start, end) = (image.uv(0.0), image.uv(TAU));
         assert!((end.u() - start.u()).abs() > 6.0, "its angle turns once: {start:?} to {end:?}");
+    }
+
+    /// [`placement`] with its Z turned onto its X.
+    fn across_x() -> occam_units::Placement<occam_units::Local, World> {
+        let quarter = Angle::from_radians(std::f64::consts::FRAC_PI_2);
+        occam_units::Placement::rotation(Direction::normalised(Vec3::new(0.0, 1.0, 0.0)), quarter).then(&placement())
+    }
+
+    /// A quartic loop on a cylinder about [`placement`]'s Z of `radius`, from its numbers after the axes: `round` with
+    /// the cylinder of radius 1 about X round the whole turn, else between the roots of `Δ` where the cylinder of
+    /// radius 0.6 about X meets one of radius 1.
+    fn quartic(round: bool) -> crate::Quartic {
+        let frame = [at(0.0, 0.0, 0.0), along(1.0, 0.0, 0.0), along(0.0, 1.0, 0.0), along(0.0, 0.0, 1.0)];
+        let mut numbers: Vec<f64> = frame.iter().flat_map(|v| [v.x, v.y, v.z]).collect();
+        let k = 0.1_f64.sqrt();
+        numbers.extend(if round {
+            vec![0.0, 0.6, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.82, 0.0, 0.0, 0.18, 0.0, 1.0]
+        } else {
+            vec![0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, k, 0.8, 1.0, 0.0]
+        });
+        numbers.extend([0.0, TAU, 2.0]);
+        crate::Quartic::restore(&numbers).unwrap()
+    }
+
+    /// Images that count the turns: a circle round a sphere's axis and an ellipse round a cylinder's, and two quartic
+    /// loops, each round one cylinder's axis and beside the other's.
+    fn counted() -> Vec<Case> {
+        let along_case =
+            |name: &'static str, c: Box<dyn Curve>, image: Option<Box<dyn ParamCurve>>, s: Box<dyn Surface>| {
+                (name, image.unwrap_or_else(|| panic!("{name} has an image")), c, s, (0.0, TAU))
+            };
+        let thin = || -> Box<dyn Surface> { Box::new(Cylinder::placed(&placement(), mm(0.6)).unwrap()) };
+        let wide = || -> Box<dyn Surface> { Box::new(Cylinder::placed(&placement(), mm(1.0)).unwrap()) };
+        let crossing = |r: f64| -> Box<dyn Surface> { Box::new(Cylinder::placed(&across_x(), mm(r)).unwrap()) };
+        let image = |c: crate::Quartic, s: &dyn Surface| -> Option<Box<dyn ParamCurve>> {
+            Some(Box::new(Image::along(c, chart(s))?))
+        };
+        let (round, between) = (quartic(true), quartic(false));
+        let mut cases = vec![
+            along_case("round_on_its_own", Box::new(round), image(round, thin().as_ref()), thin()),
+            along_case("round_beside", Box::new(round), image(round, crossing(1.0).as_ref()), crossing(1.0)),
+            along_case("between_beside", Box::new(between), image(between, wide().as_ref()), wide()),
+            along_case("between_round", Box::new(between), image(between, crossing(0.6).as_ref()), crossing(0.6)),
+        ];
+        let facing = Vec3::new(0.3, 0.0, 1.0) * (1.0 / 1.09_f64.sqrt());
+        let drop = 0.3 * facing.z;
+        let centre = at(facing.x * drop, 0.0, facing.z * drop);
+        let tilted = circle(centre, along(0.0, 1.0, 0.0), along(facing.z, 0.0, -facing.x), (1.0 - drop * drop).sqrt());
+        let sphere: Box<dyn Surface> = Box::new(Sphere::placed(&placement(), mm(1.0)).unwrap());
+        let counted: Option<Box<dyn ParamCurve>> =
+            Image::along(tilted, chart(sphere.as_ref())).map(|i| Box::new(i) as _);
+        cases.push(along_case("sphere_round", Box::new(tilted), counted, sphere));
+        cases
+    }
+
+    #[test]
+    fn an_image_that_counts_its_turns_maps_onto_its_curve_and_passes_the_suite() {
+        for (name, image, curve, surface, (lo, hi)) in counted() {
+            for i in 0..=400 {
+                let t = lo + (hi - lo) * f64::from(i) / 400.0;
+                let miss = (surface.point(image.uv(t)).to_vec3() - curve.point(t).to_vec3()).norm();
+                assert!(miss <= 1e-12 * 4.0, "{name} at {t} maps {miss} from its curve");
+                if i > 0 {
+                    let before = image.uv(t - (hi - lo) / 400.0);
+                    let jump = (image.uv(t).u() - before.u()).abs();
+                    assert!(jump < 0.2, "{name} jumps by {jump} at {t}");
+                }
+            }
+            let failures = conformance::param_curve(image.as_ref(), lo, hi);
+            assert!(failures.is_empty(), "{name}: {failures:#?}");
+        }
+    }
+
+    #[test]
+    fn an_image_that_counts_its_turns_comes_round_only_where_its_angle_does() {
+        let cases = counted();
+        let wrap = |name: &str| cases.iter().find(|c| c.0 == name).map(|c| c.1.range().wrap);
+        assert_eq!(wrap("round_on_its_own"), Some(Wrap::Open), "it goes once round the axis");
+        assert_eq!(wrap("between_round"), Some(Wrap::Open));
+        assert_eq!(wrap("round_beside"), Some(Wrap::Periodic), "beside the axis, its ends meet");
+        assert_eq!(wrap("between_beside"), Some(Wrap::Periodic));
+        let image = &cases.iter().find(|c| c.0 == "round_on_its_own").map(|c| &c.1).unwrap();
+        assert!((image.uv(TAU).u() - image.uv(0.0).u()).abs() > 6.0, "its angle turns once");
     }
 
     #[test]
@@ -973,6 +1092,7 @@ mod tests {
                 let reach = match image.turn {
                     Turn::Beside { .. } => TAU,
                     Turn::Round { .. } => (to - from).abs() + 2.0 * TAU,
+                    Turn::Laps(laps) => laps.span.1 - laps.span.0,
                 };
                 let wide = b.hi.u() - b.lo.u();
                 assert!(wide <= reach + 1e-9 * (1.0 + b.hi.u().abs()), "{name}: {from} to {to} is {wide} wide in u");
@@ -1218,6 +1338,177 @@ mod tests {
                 let circle = ring(&place, centre, (x, up.cross(x)), radius);
                 conic(&format!("plane[{seed}]"), circle, &sheet, false);
             }
+        }
+    }
+
+    /// A curve on a cylinder of the frame `(origin, x, y, z)` and `radius`, its height `t`, whose angle about the axis
+    /// swings as `4 sin t`, so that it crosses the half-plane behind its start both ways, over `range`.
+    #[derive(Clone)]
+    struct Swing {
+        frame: [Vec3; 4],
+        radius: f64,
+        range: ParamRange,
+    }
+
+    impl Swing {
+        fn on(chart: &Chart, radius: f64, range: ParamRange) -> Self {
+            let Form::Turned { origin, x, y, z, .. } = chart.0 else { panic!("a turned chart") };
+            Self { frame: [origin, x, y, z], radius, range }
+        }
+    }
+
+    #[expect(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
+    impl ParametricCurve for Swing {
+        fn eval_point<R: Real>(&self, t: R) -> Point<World, R> {
+            self.eval_second(t).0
+        }
+
+        fn eval_first<R: Real>(&self, t: R) -> (Point<World, R>, occam_units::Tangent<World, R>) {
+            let (p, d, _) = self.eval_second(t);
+            (p, d)
+        }
+
+        fn eval_second<R: Real>(
+            &self,
+            t: R,
+        ) -> (Point<World, R>, occam_units::Tangent<World, R>, occam_units::Tangent<World, R>) {
+            let [origin, across, side, up] = self.frame.map(splat::<R>);
+            let (swing, pace) = sin_cos(t);
+            let (angle, rate, bend) = (swing * R::splat(4.0), pace * R::splat(4.0), swing * R::splat(-4.0));
+            let (st, ct) = sin_cos(angle);
+            let (out, turn) = (across * ct + side * st, side * ct - across * st);
+            let radius = R::splat(self.radius);
+            let point = origin + out * radius + up * t;
+            let first = turn * (radius * rate) + up;
+            let second = turn * (radius * bend) - out * (radius * rate * rate);
+            (Point::from_vec3(point), occam_units::Tangent::new(first), occam_units::Tangent::new(second))
+        }
+
+        fn derivatives(
+            &self,
+            t: f64,
+            order: u8,
+            out: &mut Vec<occam_units::Tangent<World>>,
+            _: &mut Scratch,
+        ) -> Result<(), Report> {
+            let (_, first, second) = self.eval_second(t);
+            out.extend([first, second].into_iter().take(usize::from(order)));
+            Ok(())
+        }
+
+        fn range(&self) -> ParamRange {
+            self.range
+        }
+
+        fn bounds(&self, lo: f64, hi: f64) -> occam_units::Bounds {
+            let [origin, x, y, z] = self.frame;
+            let r = self.radius;
+            let corners = (0..8_u8).map(|i| {
+                let pick = |bit: u8, a: f64, b: f64| if i & bit == 0 { a } else { b };
+                Point::from_vec3(origin + x * pick(1, -r, r) + y * pick(2, -r, r) + z * pick(4, lo, hi))
+            });
+            occam_units::Bounds::of(corners).unwrap_or_else(crate::support::everything)
+        }
+
+        fn family(&self) -> FamilyName {
+            FamilyName("swing")
+        }
+
+        fn content(&self, _: &mut Content) {}
+
+        fn shape(&self) -> Shape {
+            Shape { form: "swing", values: Vec::new() }
+        }
+    }
+
+    fn from_to(lo: f64, hi: f64) -> ParamRange {
+        ParamRange { lo, hi, wrap: Wrap::Open, kind: occam_units::ParamKind::Knot }
+    }
+
+    #[test]
+    fn an_image_read_along_starts_at_the_charts_parameters_and_follows_a_curve_that_swings_both_ways() {
+        let surface = Cylinder::placed(&placement(), mm(0.8)).unwrap();
+        let c = chart(&surface);
+        for start in [0.0, 1.0, 2.5, 4.0] {
+            let swing = Swing::on(&c, 0.8, from_to(start, start + 5.5));
+            let image = Image::along(swing.clone(), c).unwrap();
+            let first = c.parameters(swing.eval_point(start));
+            let begun = image.eval_uv(start);
+            assert!(
+                (begun.u() - first.u()).abs() < 1e-12 && (begun.v() - first.v()).abs() < 1e-12,
+                "{start}: {begun:?}"
+            );
+            let offset = begun.u() - 4.0 * sin_cos(start).0;
+            let (mut least, mut most) = (f64::INFINITY, f64::NEG_INFINITY);
+            for i in 0..=550 {
+                let t = start + f64::from(i) / 100.0;
+                let uv = image.eval_uv(t);
+                let want = offset + 4.0 * sin_cos(t).0;
+                assert!((uv.u() - want).abs() < 1e-11, "{start} at {t}: {} against {want}", uv.u());
+                (least, most) =
+                    (if uv.u() < least { uv.u() } else { least }, if uv.u() > most { uv.u() } else { most });
+            }
+            let b = ParametricParamCurve::bounds(&image, start, start + 5.5);
+            assert!(b.lo.u() <= least && b.hi.u() >= most, "{start}: {b:?} misses {least}..{most}");
+            assert!(b.hi.u() - b.lo.u() <= most - least + 2.0 * TAU + 1e-9, "{start}: {b:?} is wider than its reach");
+        }
+    }
+
+    #[test]
+    fn an_image_read_along_refuses_a_range_without_an_end_and_keeps_a_lower_nappe_from_its_apex() {
+        let surface = Cylinder::placed(&placement(), mm(0.8)).unwrap();
+        let c = chart(&surface);
+        for range in [from_to(0.0, f64::INFINITY), from_to(f64::NEG_INFINITY, 0.0)] {
+            assert!(Image::along(Swing::on(&c, 0.8, range), c).is_none(), "{range:?}");
+        }
+        let cone = Cone::placed(&placement(), mm(0.0), Angle::from_radians(0.5)).unwrap();
+        let k = chart(&cone);
+        let (sin, cos) = sin_cos(0.5);
+        let apex = Point::from_vec3(at(0.0, 0.0, 0.0));
+        let down = Direction::normalised(along(-sin * 0.6, -sin * 0.8, -cos));
+        let up = Direction::normalised(-down.get());
+        let lines = [(0.0, 2.0, down), (-2.0, 0.0, up), (-0.4, -0.1, up)];
+        for line in lines.map(|(lo, hi, way)| Line::new(apex, way).trimmed(lo, hi).unwrap()) {
+            let image = Image::along(line, k).unwrap();
+            assert!(image.below, "on the nappe below the apex");
+            maps(&cone, &image, &line);
+        }
+        // Round the axis below the apex, either way, where the angle is read across the axis turned over.
+        let (x, y) = (along(1.0, 0.0, 0.0), along(0.0, 1.0, 0.0));
+        for way in [y, -y] {
+            let ring = circle(at(0.0, 0.0, -1.0), x, way, sin / cos);
+            let image = Image::along(ring, k).unwrap();
+            assert!(image.below, "on the nappe below the apex");
+            maps(&cone, &image, &ring);
+        }
+    }
+
+    /// `image` maps onto `curve` through `surface`, at twenty points of its range after its start, its angle not jumping
+    /// between them short of its ends, either of which may be an apex.
+    fn maps<C: ParametricCurve + Clone>(surface: &dyn Surface, image: &Image<C>, curve: &C) {
+        let range = ParametricCurve::range(curve);
+        let mut before = image.eval_uv(range.lo + (range.hi - range.lo) / 20.0).u();
+        for i in 1..=20 {
+            let t = range.lo + (range.hi - range.lo) * f64::from(i) / 20.0;
+            let miss = (surface.point(image.eval_uv(t)).to_vec3() - curve.eval_point(t).to_vec3()).norm();
+            assert!(miss <= 1e-12 * 4.0, "{t}: {miss}");
+            let u = image.eval_uv(t).u();
+            assert!(i == 20 || (u - before).abs() < 1.0, "{t}: the angle jumps from {before} to {u}");
+            before = u;
+        }
+    }
+
+    #[test]
+    fn a_circle_round_an_axis_winds_once_either_way_and_its_image_does_not_come_round() {
+        let surface = Cylinder::placed(&placement(), mm(0.8)).unwrap();
+        let c = chart(&surface);
+        let (x, y) = (along(1.0, 0.0, 0.0), along(0.0, 1.0, 0.0));
+        for (way, sign) in [(y, 1.0), (-y, -1.0)] {
+            let ring = circle(at(0.0, 0.0, 0.4), x, way, 0.8);
+            let image = Image::along(ring, c).unwrap();
+            let Turn::Laps(laps) = image.turn else { panic!("counted") };
+            assert_eq!(laps.winding(), sign * TAU);
+            assert_eq!(image.range.wrap, Wrap::Open);
         }
     }
 }

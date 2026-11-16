@@ -92,7 +92,12 @@ fn read(surface: &dyn Surface, form: Analytic, at: UvPoint) -> Form {
             let slope = sin_cos(half_angle.radians());
             let from_apex = side * across(offset, up).norm() * slope.0 + offset.dot(up) * slope.1;
             let meridian = Meridian::Slanted { apex: at.v() - from_apex, slope };
-            turned(apex.to_vec3(), unit(across(offset, up)) * side, du * side, up, at.u(), meridian)
+            // Out from the axis, square to it and to `du`, which is the surface's own and exact to rounding in itself,
+            // where `offset` is near the apex and so may keep little of its way about the axis far from the origin:
+            // only which way, the side of the axis it is on.
+            let square = unit(du.cross(up));
+            let out = square * square.dot(offset).signum();
+            turned(apex.to_vec3(), out * side, du * side, up, at.u(), meridian)
         }
         Analytic::Sphere { centre, radius } => {
             let size = radius.millimetres();
@@ -241,7 +246,7 @@ impl Chart {
 
 #[cfg(test)]
 mod tests {
-    use occam_units::{Angle, Length};
+    use occam_units::{Angle, Length, Local, Placement, Vector};
 
     use super::*;
     use crate::conformance::{placement, tolerance};
@@ -279,6 +284,25 @@ mod tests {
                 let gap = (back.to_vec3() - p.to_vec3()).norm();
                 assert!(gap <= 1e-12 * (1.0 + p.to_vec3().norm()), "{:?} reads {uv:?} back {gap} away", s.family());
             }
+        }
+    }
+
+    #[test]
+    fn a_cone_a_hundred_metres_across_is_charted_to_its_size_far_from_its_apex() {
+        // Its apex near 4e5 from the origin, where the chart is read half a millimetre from it.
+        let shift = Placement::<World, World>::translation(Vector::from_vec3(Vec3::new(2e5, -3e5, 1e5)));
+        let far = Placement::<Local, Local>::rotation(
+            Direction::normalised(Vec3::new(1.0, 2.0, 3.0)),
+            Angle::from_radians(0.7),
+        );
+        let cone =
+            Cone::placed(&far.then(&Placement::identity()).then(&shift), mm(0.0), Angle::from_radians(0.4)).unwrap();
+        let c = chart(&cone).unwrap();
+        for (u, v) in [(0.3, 5e4), (2.0, -1.5e5), (4.0, 2e5), (5.5, 1e3)] {
+            let p = cone.point(UvPoint::new(u, v));
+            let back = cone.point(c.parameters(p));
+            let gap = (back.to_vec3() - p.to_vec3()).norm();
+            assert!(gap <= 1e-12 * v.abs(), "at {u}, {v}: read back {gap} away");
         }
     }
 

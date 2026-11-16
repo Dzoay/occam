@@ -4,7 +4,7 @@
 //! or a conic; surfaces turned about one axis, a torus among them, meet in circles where their meridians cross, which
 //! covers a plane across the axis, two spheres and a sphere centred on the axis; and two parallel cylinders meet in
 //! lines. Every other pair declines: a sphere, cone or cylinder with a cylinder off their common axis goes to Levin's
-//! pencil method (`intersection.quadrics`), and a torus with most surfaces to the hybrid.
+//! pencil method ([`crate::Pencil`]), and a torus with most surfaces to the hybrid.
 //!
 //! Each curve is one of occam-geom's exact families, with its image on both surfaces in their own parameters, read
 //! through a chart of each that is recovered from its evaluation. A point where the surfaces touch is a contact, and
@@ -14,19 +14,18 @@
 
 mod coaxial;
 mod conic;
-mod decide;
 mod meet;
 mod piece;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use occam_geom::{Analytic, Chart, Surface};
 use occam_math::{Interval, Side};
 use occam_units::{Point, Tolerance, Vec3};
 
 use self::coaxial::{Axis, coaxial};
-use self::decide::{Decide, Undecided};
-use self::piece::Plan;
+pub(crate) use self::piece::{Plan, square_to};
+use crate::decide::{Decisions, Undecided};
 use crate::methods::{Answer, Method, Spent, Work};
 use crate::section::{Coincidence, Contact, Section, SectionCurve};
 
@@ -35,10 +34,10 @@ pub struct Closed;
 
 /// What a closed form found, in space.
 #[derive(Default)]
-struct Found {
-    curves: Vec<Plan>,
-    contacts: Vec<Vec3>,
-    coincidence: Option<Coincidence>,
+pub(crate) struct Found {
+    pub(crate) curves: Vec<Plan>,
+    pub(crate) contacts: Vec<Vec3>,
+    pub(crate) coincidence: Option<Coincidence>,
 }
 
 impl Found {
@@ -55,31 +54,31 @@ impl Found {
     }
 }
 
-fn unit(v: Vec3) -> Vec3 {
+pub(crate) fn unit(v: Vec3) -> Vec3 {
     v * (1.0 / v.norm())
 }
 
 /// `v`'s parts, each exactly.
-fn exact3(v: Vec3) -> [Interval; 3] {
+pub(crate) fn exact3(v: Vec3) -> [Interval; 3] {
     [v.x, v.y, v.z].map(Interval::exact)
 }
 
 /// `p − from`, certified.
-fn minus([px, py, pz]: [Interval; 3], [fx, fy, fz]: [Interval; 3]) -> [Interval; 3] {
+pub(crate) fn minus([px, py, pz]: [Interval; 3], [fx, fy, fz]: [Interval; 3]) -> [Interval; 3] {
     [px - fx, py - fy, pz - fz]
 }
 
 /// `(p − from) · towards`, certified.
-fn along(p: [Interval; 3], from: [Interval; 3], [tx, ty, tz]: [Interval; 3]) -> Interval {
+pub(crate) fn along(p: [Interval; 3], from: [Interval; 3], [tx, ty, tz]: [Interval; 3]) -> Interval {
     let [x, y, z] = minus(p, from);
     x * tx + y * ty + z * tz
 }
 
-fn cross3([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> [Interval; 3] {
+pub(crate) fn cross3([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> [Interval; 3] {
     [ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx]
 }
 
-fn norm3([x, y, z]: [Interval; 3]) -> Interval {
+pub(crate) fn norm3([x, y, z]: [Interval; 3]) -> Interval {
     (x * x + y * y + z * z).sqrt()
 }
 
@@ -105,18 +104,18 @@ const fn rank(form: Analytic) -> u8 {
 }
 
 /// Whether the unit `direction` runs along `axis`, within the angle band.
-fn parallel(direction: Vec3, axis: &Axis, decide: &mut Decide) -> Result<bool, Undecided> {
+fn parallel(direction: Vec3, axis: &Axis, decide: &mut Decisions) -> Result<bool, Undecided> {
     Ok(decide.angle(norm3(cross3(exact3(direction), exact3(axis.along))))? == Side::Within)
 }
 
 /// Whether `p` is on `axis`, within the length band.
-fn on(p: Vec3, axis: &Axis, decide: &mut Decide) -> Result<bool, Undecided> {
+fn on(p: Vec3, axis: &Axis, decide: &mut Decisions) -> Result<bool, Undecided> {
     let off = cross3(minus(exact3(p), exact3(axis.at)), exact3(axis.along));
     Ok(decide.length(norm3(off))? == Side::Within)
 }
 
 /// Whether `form` is turned about `axis`: a plane across it, a sphere centred on it, or a surface about it.
-fn about(form: Analytic, axis: &Axis, decide: &mut Decide) -> Result<bool, Undecided> {
+fn about(form: Analytic, axis: &Axis, decide: &mut Decisions) -> Result<bool, Undecided> {
     match form {
         Analytic::Plane { normal, .. } => parallel(normal.get(), axis, decide),
         Analytic::Sphere { centre, .. } => on(centre.to_vec3(), axis, decide),
@@ -128,7 +127,7 @@ fn about(form: Analytic, axis: &Axis, decide: &mut Decide) -> Result<bool, Undec
 }
 
 /// Two spheres: about the line of their centres, or, where those are one, the one sphere or none.
-fn spheres(first: Analytic, second: Analytic, decide: &mut Decide) -> Result<Found, Undecided> {
+fn spheres(first: Analytic, second: Analytic, decide: &mut Decisions) -> Result<Found, Undecided> {
     let (Analytic::Sphere { centre, radius }, Analytic::Sphere { centre: other, radius: size }) = (first, second)
     else {
         return Ok(Found::default());
@@ -142,7 +141,7 @@ fn spheres(first: Analytic, second: Analytic, decide: &mut Decide) -> Result<Fou
 }
 
 /// The section of a pair in rank order, or `Ok(None)` where it has no closed form here.
-fn solve(first: Analytic, second: Analytic, decide: &mut Decide) -> Result<Option<Found>, Undecided> {
+pub(crate) fn solve(first: Analytic, second: Analytic, decide: &mut Decisions) -> Result<Option<Found>, Undecided> {
     Ok(Some(match (first, second) {
         (Analytic::Plane { origin, normal }, Analytic::Plane { origin: other, normal: facing }) => {
             conic::planes((origin.to_vec3(), normal.get()), (other.to_vec3(), facing.get()), decide)?
@@ -174,7 +173,7 @@ fn parallel_cylinders(
     first: Analytic,
     second: Analytic,
     (axis, other): (&Axis, &Axis),
-    decide: &mut Decide,
+    decide: &mut Decisions,
 ) -> Result<Option<Found>, Undecided> {
     let (Analytic::Cylinder { radius, .. }, Analytic::Cylinder { radius: size, .. }) = (first, second) else {
         return Ok(None);
@@ -188,7 +187,7 @@ fn parallel_cylinders(
 
 /// A plane with a cylinder or a cone that it does not cross square to the axis; any other pair off a common axis has
 /// no closed form here.
-fn off_axis(first: Analytic, second: Analytic, decide: &mut Decide) -> Result<Option<Found>, Undecided> {
+fn off_axis(first: Analytic, second: Analytic, decide: &mut Decisions) -> Result<Option<Found>, Undecided> {
     let Analytic::Plane { origin, normal } = first else { return Ok(None) };
     let plane = (origin.to_vec3(), normal.get());
     Ok(Some(match second {
@@ -204,7 +203,12 @@ fn off_axis(first: Analytic, second: Analytic, decide: &mut Decide) -> Result<Op
 
 /// Puts what was found into `section`, each curve with its images on both surfaces, or gives `false`, having put
 /// nothing, where a curve or an image cannot be made.
-fn emit(found: Found, charts: [&Chart; 2], decide: &mut Decide, section: &mut Section) -> Result<bool, Undecided> {
+pub(crate) fn emit(
+    found: Found,
+    charts: [&Chart; 2],
+    decide: &mut Decisions,
+    section: &mut Section,
+) -> Result<bool, Undecided> {
     let mut curves = Vec::new();
     for plan in found.curves {
         let Some(made) = piece::pieces(plan, charts, decide)? else { return Ok(false) };
@@ -239,7 +243,7 @@ impl Method for Closed {
         let (Some(fa), Some(fb)) = (a.analytic(tol), b.analytic(tol)) else { return Ok(Answer::Declined) };
         let (Some(ca), Some(cb)) = (Chart::of(a, fa), Chart::of(b, fb)) else { return Ok(Answer::Declined) };
         work.spend(1)?;
-        let mut decide = Decide::new(tol);
+        let mut decide = Decisions::new(tol);
         let solved = if rank(fb) < rank(fa) { solve(fb, fa, &mut decide) } else { solve(fa, fb, &mut decide) };
         let emitted = solved.and_then(|found| found.map_or(Ok(false), |f| emit(f, [&ca, &cb], &mut decide, section)));
         let answer = if matches!(emitted, Ok(false)) { Answer::Declined } else { Answer::Answered };
