@@ -1,6 +1,7 @@
 //! Source: original
 //! The command's parts that a running viewer cannot show: the page the build embeds, what the viewer's first line
-//! says, a viewer that says nothing, and one that says it will stop and does not.
+//! says, a viewer that says nothing, one that says it will stop and does not, when a port is gone, and a process
+//! started apart.
 
 use std::io::{Read as _, Write as _};
 use std::net::{Ipv4Addr, TcpListener};
@@ -97,4 +98,32 @@ fn a_viewer_that_says_it_will_stop_and_still_answers_is_named() {
     let words = viewed.reports[0].message(DisplayUnits::default());
     assert!(words.ends_with(", process 77, still answered 10 seconds after it was asked to stop."), "{words}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_port_is_gone_once_its_listener_closes_within_the_wait_and_not_while_it_listens() {
+    let closing = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    let port = closing.local_addr().unwrap().port();
+    let closer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(200));
+        drop(closing);
+    });
+    assert!(gone(port, Duration::from_secs(5)), "closed a fifth of a second in, well within the wait");
+    closer.join().unwrap();
+    let held = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    assert!(!gone(held.local_addr().unwrap().port(), Duration::from_millis(100)), "still listening when the wait ends");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_detached_process_leads_a_process_group_of_its_own() {
+    let mut command = Command::new("sleep");
+    command.arg("5");
+    detach(&mut command);
+    let mut child = command.spawn().unwrap();
+    let pid = child.id().to_string();
+    let group = Command::new("ps").args(["-o", "pgid=", "-p", &pid]).output().unwrap();
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(String::from_utf8(group.stdout).unwrap().trim(), pid, "its group is its own process");
 }

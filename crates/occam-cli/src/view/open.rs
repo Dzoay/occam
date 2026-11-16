@@ -6,25 +6,32 @@
 use std::ffi::OsString;
 use std::process::{Command, Stdio};
 
-/// The command that opens `url`, given what `BROWSER` holds, if anything.
-fn opener(browser: Option<OsString>, url: &str) -> Command {
-    let mut command = match browser.filter(|program| !program.is_empty()) {
-        Some(program) => Command::new(program),
-        None if cfg!(target_os = "macos") => Command::new("open"),
-        None if cfg!(windows) => {
-            let mut start = Command::new("cmd");
-            start.args(["/C", "start", ""]);
-            start
-        }
-        None => Command::new("xdg-open"),
-    };
+/// The system's own opener where `os` runs, as `std::env::consts::OS` names it: its program, and what it takes before
+/// the address.
+fn system(os: &str) -> (&'static str, &'static [&'static str]) {
+    match os {
+        "macos" => ("open", &[]),
+        "windows" => ("cmd", &["/C", "start", ""]),
+        _ => ("xdg-open", &[]),
+    }
+}
+
+/// The command that opens `url` where `os` runs, given what `BROWSER` holds, if anything.
+fn opener(browser: Option<OsString>, os: &str, url: &str) -> Command {
+    let named = browser.filter(|program| !program.is_empty()).map(|program| (program, &[][..]));
+    let (program, before) = named.unwrap_or_else(|| {
+        let (program, before) = system(os);
+        (program.into(), before)
+    });
+    let mut command = Command::new(program);
+    command.args(before);
     command.arg(url);
     command
 }
 
 /// Opens `url` in a browser; whether the program that opens it could be started.
 pub fn page(url: &str) -> bool {
-    let mut command = opener(std::env::var_os("BROWSER"), url);
+    let mut command = opener(std::env::var_os("BROWSER"), std::env::consts::OS, url);
     command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_ok()
 }
 
@@ -32,20 +39,27 @@ pub fn page(url: &str) -> bool {
 mod tests {
     use super::*;
 
+    /// The program and arguments of `command`.
+    fn said(command: &Command) -> (String, Vec<String>) {
+        let arguments = command.get_args().map(|argument| argument.to_string_lossy().into_owned());
+        (command.get_program().to_string_lossy().into_owned(), arguments.collect())
+    }
+
     #[test]
-    fn the_browser_named_opens_the_page_and_otherwise_the_systems_opener() {
-        let named = opener(Some("firefox".into()), "http://127.0.0.1:1/t/");
-        assert_eq!(named.get_program(), "firefox");
-        assert_eq!(named.get_args().collect::<Vec<_>>(), ["http://127.0.0.1:1/t/"]);
-        let system = opener(Some(OsString::new()), "http://127.0.0.1:1/t/");
-        let want = if cfg!(target_os = "macos") {
-            "open"
-        } else if cfg!(windows) {
-            "cmd"
-        } else {
-            "xdg-open"
+    fn the_browser_named_opens_the_page_and_otherwise_each_systems_own_opener() {
+        let url = "http://127.0.0.1:1/t/";
+        let at = |program: &str, before: &[&str]| {
+            let arguments = before.iter().chain(&[url]).map(ToString::to_string).collect();
+            (program.to_string(), arguments)
         };
-        assert_eq!(system.get_program(), want, "an empty BROWSER names nothing");
-        assert_eq!(system.get_args().last().and_then(|arg| arg.to_str()), Some("http://127.0.0.1:1/t/"));
+        assert_eq!(said(&opener(Some("firefox".into()), "linux", url)), at("firefox", &[]));
+        assert_eq!(
+            said(&opener(Some(OsString::new()), "linux", url)),
+            at("xdg-open", &[]),
+            "an empty BROWSER names none"
+        );
+        assert_eq!(said(&opener(None, "macos", url)), at("open", &[]));
+        assert_eq!(said(&opener(None, "windows", url)), at("cmd", &["/C", "start", ""]));
+        assert_eq!(said(&opener(None, "freebsd", url)), at("xdg-open", &[]));
     }
 }

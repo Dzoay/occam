@@ -152,22 +152,16 @@ fn said(line: &str) -> Option<Result<Viewer, Report>> {
     Viewer::from_json(line).map(Ok).or_else(|| Report::from_json(line.trim()).ok().map(Err))
 }
 
-/// Starts `command` apart from this process's group, so that the viewer outlives it and its terminal.
-#[cfg(unix)]
+/// Starts `command` apart from this process, so that the viewer outlives it and its terminal: in a process group of
+/// its own, and on Windows with no console too (`DETACHED_PROCESS`, 0x8, with `CREATE_NEW_PROCESS_GROUP`, 0x200).
 fn detach(command: &mut Command) {
+    #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(command, 0);
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(command, 0x0000_0208);
+    #[cfg(not(any(unix, windows)))]
+    let _ = command;
 }
-
-/// Starts `command` with no console and in a process group of its own, so that the viewer outlives this process.
-#[cfg(windows)]
-fn detach(command: &mut Command) {
-    const DETACHED_PROCESS: u32 = 0x0000_0008;
-    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-    std::os::windows::process::CommandExt::creation_flags(command, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-}
-
-#[cfg(not(any(unix, windows)))]
-const fn detach(_: &mut Command) {}
 
 /// The model as an input of the command line.
 fn given_model(model: &Path) -> Input {

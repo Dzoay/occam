@@ -21,7 +21,7 @@ use axum::http::{HeaderName, StatusCode, Uri, header};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
-use futures_util::stream::{self, Stream, StreamExt as _};
+use futures_util::stream::{self, Stream};
 use occam::{DisplayUnits, Report, Viewer, Watching};
 use tokio::sync::watch;
 
@@ -95,10 +95,7 @@ impl App {
 pub fn serve(model: &Path, port: Option<u16>, idle: Duration) -> Said {
     let listener = match TcpListener::bind((Ipv4Addr::LOCALHOST, port.unwrap_or(0))) {
         Ok(listener) => listener,
-        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse && port.is_some() => {
-            return refused(&port_taken(port.unwrap_or_default()));
-        }
-        Err(_) => return refused(&super::not_started(model)),
+        Err(error) => return refused(&unbound(&error, port, model)),
     };
     let viewer = Viewer {
         pid: std::process::id(),
@@ -133,6 +130,15 @@ pub fn serve(model: &Path, port: Option<u16>, idle: Duration) -> Said {
     }
     state::remove_if_ours(&file, &token);
     Said { lines: Vec::new(), status: 0 }
+}
+
+/// Why the viewer of `model` could not listen on `port`, or a free port, as `error` says: `view.port-taken` where the
+/// port asked for is in use, and `view.not-started` otherwise.
+fn unbound(error: &std::io::Error, port: Option<u16>, model: &Path) -> Report {
+    match port {
+        Some(port) if error.kind() == std::io::ErrorKind::AddrInUse => port_taken(port),
+        _ => super::not_started(model),
+    }
 }
 
 /// What the server says when it cannot listen: `report`'s JSON, for `occam view` to read.
@@ -173,13 +179,16 @@ async fn watch(app: &Arc<App>, mut watcher: Watcher) {
         if let Some(looked) = looked {
             app.shown.send_modify(|shown| shown.take(looked));
         }
-        if app.pages.load(Ordering::Relaxed) > 0 {
-            idle_since = Instant::now();
-        }
+        idle_since = quiet_since(idle_since, app.pages.load(Ordering::Relaxed), Instant::now());
         if replaced || idle_since.elapsed() >= app.idle {
             return app.stop();
         }
     }
+}
+
+/// Since when the viewer has had no page open, given that it had none since `since` and has `pages` open at `now`.
+fn quiet_since(since: Instant, pages: u32, now: Instant) -> Instant {
+    if pages > 0 { now } else { since }
 }
 
 /// Every route, each behind the token.
@@ -194,7 +203,7 @@ fn router(app: &Arc<App>) -> Router {
         .route(&format!("/{token}/events"), get(events))
         .route(&format!("/{token}/status"), get(status))
         .route(&format!("/{token}/stop"), post(stop));
-    for (name, bytes) in page::files() {
+    for (name, bytes) in page::files(page::FILES) {
         router = router.route(
             &format!("/{token}/{name}"),
             get(move || async move { reply(StatusCode::OK, page::content_type(name), bytes) }),
@@ -278,9 +287,9 @@ struct Sent {
 }
 
 impl Sent {
-    /// The events that tell a page what changed since: `model` when another model reads whole, or the file reads
-    /// whole again, and `refused` when it does not read, each with what the viewer says of the model.
-    fn since(&mut self, shown: &Shown, app: &App) -> Vec<Result<Event, Infallible>> {
+    /// The event that tells a page what changed since, if anything did: `model` when another model reads whole, or the
+    /// file reads whole again, and `refused` when it does not read.
+    fn since(&mut self, shown: &Shown) -> Option<&'static str> {
         let digest = shown.good.as_ref().map(|(digest, _)| *digest);
         let read_again = !self.refused.is_empty() && shown.refused.is_empty();
         let name = if shown.refused != self.refused && !shown.refused.is_empty() {
@@ -291,12 +300,12 @@ impl Sent {
             None
         };
         (self.digest, self.refused) = (digest, shown.refused.clone());
-        name.map(|name| Ok(Event::default().event(name).data(app.watching().json()))).into_iter().collect()
+        name
     }
 }
 
 /// The stream of events a page follows the model by: what the viewer shows when it opens, then each change, until
-/// the server stops.
+/// the server stops. Each event carries what the viewer says of the model.
 async fn events(State(app): State<Arc<App>>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let start = (app.shown.subscribe(), Sent::default(), Page::open(&app));
     let stream = stream::unfold(start, |(mut shown, mut sent, page)| async move {
@@ -305,12 +314,15 @@ async fn events(State(app): State<Arc<App>>) -> Sse<impl Stream<Item = Result<Ev
             if now.stopping {
                 return None;
             }
-            let events = sent.since(&now, &page.0);
-            if !events.is_empty() {
-                return Some((stream::iter(events), (shown, sent, page)));
+            if let Some(name) = sent.since(&now) {
+                let event = Event::default().event(name).data(page.0.watching().json());
+                return Some((Ok(event), (shown, sent, page)));
             }
             shown.changed().await.ok()?;
         }
     });
-    Sse::new(stream.flatten()).keep_alive(KeepAlive::default())
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
+
+#[cfg(test)]
+mod tests;

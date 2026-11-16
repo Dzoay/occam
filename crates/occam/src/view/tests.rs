@@ -88,3 +88,19 @@ fn the_answer_gives_the_address_and_token_where_a_viewer_runs_and_its_reports_in
     assert_eq!(stopped.words(), [(true, "The viewer for part.occam has stopped.".to_string())]);
     assert_eq!(Viewed::of("part.occam").words(), [(true, "No viewer runs for part.occam.".to_string())]);
 }
+
+#[test]
+fn in_words_the_answer_says_it_opened_the_page_and_a_refusal_with_no_viewer_says_only_why() {
+    let opened = Viewed {
+        running: Some((viewer(), watching(Vec::new()))),
+        started: true,
+        opened: true,
+        ..Viewed::of("part.occam")
+    };
+    let said = "The viewer for part.occam is at http://127.0.0.1:40123/9f0e/, open in a browser.";
+    assert_eq!(opened.words(), [(true, said.to_string())]);
+    let refused = Viewed { reports: vec![missing()], ..Viewed::of("part.occam") };
+    let words = refused.words();
+    assert_eq!(words.len(), 1, "no line on what runs: {words:?}");
+    assert!(!words[0].0 && words[0].1.starts_with("There is no model at "), "{words:?}");
+}
