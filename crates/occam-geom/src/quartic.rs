@@ -11,6 +11,10 @@
 //! keeps one sign, and its angle is `θ` itself. Either way the loop is periodic and smooth, with rates of every order,
 //! and exact, a closed form evaluated in floating point. A smooth quartic has no rational form, so `to_bspline` gives
 //! none.
+//!
+//! Where `α` vanishes on a cone's ruling, one sign runs to infinity and the other passes at `v = −γ/2β`, where
+//! `−β ± √Δ` loses its digits. So `v` is taken there as `−γ / (β ± √Δ)`, the same number, since `β² − Δ = αγ`: of the
+//! two forms, the one that loses less. `γ` is not stored, but read from `α`, `β` and `Δ`.
 
 use std::f64::consts::SQRT_2;
 
@@ -56,6 +60,40 @@ pub struct Quartic {
     beta: [f64; 3],
     root: Root,
     range: ParamRange,
+    /// `γ`, read from `α`, `β` and `Δ`.
+    gamma: [f64; 5],
+}
+
+/// `a b`, for `a` and `b` of degree one, as one of degree two.
+fn product([a0, a1, a2]: [f64; 3], [b0, b1, b2]: [f64; 3]) -> [f64; 5] {
+    let (along, across) = (a1 * b1, a2 * b2);
+    let crossed = a1 * b2 + a2 * b1;
+    [
+        a0 * b0 + f64::midpoint(along, across),
+        a0 * b1 + a1 * b0,
+        a0 * b2 + a2 * b0,
+        0.5 * (along - across),
+        0.5 * crossed,
+    ]
+}
+
+/// `γ` from `αγ = β² − Δ`: for a cylinder, whose `α` is a constant, `β² − Δ` over it; for a cone, whose `γ` is a
+/// constant, the multiple of `α` nearest `β² − Δ`, its coefficients taken as a vector.
+fn gamma(ruled: Ruled, alpha: [f64; 5], beta: [f64; 3], root: Root) -> [f64; 5] {
+    let delta = match root {
+        Root::Whole { delta, .. } => delta,
+        Root::Between { middle: (cm, sm), k, e } => product([2.0 * k * k - 1.0, cm, sm], e),
+    };
+    let square = product(beta, beta);
+    let p: [f64; 5] =
+        std::array::from_fn(|i| square.get(i).copied().unwrap_or(0.0) - delta.get(i).copied().unwrap_or(0.0));
+    match ruled {
+        Ruled::Upright { .. } => p.map(|c| c / alpha[0]),
+        Ruled::Slanted { .. } => {
+            let dot = |a: &[f64; 5], b: &[f64; 5]| a.iter().zip(b).map(|(x, y)| x * y).sum::<f64>();
+            [dot(&p, &alpha) / dot(&alpha, &alpha), 0.0, 0.0, 0.0, 0.0]
+        }
+    }
 }
 
 /// `c₀ + c₁ cos θ + c₂ sin θ + c₃ cos 2θ + c₄ sin 2θ`.
@@ -130,7 +168,7 @@ impl Quartic {
         }
         let range = read.range(turn(), true)?;
         read.done()?;
-        Ok(Self { axes, ruled, alpha, beta, root, range })
+        Ok(Self { axes, ruled, alpha, beta, root, range, gamma: gamma(ruled, alpha, beta, root) })
     }
 
     /// The part of the loop from `lo` to `hi`.
@@ -169,7 +207,15 @@ impl Quartic {
     fn at<F: Field>(&self, s: &F) -> [F; 3] {
         let ((cos, sin), root) = self.angle(s);
         let alpha = second(&self.alpha, (&cos, &sin));
-        let v = root.minus(&first(&self.beta, (&cos, &sin))).over(&alpha);
+        let beta = first(&self.beta, (&cos, &sin));
+        // `α v = √ − β` loses `ε |√ + β|` where the two are alike, `ε |√ + β| / |α|` in `v`, and `v = −γ / (√ + β)`
+        // loses `ε ‖γ‖ / |√ + β|`: the second is taken only where `√ + β` is the larger and its square more than
+        // `|α| ‖γ‖`, as where `α` vanishes on the sign that does not run to infinity, and never where both are small.
+        let (near, far) = (root.minus(&beta), root.plus(&beta));
+        let (by_alpha, by_far) = (near.over(&alpha), second(&self.gamma, (&cos, &sin)).over(&far).scaled(-1.0));
+        let size = self.gamma.iter().map(|c| c.abs()).sum::<f64>();
+        let clear = by_alpha.pick(&by_far, (&alpha.scaled(size), &far.times(&far)));
+        let v = by_alpha.pick(&clear, (&near, &far));
         let Axes { origin, x, y, normal } = self.axes;
         let z = normal.get();
         let coordinate = |o: f64, x: f64, y: f64, z: f64| -> F {
@@ -290,7 +336,9 @@ impl ParametricCurve for Quartic {
             Root::Whole { delta, sign } => Root::Whole { delta: delta.map(|d| d * k * k), sign },
             Root::Between { middle, k: half, e } => Root::Between { middle, k: half, e: e.map(|c| c * k * k) },
         };
-        let moved = Self { axes: self.axes.moved(&similar), ruled, beta: self.beta.map(|b| b * k), root, ..*self };
+        let beta = self.beta.map(|b| b * k);
+        let gamma = gamma(ruled, self.alpha, beta, root);
+        let moved = Self { axes: self.axes.moved(&similar), ruled, beta, root, gamma, ..*self };
         Some((moved, ParamMap::IDENTITY))
     }
 }
@@ -447,6 +495,75 @@ mod tests {
         let trimmed = between().trimmed(1.0, 2.5).unwrap();
         assert_eq!(Curve::range(&trimmed), crate::domain::ParamRange { lo: 1.0, hi: 2.5, ..Curve::range(&trimmed) });
         assert_eq!((Curve::range(&trimmed).lo, Curve::range(&trimmed).hi), (1.0, 2.5));
+    }
+
+    /// On the double cone of half-angle 0.5 with its apex at the placement's origin, where `x² − y² + 2z + 1/2`
+    /// vanishes: `α = sin²a cos 2θ`, `β = cos a` and `γ = 1/2`, so `α` has a root at each odd eighth of the turn, where
+    /// the loop of the sign `+` passes at `v = −γ/2β` and the other runs to infinity.
+    fn through_a_root_of_alpha() -> Quartic {
+        let (sa, ca) = sin_cos(0.5);
+        let delta = [ca * ca, 0.0, 0.0, -0.5 * sa * sa, 0.0];
+        made(&[&[1.0, sa, ca, 0.0, 0.0, 0.0, sa * sa, 0.0, ca, 0.0, 0.0, 0.0], &delta, &[1.0], &WHOLE])
+    }
+
+    #[test]
+    fn a_loop_passes_a_root_of_alpha_on_both_quadrics_with_finite_rates_and_a_finite_box() {
+        let q = through_a_root_of_alpha();
+        let (sa, ca) = sin_cos(0.5);
+        let off = |p: Vec3| {
+            let cone = (p.x * p.x + p.y * p.y) * ca * ca - p.z * p.z * sa * sa;
+            cone.abs() + (p.x * p.x - p.y * p.y + 2.0 * p.z + 0.5).abs()
+        };
+        let root = std::f64::consts::FRAC_PI_4;
+        for eighth in [1.0, 3.0, 5.0, 7.0] {
+            for d in [0.0, 1e-15, -1e-12, 1e-9, -1e-7, 1e-4, -0.1] {
+                let s = root * eighth + d;
+                let p = local(q.point(s).to_vec3());
+                assert!(off(p) <= 1e-14, "{eighth} eighths and {d}: {} off, at {p:?}", off(p));
+                assert!(p.norm() <= 1.0, "{eighth} eighths and {d}: the bounded sign, at {p:?}");
+            }
+            let (lo, hi) = (root * eighth - 0.01, root * eighth + 0.01);
+            let failures = conformance::curve(&q.trimmed(lo, hi).unwrap(), lo, hi);
+            assert!(failures.is_empty(), "{eighth} eighths: {failures:#?}");
+            let b = Curve::bounds(&q, lo, hi);
+            let (low, high) = (b.low().to_vec3(), b.high().to_vec3());
+            assert!((high - low).norm() <= 0.1, "{eighth} eighths: a box {low:?} to {high:?}");
+        }
+    }
+
+    #[test]
+    fn the_root_read_without_cancellation_is_on_both_quadrics_between_roots_and_on_a_cylinder() {
+        // Between the roots of `Δ` about a quarter turn: `x² − y² + 0.4 z + 1/2` on the same cone, where
+        // `Δ = 2c s² (sin θ − cos h)(sin θ + cos h)`, `α` vanishing at three eighths of the turn inside the arc.
+        let (sa, ca) = sin_cos(0.5);
+        let (beta, scale) = (0.2 * ca, sa * sa);
+        let cos_h = ((0.5 * scale - beta * beta) / scale).sqrt();
+        let half = occam_math::atan2((1.0 - cos_h * cos_h).sqrt(), cos_h);
+        let k = sin_cos(0.5 * half).0;
+        let e = [scale * cos_h, 0.0, scale];
+        let head = [1.0, sa, ca, 0.0, 0.0, 0.0, sa * sa, 0.0, beta, 0.0, 0.0, 1.0, 0.0, 1.0, k];
+        let between = made(&[&head, &e, &WHOLE]);
+        let off = |p: Vec3| {
+            let cone = (p.x * p.x + p.y * p.y) * ca * ca - p.z * p.z * sa * sa;
+            cone.abs() + (p.x * p.x - p.y * p.y + 0.4 * p.z + 0.5).abs()
+        };
+        // At `θ = 3π/4`, `φ = π/4`, so `cos s = sin(π/8) / k`, on the sign that passes.
+        let c = sin_cos(0.0625 * TAU).0 / k;
+        let at_root = occam_math::atan2((1.0 - c * c).sqrt(), c);
+        for d in [0.0, 1e-12, -1e-9, 1e-6] {
+            let p = local(between.point(at_root + d).to_vec3());
+            assert!(off(p) <= 1e-14 && p.norm() <= 2.0, "between, {d} past the root: {} off, at {p:?}", off(p));
+        }
+        // On the cylinder of radius 1 about Z, the ellipsoid `x² + y² + 4z² + 20z = 0`: `α = 4`, `β = 10` and `γ = 1`,
+        // so `v = (−10 + √96)/4` keeps its digits only as `−1/(10 + √96)`.
+        let world = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+        let ruled = [0.0, 1.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 96.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+        let numbers: Vec<f64> = world.into_iter().chain(ruled).chain(WHOLE).collect();
+        let cylinder = Quartic::restore(&numbers).unwrap();
+        for s in [0.0, 1.0, 4.0] {
+            let (got, want) = (cylinder.point(s).to_vec3().z, -1.0 / (10.0 + 96.0_f64.sqrt()));
+            assert!((got - want).abs() <= 1e-17, "on the cylinder at {s}: {got} against {want}");
+        }
     }
 
     #[test]

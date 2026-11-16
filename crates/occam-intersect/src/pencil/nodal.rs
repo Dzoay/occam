@@ -6,47 +6,32 @@
 //! the rulings are `g(φ) = e₁ cos φ/√|μ₁| + e₂ sin φ/√|μ₂| + e₃/√|μ₃|`, and on the other quadric `S` the ruling
 //! `p₀ + w g` meets the curve where `w = −2 gᵀ(M p₀ + q) / gᵀ M g`, since `S(p₀)` is zero.
 //!
-//! That is a rational curve of degree two in `cos φ` and `sin φ`, and so of degree four in the parameter of a rational
-//! quadratic arc: each eighth of the turn is a rational Bézier curve of degree four, and the eight are one rational
-//! B-spline, exact. Where `K`'s part is definite its only real point is `p₀`, an isolated contact. A cusp, where `K`
-//! meets the common tangent plane in one ruling, is the same construction: the curve passes it once, at rest.
+//! That is a rational curve of degree two in `cos φ` and `sin φ`, a [`Fan`]: each eighth of the turn is a rational
+//! Bézier curve of degree four, and the eight are one rational B-spline, exact. Where `K`'s part is definite its only
+//! real point is `p₀`, an isolated contact. A cusp, where `K` meets the common tangent plane in one ruling, is the same
+//! construction: the curve passes it once, at rest. Where a ruling of `K` runs along `S`'s asymptotic cone, as where two
+//! cones share a ruling direction, `gᵀ M g` vanishes and the curve runs to infinity there: it is given within the
+//! extent asked.
 
-use std::f64::consts::{FRAC_PI_8, TAU};
-
-use occam_geom::{BsplineCurve, SplineCurve};
 use occam_math::sin_cos;
-use occam_units::{Point, Vec3};
+use occam_units::Vec3;
 
 use super::Pair;
 use super::eigen::eigen;
+use super::fan::Fan;
 use super::quadric::Quadric;
 use super::roots::Members;
 use super::trig::Trig;
+use crate::closed::unit;
+use crate::decide::{Decisions, Undecided};
 
-/// A nodal quartic's curve, or none where its only real point is its node, and the node.
+/// A nodal quartic, with its node `at`: its curve, from `start`, where it leaves the node, or none where its only
+/// real point is its node, and whether it runs to infinity.
 pub(super) struct Nodal {
-    pub(super) curve: Option<SplineCurve>,
+    pub(super) fan: Option<Fan>,
     pub(super) at: Vec3,
-}
-
-/// The arcs a turn is cut into.
-const ARCS: u32 = 8;
-
-/// `f g` for two quadratics in Bernstein form, in Bernstein form of degree four.
-fn product([f0, f1, f2]: [f64; 3], [g0, g1, g2]: [f64; 3]) -> [f64; 5] {
-    let ends = (f64::midpoint(f0 * g1, f1 * g0), f64::midpoint(f1 * g2, f2 * g1));
-    [f0 * g0, ends.0, (f0 * g2 + 4.0 * f1 * g1 + f2 * g0) / 6.0, ends.1, f2 * g2]
-}
-
-/// `T W²` on the arc whose circle is `(C, S, W)` in Bernstein form, for `T` of degree two in `cos φ` and `sin φ`.
-fn homogeneous(trig: &Trig, (c, s, w): ([f64; 3], [f64; 3], [f64; 3])) -> [f64; 5] {
-    let k: [f64; 5] = std::array::from_fn(|i| trig.0.get(i).copied().unwrap_or(0.0));
-    let (ww, cw, sw, cc, ss, cs) =
-        (product(w, w), product(c, w), product(s, w), product(c, c), product(s, s), product(c, s));
-    std::array::from_fn(|i| {
-        let at = |b: &[f64; 5]| b.get(i).copied().unwrap_or(0.0);
-        k[0] * at(&ww) + k[1] * at(&cw) + k[2] * at(&sw) + k[3] * (at(&cc) - at(&ss)) + 2.0 * k[4] * at(&cs)
-    })
+    pub(super) start: f64,
+    pub(super) reaching: bool,
 }
 
 /// `gᵀ M g` and `gᵀ h` for `g = g₀ + g_c cos φ + g_s sin φ`.
@@ -85,15 +70,16 @@ fn rulings(m: [Vec3; 3]) -> Option<[Vec3; 3]> {
 }
 
 /// The nodal quartic of `pair` with its node `at`, in the world, the vertex of the pencil's member at `phi`.
-pub(super) fn node(pair: &Pair, at: Vec3, phi: f64) -> Result<Nodal, &'static str> {
+///
+/// # Errors
+///
+/// [`Undecided`] where the band cannot tell whether it reaches infinity.
+pub(super) fn node(pair: &Pair, at: Vec3, phi: f64, decide: &mut Decisions) -> Result<Nodal, Undecided> {
     let p0 = at - pair.origin;
     let (cone, cut) = cone_and_cut(pair, phi);
-    let Some(ways) = rulings(cone) else { return Ok(Nodal { curve: None, at }) };
+    let Some(ways) = rulings(cone) else { return Ok(Nodal { fan: None, at, start: 0.0, reaching: false }) };
     let quadric = pair.quadric(cut);
     let (alpha, beta) = on_rulings(&quadric, ways, quadric.half_gradient(p0));
-    if !alpha.roots().is_empty() {
-        return Err("a nodal quartic that reaches infinity");
-    }
     // The curve starts at the node, on a ruling through it along which `β` is zero: one of its roots, or, at a cusp, its
     // double root, where it touches zero without crossing and is least.
     let least = |best: (f64, f64), theta: f64| {
@@ -101,37 +87,11 @@ pub(super) fn node(pair: &Pair, at: Vec3, phi: f64) -> Result<Nodal, &'static st
         if size < best.1 { (theta, size) } else { best }
     };
     let start = beta.roots().into_iter().chain(beta.rate().roots()).fold((0.0, f64::INFINITY), least).0;
-    let coordinate = |pick: fn(Vec3) -> f64| {
-        let ruling = Trig(ways.iter().map(|v| pick(*v)).collect());
-        alpha.scaled(pick(p0)).plus(&beta.times(&ruling).scaled(-2.0))
+    let [g0, gc, gs] = ways;
+    let way = |phi: f64| {
+        let (sin, cos) = sin_cos(phi);
+        unit(g0 + gc * cos + gs * sin)
     };
-    let numerator = [coordinate(|v| v.x), coordinate(|v| v.y), coordinate(|v| v.z)];
-    let (mut poles, mut weights) = (Vec::new(), Vec::new());
-    for i in 0..ARCS {
-        let from = start + TAU * f64::from(i) / f64::from(ARCS);
-        let ((s0, c0), (sm, cm), (s1, c1)) =
-            (sin_cos(from), sin_cos(from + FRAC_PI_8), sin_cos(from + 2.0 * FRAC_PI_8));
-        let circle = ([c0, cm, c1], [s0, sm, s1], [1.0, sin_cos(FRAC_PI_8).1, 1.0]);
-        let w = homogeneous(&alpha, circle);
-        let [x, y, z] = numerator.clone().map(|n| homogeneous(&n, circle));
-        for k in usize::from(i != 0)..5 {
-            let at = |b: &[f64; 5]| b.get(k).copied().unwrap_or(f64::NAN);
-            let weight = at(&w);
-            let local = Vec3::new(at(&x), at(&y), at(&z)) * (1.0 / weight);
-            poles.push(Point::from_vec3(pair.world(local)));
-            weights.push(weight);
-        }
-    }
-    let flip = weights.first().is_some_and(|w| w.is_sign_negative());
-    let weights: Vec<f64> = weights.into_iter().map(|w| if flip { -w } else { w }).collect();
-    if weights.iter().any(|w| *w <= 0.0) {
-        return Err("a nodal quartic whose weights change sign");
-    }
-    let mut knots = vec![0.0; 5];
-    for i in 1..ARCS {
-        knots.extend([f64::from(i); 4]);
-    }
-    knots.extend([f64::from(ARCS); 5]);
-    let form = BsplineCurve { degree: 4, knots, poles, weights: Some(weights) };
-    SplineCurve::new(&form).map(|c| Nodal { curve: Some(c), at }).map_err(|_| "a nodal quartic with no B-spline")
+    let reaching = quadric.reached(&alpha, way, decide)?;
+    Ok(Nodal { fan: Some(Fan::through(p0, ways, (&alpha, &beta))), at, start, reaching })
 }
