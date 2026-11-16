@@ -208,16 +208,42 @@ export const PLATE = request([
 ]);
 
 /**
- * The scripted agent: the calls an agent following the skill makes, through `agent.occam(args)`, which runs `occam` as
- * the agent finds it and gives its standard output, and `agent.write(name, text)`, which writes a file where it works.
+ * What the agent may do: the live run gives it to Claude Code as `--tools` and `--allowedTools` under `--permission-mode
+ * dontAsk`, where what is not allowed is refused, and the scripted agent is held to it. Its tools, and the rules that
+ * let it use them: the shell for `occam` alone, and the file tools.
+ */
+export const PERMISSIONS = {
+  tools: ["Bash", "Read", "Write", "Edit", "Skill"],
+  allowed: ["Bash(occam *)", "Read", "Write", "Edit", "Skill"],
+};
+
+const literal = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Whether `permissions` let the agent use `tool`, and for Bash run `command`: one command, with no operator,
+ * redirection or substitution, that a `Bash(...)` rule matches, `*` standing for anything. A model of Claude Code's
+ * check, stricter than it, and not Claude Code itself; it refuses what the live run's agent was refused, a request
+ * written by `cat` and a heredoc.
+ */
+export function permits(permissions, tool, command = "") {
+  if (!permissions.tools.includes(tool)) return false;
+  if (tool !== "Bash") return permissions.allowed.includes(tool);
+  if (/[;&|<>`$\n\\]/.test(command)) return false;
+  const rules = permissions.allowed.map((rule) => /^Bash\((.*)\)$/.exec(rule)?.[1]).filter(Boolean);
+  return rules.some((rule) => new RegExp(`^${rule.split("*").map(literal).join(".*")}$`).test(command));
+}
+
+/**
+ * The scripted agent: the calls an agent following the skill makes, through `agent.bash(command)`, which runs a shell
+ * command where it works and gives its standard output, and `agent.write(name, text)`, its file tool.
  */
 export const scripted = {
   /** The first prompt: start the viewer, then build the plate in one run. `started()` is awaited between them. */
   async build(agent, started = async () => {}) {
-    await agent.occam(["view", "--model", MODEL]);
+    await agent.bash(`occam view --model ${MODEL}`);
     await started();
     await agent.write("plate.json", PLATE);
-    await agent.occam(["run", "--model", MODEL, "plate.json"]);
+    await agent.bash(`occam run --model ${MODEL} plate.json`);
   },
   /**
    * The second: read the selection, highlight it, stand the cylinder on its centre along its normal, and measure what
@@ -225,27 +251,36 @@ export const scripted = {
    * cylinder stands, the middle of the face's box as the skill has it unless a test says otherwise.
    */
   async act(agent, shown = async () => {}, place = middleOf) {
-    const { entity, description } = JSON.parse(await agent.occam(["selection", "--model", MODEL, "--json"])).answers[0];
-    await agent.occam(["highlight", "--model", MODEL, entity]);
+    const { entity, description } = JSON.parse(await agent.bash(`occam selection --model ${MODEL} --json`)).answers[0];
+    await agent.bash(`occam highlight --model ${MODEL} ${entity}`);
     await shown(entity);
     const frame = { origin: place(description), z: valueOf(description.values, "normal") };
     await agent.write("cylinder.json", request([{ op: "cylinder", label: "boss", radius: 5, height: 20, frame }]));
-    const ran = JSON.parse(await agent.occam(["run", "--model", MODEL, "cylinder.json", "--json"]));
+    const ran = JSON.parse(await agent.bash(`occam run --model ${MODEL} cylinder.json --json`));
     await agent.write("check.json", request([{ op: "measure", target: ran.steps[0].made, what: ["volume", "bounds"] }]));
-    await agent.occam(["run", "--model", MODEL, "check.json"]);
+    await agent.bash(`occam run --model ${MODEL} check.json`);
   },
 };
 
-/** An agent of `scripted`'s that runs `occam` as `kit` gives it to the agent for prompt `prompt`, in its directory. */
-export function scriptedAgent(kit, prompt) {
+/**
+ * An agent for `scripted`, working in `dir` with the environment `env`, held to `permissions` as Claude Code holds the
+ * live run's agent: a shell command or a file write they do not permit is refused, and throws.
+ */
+export function heldAgent(dir, env, permissions = PERMISSIONS) {
   return {
-    occam: async (args) => {
-      const options = { cwd: kit.case, env: kit.env(prompt), maxBuffer: 1 << 28 };
-      return (await exec("occam", args, options).catch((refused) => refused)).stdout;
+    async bash(command) {
+      if (!permits(permissions, "Bash", command)) throw new Error(`refused, as the live run's agent would be: ${command}`);
+      return (await exec("sh", ["-c", command], { cwd: dir, env, maxBuffer: 1 << 28 }).catch((refused) => refused)).stdout;
     },
-    write: (name, text) => writeFile(join(kit.case, name), text),
+    async write(name, text) {
+      if (!permits(permissions, "Write")) throw new Error(`refused, as the live run's agent would be: Write ${name}`);
+      await writeFile(join(dir, name), text);
+    },
   };
 }
+
+/** The agent for `scripted` that works in `kit` on prompt `prompt`, held to the live run's permissions. */
+export const scriptedAgent = (kit, prompt) => heldAgent(kit.case, kit.env(prompt));
 
 /** The wrapper's log read back: each call's number, prompt, arguments, request files, standard output and status. */
 export function callsIn(log) {

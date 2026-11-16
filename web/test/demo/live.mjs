@@ -5,7 +5,7 @@
 // start the viewer and build a plate with a hole, while headless Chromium follows the page it opened; the harness then
 // selects the plate's top face there, as a person would, and resumes the session with the second prompt. It is scored
 // as the scripted demo is (../demo.test.mjs), and the kit is kept, with the transcripts, the calls, what the page
-// showed and the score, in the blind run's form for docs/evidence/.
+// showed and the score, in the blind run's form, and a copy of them scrubbed for docs/evidence/ (evidence.mjs).
 //
 //   just agent-demo                the live run, which prints where it keeps everything
 //   just agent-demo --dry-run      everything but the model: the command lines are written down, and a stand-in
@@ -25,6 +25,7 @@ import { chromium } from "playwright";
 import {
   FIRST,
   MODEL as FILE,
+  PERMISSIONS,
   SECOND,
   answer,
   callsIn,
@@ -37,13 +38,10 @@ import {
   score,
   selectTop,
 } from "./harness.mjs";
+import { evidence } from "./evidence.mjs";
 
 /** The cheapest model the construction blind run's agents ran on, pinned by its full id. */
 const MODEL = "claude-haiku-5-5";
-/** The tools the agent has: a shell, which the permissions below hold to `occam`, files, and its skills. */
-const TOOLS = "Bash,Read,Write,Edit,Skill";
-/** What it may do without asking, which under `--permission-mode dontAsk` is all it may do. */
-const ALLOWED = ["Bash(occam *)", "Read", "Write", "Edit", "Skill"];
 /** How long a prompt may run before it is stopped. */
 const LIMIT_MS = 15 * 60_000;
 const STAND_IN = fileURLToPath(new URL("stand-in.mjs", import.meta.url));
@@ -79,12 +77,12 @@ function claude(prompt, resume) {
     "--strict-mcp-config",
     "--no-chrome",
     "--tools",
-    TOOLS,
+    PERMISSIONS.tools.join(","),
     "--permission-mode",
     "dontAsk",
     ...(resume ? ["--resume", resume] : []),
     "--allowedTools",
-    ...ALLOWED,
+    ...PERMISSIONS.allowed,
   ];
 }
 
@@ -211,7 +209,10 @@ try {
 }
 await writeFile(join(root, "score.json"), `${JSON.stringify(kept, null, 2)}\n`);
 await writeFile(join(root, "score.md"), words(kept));
+const { leaks } = await evidence(root, OCCAM);
 process.stdout.write(`${words(kept)}\nKept in ${root}: score.md and score.json; the agent's directory case/; logs/ holds\n`);
 process.stdout.write("the calls (calls.log), each prompt's transcript (prompt-1.jsonl, prompt-2.jsonl), what the page\n");
-process.stdout.write("showed (page.jsonl) and the command lines run (command-lines.txt).\n");
-process.exitCode = kept.scored?.pass && !kept.error ? 0 : 1;
+process.stdout.write("showed (page.jsonl) and the command lines run (command-lines.txt); and evidence/ holds the same,\n");
+process.stdout.write("scrubbed of this machine's paths and the person's own setup, ready for docs/evidence/.\n");
+if (leaks.length > 0) process.stdout.write(`These still name the home directory, so are not ready: ${leaks.join(", ")}\n`);
+process.exitCode = kept.scored?.pass && !kept.error && leaks.length === 0 ? 0 : 1;

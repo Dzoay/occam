@@ -8,6 +8,13 @@ description: Build and change CAD models with the occam command while the person
 `occam run --help` is the guide to writing requests, and each command's `--help` says what it takes. This skill says
 what the guide does not: how to work with a person who watches the model in occam's viewer and selects in it.
 
+## Run occam alone, and write requests with your file tool
+
+A project may let only `occam` commands run in the shell. So run each `occam` command on its own, with no `&&`, pipe
+or redirection, and write each request file with your file-writing tool (Write), never with `cat`, `echo` or a heredoc.
+`occam run` takes the request as a file, not inline. If a shell command is refused, that says nothing about `occam`:
+run the `occam` command alone.
+
 ## Start the viewer, and say where to look
 
 Choose the model's file, here `part.occam`, and start its viewer before the first run:
@@ -23,7 +30,7 @@ commands, and `occam view` again starts nothing new and prints the same address.
 ## Build in runs you can check
 
 The page redraws after each run that changes the model, so build in steps the person can follow, and read each result
-before the next. Write a request to a file, here `block.json`:
+before the next. Write a request with your file tool, here `block.json`:
 
 ```json
 {"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
@@ -31,6 +38,8 @@ before the next. Write a request to a file, here `block.json`:
   {"op": "extrude", "label": "block", "face": "outline", "vector": [0, 0, 10]}
 ]}
 ```
+
+Then run it, naming the file:
 
 ```sh
 occam run --model part.occam block.json
@@ -65,7 +74,7 @@ occam highlight --model part.occam face:5/1
 The page draws it in a colour of its own until the next run that changes the model. Here the selected face is the
 block's top, `face:5/1`, from `low` about (0, 0, 10) to `high` about (40, 30, 10), so its centre is (20, 15, 10). A pin
 of radius 3 and height 8 stands on it with its frame's origin there and its `z` pointing out of the block. Write
-`pin.json`:
+`pin.json` with your file tool:
 
 ```json
 {"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
@@ -83,7 +92,7 @@ asks to join, cut or round.
 ## Measure to confirm
 
 Check what a run made against what was asked before you say it is done. A request of measures alone leaves the model as
-it was. Write `check.json`:
+it was. Write `check.json` with your file tool:
 
 ```json
 {"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [

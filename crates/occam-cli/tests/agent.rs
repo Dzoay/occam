@@ -405,6 +405,11 @@ fn every_example_in_the_skill_runs_as_the_skill_says() {
         };
         assert_eq!(line[..3], ["occam", line[1].as_str(), "--model"], "{line:?}");
         assert_eq!(line[3], "part.occam", "one model throughout: {line:?}");
+        let shell = |word: &String| word.contains(['&', '|', ';', '<', '>', '$', '`']);
+        assert!(
+            !line.iter().any(shell),
+            "an occam command alone, as a project that allows only occam runs it: {line:?}"
+        );
         if line[1] == "selection" {
             selected = Some(person_selects_the_top(&model));
         }

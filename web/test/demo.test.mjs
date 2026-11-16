@@ -7,13 +7,15 @@
 //
 // Run by `just web-test`, which builds the page and then `occam`, which embeds it.
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 
+import { INIT, evidence } from "./demo/evidence.mjs";
 import {
+  PERMISSIONS,
   answer,
   callsIn,
   drawn,
@@ -22,6 +24,7 @@ import {
   kit,
   middleOf,
   opened,
+  permits,
   score,
   scripted,
   scriptedAgent,
@@ -100,4 +103,63 @@ test("a cylinder stood on the plane's origin, the face's corner, fails the score
   const failed = scored.checks.filter((check) => !check.pass).map((check) => check.name);
   assert.deepEqual(failed, ["centred on the face, within the band", "within the face, clear of its hole", "standing out of the plate"]);
   assert.equal(scored.pass, false);
+});
+
+test("the live run's permissions let the agent run every command in the skill and write its requests, and refuse a shell write", async () => {
+  const skill = await readFile(new URL("../../skills/occam/SKILL.md", import.meta.url), "utf8");
+  const commands = [...skill.matchAll(/```sh\n([\s\S]*?)```/g)].flatMap(([, block]) => block.split("\n").filter(Boolean));
+  assert.equal(commands.length, 7);
+  for (const command of commands) assert.ok(permits(PERMISSIONS, "Bash", command), command);
+  assert.ok(["Write", "Read", "Skill"].every((tool) => permits(PERMISSIONS, tool)), "its file tools and its skill");
+  assert.match(skill, /write each request file with your file-writing tool \(Write\), never with `cat`/);
+  // What the live run's agent tried first, and Claude Code refused: a request written by the shell.
+  const tried = "cat > plate.json <<'EOF'\n{\"schema\": 1}\nEOF";
+  assert.equal(permits(PERMISSIONS, "Bash", tried), false);
+  for (const other of ["python3 -c 1", "rm part.occam", "occam run --model part.occam plate.json && rm plate.json"]) {
+    assert.equal(permits(PERMISSIONS, "Bash", other), false, other);
+  }
+  assert.equal(permits({ ...PERMISSIONS, allowed: ["Bash(occam *)"] }, "Write"), false, "a tool needs its rule");
+});
+
+test("the evidence keeps the agent's transcript without the person's setup, their account's state or this machine's paths", async () => {
+  const root = await mkdtemp(join(tmpdir(), "occam-evidence-"));
+  try {
+    const occam = join(homedir(), ".cache", "target", "debug", "occam");
+    const init = {
+      type: "system",
+      subtype: "init",
+      session_id: "2b72e98f",
+      model: "claude-haiku-5-5",
+      tools: PERMISSIONS.tools,
+      permissionMode: "dontAsk",
+      claude_code_version: "2.1.325",
+      cwd: join(root, "case"),
+      original_cwd: join(root, "case"),
+      memory_paths: { auto: join(homedir(), ".claude", "projects", `${homedir().replace(/[^A-Za-z0-9]/g, "-")}-x`) },
+      skills: ["occam", "theirs"],
+      slash_commands: ["occam", "theirs"],
+      plugins: [{ name: "theirs", path: "builtin" }],
+      agents: ["theirs"],
+      apiKeySource: "none",
+    };
+    const wrote = { type: "assistant", message: { content: [{ type: "tool_use", name: "Write", input: { file_path: join(root, "case", "plate.json") } }] } };
+    const limits = { type: "rate_limit_event", rate_limit_info: { status: "allowed" } };
+    const result = { type: "result", subtype: "success", session_id: "2b72e98f", num_turns: 6, total_cost_usd: 0.004 };
+    await mkdir(join(root, "logs"));
+    const transcript = [init, wrote, limits, result].map((event) => JSON.stringify(event)).join("\n");
+    await writeFile(join(root, "logs", "prompt-1.jsonl"), `${transcript}\n`);
+    await writeFile(join(root, "logs", "calls.log"), `=== call 1 prompt 1 now\ncwd: ${join(root, "case")}\nargv: view\n--- exit 0\n`);
+    await writeFile(join(root, "score.md"), `Run by ${occam}\n`);
+    const { written, leaks } = await evidence(root, occam);
+    assert.deepEqual(written.map((file) => file.slice(root.length)), ["/evidence/score.md", "/evidence/logs/calls.log", "/evidence/logs/prompt-1.jsonl"]);
+    assert.deepEqual(leaks, []);
+    const events = (await readFile(join(root, "evidence", "logs", "prompt-1.jsonl"), "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    assert.deepEqual(Object.keys(events[0]), INIT.filter((key) => key in init), "the init event's lists and paths dropped");
+    assert.deepEqual(events.map((event) => event.type), ["system", "assistant", "result"], "and the account's rate limits");
+    assert.equal(events[1].message.content[0].input.file_path, "$KIT/case/plate.json");
+    assert.equal(await readFile(join(root, "evidence", "logs", "calls.log"), "utf8"), "=== call 1 prompt 1 now\ncwd: $KIT/case\nargv: view\n--- exit 0\n");
+    assert.equal(await readFile(join(root, "evidence", "score.md"), "utf8"), "Run by $OCCAM\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

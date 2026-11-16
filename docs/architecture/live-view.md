@@ -111,8 +111,9 @@ flowchart LR
 
 ## The skill and the demo
 
-- **The skill,** `skills/occam/SKILL.md`, in Claude Code's form, says what the command's guide does not: start the
-  viewer and say where to look, build in runs that can be checked, read `occam selection` for "the selected", find a
+- **The skill,** `skills/occam/SKILL.md`, in Claude Code's form, says what the command's guide does not: run each
+  `occam` command alone and write requests with the file tool, since a project may let only `occam` run in the shell;
+  start the viewer and say where to look, build in runs that can be checked, read `occam selection` for "the selected", find a
   flat face's centre as the middle of its box, highlight before a change, measure to confirm, and stop the viewer at
   the end. A test runs every example in it, in order, the person's click posted to the viewer before it reads the
   selection.
@@ -126,10 +127,12 @@ flowchart LR
   the face's plane and centre within the band, clear of the hole, the page to drawing it, and the calls to the
   skill's order. A cylinder stood on the plane's origin instead fails it.
 - **The live agent test,** `just agent-demo`, runs by hand on the person's own key: headless Claude Code on Haiku,
-  pinned, with the skill installed in a directory of its own and `occam` behind the wrapper, capped in calls a
-  prompt and in spend, resumed for the second prompt. It is scored as the scripted demo is and keeps the kit, the
-  transcripts and the score in `~/.cache/occam-agent-demo/` for `docs/evidence/`. `--dry-run` has a stand-in play
-  the agent.
+  pinned, with the skill installed in a directory of its own and `occam` behind the wrapper, the shell allowed
+  `occam` alone and the file tools, capped in calls a prompt and in spend, resumed for the second prompt. The
+  scripted demo's agent is held to the same permissions. It is scored as the scripted demo is and keeps the kit, the
+  transcripts and the score in `~/.cache/occam-agent-demo/`, with a copy in `evidence/` for `docs/evidence/` that
+  drops the person's installed skills, plugins and commands, their account's state and this machine's paths.
+  `--dry-run` has a stand-in play the agent, held to the permissions its command line gives.
 
 ## What waits
 
