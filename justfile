@@ -106,7 +106,7 @@ clippy:
 web-check: web-deps
     web/node_modules/.bin/tsc --noEmit -p web
 
-# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, its workers' meshes against the native `occam mesh`, the page `occam view` serves, built in, following the model file, and its clicks against `occam pick`
+# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, its workers' meshes against the native `occam mesh`, the page `occam view` serves, built in, following the model file, and its clicks against `occam pick`; and the demo with the agent's calls scripted
 [env("CARGO_TARGET_DIR", target)]
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
 [group('gates')]
@@ -114,7 +114,15 @@ web-test: web-build
     mkdir -p "$CARGO_TARGET_DIR"
     cargo run --quiet -p occam-report --example catalogue > "$CARGO_TARGET_DIR/occam-catalogue.json"
     cargo build --quiet -p occam-cli
-    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" OCCAM="$CARGO_TARGET_DIR/debug/occam" node --test --test-timeout=300000 web/test/viewer.test.mjs
+    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" OCCAM="$CARGO_TARGET_DIR/debug/occam" node --test --test-timeout=300000 web/test/viewer.test.mjs web/test/demo.test.mjs
+
+# The live agent test, by hand on your own key and account, never in CI: headless Claude Code on Haiku, pinned, with the occam skill, builds a plate with a hole as headless Chromium follows the page, then stands a cylinder on the face selected there; scored as the scripted demo is, everything kept for docs/evidence/. `--dry-run`: a stand-in plays the agent, and no model is asked; `--score KIT --why REASON`: a kit scored again from its logs
+[env("CARGO_TARGET_DIR", target)]
+[env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
+[group('tools')]
+agent-demo *args: web-build
+    cargo build --quiet -p occam-cli
+    OCCAM="$CARGO_TARGET_DIR/debug/occam" node web/test/demo/live.mjs "$@"
 
 # What headless Chromium gives the viewer's tests: its WebGPU adapter, its GPU status, and whether a read-back works
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]

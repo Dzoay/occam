@@ -18,7 +18,7 @@ and gives one result per id. `occam --help`, and `--help` after any command, say
 | `occam view --model part.occam` | Starts the model's [live view](live-view.md) if none runs, prints the page's address and returns; `--status`, `--stop` |
 | `occam selection --model part.occam` | Describes what the person selected in the [live view](live-view.md#the-selection-file) |
 | `occam highlight --model part.occam face:9/1` | Shows ids in the [live view](live-view.md#the-selection-file) in a colour of their own; `--clear` |
-| `occam skill --install` | Copies the occam skill into this project's `.claude/skills/`, for the [live view](live-view.md) (`view`) |
+| `occam skill --install` | Copies the [occam skill](live-view.md#the-skill-and-the-demo) into this project's `.claude/skills/occam/`; `occam skill` prints it |
 | `occam export --step` | Writes STEP (`exchange`) |
 
 ```mermaid
@@ -50,6 +50,8 @@ flowchart LR
   "distance", "reports"}`, the direction of length one, and `entity` null with `mesh.ray-missed` first in `reports`
   for a ray that hits nothing. `selection` and `highlight` give `describe`'s form for the ids they read or write. A
   `run` that carries the selection over adds `selection`, and one that clears the highlight `highlight-cleared`.
+  `skill` gives `{"schema", "ok", "skill"}`, and with `--install` `{"schema", "ok", "file", "installed", "reports"}`,
+  `installed` being `written`, `unchanged` or `replaced`, or null when refused.
 - **In words,** answers go to standard output and refusals to standard error.
 - **The exit status** is 0 when everything asked was answered, 1 when anything was refused, and 2 when the command line
   is wrong (`cli.bad-argument`, naming the argument, what was given and what was wanted).

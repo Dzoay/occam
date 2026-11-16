@@ -29,7 +29,7 @@ x86-64 and on wasm32 baseline and simd128. In headless Chromium, against `occam 
   describes what was clicked; and an `occam highlight` shows in the page;
 - the agent test passes when its recipe runs on `view.agent`'s PR, its log kept as evidence: an agent on the cheapest
   model the blind runs used starts `occam view`, builds a part from a prompt, the page following each run, and acts on a face
-  selected as a person would.
+  selected as a person would ([the live run](../evidence/2026-11-16-view-agent-live-run.md)).
 
 **Exit (goal):** [P9's](../evidence/2026-11-09-p9.md) quality and scaling tables on the real mesher; the mesh pool timed
 in the browser beside [P10's](../evidence/2026-11-09-p10.md); the time from a run's save to the page's redraw; and a
@@ -57,24 +57,6 @@ Playwright `gates perf` already runs. Each face is meshed once: [view-dependent
 detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes after the release.
 
 ## Steps
-
-### `view.agent`
-
-The demo, made a test. A first occam skill, `skills/occam/SKILL.md`, tells an agent what the command's guide does not:
-start `occam view` and tell the person where to look, build in runs it can check, read `occam selection` when the
-person says "the selected", highlight before changing what is selected, measure to confirm, and stop the viewer when
-the person is done. It serves Claude Code first: the binary carries it, and `occam skill --install` copies it into the
-project's `.claude/skills/` ([decision](../decisions/2026-11-14-the-agent-starts-the-viewer.md)). The skill is held to
-the commands by a test that runs every example in it.
-
-*Failing test first:* an agent on the cheapest model the blind runs used, given the skill and a prompt for a plate with
-a hole, starts `occam view` and builds the plate through `occam run` while headless Chromium follows each run; the test
-then selects the plate's top face through the page and prompts "stand a cylinder of radius 5 and height 20 on the
-centre of the selected face"; the agent reads the selection, highlights it, and runs; the cylinder's base lies on that
-face, within the band. The agent is headless Claude Code, resumed for the second prompt, with the model pinned and a
-cap on its calls, run by a recipe on the person's own key: once on `view.agent`'s PR, its log kept as evidence, as in
-[the construction blind run](../evidence/2026-11-13-construction-blind-run.md). The same steps with the agent's calls
-scripted run in CI. Rounding an edge waits for `blends`, and adding material to a solid's face for `booleans`.
 
 ### `view.hardening`
 

@@ -30,7 +30,7 @@ flowchart LR
 | `occam pick --model part.occam --from 45,20,5 --towards 30,20,5` | The id a ray hits first, as a click in the page picks |
 | `occam selection --model part.occam` | Describes what the person has selected, as `describe` does |
 | `occam highlight --model part.occam edge:41/1 ...` | Shows the agent's ids in the page; `--clear` removes them |
-| `occam skill --install` | Copies the occam skill into this project's `.claude/skills/` |
+| `occam skill --install` | Copies the occam skill into this project's `.claude/skills/occam/`; `occam skill` prints it |
 
 ## The server
 
@@ -108,6 +108,33 @@ flowchart LR
   something live and refuses the rest alone; `occam run` removes the file once it changes the model, since it named
   what the agent was about to change, and its result says `"highlight-cleared": true`. A run that changes nothing,
   such as a measure, clears nothing.
+
+## The skill and the demo
+
+- **The skill,** `skills/occam/SKILL.md`, in Claude Code's form, says what the command's guide does not: run each
+  `occam` command alone and write requests with the file tool, since a project may let only `occam` run in the shell;
+  start the viewer and say where to look, build in runs that can be checked, read `occam selection` for "the selected", find a
+  flat face's centre as the middle of its box, highlight before a change, measure to confirm, and stop the viewer at
+  the end. A test runs every example in it, in order, the person's click posted to the viewer before it reads the
+  selection.
+- **`occam skill`** prints it, as the binary carries it. `--install` writes `.claude/skills/occam/SKILL.md` under the
+  current directory and says where; one there already that is this build's is left unchanged, and another is refused
+  as `cli.skill-present` unless `--force` replaces it. A project it cannot write into is `cli.skill-not-written`.
+- **The demo, scripted,** runs in `just web-test` (`web/test/demo.test.mjs`): the agent's calls, through the
+  logging wrapper the live test gives its agent, start `occam view`, whose page headless Chromium opens as the
+  person's browser, and build a plate with a hole; a click selects its top face; the agent reads the selection,
+  highlights it and stands a cylinder of radius 5 and height 20 on its centre. The score holds the cylinder's base to
+  the face's plane and centre within the band, clear of the hole, the page to drawing it, and the calls to the
+  skill's order. A cylinder stood on the plane's origin instead fails it.
+- **The live agent test,** `just agent-demo`, runs by hand on the person's own key: headless Claude Code on Haiku,
+  pinned, with the skill installed in a directory of its own and `occam` behind the wrapper, the shell allowed
+  `occam` alone and the file tools, capped in calls a prompt and in spend, resumed for the second prompt. The
+  scripted demo's agent is held to the same permissions. It is scored as the scripted demo is and keeps the kit, the
+  transcripts and the score in `~/.cache/occam-agent-demo/`, with a copy in `evidence/` for `docs/evidence/` that
+  drops the person's installed skills, plugins and commands, their account's state and this machine's paths.
+  `--dry-run` has a stand-in play the agent, held to the permissions its command line gives. `--score KIT --why
+  REASON` scores a kit again from its logs with the scorer as it is now, and its score says it was re-scored, why,
+  and what the scoring before gave. A call for help is no step in the order the score checks.
 
 ## What waits
 

@@ -1,0 +1,7 @@
+# KIT is the directory that holds this logs/, OCCAM the occam `just agent-demo` built, and SESSION the
+# session id the first prompt's result gives. Each runs in $KIT/case.
+cd "$KIT/case"
+export PATH="$KIT/bin:$PATH" BROWSER="$KIT/bin/browser" OCCAM_DEMO_REAL="$OCCAM" OCCAM_DEMO_LOG="$KIT/logs/calls.log"
+export OCCAM_DEMO_OPENED="$KIT/logs/opened.txt" OCCAM_DEMO_CALLS=12
+OCCAM_DEMO_PROMPT=1 claude -p 'Using occam, make a plate 80 mm long, 60 mm wide and 10 mm thick, lying flat on the xy plane, with a round hole 12 mm across through it, its centre 20 mm from one short end and midway across. Keep it in part.occam.' --model claude-haiku-5-5 --output-format stream-json --verbose --max-budget-usd 0.50 --setting-sources project --strict-mcp-config --no-chrome --tools Bash,Read,Write,Edit,Skill --permission-mode dontAsk --allowedTools 'Bash(occam *)' Read Write Edit Skill
+OCCAM_DEMO_PROMPT=2 claude -p 'stand a cylinder of radius 5 and height 20 on the centre of the selected face' --model claude-haiku-5-5 --output-format stream-json --verbose --max-budget-usd 0.50 --setting-sources project --strict-mcp-config --no-chrome --tools Bash,Read,Write,Edit,Skill --permission-mode dontAsk --resume "$SESSION" --allowedTools 'Bash(occam *)' Read Write Edit Skill

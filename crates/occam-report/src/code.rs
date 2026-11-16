@@ -698,6 +698,22 @@ catalogue! {
         "The selection was made on another model than the file holds now.",
         "The selection was made on another model than {given} holds now, so it names nothing: select again.",
     }
+
+    /// `occam skill --install` found a skill other than this build's where it would write the occam skill, and left it
+    /// as it was. Its remedy replaces it.
+    SkillPresent = "cli.skill-present" {
+        Error, [UseForce],
+        "Another skill is where `occam skill --install` writes the occam skill, so it was left as it was.",
+        "{given} holds a skill other than this build's occam skill, so it was left as it was; --force replaces it.",
+    }
+
+    /// `occam skill --install` could not write the skill into the project's `.claude/skills/occam/`. The directory is
+    /// the person's to make writable, so no remedy can be followed.
+    SkillNotWritten = "cli.skill-not-written" {
+        Error, [],
+        "The occam skill could not be written into the project.",
+        "The occam skill could not be written to {given}.",
+    }
 }
 
 #[cfg(test)]
@@ -1655,6 +1671,38 @@ mod tests {
         ])
     }
 
+    fn skill_codes() -> Value {
+        json!([
+            {
+                "name": "SkillPresent",
+                "code": "cli.skill-present",
+                "severity": "error",
+                "summary": "Another skill is where `occam skill --install` writes the occam skill, so it was left as it was.",
+                "template": "{given} holds a skill other than this build's occam skill, so it was left as it was; --force replaces it.",
+                "remedies": ["use-force"]
+            },
+            {
+                "name": "SkillNotWritten",
+                "code": "cli.skill-not-written",
+                "severity": "error",
+                "summary": "The occam skill could not be written into the project.",
+                "template": "The occam skill could not be written to {given}.",
+                "remedies": []
+            }
+        ])
+    }
+
+    fn skill_remedies() -> Value {
+        json!([
+            {
+                "name": "UseForce",
+                "kind": "use-force",
+                "summary": "Run the same command again with --force, which replaces the file the report names.",
+                "parameters": [],
+            },
+        ])
+    }
+
     #[test]
     fn the_catalogue_lists_every_code_and_remedy() {
         let value: Value = serde_json::from_str(&catalogue_json().unwrap()).unwrap();
@@ -1681,12 +1729,13 @@ mod tests {
             view_codes(),
             viewer_codes(),
             selection_codes(),
+            skill_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())
         .flatten()
         .collect();
-        let remedies: Vec<Value> = [remedies(), viewer_remedies(), selection_remedies()]
+        let remedies: Vec<Value> = [remedies(), viewer_remedies(), selection_remedies(), skill_remedies()]
             .into_iter()
             .filter_map(|rows| rows.as_array().cloned())
             .flatten()
