@@ -45,6 +45,8 @@ mod subdivide;
 mod tests;
 #[cfg(test)]
 mod tests_hits;
+#[cfg(test)]
+mod tests_pinned;
 mod trace;
 #[cfg(test)]
 mod trace_tests;

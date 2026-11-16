@@ -252,3 +252,44 @@ impl Sink<'_> {
         self.hits.tally.undecided = self.hits.tally.undecided.saturating_add(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use occam_units::ParamKind;
+
+    use super::*;
+
+    fn range(lo: f64, hi: f64, wrap: Wrap) -> ParamRange {
+        ParamRange { lo, hi, wrap, kind: ParamKind::Knot }
+    }
+
+    fn uv_box(lo: (f64, f64), hi: (f64, f64)) -> UvBox {
+        UvBox::new(UvPoint::new(lo.0, lo.1), UvPoint::new(hi.0, hi.1))
+    }
+
+    #[test]
+    fn a_parameter_comes_into_the_patch_by_whole_periods_only_where_it_comes_round() {
+        let turn = range(1.0, 3.0, Wrap::Periodic);
+        assert_eq!(into(4.5, (1.5, 2.6), turn), Some(2.5), "a period of 2, from a range that does not start at 0");
+        assert!(into(0.2, (1.5, 2.6), turn).is_some_and(|x| (x - 2.2).abs() < 1e-15));
+        assert_eq!(into(1.4, (1.5, 2.6), turn), None, "2 past it is 3.4, beyond the patch");
+        let open = range(-1.0, 1.0, Wrap::Open);
+        assert_eq!(
+            into(-0.5, (0.0, 1.6), open),
+            None,
+            "an open parameter is never moved, though a period would bring it in"
+        );
+        assert_eq!(into(0.5, (0.0, 1.6), open), Some(0.5));
+    }
+
+    #[test]
+    fn a_patch_reversed_in_either_parameter_is_refused() {
+        let all = range(f64::NEG_INFINITY, f64::INFINITY, Wrap::Open);
+        let (line, plane, span) = (range(0.0, 1.0, Wrap::Open), Domain { u: all, v: all }, Span { lo: 0.0, hi: 1.0 });
+        assert!(valid(line, span, plane, uv_box((0.0, 0.0), (1.0, 1.0))).is_ok());
+        for reversed in [uv_box((1.0, 0.0), (0.0, 1.0)), uv_box((0.0, 1.0), (1.0, 0.0))] {
+            let refused = valid(line, span, plane, reversed).unwrap_err();
+            assert_eq!(refused.code, Code::UndefinedParameter, "{reversed:?}");
+        }
+    }
+}

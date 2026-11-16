@@ -201,3 +201,151 @@ pub(crate) fn judge(value: Interval, eps: f64) -> (Verdict, Tally) {
     let tally = decide_computed(&Value, &[[value]], eps, &mut out);
     (out.first().copied().unwrap_or(Verdict::Undecided), Tally { undecided: 0, ..tally })
 }
+
+#[cfg(test)]
+mod tests {
+    use occam_geom::{Circle, Line};
+    use occam_units::Local;
+
+    use super::*;
+
+    fn at(x: f64, y: f64, z: f64) -> Point<World> {
+        Point::from_vec3(Vec3::new(x, y, z))
+    }
+
+    /// One point, exactly: a box of nothing but it.
+    fn only(p: Point<World>) -> Spread {
+        Spread::of(&Bounds::of([p]).unwrap())
+    }
+
+    /// A unit direction with every component non-zero and none one.
+    fn slanted() -> Direction<World> {
+        Direction::normalised(Vec3::new(1.0, 2.0, 2.0))
+    }
+
+    /// Every family placed off the origin about [`slanted`], with a sphere about the same centre.
+    fn forms() -> [Analytic; 5] {
+        let (o, a) = (at(1.0, -2.0, 3.0), slanted());
+        [
+            Analytic::Plane { origin: o, normal: a },
+            Analytic::Sphere { centre: o, radius: Length::from_millimetres(1.5) },
+            Analytic::Cylinder { on_axis: o, axis: a, radius: Length::from_millimetres(1.5) },
+            Analytic::Cone { apex: o, axis: a, half_angle: Angle::from_radians(0.4) },
+            Analytic::Torus {
+                centre: o,
+                axis: a,
+                major: Length::from_millimetres(3.0),
+                minor: Length::from_millimetres(1.0),
+            },
+        ]
+    }
+
+    /// The signed distance from `form` of `p`, by another route than [`distance`]'s: the component along the axis and
+    /// the rest by subtraction, in plain arithmetic.
+    fn plainly(form: &Analytic, p: Point<World>) -> f64 {
+        let parts = |o: Point<World>, axis: Direction<World>| {
+            let w = p.to_vec3() - o.to_vec3();
+            let h = w.dot(axis.get());
+            (h, (w - axis.get() * h).norm())
+        };
+        match *form {
+            Analytic::Plane { origin, normal } => parts(origin, normal).0,
+            Analytic::Sphere { centre, radius } => (p.to_vec3() - centre.to_vec3()).norm() - radius.millimetres(),
+            Analytic::Cylinder { on_axis, axis, radius } => parts(on_axis, axis).1 - radius.millimetres(),
+            Analytic::Cone { apex, axis, half_angle } => {
+                let ((h, rho), (sin, cos)) = (parts(apex, axis), sin_cos(half_angle.radians()));
+                rho * cos - h.abs() * sin
+            }
+            Analytic::Torus { centre, axis, major, minor } => {
+                let (h, rho) = parts(centre, axis);
+                ((rho - major.millimetres()) * (rho - major.millimetres()) + h * h).sqrt() - minor.millimetres()
+            }
+        }
+    }
+
+    /// Points around the forms, above and below the cone's apex and inside and outside each.
+    fn points() -> [Point<World>; 4] {
+        [at(4.0, 1.5, -1.5), at(-1.0, 0.5, 7.0), at(2.5, -4.0, 1.0), at(0.2, -0.3, 6.5)]
+    }
+
+    #[test]
+    fn a_box_of_two_ends_holds_both_whichever_end_its_middle_rounds_towards() {
+        let unit = f64::EPSILON;
+        for (lo, hi) in [(1.0, 1.0 + 3.0 * unit), (1.0 - 1.5 * unit, 1.0), (-2.0, 5.0)] {
+            let held = between(lo, hi);
+            assert!(held.radius() >= held.mid() - lo && held.radius() >= hi - held.mid(), "{lo} {hi}: {held:?}");
+            assert!(held.radius() <= (hi - lo).next_up(), "{lo} {hi}: {held:?}");
+        }
+    }
+
+    #[test]
+    fn an_evaluated_points_box_follows_its_largest_coordinate() {
+        let b = around(at(1.0, -100.0, 1000.0));
+        let reach = EVALUATED * 1000.0;
+        for (low, high) in [(b.low().x(), b.high().x()), (b.low().z(), b.high().z())] {
+            let width = high.millimetres() - low.millimetres();
+            assert!(width >= 2.0 * reach && width < 2.1 * reach, "{b:?}");
+        }
+    }
+
+    #[test]
+    fn each_familys_distance_is_its_true_signed_distance_off_the_origin_and_axes() {
+        for form in forms() {
+            for p in points() {
+                let (got, want) = (distance(&form, only(p)), plainly(&form, p));
+                assert!((got.mid() - want).abs() < 1e-12 && got.radius() < 1e-12, "{form:?} at {p:?}: {got:?}, {want}");
+            }
+        }
+    }
+
+    #[test]
+    fn each_familys_gradient_is_the_slope_of_its_distance() {
+        for form in forms() {
+            for p in points() {
+                let step = 1e-6;
+                let slope = |e: Vec3| {
+                    let (ahead, behind) = (p.to_vec3() + e * step, p.to_vec3() - e * step);
+                    (plainly(&form, Point::from_vec3(ahead)) - plainly(&form, Point::from_vec3(behind))) / (2.0 * step)
+                };
+                let want = Vec3::new(
+                    slope(Vec3::new(1.0, 0.0, 0.0)),
+                    slope(Vec3::new(0.0, 1.0, 0.0)),
+                    slope(Vec3::new(0.0, 0.0, 1.0)),
+                );
+                let got = gradient(&form, p);
+                assert!((got - want).norm() < 1e-6, "{form:?} at {p:?}: {got:?}, not {want:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn on_a_cones_apex_plane_the_gradient_is_the_upper_nappes() {
+        let cone = Analytic::Cone {
+            apex: at(0.0, 0.0, 0.0),
+            axis: Direction::normalised(Vec3::new(0.0, 0.0, 1.0)),
+            half_angle: Angle::from_radians(0.4),
+        };
+        let (sin, cos) = sin_cos(0.4);
+        assert_eq!(gradient(&cone, at(2.0, 0.0, 0.0)), Vec3::new(cos, 0.0, -sin));
+    }
+
+    #[test]
+    fn a_curve_moved_into_a_forms_frame_keeps_its_distance_from_it() {
+        let line = Line::new(at(4.0, -1.0, 0.5), Direction::normalised(Vec3::new(1.0, -3.0, 2.0)));
+        let spin = Placement::rotation(Direction::normalised(Vec3::new(0.3, 1.0, -0.2)), Angle::from_radians(1.1));
+        let circle =
+            Circle::placed(&Placement::<Local, World>::identity().then(&spin), Length::from_millimetres(2.0)).unwrap();
+        let (up, down) =
+            (Direction::normalised(Vec3::new(0.0, 0.0, 1.0)), Direction::normalised(Vec3::new(0.0, 0.0, -1.0)));
+        let along = [slanted(), up, down];
+        for (curve, axis) in [&line as &dyn Curve, &circle].into_iter().flat_map(|c| along.map(|a| (c, a))) {
+            let form = Analytic::Cylinder { on_axis: at(1.0, -2.0, 3.0), axis, radius: Length::from_millimetres(1.5) };
+            let (moved, there) = canonical(curve, &form).unwrap();
+            assert_eq!(moved.range(), curve.range());
+            for t in [0.0, 0.7, 2.5, -1.3] {
+                let (got, want) = (distance(&there, Spread::at(moved.point(t))).mid(), plainly(&form, curve.point(t)));
+                assert!((got - want).abs() < 1e-12, "{axis:?} at {t}: {got} against {want}");
+            }
+        }
+    }
+}

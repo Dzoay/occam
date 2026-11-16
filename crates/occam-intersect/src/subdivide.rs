@@ -141,8 +141,9 @@ fn leaves(span: Span, work: &mut Work, sink: &mut Sink<'_>, found: &mut Vec<Foun
         match split(cell, sizes, sink).filter(|_| !small && cell.depth < DEPTH) {
             Some((halves, side)) => {
                 for half in halves.into_iter().rev() {
+                    let (lo, hi, patch, kept) = (half.lo, half.hi, half.patch, half.stuck);
                     let depth = cell.depth.saturating_add(1);
-                    stack.push(Cell { depth, parents: Some(pair), halved: side, ..half });
+                    stack.push(Cell { lo, hi, patch, depth, parents: Some(pair), halved: side, stuck: kept });
                 }
             }
             None => found.extend(solve(&cell, span, sink)),
@@ -303,4 +304,23 @@ fn same(a: &Found, b: &Found, sink: &mut Sink<'_>) -> bool {
     let (verdict, tally) = judge(gap, sink.tol.band().millimetres());
     sink.tally(tally);
     verdict == Verdict::Decided(Side::Within)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_three_by_three_system_is_solved_and_a_singular_one_refused() {
+        let a = [[4.0, 1.0, -2.0], [1.0, 3.0, 0.5], [-2.0, 0.5, 5.0]];
+        let b = [1.0, -2.0, 3.0];
+        let x = solve3(a, b).unwrap();
+        for (row, want) in a.iter().zip(b) {
+            let got: f64 = row.iter().zip(x).map(|(m, xi)| m * xi).sum();
+            assert!((got - want).abs() < 1e-14, "{x:?}");
+        }
+        assert_eq!(solve3([[1.0, 2.0, 3.0], [2.0, 4.0, 6.0], [0.0, 1.0, 1.0]], b), None, "a row twice another");
+        assert_eq!(solve3([[f64::NAN, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], b), None, "not finite");
+        assert_eq!(solve3([[f64::INFINITY, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], b), None, "not finite");
+    }
 }
