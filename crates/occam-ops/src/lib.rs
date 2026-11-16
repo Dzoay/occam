@@ -10,6 +10,8 @@ mod execute;
 mod facing;
 mod guide;
 mod measure;
+#[cfg(test)]
+mod meshed;
 mod operand;
 mod operation;
 mod primitive;

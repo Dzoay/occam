@@ -312,6 +312,80 @@ exclude_re = [
     # numbers, from the one pair of helpers every bound, box and clamp of occam-mesh is decided by.
     "occam-mesh/src/limits\\.rs:\\d+:\\d+: replace < with <= in lower$",
     "occam-mesh/src/limits\\.rs:\\d+:\\d+: replace > with >= in higher$",
+    # The closed forms' (intersection.closed). By line. A quotient's sign is the product's; `way` is 1 or -1, so
+    # dividing by it is multiplying by it; and a cone's two rulings through its apex in a plane less steep than its
+    # side are each other's mirror, both made, so taking the part across away instead of adding it swaps them.
+    "closed/conic\\.rs:111:28: replace \\* with / in plane_cone$",
+    "closed/conic\\.rs:131:94: replace \\* with / in through_apex$",
+    "closed/conic\\.rs:131:79: replace \\+ with - in through_apex$",
+    # Ties, which give the same value either way: a cosine or a difference of radii of exactly nought, which is its own
+    # magnitude; two world axes as little along a normal, either square to it; a parabola's `d` times its slant exactly
+    # nought, which only a plane through the apex has, decided before; and circles of one radius, which touch inside
+    # each other only where they are one circle, decided before.
+    "closed/conic\\.rs:93:33: replace < with <= in plane_cone$",
+    "closed/conic\\.rs:111:36: replace > with >= in plane_cone$",
+    "closed/meet\\.rs:116:16: replace < with <= in magnitude$",
+    "closed/meet\\.rs:137:38: replace < with <= in circles$",
+    "closed/piece\\.rs:60:17: replace < with <= in square_to$",
+    # By line. A point two meridians of a coaxial pair meet in twice on the axis is a cone's apex, and a pair with a
+    # cone measures its heights from the apex: nought and twice nought are one height.
+    "closed/coaxial\\.rs:118:33: replace - with \\+ in seen$",
+    # By line. A sine or a cosine is at most 1, so four machine epsilons over it is at least four of it: a wider
+    # enclosure, still certified, which only a value within a few ulps of a band's edge could tell, and none is.
+    "closed/(conic|coaxial)\\.rs:(77|33):41: replace \\* with / in computed$",
+    # The closed forms' images and charts, in occam-geom. Ties, which give the same value either way: the smaller and
+    # larger of numbers that are equal, a window's nearest sample, an end of it exactly twice as far as that, a height
+    # exactly a sphere's radius, which is clamped to it either way, and a collapsing line exactly a quarter from where
+    # a chart is read, which reading there or half a unit on reads alike.
+    "image\\.rs:\\d+:\\d+: replace (< with <=|> with >=) in extremes$",
+    "image\\.rs:344:50: replace < with <= in Image<C>::window$",
+    "image\\.rs:345:(36|75): replace > with >= in Image<C>::window$",
+    "image\\.rs:37[57]:\\d+: replace (> with >=|< with <=) in Image<C>::heights$",
+    "chart\\.rs:121:77: replace < with <= in Chart::of$",
+    # By line. `side` is 1 or -1, so dividing by it is multiplying by it.
+    "image\\.rs:204:(26|50): replace \\* with / in Image<C>::local$",
+    "image\\.rs:304:97: replace \\* with / in Image<C>::by_series$",
+    # No range has exactly one end finite (`ParamRange`): a window and a chart's spread take a range whole, or else
+    # without end both ways.
+    "image\\.rs:335:38: replace && with \\|\\| in Image<C>::window$",
+    "chart\\.rs:\\d+:\\d+: replace && with \\|\\| in spread$",
+    # By line. A window's samples run evenly from `-reach` to `reach` about its centre, the same either way round. And
+    # one that stops once its ends are more than 2 further than its nearest sample, not twice as far: either stops only
+    # with both ends further than a sample inside, which holds the nearest point of a line's image, whose distance is
+    # convex; for a parabola's or a hyperbola's, how much further is a margin against a second dip beyond the window,
+    # and every case tried finds the same point with either.
+    "image\\.rs:343:37: replace \\+ with - in Image<C>::window$",
+    "image\\.rs:345:(42|81): replace \\* with \\+ in Image<C>::window$",
+    # By line. A smaller pad, a part in 10^12 over 1 + |x| or of |x| alone: a box is from the corners of the curve's,
+    # which hold its points with the curve's own padding, and where a corner is a point of the curve the image gives it
+    # the same parameters by the same arithmetic, so no point falls between the pads.
+    "image\\.rs:147:30: replace \\* with / in padded$",
+    "image\\.rs:147:37: replace \\+ with \\* in padded$",
+    # By line. At order 2 the rungs give both rates, and the series' rates past the second are none. Each corner's ends
+    # picked the other way round are the same eight corners in another order. And a curve's box is finite, or endless
+    # in every coordinate: `Bounds::of` refuses a point not finite in each, and the box given then is everything's.
+    "image\\.rs:416:18: replace > with >= in <impl ParametricParamCurve for Image<C>>::derivatives$",
+    "image\\.rs:433:65: replace == with != in <impl ParametricParamCurve for Image<C>>::bounds$",
+    "image\\.rs:439:(52|71): replace && with \\|\\| in <impl ParametricParamCurve for Image<C>>::bounds$",
+    # By line. Where the axis meets a conic's plane exactly on the conic, the conic passes through the axis, where its
+    # angle jumps by a half turn round it or beside it alike: the closed forms cut such a circle at the pole and make
+    # each arc's image beside it. And a conic's plane is asked which way it faces only where the axis passes inside the
+    # conic, so crosses the plane: the normal's part along the axis is never nought.
+    "image\\.rs:118:56: replace < with <= in round$",
+    "image\\.rs:124:42: replace < with <= in round$",
+    # By line. A collapsing line is a sphere's pole or a cone's apex: a sphere's are half a turn apart, so a reading
+    # within a quarter of one is as far from both half a unit either side. A cylinder presents the point of its axis at
+    # `v` = 0, so the origin's shift along the axis is nought to rounding either way. A cone's chart is read more than a
+    # quarter from its apex, and only its apex is at the apex's height, where the angle is undefined and any value
+    # serves; no ruling is square to the axis, a cone's half-angle being under a right angle. And where a parameter has
+    # no end the surface is a plane, cylinder or cone, or an offset or part of one, which its chart holds exactly, so a
+    # probe at 1.3 fits as one at -1.3 does.
+    "chart\\.rs:122:31: replace \\+ with - in Chart::of$",
+    "chart\\.rs:85:44: replace \\+ with - in read$",
+    "chart\\.rs:91:42: replace < with <= in read$",
+    "chart\\.rs:178:46: replace < with <= in Chart::parameters$",
+    "chart\\.rs:208:30: replace < with <= in Chart::ruling$",
+    "chart\\.rs:60:15: delete - in spread$",
     # occam-intersect's trace. By line. Ties that give the same number either way: the largest entry of a matrix, the
     # sag allowed against the band, the shortest step against the longest, a step's growth held to twice, a step held
     # to the longest or the shortest, a search's first move against the band, and the lesser of a step taken again for

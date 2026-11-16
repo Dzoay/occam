@@ -117,6 +117,13 @@ plain numbers here: one millimetre of the plane is one unit of each parameter, a
 distance or a fit between parameters is in their own measure. The curve suite runs over a parameter curve unchanged,
 through an exact embedding of it in the plane.
 
+A curve in space that lies on a surface is read in the surface's parameters as an `Image<C>`, through its `Chart`: the
+closed form of the parameters of a plane, cylinder, cone, sphere or torus, recovered from the surface's evaluation and
+held to its points, so that a surface parametrized otherwise has none. An angle about the chart's axis is kept
+continuous, so an image does not jump where the parameter comes round, and an image round the axis has an open range,
+since it comes round in space and not in the parameters. Its first two rates are closed forms of the curve's, and
+higher ones come from Taylor series of the same forms. The section's closed forms give their curves these images.
+
 `join_edge` joins a parameter curve to its edge's curve in space. They agree when the surface over the one runs along
 the other within the band the same way: starts meet, ends meet, and samples of each have a foot on the other within
 the band, found along each, so their parameterisations may differ. Otherwise it reports `geom.edge-off-surface` with

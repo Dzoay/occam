@@ -8,14 +8,44 @@
 //! floor, no size estimate is read where the surface collapses, and an edge that would need more than
 //! [`Limits::SAMPLES_PER_EDGE`] samples is refused by name, with a deflection at which it fits.
 //!
+//! Each face is then meshed against [`Edges`] by [`mesh_faces`]: its boundary drawn in its parameters through its
+//! edges' samples, triangulated with exact decisions on the coordinates as they are, not P9's integer grid, and
+//! refined until it is within the deflection measured to the triangle ([`deviation`] measures it), with a floor for
+//! conical points and a cap of [`Limits::TRIANGLES_PER_FACE`]. A face that will not mesh is refused by name, with its
+//! reason, and its neighbours are meshed as if it were not there.
+//!
+//! [`mesh`] does all of it: [`merge`] merges the faces by index into one [`Mesh`], each face's vertices a [`Block`] of
+//! its own, welding nothing, and [`watertight`] checks every output, in release builds too, matching vertices by
+//! position: every segment used once each way, a face that did not mesh named as a hole, and each shell's mesh with its
+//! faces' Euler characteristic. [`Mesh::digest`] is what `gates determinism` holds to its record.
+//!
 //! The work runs in parallel only through [`occam_math::Exec`], one face or one edge a task, and every result comes back
-//! in id order, so the samples are the same bits at any thread count.
+//! in id order, so the samples and the meshes are the same bits at any thread count.
 
+mod boundary;
 mod curvature;
+mod deviation;
 mod edges;
+mod faces;
 mod limits;
+mod merge;
+mod predicates;
+#[cfg(any(test, feature = "determinism"))]
+#[doc(hidden)]
+pub mod probe;
+mod refine;
 #[cfg(test)]
 mod testing;
+/// The tests' models, built outside the tests only for the determinism probe, which nothing that ships turns on.
+#[cfg(all(feature = "determinism", not(test)))]
+#[allow(dead_code, clippy::indexing_slicing, clippy::unwrap_used, reason = "the tests' models, as they are written")]
+mod testing;
+mod triangulation;
+mod watertight;
 
+pub use deviation::deviation;
 pub use edges::{EdgeSamples, Edges, sample_edges};
+pub use faces::{FaceMesh, Faces, Side, mesh_face, mesh_faces};
 pub use limits::Limits;
+pub use merge::{Block, Mesh, merge, mesh};
+pub use watertight::watertight;

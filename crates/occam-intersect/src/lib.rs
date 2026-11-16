@@ -25,6 +25,7 @@
 //! The crate works on surfaces only, through occam-geom's frozen seam, and knows nothing of faces or ids. Every decision
 //! a method makes goes through occam-math's predicates.
 
+mod closed;
 mod correct;
 #[cfg(test)]
 mod correct_tests;
@@ -46,6 +47,7 @@ mod trace;
 #[cfg(test)]
 mod trace_tests;
 
+pub use closed::Closed;
 pub use fit::{Fitted, fit, fits};
 pub use methods::{Answer, Budget, Method, Methods, Spent, SurfacePair, Work, sections};
 pub use section::{Coincidence, Contact, Section, SectionCurve};

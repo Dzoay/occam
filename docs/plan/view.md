@@ -54,33 +54,9 @@ application grows from, and is written in
 `tsc --noEmit` checks it in the gates. `view.renderer` adds them, esbuild, `typescript` and `@webgpu/types` at pinned
 versions, asking for each again under the dependency rule. `web/`'s tests use the Playwright `gates perf` already
 runs. Each face is meshed once: [view-dependent
-detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes after the release. The sketch's `mesh.rs`,
-then `compose.rs`'s `Session`, are deleted as they become real.
+detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes after the release.
 
 ## Steps
-
-### `view.faces`
-
-Each face meshed against the shared samples, one face a task. Point location uses `occam-math`'s exact predicates on
-the real coordinates, not P9's integer grid, which caused all three of its failures. Refinement stops on chordal error
-measured to the triangle, with a floor for conical points and a cap on triangles. Normals come from the surface, poles
-included. A face that will not mesh is named with its reason, and its neighbours are unaffected. P9's adversarial
-cases and repair wait for `view.hardening`, after the demo.
-
-*Failing test first:* every face `construction` makes (planes with holes, and the sides and caps of each primitive,
-extrusion and revolve) meshes within its deflection, measured to the triangle; a face seeded to fail is reported, and
-its neighbours still mesh.
-
-### `view.watertight`
-
-The faces merged by index into one vertex block per face, whose boundary positions are its edges' samples, so
-neighbours hold the same bits there without welding. The watertight check runs on every output, in release builds
-too: every mesh edge used twice, in opposite directions, and each closed shell's mesh with its Euler characteristic.
-A failure names its open edges and their faces. Meshes join `gates determinism`.
-
-*Failing test first:* a boundary vertex moved one ulp is caught and named by its edge; an unmeshed face shows as a
-named hole; every primitive and swept solid meshes watertight; the probe's hash is the same at every thread count and
-lane width.
 
 ### `view.buffers`
 

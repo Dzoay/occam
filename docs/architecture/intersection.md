@@ -26,6 +26,9 @@ flowchart TD
 | tally | The decisions made, from [maths](maths.md#robust-decisions) |
 
 - **Canonical order** means swapping the arguments cannot change the answer.
+- **A closed form's images** are its curve read through each surface's [chart](geometry.md#parameter-curves), the
+  closed form of its parameters. A surface without one, such as a plane's B-spline with uneven poles, declines to the
+  next method.
 - **The hybrid works through evaluation and bounds,** not a B-spline form, so offsets and mesh-backed surfaces reach it.
 - **Many pairs** run one pair a task, one result each, in pair order.
 - **Traced points become curves** through [`fit`](../../crates/occam-intersect/src/fit.rs): B-splines through a trace's
