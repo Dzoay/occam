@@ -24,8 +24,8 @@ use crate::distance::{Spread, judge, shrank};
 use crate::hits::{Kind, Sink, Span};
 use crate::methods::{Spent, Work};
 
-/// How many times a pair of pieces is split at most.
-const DEPTH: u32 = 40;
+/// How many times a pair of pieces is split at most: the sink's depth, which a test may set lower.
+pub(crate) const DEPTH: u32 = 40;
 
 /// A leaf's boxes are at most this fraction of the first pair's larger box.
 const LEAF: f64 = 1.0 / 64.0;
@@ -148,7 +148,7 @@ fn leaves(span: Span, work: &mut Work, sink: &mut Sink<'_>, found: &mut Vec<Foun
         let sizes = (size(&pair.0), size(&pair.1));
         let floor = *floor.get_or_insert(if sizes.0 > sizes.1 { sizes.0 } else { sizes.1 } * LEAF);
         let small = (sizes.0 <= floor || settled.0) && (sizes.1 <= floor || settled.1);
-        match split(cell, sizes, sink).filter(|_| !small && cell.depth < DEPTH) {
+        match split(cell, sizes, sink).filter(|_| !small && cell.depth < sink.depth) {
             Some((halves, side)) => {
                 for half in halves.into_iter().rev() {
                     let (lo, hi, patch, kept) = (half.lo, half.hi, half.patch, half.stuck);
@@ -356,6 +356,22 @@ mod tests {
         let mut sink = Sink::new(&line, &plane, patch((-1.0, -1.0), (2.0, 1.0)), tol());
         keep(vec![at(0.4, Kind::Contact), at(0.5, Kind::Contact)], &mut sink);
         assert_eq!(sink.found().contacts.len(), 2);
+    }
+
+    #[test]
+    fn a_pair_never_small_nor_stuck_is_split_as_deep_as_the_sink_allows_and_no_deeper() {
+        // A line 20 long along z through the plane z = 0 at its middle: its box is always the larger, so its span is
+        // halved, and the two halves beside the crossing touch the plane. A pair is tested for a step each: at a depth
+        // of 2, 1 + 2 + 4 (two clear of the plane) = 7; at a depth of 3, 4 more (two clear), 11.
+        let line = Line::new(Point::from_vec3(v(0.5, 0.0, -10.0)), Direction::normalised(v(0.0, 0.0, 1.0)));
+        let plane = level(0.0);
+        let within = |depth: u32, steps: u32| {
+            let mut sink = Sink::new(&line, &plane, patch((0.0, -1.0), (1.0, 1.0)), tol());
+            sink.depth = depth;
+            leaves(span(0.0, 20.0), &mut Work::of(Budget { steps }), &mut sink, &mut Vec::new()).is_ok()
+        };
+        assert!(within(2, 7) && !within(2, 6), "7 pairs at a depth of 2");
+        assert!(within(3, 11) && !within(3, 10), "11 pairs at a depth of 3");
     }
 
     #[test]
