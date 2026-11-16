@@ -7,15 +7,14 @@
 //! here is copied into a crate; each part is rewritten test-first when its milestone comes. `geom.rs` and `units.rs` went
 //! with `geometry.freeze`, when occam-geom's seam was frozen and recorded in `ci/seam.txt`, `topo.rs` with
 //! `topology.scale`, when occam-topo held all of it but the describer, and `compose.rs` with `construction.commands`,
-//! when the `occam` crate's `Session` and its listing became real.
+//! when the `occam` crate's `Session` and its listing became real, and `mesh.rs` with `view.watertight`, when occam-mesh
+//! held all of it, the merge and the watertight check last.
 #![forbid(unsafe_code)]
 #![allow(dead_code, unused_variables, clippy::unimplemented, missing_docs)]
 
 pub mod report;
 
 pub mod intersect;
-
-pub mod mesh;
 
 pub mod ops;
 

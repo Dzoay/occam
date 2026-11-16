@@ -53,6 +53,66 @@ impl Session {
     pub fn take_saved(&mut self) -> Option<Vec<u8>> {
         self.saved.take()
     }
+
+    /// The model meshed to a chordal `deflection` in millimetres and an `angle` in radians, as `occam mesh` meshes it.
+    /// After a run, at the same limits, only the faces the runs since the last mesh touched, and those along an edge
+    /// whose samples changed, are meshed again; the rest keep their blocks bit for bit.
+    ///
+    /// # Errors
+    ///
+    /// The reports refusing the limits, in the commands' one JSON form.
+    pub fn mesh(&mut self, deflection: f64, angle: f64) -> Result<Meshed, String> {
+        let meshed = self.session.mesh(&Exec::serial(), deflection, angle).map_err(|r| Answered::Refused(r).json())?;
+        Ok(Meshed { meshed })
+    }
+}
+
+/// A model's mesh as the renderer contract wants it: flat arrays, each face a vertex block whose indices count from its
+/// start, and the summary `occam mesh --json` gives.
+#[wasm_bindgen]
+pub struct Meshed {
+    meshed: occam::Meshed,
+}
+
+#[wasm_bindgen]
+impl Meshed {
+    /// One answer per face, its vertex block and its range of triangles or the report refusing it, and the reports
+    /// refusing edges and what the watertight check found, in the one JSON form `occam mesh --json` gives.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        self.meshed.json(None)
+    }
+
+    /// Each vertex's position, three numbers each, in millimetres.
+    #[must_use]
+    pub fn positions(&self) -> Vec<f64> {
+        self.meshed.buffers.positions.clone()
+    }
+
+    /// Each vertex's unit normal, out of its face, three numbers each.
+    #[must_use]
+    pub fn normals(&self) -> Vec<f64> {
+        self.meshed.buffers.normals.clone()
+    }
+
+    /// Each vertex's place in its face's parameters, two numbers each.
+    #[must_use]
+    pub fn uvs(&self) -> Vec<f64> {
+        self.meshed.buffers.uvs.clone()
+    }
+
+    /// Each triangle's corners, three each, counted from the start of its face's vertex block.
+    #[must_use]
+    pub fn indices(&self) -> Vec<u32> {
+        self.meshed.buffers.indices.clone()
+    }
+
+    /// Each face that meshed, in id order, as six numbers: its slot and generation, its first vertex and how many, and
+    /// its first triangle and how many, as the table that ends `occam mesh`'s file.
+    #[must_use]
+    pub fn faces(&self) -> Vec<u32> {
+        self.meshed.buffers.table()
+    }
 }
 
 /// The distance between two points, as the JSON form of its result or of the report refusing it. Everything is in millimetres
@@ -83,6 +143,8 @@ pub fn distance(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::arithmetic_side_effects, reason = "small counts in tests")]
+
     use occam::{Code, Report};
 
     use super::*;
@@ -130,6 +192,44 @@ mod tests {
         );
         assert!(ran.starts_with(r#"{"schema":2,"ok":false,"#), "{ran}");
         assert_eq!(session.take_saved(), None);
+    }
+
+    /// The numbers `meshed`'s summary gives for face `k`: its first vertex and how many, its first triangle and how many.
+    fn ranges(summary: &serde_json::Value, k: usize) -> [u64; 4] {
+        let mesh = &summary["answers"][k]["mesh"];
+        let at = |name: &str, field: &str| mesh[name][field].as_u64().unwrap();
+        [at("vertices", "first"), at("vertices", "count"), at("triangles", "first"), at("triangles", "count")]
+    }
+
+    #[test]
+    fn a_session_meshes_into_flat_arrays_and_after_a_run_keeps_what_it_did_not_touch() {
+        let mut session = Session::new();
+        let _ = session.run(BOX);
+        let first = session.mesh(0.1, 0.35).unwrap();
+        let summary: serde_json::Value = serde_json::from_str(&first.summary()).unwrap();
+        assert_eq!((&summary["ok"], &summary["vertices"]), (&serde_json::json!(true), &serde_json::json!(24)));
+        assert_eq!((first.positions().len(), first.normals().len(), first.uvs().len()), (72, 72, 48));
+        assert_eq!(first.indices().len(), 36);
+        let faces = first.faces();
+        assert_eq!(faces.len(), 6 * 6, "six numbers a face");
+        for (k, row) in faces.chunks(6).enumerate() {
+            assert_eq!(row[..2], [u32::try_from(k).unwrap(), 1], "face:{k}/1");
+            assert_eq!(row[2..].iter().map(|&n| u64::from(n)).collect::<Vec<_>>(), ranges(&summary, k));
+        }
+        let _ = session.run(
+            r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+            {"op": "sphere", "radius": 2, "frame": {"origin": [20, 0, 0]}}]}"#,
+        );
+        let second = session.mesh(0.1, 0.35).unwrap();
+        let summary: serde_json::Value = serde_json::from_str(&second.summary()).unwrap();
+        let kept: Vec<bool> =
+            summary["answers"].as_array().unwrap().iter().map(|a| a["mesh"]["kept"].as_bool().unwrap()).collect();
+        assert_eq!(kept[..6], [true; 6], "the box's faces kept");
+        assert!(kept.len() > 6 && kept[6..].iter().all(|kept| !kept), "the sphere's meshed: {kept:?}");
+        assert_eq!(second.positions()[..72], first.positions()[..], "the box's blocks bit for bit");
+        assert_eq!(second.indices()[..36], first.indices()[..]);
+        let refused = serde_json::from_str::<serde_json::Value>(&session.mesh(-1.0, 0.35).err().unwrap()).unwrap();
+        assert_eq!(refused["reports"][0]["code"], "mesh.limit-not-positive");
     }
 
     #[test]

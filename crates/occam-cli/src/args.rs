@@ -61,6 +61,14 @@ pub enum Command {
     Describe(IdsArgs),
     /// Check the whole model.
     Check(ModelArgs),
+    /// Mesh the model for display, write its buffers, and say how each face meshed.
+    ///
+    /// The buffers are written beside the model as <model>.mesh, or to --out: the counts of vertices, triangles and
+    /// faces as three u64, then the positions, the unit normals and each vertex's (u, v) on its face as f64, then the
+    /// indices, counted from the start of their face's vertex block, and a table of six u32 per face (its slot and
+    /// generation, its first vertex and how many, its first triangle and how many), all little-endian. A face or edge
+    /// refused gives a report; its use-deflection remedy names a --deflection at which it meshes.
+    Mesh(MeshArgs),
     /// The distance between two points, to a tolerance.
     Distance(DistanceArgs),
 }
@@ -115,6 +123,23 @@ pub struct IdsArgs {
     /// The ids, each as kind:slot/generation, such as edge:41/1.
     #[arg(required = true, value_name = "ID", value_parser = entity)]
     pub ids: Vec<EntityRef>,
+}
+
+/// What `mesh` takes.
+#[derive(Debug, Args)]
+pub struct MeshArgs {
+    /// The model.
+    #[command(flatten)]
+    pub model: ModelArgs,
+    /// The farthest a triangle may stray from its face, in millimetres.
+    #[arg(long, value_name = "LENGTH", value_parser = number)]
+    pub deflection: f64,
+    /// The most an edge may turn between two of its samples, in radians.
+    #[arg(long, value_name = "ANGLE", value_parser = number, default_value_t = 0.35)]
+    pub angle: f64,
+    /// Where to write the buffers. Beside the model, as <model>.mesh, if not given.
+    #[arg(long, value_name = "FILE")]
+    pub out: Option<PathBuf>,
 }
 
 /// What `distance` takes.

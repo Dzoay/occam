@@ -26,8 +26,15 @@ flowchart TD
 | tally | The decisions made, from [maths](maths.md#robust-decisions) |
 
 - **Canonical order** means swapping the arguments cannot change the answer.
+- **A closed form's images** are its curve read through each surface's [chart](geometry.md#parameter-curves), the
+  closed form of its parameters. A surface without one, such as a plane's B-spline with uneven poles, declines to the
+  next method.
 - **The hybrid works through evaluation and bounds,** not a B-spline form, so offsets and mesh-backed surfaces reach it.
 - **Many pairs** run one pair a task, one result each, in pair order.
+- **Traced points become curves** through [`fit`](../../crates/occam-intersect/src/fit.rs): B-splines through a trace's
+  stations, with images through the same stations' parameters, cut where a surface's parameters jump and refined until
+  twice every gap between a curve and a surface's point at its image is within the band. The fit is recorded on the
+  curve and on each image; one that cannot reach the band is `intersect.fit-outside-band`, and its curve is kept.
 
 ## Edge against surface
 

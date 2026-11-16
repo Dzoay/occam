@@ -7,8 +7,9 @@
 
 use occam_math::{Level, Real, width};
 use occam_report::{NamedValue, Quantity, Report};
-use occam_units::{Affine, Bounds, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
+use occam_units::{Affine, Bounds, Direction, ParamKind, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
+use crate::analytic::Analytic;
 use crate::basis::{basis, rows_len, span};
 use crate::batch::{Jet1, Jet2, Jets, Order, Scratch, eval_in_lanes};
 use crate::bspline::{
@@ -374,6 +375,25 @@ impl Parametric for SplineSurface {
         Shape { form: if self.bezier { "bezier" } else { "bspline" }, values }
     }
 
+    /// The plane its poles lie in, each within the band of it (S4: a B-spline that is really a plane takes the closed
+    /// forms). The plane is the one through the first pole facing the cross product of the diagonals between the
+    /// corner poles, which is the side `du × dv` faces where the patch is not folded. A surface lies in its poles' hull
+    /// where its weights are positive, as they are, so it lies within the band of the plane too.
+    fn analytic(&self, tol: Tolerance) -> Option<Analytic> {
+        let points: Vec<Vec3> = self.poles.iter().map(|[x, y, z, w]| Vec3::new(x / w, y / w, z / w)).collect();
+        let (nu, n) = (self.count.0, points.len());
+        let corner = |i: Option<usize>| i.and_then(|i| points.get(i)).copied();
+        let first = corner(Some(0))?;
+        let (along_u, along_v, last) =
+            (corner(nu.checked_sub(1))?, corner(n.checked_sub(nu))?, corner(n.checked_sub(1))?);
+        // Corners whose diagonals are parallel face nowhere: the normal is NaN, which no pole is within the band of.
+        let facing = (last - first).cross(along_v - along_u);
+        let normal = facing * (1.0 / facing.norm());
+        let band = tol.band().millimetres();
+        let flat = points.iter().all(|p| (*p - first).dot(normal).abs() <= band);
+        flat.then(|| Analytic::Plane { origin: Point::from_vec3(first), normal: Direction::normalised(normal) })
+    }
+
     /// Itself from `patch.lo` to `patch.hi`, cut by knot insertion: in `u` along each row, then in `v` along each
     /// column.
     fn to_bspline(&self, patch: UvBox) -> Option<BsplineSurface> {
@@ -667,5 +687,50 @@ mod tests {
         Surface::content(&SplineSurface { rational: false, ..s.clone() }, &mut other);
         assert_ne!(content, other, "whether it is rational is part of what it is");
         assert_eq!((Surface::degeneracies(&s), Surface::analytic(&s, conformance::tolerance())), (&[][..], None));
+    }
+
+    /// A bicubic patch on poles spaced unevenly in the plane `z = x + 2y + 1`, rational, with pole `(i, j)` moved `lift`
+    /// off the plane along its normal.
+    fn tilted(lift: (u32, u32, f64)) -> SplineSurface {
+        let pole = |i: u32, j: u32| {
+            let (x, y) =
+                (1.3 * f64::from(i) + 0.1 * f64::from(j) * f64::from(j), 0.9 * f64::from(j) - 0.2 * f64::from(i));
+            let off = if (i, j) == (lift.0, lift.1) { lift.2 / 6.0_f64.sqrt() } else { 0.0 };
+            point(x - off, y - 2.0 * off, x + 2.0 * y + 1.0 + off)
+        };
+        let poles = (0..4).flat_map(|j| (0..4).map(move |i| pole(i, j))).collect();
+        let knots = vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
+        let form = BsplineSurface {
+            degree: (3, 3),
+            count: (4, 4),
+            knots_u: knots.clone(),
+            knots_v: knots,
+            poles,
+            weights: Some(weights(16)),
+        };
+        SplineSurface::new(&form).unwrap()
+    }
+
+    #[test]
+    fn a_surface_whose_poles_lie_in_a_plane_presents_it_and_one_off_it_by_more_than_the_band_does_not() {
+        let tol = conformance::tolerance();
+        let band = tol.band().millimetres();
+        for lift in [0.0, 0.5 * band] {
+            let s = tilted((2, 1, lift));
+            let Some(Analytic::Plane { origin, normal }) = Surface::analytic(&s, tol) else { panic!("{lift}") };
+            let unit = Vec3::new(-1.0, -2.0, 1.0) * (1.0 / 6.0_f64.sqrt());
+            assert!((normal.get() - unit).norm() <= 1e-9, "{normal:?} faces du x dv's side");
+            for i in 0..=8 {
+                let uv = UvPoint::new(f64::from(i) / 8.0, f64::from(8 - i) / 8.0);
+                let off = (Surface::point(&s, uv).to_vec3() - origin.to_vec3()).dot(normal.get());
+                assert!(off.abs() <= band, "{uv:?} is {off} off the plane");
+            }
+        }
+        // The suite holds a presented form's normal to the surface's within 1e-9, which a pole raised by half the band
+        // turns it by more than: it is run on the patch that lies in its plane exactly.
+        let failures = conformance::surface(&tilted((0, 0, 0.0)), whole(&tilted((0, 0, 0.0))));
+        assert!(failures.is_empty(), "{failures:?}");
+        assert_eq!(Surface::analytic(&tilted((2, 1, 2.0 * band)), tol), None, "one pole is off it");
+        assert_eq!(Surface::analytic(&tilted((1, 3, -2.0 * band)), tol), None, "one on an edge is off it too");
     }
 }

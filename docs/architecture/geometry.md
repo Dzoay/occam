@@ -99,6 +99,11 @@ wherever the distance is within the base's radii of curvature on that side, and 
 from there finds it where it is not. A trimmed family's foot is the base's where that lies in the trimmed part, and
 otherwise is searched for there.
 
+A curve fitted to points, as a section curve is, is a `FittedCurve<C>`: its base held by type, as an offset's is, and
+`fit` saying how closely it fits what it was fitted to, which a map grows by the most it stretches a length.
+`interpolate` gives the B-spline through points at the parameters given (Piegl and Tiller, A9.1), so that a curve and
+its images in two faces' parameters share their knots.
+
 ## Parameter curves
 
 A curve in a face's parameters is any curve family drawn in the plane `z = 0` and read as `(u, v) = (x, y)`:
@@ -111,6 +116,13 @@ range without end: otherwise a tilted circle would read as an ellipse that said 
 plain numbers here: one millimetre of the plane is one unit of each parameter, a radian, a millimetre or a knot, and a
 distance or a fit between parameters is in their own measure. The curve suite runs over a parameter curve unchanged,
 through an exact embedding of it in the plane.
+
+A curve in space that lies on a surface is read in the surface's parameters as an `Image<C>`, through its `Chart`: the
+closed form of the parameters of a plane, cylinder, cone, sphere or torus, recovered from the surface's evaluation and
+held to its points, so that a surface parametrized otherwise has none. An angle about the chart's axis is kept
+continuous, so an image does not jump where the parameter comes round, and an image round the axis has an open range,
+since it comes round in space and not in the parameters. Its first two rates are closed forms of the curve's, and
+higher ones come from Taylor series of the same forms. The section's closed forms give their curves these images.
 
 `join_edge` joins a parameter curve to its edge's curve in space. They agree when the surface over the one runs along
 the other within the band the same way: starts meet, ends meet, and samples of each have a foot on the other within

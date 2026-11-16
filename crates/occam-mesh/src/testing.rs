@@ -1,15 +1,18 @@
 //! Source: original
 //! The tests' models, written through `Edit` as any caller would: sheets of faces, each loop running anticlockwise in
 //! its face's parameters, each edge's uses round its ring in the order the faces give them, and each vertex's star in
-//! the order the edges give their ends. A flat disc; P9's bicubic patch with a collapsed row; and a plane meeting a
-//! quarter of a cylinder along a line, so that one edge is shared by a flat face and a bent one.
+//! the order the edges give their ends. A flat disc, with its circle drawn in its parameters or not; P9's bicubic patch
+//! with a collapsed row; half a sphere, whose loop crosses each pole; and a plane meeting a quarter of a cylinder along
+//! a line, so that one edge is shared by a flat face and a bent one.
 
 #![expect(clippy::arithmetic_side_effects, reason = "small indices in test models")]
 
 use core::f64::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
 
-use occam_geom::{Circle, Curve, Cylinder, Line, ParamCurve, Plane, SplineCurve, SplineSurface, Surface, UvCurve};
+use occam_geom::{
+    Circle, Curve, Cylinder, Line, ParamCurve, Plane, Sphere, SplineCurve, SplineSurface, Surface, UvCurve,
+};
 use occam_math::Exec;
 use occam_report::StepRole;
 use occam_topo::{
@@ -162,6 +165,34 @@ pub(crate) fn disc(radius: f64) -> Layout {
     Layout { points: vec![Vec3::new(radius, 0.0, 0.0)], edges, faces }
 }
 
+/// A flat triangle in `z = 0`, facing +Z: three straight edges, each drawn in the plane's parameters.
+pub(crate) fn triangle() -> Layout {
+    let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+    let edges = vec![straight(&points, (0, 1)), straight(&points, (1, 2)), straight(&points, (2, 0))];
+    let sides = vec![
+        side(0, false, uv_line((0.0, 0.0), (1.0, 0.0))),
+        side(1, false, uv_line((2.0, 0.0), (-2.0, 1.0))),
+        side(2, false, uv_line((0.0, 1.0), (0.0, -1.0))),
+    ];
+    let faces = vec![Patch { surface: Arc::new(Plane::placed(&Placement::identity())), sides, witness: (0.5, 0.25) }];
+    Layout { points, edges, faces }
+}
+
+/// [`disc`], with its circle drawn in the plane's parameters, where the plane's `(u, v)` is `(x, y)`.
+pub(crate) fn disc_drawn(radius: f64) -> Layout {
+    let mut layout = disc(radius);
+    let circle = Circle::placed(&Placement::identity(), Length::from_millimetres(radius)).unwrap();
+    let drawn: Arc<dyn ParamCurve> = Arc::new(UvCurve::new(circle).unwrap());
+    layout.faces[0].sides[0].pcurve = Some(drawn);
+    layout
+}
+
+/// `layout` with the curves of face `face`'s edges in its parameters taken away.
+pub(crate) fn undrawn(mut layout: Layout, face: usize) -> Layout {
+    layout.faces[face].sides.iter_mut().for_each(|side| side.pcurve = None);
+    layout
+}
+
 /// The poles of P9's bicubic patch, a row of constant `v` at a time: a bump over the unit square whose row at `v = 0`
 /// is collapsed to one point.
 pub(crate) fn collapsed_poles() -> Vec<Point<World>> {
@@ -194,6 +225,24 @@ pub(crate) fn collapsed_patch() -> Layout {
     ];
     let points = [0, 12, 15].map(|k| poles[k].to_vec3()).into();
     Layout { points, edges, faces: vec![Patch { surface: Arc::new(surface), sides, witness: (0.5, 0.5) }] }
+}
+
+/// Half a sphere of `radius` about the origin, as construction lays it out: one face from the meridian at `u = pi` up
+/// to the north pole, where its loop crosses to the meridian at `u = 0`, down that to the south pole, and across back.
+pub(crate) fn sphere_half(radius: f64) -> Layout {
+    let turn = |axis: Vec3, angle: f64| {
+        Placement::<World, World>::rotation(Direction::normalised(axis), Angle::from_radians(angle))
+    };
+    let upright = Placement::<Local, World>::identity().then(&turn(Vec3::new(1.0, 0.0, 0.0), FRAC_PI_2));
+    let meridian = |frame: &Placement<Local, World>| -> Arc<dyn Curve> {
+        Arc::new(Circle::placed(frame, Length::from_millimetres(radius)).unwrap())
+    };
+    let piece = |curve| Piece { curve, range: (-FRAC_PI_2, FRAC_PI_2), ends: (0, 1) };
+    let edges = vec![piece(meridian(&upright)), piece(meridian(&upright.then(&turn(Vec3::new(0.0, 0.0, 1.0), PI))))];
+    let sides = vec![side(1, false, uv_line((PI, 0.0), (0.0, 1.0))), side(0, true, uv_line((0.0, 0.0), (0.0, 1.0)))];
+    let surface = Arc::new(Sphere::placed(&Placement::identity(), Length::from_millimetres(radius)).unwrap());
+    let points = vec![Vec3::new(0.0, 0.0, -radius), Vec3::new(0.0, 0.0, radius)];
+    Layout { points, edges, faces: vec![Patch { surface, sides, witness: (FRAC_PI_2, 0.0) }] }
 }
 
 /// The frame of the quarter cylinder of [`plane_and_cylinder`]: its axis along +Y through `(0, 0, -radius)`, `u = 0`

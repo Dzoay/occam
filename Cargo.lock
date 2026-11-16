@@ -240,6 +240,7 @@ dependencies = [
  "occam-geom",
  "occam-io",
  "occam-math",
+ "occam-mesh",
  "occam-ops",
  "occam-report",
  "occam-topo",
@@ -316,6 +317,7 @@ version = "0.0.0"
 dependencies = [
  "occam-geom",
  "occam-math",
+ "occam-mesh",
  "occam-report",
  "occam-topo",
  "occam-units",

@@ -541,6 +541,23 @@ catalogue! {
         "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
     }
 
+    /// A decision on a computed value could not be made at this resolution (O11): its certified enclosure reaches
+    /// across an edge of the band. Nothing is guessed in its place.
+    Undecided = "decide.undecided" {
+        Error, [],
+        "A decision cannot be made at this resolution: the value's certified enclosure reaches across an edge of the band.",
+        "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}.",
+    }
+
+    /// A curve fitted to traced points, or one of its images, does not lie within the band of both surfaces, though it
+    /// runs through every station it could be given: what it reached is reported, and the curve is kept beside the
+    /// report with its fit (L5).
+    FitOutsideBand = "intersect.fit-outside-band" {
+        Error, [],
+        "A curve fitted to traced points, or an image of it, is not within the band of both surfaces; it is kept with its fit.",
+        "The curve fitted to {points} traced points and its images lie within {reached} of both surfaces, outside the band of {band}.",
+    }
+
     /// A limit a mesh is made to, its deflection or its angle, is not a finite number greater than zero.
     LimitNotPositive = "mesh.limit-not-positive" {
         Error, [],
@@ -554,6 +571,23 @@ catalogue! {
         Error, [UseDeflection],
         "An edge would need more samples than one edge may have at the deflection asked.",
         "The edge would need more than {cap} samples at a deflection of {deflection}.",
+    }
+
+    /// A face could not be meshed, for the reason given, so the mesh leaves it out and meshes its neighbours as if it
+    /// were there (P9). Where an edge of it was refused, the report names that edge and carries its remedy.
+    FaceNotMeshed = "mesh.face-not-meshed" {
+        Error, [UseDeflection],
+        "A face could not be meshed, so the mesh leaves a hole where it is.",
+        "The face could not be meshed, for the reason given; the faces around it are meshed without it.",
+    }
+
+    /// The watertight check, which runs on every mesh, found it open or its counts wrong: a face is missing, segments
+    /// matched by position are not each used once in each direction, or a shell's Euler characteristic differs from its
+    /// faces'. The reason says which, and the report names where.
+    NotWatertight = "mesh.not-watertight" {
+        Error, [],
+        "The mesh is not watertight: a face is missing, a segment is not used once each way, or a shell's counts are wrong.",
+        "The mesh is not watertight, for the reason given, at the entities named.",
     }
 
     /// The viewer's page is open in a browser that has no WebGPU, which the page draws with.
@@ -1272,6 +1306,22 @@ mod tests {
                 "summary": "A section of two surfaces stopped before it was complete; what it found is kept.",
                 "template": "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
                 "remedies": []
+            },
+            {
+                "name": "Undecided",
+                "code": "decide.undecided",
+                "severity": "error",
+                "summary": "A decision cannot be made at this resolution: the value's certified enclosure reaches across an edge of the band.",
+                "template": "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}.",
+                "remedies": []
+            },
+            {
+                "name": "FitOutsideBand",
+                "code": "intersect.fit-outside-band",
+                "severity": "error",
+                "summary": "A curve fitted to traced points, or an image of it, is not within the band of both surfaces; it is kept with its fit.",
+                "template": "The curve fitted to {points} traced points and its images lie within {reached} of both surfaces, outside the band of {band}.",
+                "remedies": []
             }
         ])
     }
@@ -1293,6 +1343,22 @@ mod tests {
                 "summary": "An edge would need more samples than one edge may have at the deflection asked.",
                 "template": "The edge would need more than {cap} samples at a deflection of {deflection}.",
                 "remedies": ["use-deflection"]
+            },
+            {
+                "name": "FaceNotMeshed",
+                "code": "mesh.face-not-meshed",
+                "severity": "error",
+                "summary": "A face could not be meshed, so the mesh leaves a hole where it is.",
+                "template": "The face could not be meshed, for the reason given; the faces around it are meshed without it.",
+                "remedies": ["use-deflection"]
+            },
+            {
+                "name": "NotWatertight",
+                "code": "mesh.not-watertight",
+                "severity": "error",
+                "summary": "The mesh is not watertight: a face is missing, a segment is not used once each way, or a shell's counts are wrong.",
+                "template": "The mesh is not watertight, for the reason given, at the entities named.",
+                "remedies": []
             }
         ])
     }

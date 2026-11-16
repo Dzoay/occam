@@ -55,21 +55,6 @@ source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted
 
 ## Steps
 
-### `intersection.closed`
-
-Closed forms where both surfaces present an analytic form: a plane with a plane, sphere, cylinder or cone (conics
-included); a sphere with a sphere; and a cylinder with a cylinder, coaxial, parallel or tangent (Patrikalakis and
-Maekawa 2002, ch. 5; Sarraga 1983; Levin 1976, 1979). Coaxial surfaces of revolution meet in circles where their
-meridians cross, a torus included. Curves come back as `occam-geom`'s exact families, with their parameter curves on
-both surfaces. Tangencies come back as contacts, and coplanar or coaxial coincident surfaces are detected (O25).
-Rejection bounds carry a rounding margin. `occam-geom`'s B-spline surface presents a plane when all its control points
-lie in one within the tolerance (S4). Other quadric pairs, such as a sphere or a cone with a cylinder off their common
-axis, decline to `intersection.quadrics`, and a torus with most surfaces declines to the hybrid.
-
-*Failing test first:* P5's 58 closed-form cases under rigid placements, every point within 1e-12 of the part's size of
-both surfaces; a plane exactly tangent to a sphere gives a contact (P5's rounding-margin bug); a B-spline patch that is
-really a plane takes the closed form (S4); a cone with a cylinder off its axis declines.
-
 ### `intersection.quadrics`
 
 Levin's pencil method, for any two of plane, sphere, cylinder and cone that `intersection.closed` does not answer
@@ -110,27 +95,6 @@ rigid placements with every degenerate class built in by construction:
 Each curve lies on both surfaces within the band at dense samples, and its images map onto it within the band. Each
 degenerate pencil is classified as built, and none is fitted. Where a closed form also answers, the two agree within
 the band. A pencil nudged to within the band of a split is `decide.undecided`.
-
-### `intersection.trace`
-
-The marcher: a tangent predictor along the cross product of the normals, a Newton corrector on both surfaces (on the
-implicit form when one side is analytic), step control by curvature within the band, and loop closure (Bajaj, Hoffmann,
-Lynch and Hopcroft 1988; Barnhill and Kersey 1990). Near a tangency, where Newton loses rank, alternating projections
-take over (von Neumann). Seams and poles are domain edges, and a contact at a pole is not the curve's end. A trace that
-neither closes nor leaves the domain within its budget has stalled, and it is reported with its points.
-
-*Failing test first:* P5's failure modes as tests: a corrector that jumps to a neighbouring loop is caught as a stalled
-trace, not a long wrong curve; a trace across a closed NURBS's seam continues; a contact at a sphere's pole is
-classified; a double cone's lower nappe inverts to the right parameters; a tangency converges by projection.
-
-### `intersection.fit`
-
-Traced points become curves. A section curve is a B-spline fitted to the trace (Piegl and Tiller 1997, ch. 9), with
-its fit recorded in `Curve::fit`, and so are its images on both surfaces. This adds a fitted family to `occam-geom`,
-which passes the conformance suite like every other family. The seam does not change.
-
-*Failing test first:* every fitted curve lies within its recorded fit of both surfaces, at samples denser than the
-trace's; its images map onto it within the band; a fit that cannot reach the band is reported with what it reached.
 
 ### `intersection.hybrid`
 

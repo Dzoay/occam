@@ -20,7 +20,7 @@ struct AnsweredWire {
 }
 
 /// One id's answer as a JSON value: what `field` holds for it, or the report refusing it.
-fn answer<T>(id: EntityRef, answer: &Result<T, Report>, field: &str, value: impl Fn(&T) -> Value) -> Value {
+pub(crate) fn answer<T>(id: EntityRef, answer: &Result<T, Report>, field: &str, value: impl Fn(&T) -> Value) -> Value {
     let units = DisplayUnits::default();
     match answer {
         Ok(found) => json!({"entity": id, field: value(found)}),
@@ -39,7 +39,7 @@ fn refusals(reports: &[Report], units: DisplayUnits) -> Vec<(bool, String)> {
 }
 
 /// One id's answer as a line, the answer said by `say`, or the reason it has none; and whether it was answered.
-fn line<T>((id, answer): &PerId<T>, say: impl Fn(&T) -> String) -> (bool, String) {
+pub(crate) fn line<T>((id, answer): &PerId<T>, say: impl Fn(&T) -> String) -> (bool, String) {
     match answer {
         Ok(found) => (true, say(found)),
         Err(report) => (false, format!("{}: {}", id.text(), report.message(DisplayUnits::default()))),

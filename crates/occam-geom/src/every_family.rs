@@ -79,6 +79,23 @@ fn in_parameters() -> Row {
     Row::Param(Box::new(UvCurve::new(flat).unwrap()), (0.0, TAU))
 }
 
+/// An ellipse on a cylinder, where a plane slanting across the axis cuts it, read in the cylinder's parameters: an
+/// image that goes once round the axis.
+fn imaged() -> Row {
+    let cylinder = Cylinder::placed(&placement(), mm(6.0)).unwrap();
+    let form = crate::Surface::analytic(&cylinder, conformance::tolerance()).unwrap();
+    let chart = crate::Chart::of(&cylinder, form).unwrap();
+    let toward = |x: f64, y: f64, z: f64| placement().direction(Direction::normalised(Vec3::new(x, y, z))).get();
+    let (minor, normal) = (toward(0.0, -1.0, 0.0), toward(1.0, 0.0, 2.0));
+    let major = normal.cross(minor);
+    let origin = placement().point(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0))).to_vec3();
+    let axes = [origin, minor, major, minor.cross(major)];
+    let sizes = [6.0, 3.0 * 5.0_f64.sqrt(), 0.0, TAU, 2.0];
+    let numbers: Vec<f64> = axes.iter().flat_map(|v| [v.x, v.y, v.z]).chain(sizes).collect();
+    let oval = Ellipse::restore(&numbers).unwrap();
+    Row::Param(Box::new(crate::Image::conic(oval, chart).unwrap()), (0.0, TAU))
+}
+
 /// Defines the table: a test a row, named for the family, and the families it lists.
 macro_rules! every_family {
     ($($test:ident: $family:literal => $row:expr;)*) => {
@@ -136,11 +153,13 @@ every_family! {
         Row::Curve(Box::new(Hyperbola::placed(&placement(), mm(4.0), mm(3.0)).unwrap()), (-2.0, 2.5));
     parabola: "Parabola" => Row::Curve(Box::new(Parabola::placed(&placement(), mm(3.0)).unwrap()), (-20.0, 30.0));
     spline_curve: "SplineCurve" => Row::Curve(Box::new(twist()), (twist().range().lo, twist().range().hi));
+    fitted_curve: "FittedCurve" => Row::Curve(Box::new(crate::FittedCurve::new(twist(), mm(1e-4)).unwrap()), (0.1, 0.9));
     offset_curve: "OffsetCurve" =>
         Row::Curve(Box::new(OffsetCurve::new(ring_of_ten(), mm(2.0), up()).unwrap()), (0.0, TAU));
     trimmed_curve: "TrimmedCurve" =>
         Row::Curve(Box::new(TrimmedCurve::new(ring_of_ten(), 5.0, 7.0).unwrap()), (5.0, 7.0));
     uv_curve: "UvCurve" => in_parameters();
+    image: "Image" => imaged();
 }
 
 #[test]
