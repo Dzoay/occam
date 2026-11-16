@@ -165,6 +165,11 @@ impl Decisions {
         Self { tol, tally: Tally { decided: 0, exact: 0, undecided: 0 }, failures: Vec::new() }
     }
 
+    /// The length band.
+    pub(crate) fn band(&self) -> f64 {
+        self.tol.band().millimetres()
+    }
+
     /// Where the length `value` lies against the length band.
     ///
     /// # Errors

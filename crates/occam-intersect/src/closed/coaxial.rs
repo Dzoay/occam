@@ -11,8 +11,9 @@ use occam_units::Vec3;
 
 use super::meet::{Flat, Meeting, Shape, meet};
 use super::piece::Plan;
-use super::{Found, along, exact3};
+use super::{Found, Touch, along, exact3};
 use crate::decide::{Decisions, Undecided};
+use crate::resolution::{MARGIN, hidden};
 
 /// An axis: a point on it and its unit direction.
 #[derive(Clone, Copy, Debug)]
@@ -73,6 +74,31 @@ enum Turned {
     Mirror,
 }
 
+/// How a meridian bends at `point` of it on the axis, towards greater heights: a line across the axis not at all, and
+/// a circle centred on the axis by its curvature, towards its centre.
+fn bend(shape: &Shape, point: Flat) -> f64 {
+    match shape {
+        Shape::Line { .. } => 0.0,
+        Shape::Circle { centre, radius } => {
+            let r = radius.mid();
+            (centre.y.mid() - point.y.mid()) / (r * r)
+        }
+    }
+}
+
+/// How far from a point of the axis where `one` and `other` meet what the band hides there reaches. Where they touch,
+/// both surfaces are as round there as their meridians, about the axis, and the gap between them is
+/// `g₀ + ½ κ ρ²` at a distance `ρ` from it, `κ` the difference of the meridians' bends: twice `d = √(2 band / κ)`, as
+/// [`resolution`](crate::resolution) derives. Where they cross, as a cone's side crosses the axis at its apex, it is no
+/// tangency, and nought.
+fn reach(one: &Shape, other: &Shape, (point, touch): (Flat, bool), band: f64) -> f64 {
+    if !touch {
+        return 0.0;
+    }
+    let kappa = bend(one, point) - bend(other, point);
+    MARGIN * hidden(band, if kappa < 0.0 { -kappa } else { kappa })
+}
+
 fn turned(point: Flat, decide: &mut Decisions) -> Result<Turned, Undecided> {
     Ok(match decide.length(point.x)? {
         Side::Above => Turned::Circle(point.y.mid(), point.x.mid()),
@@ -92,7 +118,7 @@ pub(super) fn coaxial(a: Analytic, b: Analytic, axis: &Axis, decide: &mut Decisi
                 Meeting::Same => return Ok(Found::coincident()),
                 Meeting::At(points) => points,
             };
-            for (point, _) in points {
+            for (point, touch) in points {
                 match turned(point, decide)? {
                     Turned::Circle(height, radius) => {
                         let centre = axis.at + axis.along * height;
@@ -101,7 +127,8 @@ pub(super) fn coaxial(a: Analytic, b: Analytic, axis: &Axis, decide: &mut Decisi
                     Turned::OnAxis(height) => {
                         if !seen(&heights, height, decide)? {
                             heights.push(height);
-                            found.contacts.push(axis.at + axis.along * height.mid());
+                            let bound = reach(&one, &other, (point, touch), decide.band());
+                            found.contacts.push(Touch { at: axis.at + axis.along * height.mid(), bound });
                         }
                     }
                     Turned::Mirror => {}

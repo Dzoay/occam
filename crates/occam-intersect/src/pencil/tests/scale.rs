@@ -126,7 +126,7 @@ fn a_split_nudged_to_the_edge_of_the_band_is_undecided_at_every_scale() {
         assert_eq!((edge.curves.len(), edge.contacts.len(), codes), (0, 0, vec![Code::Undecided]), "at {k}");
         let split = nudged(k, 2.0);
         assert!(split.failures.is_empty(), "at {k}: {:?}", split.failures);
-        assert_eq!((split.curves.len(), split.contacts.len()), (2, 2), "at {k}: within the band, a split");
+        assert_eq!((split.curves.len(), split.contacts.len()), (4, 2), "at {k}: within the band, a split, cut");
         let apart = nudged(k, 0.5);
         assert!(apart.failures.is_empty(), "at {k}: {:?}", apart.failures);
         assert_eq!((apart.curves.len(), apart.contacts.len()), (2, 0), "at {k}: clear of it, two loops");

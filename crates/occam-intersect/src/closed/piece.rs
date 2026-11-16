@@ -13,7 +13,7 @@ use occam_geom::{
 use occam_math::{Side, atan2};
 use occam_units::{Direction, Point, Vec3};
 
-use super::{along, exact3, unit};
+use super::{exact3, minus, norm3, unit};
 use crate::decide::{Decisions, Undecided};
 
 /// A curve a closed form found, before it is made.
@@ -33,12 +33,27 @@ pub(crate) enum Plan {
     Hyperbola { centre: Vec3, x: Vec3, y: Vec3, radii: (f64, f64) },
 }
 
-/// A circle's centre and unit axes, where its poles are cut.
+/// A closed conic's centre, unit axes and radii along them, where it is cut.
 #[derive(Clone, Copy, Debug)]
 struct Ring {
     centre: Vec3,
     x: Vec3,
     y: Vec3,
+    radii: (f64, f64),
+}
+
+impl Ring {
+    /// The angle of `p`, a point of the conic's plane, as the conic's parameter: the eccentric angle of an ellipse.
+    fn angle(&self, p: Vec3) -> f64 {
+        let q = p - self.centre;
+        atan2(q.dot(self.y) / self.radii.1, q.dot(self.x) / self.radii.0)
+    }
+
+    /// The conic's point at `t`.
+    fn at(&self, t: f64) -> Vec3 {
+        let (sin, cos) = occam_math::sin_cos(t);
+        self.centre + self.x * (self.radii.0 * cos) + self.y * (self.radii.1 * sin)
+    }
 }
 
 /// A curve made, with what its images need.
@@ -46,7 +61,7 @@ enum Piece {
     Line(Line),
     Ruling(Line, Vec3),
     /// A circle or an arc of one, and whether it was cut at a pole of each surface of the pair.
-    Circle(Circle, Ring, [bool; 2]),
+    Circle(Circle, [bool; 2]),
     Ellipse(Ellipse),
     Parabola(Parabola),
     Hyperbola(Hyperbola),
@@ -80,8 +95,7 @@ fn made(plan: Plan) -> Option<Piece> {
         Plan::Circle { centre, normal, radius } => {
             let x = square_to(normal);
             let y = normal.cross(x);
-            let ring = Ring { centre, x, y };
-            Piece::Circle(Circle::restore(&numbers(centre, x, y, &[radius], true)).ok()?, ring, [false; 2])
+            Piece::Circle(Circle::restore(&numbers(centre, x, y, &[radius], true)).ok()?, [false; 2])
         }
         Plan::Ellipse { centre, x, y, radii } => {
             Piece::Ellipse(Ellipse::restore(&numbers(centre, x, y, &[radii.0, radii.1], true)).ok()?)
@@ -102,37 +116,89 @@ impl Plan {
     }
 }
 
-/// The curves `plan` is made as: one, or a circle's arcs between the poles of either surface it passes through, each
-/// decided. `None` where a curve cannot be made of its numbers.
-pub(super) fn pieces(plan: Plan, charts: [&Chart; 2], decide: &mut Decisions) -> Result<Option<Vec<Made>>, Undecided> {
-    let Some(piece) = made(plan) else { return Ok(None) };
-    let Piece::Circle(circle, ring, _) = piece else { return Ok(made_all(vec![piece], charts)) };
-    let n = ring.x.cross(ring.y);
-    let mut cuts: Vec<(f64, usize)> = Vec::new();
-    for (which, chart) in charts.iter().enumerate() {
-        for pole in chart.poles().into_iter().map(Point::to_vec3) {
-            let off = along(exact3(pole), exact3(ring.centre), exact3(n));
-            if decide.length(off)? == Side::Within {
-                let q = pole - ring.centre;
-                cuts.push((atan2(q.dot(ring.y), q.dot(ring.x)), which));
+/// The conic `plan` is, where it is a closed one, as a ring.
+fn ring_of(plan: Plan) -> Option<Ring> {
+    match plan {
+        Plan::Circle { centre, normal, radius } => {
+            let x = square_to(normal);
+            Some(Ring { centre, x, y: normal.cross(x), radii: (radius, radius) })
+        }
+        Plan::Ellipse { centre, x, y, radii } => Some(Ring { centre, x, y, radii }),
+        _ => None,
+    }
+}
+
+/// Whether `p` is on `ring`, within the band.
+fn on_ring(ring: &Ring, p: Vec3, decide: &mut Decisions) -> Result<bool, Undecided> {
+    let off = ring.at(ring.angle(p));
+    Ok(decide.length(norm3(minus(exact3(p), exact3(off))))? == Side::Within)
+}
+
+/// Where a closed conic is cut: at the angle of each pole of either surface it passes through, with which surface's it
+/// is, and of each point of `through` it passes through, as where it crosses another conic, each decided, in angle
+/// order and each place once.
+fn cuts(
+    ring: &Ring,
+    charts: [&Chart; 2],
+    through: &[Vec3],
+    decide: &mut Decisions,
+) -> Result<Vec<(f64, Option<usize>, Vec3)>, Undecided> {
+    let mut found: Vec<(f64, Option<usize>, Vec3)> = Vec::new();
+    let poles = charts
+        .iter()
+        .enumerate()
+        .flat_map(|(which, chart)| chart.poles().into_iter().map(move |p| (p.to_vec3(), Some(which))));
+    for (p, which) in poles.chain(through.iter().map(|p| (*p, None))) {
+        if !on_ring(ring, p, decide)? {
+            continue;
+        }
+        let mut again = false;
+        for (_, other, at) in &mut found {
+            if decide.length(norm3(minus(exact3(p), exact3(*at))))? == Side::Within {
+                *other = other.or(which);
+                again = true;
             }
         }
+        if !again {
+            found.push((ring.angle(p), which, p));
+        }
     }
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Ok(found)
+}
+
+/// The curves `plan` is made as: one, or a closed conic's arcs between the places it is cut, the poles of either
+/// surface it passes through and the points of `through`, each decided. `None` where a curve cannot be made of its
+/// numbers.
+pub(super) fn pieces(
+    plan: Plan,
+    charts: [&Chart; 2],
+    through: &[Vec3],
+    decide: &mut Decisions,
+) -> Result<Option<Vec<Made>>, Undecided> {
+    let Some(piece) = made(plan) else { return Ok(None) };
+    let Some(ring) = ring_of(plan) else { return Ok(made_all(vec![piece], charts)) };
+    let cuts = cuts(&ring, charts, through, decide)?;
     if cuts.is_empty() {
         return Ok(made_all(vec![piece], charts));
     }
-    cuts.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut arcs = Vec::with_capacity(cuts.len());
-    let round = cuts.first().map(|(at, which)| (at + TAU, *which));
-    for ((start, which), (end, other)) in cuts.iter().zip(cuts.iter().skip(1).copied().chain(round)) {
-        let Ok(arc) = circle.trimmed(*start, end) else { return Ok(None) };
+    let round = cuts.first().map(|(at, which, _)| (at + TAU, *which));
+    let rest = cuts.iter().skip(1).map(|(at, which, _)| (*at, *which));
+    for ((start, which, _), (end, other)) in cuts.iter().zip(rest.chain(round)) {
         let mut cut = [false; 2];
-        for w in [*which, other] {
+        for w in [*which, other].into_iter().flatten() {
             if let Some(slot) = cut.get_mut(w) {
                 *slot = true;
             }
         }
-        arcs.push(Piece::Circle(arc, ring, cut));
+        let arc = match &piece {
+            Piece::Circle(circle, _) => circle.trimmed(*start, end).map(|arc| Piece::Circle(arc, cut)),
+            Piece::Ellipse(ellipse) => ellipse.trimmed(*start, end).map(Piece::Ellipse),
+            _ => return Ok(made_all(vec![piece], charts)),
+        };
+        let Ok(arc) = arc else { return Ok(None) };
+        arcs.push(arc);
     }
     Ok(made_all(arcs, charts))
 }
@@ -197,7 +263,7 @@ fn image(piece: &Piece, chart: &Chart, which: usize) -> Option<Arc<dyn ParamCurv
         Piece::Line(c) => Some(open(*c, chart)),
         Piece::Parabola(c) => Some(open(*c, chart)),
         Piece::Hyperbola(c) => Some(open(*c, chart)),
-        Piece::Circle(c, _, cut) => closed(*c, chart, cut.get(which).copied().unwrap_or(false)),
+        Piece::Circle(c, cut) => closed(*c, chart, cut.get(which).copied().unwrap_or(false)),
         Piece::Ellipse(c) => closed(*c, chart, false),
     }
 }

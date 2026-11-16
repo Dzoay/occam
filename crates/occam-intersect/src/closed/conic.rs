@@ -11,7 +11,7 @@ use occam_units::Vec3;
 
 use super::meet::{Flat, Meeting, Shape, meet};
 use super::piece::{Plan, square_to};
-use super::{Found, along, cross3, exact3, norm3, unit};
+use super::{Found, Touch, along, cross3, exact3, norm3, unit};
 use crate::decide::{Decisions, Undecided};
 
 /// A plane, as a point on it and the unit normal it faces.
@@ -121,15 +121,16 @@ pub(super) fn plane_cone(
 
 /// A plane through a cone's apex `a`: the apex alone where the plane is steeper than the cone's side, the ruling along
 /// its steepest direction where it is as steep, and two rulings where it is less, at the cone's angle from the axis,
-/// `ratio` of the way along `e₁` and the rest across.
+/// `ratio` of the way along `e₁` and the rest across, which cross at the apex, a contact. The rulings have no ends, so
+/// they are not cut there.
 fn through_apex(kind: Side, a: Vec3, (e1, e2): (Vec3, Vec3), ratio: f64) -> Found {
     match kind {
-        Side::Above => Found { contacts: vec![a], ..Found::default() },
+        Side::Above => Found { contacts: vec![Touch::point(a)], ..Found::default() },
         Side::Within => Found::of(Plan::Ruling { apex: a, along: e1 }),
         Side::Below => {
             let across = ((1.0 - ratio) * (1.0 + ratio)).sqrt();
             let ruling = |way: f64| Plan::Ruling { apex: a, along: e1 * ratio + e2 * (across * way) };
-            Found { curves: vec![ruling(1.0), ruling(-1.0)], ..Found::default() }
+            Found { curves: vec![ruling(1.0), ruling(-1.0)], contacts: vec![Touch::point(a)], ..Found::default() }
         }
     }
 }

@@ -11,10 +11,11 @@ use occam_geom::{Chart, Curve, Image, ParametricCurve, TrimmedCurve, Wrap};
 use occam_math::Side;
 use occam_units::{Point, Vec3};
 
-use super::quadric::Natural;
+use super::quadric::{Natural, Quadric};
 use super::{Class, Pair, nodal, smooth, split};
-use crate::closed::{Found, emit, exact3, minus, norm3};
+use crate::closed::{Found, Touch, decided, emit, exact3, minus, norm3, square_to, unit};
 use crate::decide::{Decisions, Undecided};
+use crate::resolution::{NULL, Near};
 use crate::section::{Contact, Section, SectionCurve};
 
 /// The points of the world at which a chart's parameters are undefined: the charts' poles and the cones' apexes.
@@ -25,6 +26,16 @@ fn undefined(pair: &Pair, charts: [&Chart; 2]) -> Vec<Vec3> {
         _ => None,
     });
     poles.chain(apexes).collect()
+}
+
+/// Whether `at` is one of `points`, within the band, as a node at a cone's apex is.
+fn held(points: &[Vec3], at: Vec3, decide: &mut Decisions) -> Result<bool, Undecided> {
+    for p in points {
+        if decide.length(norm3(minus(exact3(*p), exact3(at))))? == Side::Within {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// The samples a curve's range is searched in for where it passes a point.
@@ -116,10 +127,45 @@ fn pieces<C: ParametricCurve + Clone, T: ParametricCurve + Clone>(
     Ok(split.into_iter().map(|(lo, hi)| imaged(trim(lo, hi)?, charts)).collect())
 }
 
-/// A contact at `at`, with its parameters on both surfaces.
-fn contact(at: Vec3, charts: [&Chart; 2]) -> Contact {
-    let p = Point::from_vec3(at);
-    Contact::Point { at: p, on_a: charts[0].parameters(p), on_b: charts[1].parameters(p) }
+/// The contact at `at`, a point on both of `pair`'s surfaces, with the bound of what the band hides there (O24): nought
+/// at a cone's apex, which is no tangency, and else twice `√(2 band / κ)`, `κ` the least size of the relative
+/// curvature of the two quadrics there, as [`resolution`](crate::resolution) derives. A quadric `Q` with half its
+/// gradient `h` at the contact is, over the common tangent plane, the graph whose second derivative along `e` and `f`
+/// is `−eᵀ M f / (h · n)`, `M` its 3×3 part and `n` the first's unit normal.
+pub(super) fn touch(pair: &Pair, at: Vec3, decide: &mut Decisions) -> Result<Touch, Undecided> {
+    for surface in &pair.surfaces {
+        if let Natural::Cone { apex, .. } = *surface
+            && decide.length(norm3(minus(exact3(apex), exact3(at))))? == Side::Within
+        {
+            return Ok(Touch::point(at));
+        }
+    }
+    let x = at - pair.origin;
+    let (first, second) = (pair.quadric(0), pair.quadric(1));
+    let n = unit(first.half_gradient(x));
+    let e1 = square_to(n);
+    let e2 = n.cross(e1);
+    let graph = |q: &Quadric, s: Vec3, t: Vec3| -q.form(s, t) / q.half_gradient(x).dot(n);
+    let relative = |s: Vec3, t: Vec3| graph(&second, s, t) - graph(&first, s, t);
+    let across = relative(e1, e2);
+    let bend = [[relative(e1, e1), across], [across, relative(e2, e2)]];
+    let gap = Near { gap: 0.0, slope: [0.0; 2], bend, basis: [e1, e2], null: NULL };
+    Ok(Touch { at, bound: gap.bound(decide.band()) })
+}
+
+/// The contacts at `points`, each decided by the rule, with its parameters through both charts.
+fn contacts(
+    pair: &Pair,
+    points: &[Vec3],
+    charts: [&Chart; 2],
+    decide: &mut Decisions,
+) -> Result<Vec<Contact>, Undecided> {
+    let mut out = Vec::with_capacity(points.len());
+    for at in points {
+        let found = touch(pair, *at, decide)?;
+        out.push(decided(found, charts, decide));
+    }
+    Ok(out)
 }
 
 /// Lines and conics, made and imaged by the closed forms.
@@ -164,12 +210,16 @@ pub(super) fn built(
                 Ok(nodal) => nodal,
                 Err(why) => return Ok(Err(why)),
             };
+            let mut through = points.clone();
+            if !held(&points, nodal.at, decide)? {
+                through.push(nodal.at);
+            }
             let made = match nodal.curve {
                 None => Some(Vec::new()),
-                Some(c) => pieces(&c, |lo, hi| TrimmedCurve::new(c.clone(), lo, hi).ok(), (&points, charts), decide)?,
+                Some(c) => pieces(&c, |lo, hi| TrimmedCurve::new(c.clone(), lo, hi).ok(), (&through, charts), decide)?,
             };
             let Some(made) = made else { return Ok(Err("a nodal quartic with no image")) };
-            section.contacts.push(contact(nodal.at, charts));
+            section.contacts.extend(contacts(pair, &[nodal.at], charts, decide)?);
             made
         }
         Class::Split { planes } => return conics(split::conics(pair, planes, decide)?, charts, decide, section),
@@ -179,7 +229,7 @@ pub(super) fn built(
                 Some(planes) => split::touches(pair, planes, decide)?,
                 None => Vec::new(),
             };
-            section.contacts.extend(points.into_iter().map(|at| contact(at, charts)));
+            section.contacts.extend(contacts(pair, &points, charts, decide)?);
             Vec::new()
         }
         Class::Other(why) => return Ok(Err(why)),

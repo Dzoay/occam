@@ -149,14 +149,36 @@ pub(crate) fn torus(centre: Vec3, axis: Vec3, major: f64, minor: f64) -> Arc<dyn
     Arc::new(Torus::placed(&frame(centre, axis), mm(major), mm(minor)).unwrap())
 }
 
-/// What a case gives, known by construction, before the rigid placement: how many curves, the contacts, any
-/// coincidence, and points of the true section that some curve passes through.
+/// What a case gives, known by construction, before the rigid placement: how many curves, the contacts, each with its
+/// bound where it is a tangency and below the resolution (O24), any coincidence, and points of the true section that
+/// some curve passes through.
 #[derive(Default)]
 pub(crate) struct Want {
     pub(crate) curves: usize,
     pub(crate) contacts: Vec<Vec3>,
+    pub(crate) bounds: Vec<Option<f64>>,
     pub(crate) coincidence: Option<Coincidence>,
     pub(crate) on: Vec<Vec3>,
+}
+
+impl Want {
+    /// `self` with its contacts each a tangency below the resolution, of the relative curvature `kappa`.
+    pub(crate) fn below(self, kappa: f64) -> Self {
+        let bounds = self.contacts.iter().map(|_| Some(tangency(kappa))).collect();
+        Self { bounds, ..self }
+    }
+}
+
+/// Whether `found` is the contact `want` at `p`: a point there where `bound` is `None`, and else below the resolution
+/// there with that bound, to a part in a million.
+pub(crate) fn is_contact(found: &Contact, p: Vec3, bound: Option<f64>, near: f64) -> bool {
+    match (*found, bound) {
+        (Contact::Point { at, .. }, None) => (at.to_vec3() - p).norm() <= near,
+        (Contact::BelowResolution { at, bound: got }, Some(want)) => {
+            (at.to_vec3() - p).norm() <= near && (got.millimetres() - want).abs() <= 1e-6 * want
+        }
+        _ => false,
+    }
 }
 
 /// `count` curves, which between them pass through every point of `on`.
@@ -234,13 +256,24 @@ pub(crate) fn lies_on_both(name: &str, piece: &SectionCurve, a: &dyn Surface, b:
     }
 }
 
-/// A contact's parameters on both surfaces map onto it.
+/// A contact's parameters on both surfaces map onto it, where it is a point, and a contact below the resolution has a
+/// bound that is a length, finite or not.
 pub(crate) fn contact_maps(name: &str, found: &Contact, a: &dyn Surface, b: &dyn Surface) {
-    let Contact::Point { at, on_a, on_b } = *found else { panic!("{name}: {found:?} is not a point") };
+    let Contact::Point { at, on_a, on_b } = *found else {
+        let Contact::BelowResolution { bound, .. } = *found else { return };
+        assert!(bound.millimetres() >= 0.0, "{name}: {found:?}");
+        return;
+    };
     for (surface, uv) in [(a, on_a), (b, on_b)] {
         let miss = (surface.point(uv).to_vec3() - at.to_vec3()).norm();
         assert!(miss <= 1e-12 * size(), "{name}: a contact's parameters map {miss} from it");
     }
+}
+
+/// A tangency's bound: twice `√(2 band / κ)`, for the relative curvature `κ`, at this thread's scale (O24).
+pub(crate) fn tangency(kappa: f64) -> f64 {
+    let band = tol().band().millimetres();
+    2.0 * (2.0 * band / (kappa / scale())).sqrt()
 }
 
 /// The nearer of two distances.
@@ -259,9 +292,10 @@ pub(crate) fn check(name: &str, a: &dyn Surface, b: &dyn Surface, want: &Want) {
         let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, nearer);
         assert!(near <= 1e-9 * SIZE, "{name}: no curve passes through {p:?}: the nearest is {near} away");
     }
-    for p in want.contacts.iter().map(|p| placed(*p)) {
-        let near = |c: &Contact| matches!(c, Contact::Point { at, .. } if (at.to_vec3() - p).norm() <= 1e-12 * SIZE);
-        assert!(got.contacts.iter().any(near), "{name}: no contact at {p:?} in {:?}", got.contacts);
+    for (k, p) in want.contacts.iter().map(|p| placed(*p)).enumerate() {
+        let bound = want.bounds.get(k).copied().flatten();
+        let near = |c: &Contact| is_contact(c, p, bound, 1e-12 * SIZE);
+        assert!(got.contacts.iter().any(near), "{name}: no contact at {p:?}, {bound:?}, in {:?}", got.contacts);
     }
     for found in &got.contacts {
         contact_maps(name, found, a, b);

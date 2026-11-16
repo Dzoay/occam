@@ -70,17 +70,6 @@ traits or bounded pieces up to an extent the caller gives, and the seam does not
 surfaces within the band over the extent asked, its images mapping onto them; none is reported as not implemented, and
 swapping the pair swaps the images.
 
-### `intersection.resolution`
-
-What the tolerance cannot tell apart (O24). A loop smaller than `d` comes back as `BelowResolution { at, bound }`,
-where `d` follows from the band and the surfaces' relative curvature at the contact (P5: loop radius about `sqrt(eps)`).
-A tangent contact is a `Contact::Point` only when the decision certifies it. Branch points, where two branches of the
-section cross, split the curves there and are kept as contacts, where P5 passed through them.
-
-*Failing test first:* P5's near-tangent sweep, 48 cases from a gap of 1e-1 to 1e-12, each correct or `BelowResolution`
-with a bound that contains the true loop, and never silent. `nt_poly_loop` at 1e-10, P5's one silent failure, is
-`BelowResolution`. The Viviani node splits its curve.
-
 ### `intersection.timing`
 
 The exit's measurements: `gates perf` classes for the closed forms, the pencil method, the hybrid and hits, with browser

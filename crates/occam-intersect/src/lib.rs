@@ -27,16 +27,24 @@
 //! breadth-first subdivision by boxes, and against an analytic side by its implicit form's sign, gives at most one
 //! start point a leaf; start points already in the tube about a found curve are not traced, the rest are traced in
 //! rounds and fitted. A leaf where the surfaces lie within the band of each other is reported as an overlap, and a part
-//! halved as far as it goes and still too large as unresolved; neither is answered with curves.
+//! halved as far as it goes and still too large as unresolved; neither is answered with curves. Near a tangency a leaf
+//! takes its start from alternating projections where Newton's method loses rank, a shallow crossing gives a second
+//! start for a second close curve, and a trace is cut at a branch point it passes.
 //!
 //! Where a curve over a span meets a surface over a patch is [`Hits`], beside a section: crossings, contacts and
 //! overlaps, the failures and the tally. [`hits`] tests their boxes first, and [`scan`] does not, so the two can be
 //! compared (P8). [`hits_of_pairs`] runs many, as [`sections`] does.
 //!
+//! What the tolerance cannot tell apart (O24) is one rule for every method: where the surfaces touch, or branches of
+//! the section cross, the contact's bound follows from the band and the surfaces' relative curvature there, and it is a
+//! [`Contact::Point`] only where that is decided within the band, else [`Contact::BelowResolution`]. A bounded curve
+//! through a branch point is cut there.
+//!
 //! The crate works on surfaces and curves only, through occam-geom's frozen seam, and knows nothing of faces or ids.
 //! Every decision a method makes goes through occam-math's predicates.
 
 mod along;
+mod branch;
 mod closed;
 mod correct;
 #[cfg(test)]
@@ -60,8 +68,12 @@ mod on;
 mod pencil;
 mod pieces;
 mod project;
+mod resolution;
+#[cfg(test)]
+mod resolution_tests;
 mod section;
 mod subdivide;
+mod tangency;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
