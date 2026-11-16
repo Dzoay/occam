@@ -17,6 +17,7 @@ use crate::correct::{Here, Other, Pair, Side};
 use crate::decide::undecided;
 use crate::march::{Frame, Limits, Run, frame};
 use crate::methods::{Spent, SurfacePair, Work, incomplete};
+use crate::on::On;
 use crate::project::project;
 use crate::section::Section;
 
@@ -183,15 +184,25 @@ impl Tracer {
         starts: &[Start],
         work: &mut Work,
         found: &mut Vec<Trace>,
+        skip: impl FnMut(&Start, &[Trace]) -> bool,
+    ) -> Result<(), Spent> {
+        self.rounds(On::Shared(exec, pair), starts, work, found, skip)
+    }
+
+    /// [`Tracer::traces`] on `on`, which runs each round's traces on the calling thread or through `Exec`, with the
+    /// same bits.
+    pub(crate) fn rounds(
+        &self,
+        on: On<'_>,
+        starts: &[Start],
+        work: &mut Work,
+        found: &mut Vec<Trace>,
         mut skip: impl FnMut(&Start, &[Trace]) -> bool,
     ) -> Result<(), Spent> {
         for round in starts.chunks(ROUND) {
             let kept: Arc<[Start]> = round.iter().filter(|start| !skip(start, found)).copied().collect();
-            let (steps, a, b, count) = (*self, Arc::clone(&pair.0), Arc::clone(&pair.1), kept.len());
-            let results = exec.map(count, Grain::Each, move |index| {
-                kept.get(index).map(|start| steps.trace(a.as_ref(), b.as_ref(), *start))
-            });
-            for trace in results.into_iter().flatten() {
+            let steps = *self;
+            for trace in on.map(kept, Grain::Each, move |a, b, start| steps.trace(a, b, *start)) {
                 work.spend(trace.steps)?;
                 found.push(trace);
             }

@@ -14,7 +14,7 @@ use crate::bspline::{BsplineCurve, MAX_DEGREE, bezier_knots, cartesian, checked_
 use crate::curve::ParametricCurve;
 use crate::domain::{ParamMap, ParamRange, Wrap};
 use crate::identity::{Content, FamilyName, Shape};
-use crate::knots::{Rows, canonical};
+use crate::knots::{Rows, canonical, of_spans};
 use crate::lanewise::{MAX_LANES, from_lanes, lanes};
 use crate::restore::{Numbers, knots as saved_knots, poles as saved_poles};
 use crate::spline::{CAPACITIES, curve_quotient, moved_pole};
@@ -212,16 +212,22 @@ impl ParametricCurve for SplineCurve {
         self.range
     }
 
-    /// The box of the poles of the spans from `lo` to `hi`, which hold the curve there where every weight is positive,
-    /// padded for rounding. A part outside the range gives all of space.
+    /// The box of the poles of the part from `lo` to `hi` alone, which hold the curve there where every weight is
+    /// positive: the poles of the spans it covers, each end inserted until it repeats as often as the degree (Piegl and
+    /// Tiller, section 5.2), so that they close in on the part as it shrinks. Padded for the rounding of its points and
+    /// of the knots inserted. A part outside the range gives all of space.
     fn bounds(&self, lo: f64, hi: f64) -> Bounds {
         let (lo, hi) = if hi < lo { (hi, lo) } else { (lo, hi) };
         if !(self.range.contains(lo) && self.range.contains(hi)) {
             return everything();
         }
-        let near = self.poles.get(self.span(lo).saturating_sub(self.degree)..=self.span(hi)).unwrap_or_default();
-        let points = near.iter().map(|[x, y, z, w]| Point::from_vec3(Vec3::new(x / w, y / w, z / w)));
-        Bounds::of(points).map_or_else(everything, |hull| padded(hull, number(self.degree.saturating_add(2))))
+        let (p, spans) = (self.degree, (self.span(lo), self.span(hi)));
+        let near = self.poles.get(spans.0.saturating_sub(p)..=spans.1).unwrap_or_default().to_vec();
+        let (part, inserted) =
+            Rows { knots: of_spans(&self.knots, p, spans), degree: p, poles: vec![near] }.cut(lo, hi);
+        let points = part.poles.iter().flatten().map(|[x, y, z, w]| Point::from_vec3(Vec3::new(x / w, y / w, z / w)));
+        let terms = number(p.saturating_add(2).saturating_add(inserted));
+        Bounds::of(points).map_or_else(everything, |hull| padded(hull, terms))
     }
 
     fn family(&self) -> FamilyName {
@@ -398,6 +404,31 @@ mod tests {
         assert!(Curve::bounds(&c, -0.5, 0.5).contains(point(1e300, -1e300, 1e300)));
         let b = Curve::bounds(&c, 0.5, 0.5);
         assert!(b.contains(c.point(0.5)) && !b.contains(point(1e300, 0.0, 0.0)));
+    }
+
+    #[test]
+    fn a_box_inside_one_knot_span_closes_in_on_its_part_and_holds_it() {
+        // Inside a span every pole the span uses holds the whole span; the part's own poles close in on the part.
+        let size = |b: &Bounds| (b.high().to_vec3() - b.low().to_vec3()).norm();
+        for c in curves() {
+            let (lo, hi) = (c.knots[c.degree], c.knots[c.degree + 1]);
+            let whole_span = size(&Curve::bounds(&c, lo, hi));
+            for k in [2.0, 4.0, 8.0] {
+                let at = |f: f64| lo + (hi - lo) * f;
+                let (from, to) = (at(0.3), at(0.3 + 1.0 / k));
+                let b = Curve::bounds(&c, from, to);
+                assert!(
+                    size(&b) <= 2.0 / k * whole_span,
+                    "degree {} at a {k}th: {} against {whole_span}",
+                    c.degree,
+                    size(&b)
+                );
+                for i in 0..=16 {
+                    let t = from + (to - from) * f64::from(i) / 16.0;
+                    assert!(b.contains(c.point(t)), "degree {} at a {k}th: {b:?} misses {t}", c.degree);
+                }
+            }
+        }
     }
 
     #[test]

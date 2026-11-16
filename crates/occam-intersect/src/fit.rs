@@ -41,6 +41,7 @@ use occam_units::{Length, Point, Tolerance, UvPoint, Vec3, World};
 use crate::correct::Pair;
 use crate::decide::{Decide, ahead, distance, undecided};
 use crate::methods::SurfacePair;
+use crate::on::On;
 use crate::section::SectionCurve;
 use crate::trace::{Crossing, End, Jump, Start, Station, Trace, Uncertain, Which};
 
@@ -80,10 +81,7 @@ pub fn fit(a: &dyn Surface, b: &dyn Surface, trace: &Trace, tol: Tolerance) -> F
 /// of threads.
 #[must_use]
 pub fn fits(exec: &Exec, pair: &SurfacePair, traces: Arc<[Trace]>, tol: Tolerance) -> Vec<Fitted> {
-    let (a, b, count) = (Arc::clone(&pair.0), Arc::clone(&pair.1), traces.len());
-    let found = exec
-        .map(count, Grain::Each, move |index| traces.get(index).map(|trace| fit(a.as_ref(), b.as_ref(), trace, tol)));
-    found.into_iter().flatten().collect()
+    On::Shared(exec, pair).map(traces, Grain::Each, move |a, b, trace| fit(a, b, trace, tol))
 }
 
 /// A run of stations along which no surface's parameters jump, none repeating the one before it, and the surface at

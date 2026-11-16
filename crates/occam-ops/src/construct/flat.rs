@@ -332,18 +332,19 @@ pub(crate) fn closest(x: Flat, y: Flat) -> (f64, P2) {
 }
 
 /// Where `x` and `y`, which meet end to end at each point of `shared`, also meet or touch elsewhere: a place where they
-/// cross away from every shared point, or an end of one, not a shared point, within `band` of the other. Two pieces that
-/// meet end to end at both their ends, as the two of a closed run of two do, can run along each other all the way
-/// between, where they neither cross nor have an end: there the middle of `x`, within `band` of `y`, is such a place.
+/// cross away from every shared point, or an end or the middle of one, not a shared point, within `band` of the other.
+/// Pieces can run along each other from where they meet without crossing or having an end there: an arc tangent to a
+/// segment where it ends can turn back along it, and the two of a closed run of two can run along each other all the
+/// way between their ends. There the middle of one, within `band` of the other, is such a place. Nearer where they meet,
+/// as at a sharp corner, they are part of that meeting.
 pub(crate) fn meet_elsewhere(x: Flat, y: Flat, shared: &[P2], band: f64) -> Option<P2> {
     let away = |p: P2| shared.iter().all(|&s| apart(p, s) > 4.0 * band);
     if let Some(&p) = crossings(x, y).iter().find(|&&p| away(p)) {
         return Some(p);
     }
-    let middle = shared.get(1).map(|_| x.at(0.5).0);
-    let x_points = [x.start(), x.end()].into_iter().chain(middle).filter(|&e| away(e) && y.distance(e) <= band);
-    let y_ends = [y.start(), y.end()].into_iter().filter(|&e| away(e) && x.distance(e) <= band);
-    x_points.chain(y_ends).next()
+    let x_points = [x.start(), x.end(), x.at(0.5).0].into_iter().filter(|&e| away(e) && y.distance(e) <= band);
+    let y_points = [y.start(), y.end(), y.at(0.5).0].into_iter().filter(|&e| away(e) && x.distance(e) <= band);
+    x_points.chain(y_points).next()
 }
 
 /// The segments piece `k` of the closed chain through `pieces` gives it, its arcs cut so their chords stray by at most
