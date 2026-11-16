@@ -89,8 +89,16 @@ for (const name of KERNELS) {
     lanes_result: gave.lanes,
   });
 }
-// Each construction operation in both builds, alternating in the same way, which must answer with the same bits (L23).
-const OPERATIONS = ["construct_primitives", "construct_sweeps", "construct_transforms", "measure_primitives"];
+// Each construction operation in both builds, alternating in the same way, which must answer with the same bits (L23);
+// and the mesher's classes, which have no lane kernel, the same way.
+const OPERATIONS = [
+  "construct_primitives",
+  "construct_sweeps",
+  "construct_transforms",
+  "measure_primitives",
+  "mesh_p9_parts",
+  "mesh_pick",
+];
 const OPERATION_ROUNDS = 5;
 const operationTimed = (build, name) =>
   page.evaluate(

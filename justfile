@@ -107,7 +107,7 @@ web-test: web-build
     mkdir -p "$CARGO_TARGET_DIR"
     cargo run --quiet -p occam-report --example catalogue > "$CARGO_TARGET_DIR/occam-catalogue.json"
     cargo build --quiet -p occam-cli
-    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" OCCAM="$CARGO_TARGET_DIR/debug/occam" node --test --test-timeout=300000 web/test/viewer.test.mjs web/test/demo.test.mjs
+    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" OCCAM="$CARGO_TARGET_DIR/debug/occam" node --test --test-timeout=300000 web/test/viewer.test.mjs web/test/demo.test.mjs web/test/pick-timing.test.mjs
 
 # The live agent test, by hand on your own key and account, never in CI: headless Claude Code on Haiku, pinned, with the occam skill, builds a plate with a hole as headless Chromium follows the page, then stands a cylinder on the face selected there; scored as the scripted demo is, everything kept for docs/evidence/. `--dry-run`: a stand-in plays the agent, and no model is asked; `--score KIT --why REASON`: a kit scored again from its logs
 [env("CARGO_TARGET_DIR", target)]
@@ -244,6 +244,27 @@ workflows:
 [group('tools')]
 load *args:
     cargo run --quiet --release -p occam-io --example load -- "$@"
+
+# The `view` milestone's goals in headless Chromium, as JSON lines: `pool <model> [workers...]`, the page's mesh workers at 1 to 6, cold and warm; `editing`, the editing worker's call on construction's requests; `redraw <model> [rounds]`, from a run's save to the page's redraw. A model from `just view-timing save`
+[env("CARGO_TARGET_DIR", target)]
+[env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
+[group('tools')]
+view-timing-browser *args: web-build
+    cargo build --quiet --release -p occam-cli
+    OCCAM="$CARGO_TARGET_DIR/release/occam" node web/test/timing.mjs "$@"
+
+# A pick timed on this machine's real GPU, `<model> [chromium|firefox]`, on a model from `just view-timing save`: headed, opening a browser window, where headless reaches only a software adapter, and refused on a software adapter. A goal, not a gate
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+view-pick-gpu *args: web-build
+    cargo build --quiet --release -p occam-cli
+    OCCAM="$CARGO_TARGET_DIR/release/occam" node web/test/pick-timing.mjs "$@"
+
+# The `view` milestone's native goals on P9's models (`build`, `quality`, `scale`, `save`, `open`): its quality table, its speed-up at 1 to 6 threads, and its models saved for `occam view`. Goals, not gates
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+view-timing *args:
+    cargo run --quiet --release -p occam --example view_timing -- "$@"
 
 # The determinism stream's record, from its separate implementation; `--check` compares it with ci/determinism-hashes.txt
 [group('tools')]

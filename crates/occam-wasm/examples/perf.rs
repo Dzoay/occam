@@ -3,13 +3,16 @@
 //! `gates perf` builds it with and without simd128 and compares the two in one run (L30). And each lane kernel of
 //! `occam_math::workloads`, and the spline kernel, at width 1 and at its width, which the simd128 build must show clearly
 //! faster (L29). And each construction operation `gates perf` counts natively, run through a session as the editing
-//! worker runs it, which the simd128 build must answer with the same bits (L23).
+//! worker runs it, which the simd128 build must answer with the same bits (L23). And the mesher's classes, P9's first
+//! parts meshed whole and a picker's rays picked, which have no lane kernel to compare, so are timed in both builds
+//! and must give the same bits.
 #![allow(clippy::arithmetic_side_effects, reason = "IEEE arithmetic over `Real`, which cannot panic or overflow")]
 #![allow(missing_docs, reason = "an example")]
 
 use std::cell::RefCell;
 use std::hint::black_box;
 
+use occam::mesh_workloads::PerfParts;
 use occam::operation_workloads::{MEASURES, PRIMITIVES, SWEEPS, TRANSFORMS};
 use occam::{Encoding, Jets, Lanes, Real, Session, SplineSurface, ran_json, spline_workloads, width, workloads};
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -138,6 +141,21 @@ pub fn kernel(name: &str, lanes: bool, repeats: u32) -> f64 {
 thread_local! {
     /// The primitives, made once for the measures: setup, which the timing leaves out after the first round.
     static PRIMITIVES_MADE: RefCell<Option<Session>> = const { RefCell::new(None) };
+    /// P9's first parts and their picker, made once for the mesher's classes, the same.
+    static PARTS_MADE: RefCell<Option<PerfParts>> = const { RefCell::new(None) };
+}
+
+/// The mesher's class `name` run once on P9's first parts: its digest, or `failed` if the parts could not be made.
+fn meshing(name: &str) -> String {
+    PARTS_MADE.with(|made| {
+        let mut made = made.borrow_mut();
+        if made.is_none() {
+            *made = PerfParts::new().ok();
+        }
+        let Some(parts) = made.as_ref() else { return "failed".to_string() };
+        let digest = if name == "mesh_p9_parts" { parts.mesh() } else { parts.pick() };
+        format!("{digest:016x}")
+    })
 }
 
 /// FNV-1a, 64 bits, of `text`: enough to tell two builds' answers apart without passing them whole.
@@ -171,6 +189,7 @@ pub fn operation(name: &str) -> String {
         "construct_sweeps" => (Session::new(Encoding::Binary), SWEEPS),
         "construct_transforms" => (Session::new(Encoding::Binary), TRANSFORMS),
         "measure_primitives" => (primitives(), MEASURES),
+        "mesh_p9_parts" | "mesh_pick" => return meshing(name),
         _ => return "unknown".to_string(),
     };
     let (ran, _) = session.run(black_box(request));
