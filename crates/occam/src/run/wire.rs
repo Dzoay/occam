@@ -1,7 +1,8 @@
 //! Source: original
 //! A run's one JSON form (L4): whether it went through, the tolerance in force and where it came from, each step that ran
 //! with what it created, changed and deleted, what it measured, and what each entity it names is, why it stopped if it
-//! did, and the notes. Numbers are in millimetres and radians, as every result gives them; the reports' wording, and
+//! did, and the notes; and, where the command line carried the selection over, what became of each selected id, and
+//! whether it cleared the highlight. Numbers are in millimetres and radians, as every result gives them; the reports' wording, and
 //! each value a description or a measure shows, are in the request's units.
 
 use occam_ops::Measured;
@@ -25,6 +26,18 @@ struct RanWire<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     failed: Option<FailedWire>,
     diagnostics: Vec<Value>,
+    /// What became of each selected id, where the selection was carried over.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    selection: Option<Vec<CarriedWire>>,
+    #[serde(rename = "highlight-cleared", skip_serializing_if = "std::ops::Not::not")]
+    highlight_cleared: bool,
+}
+
+/// A selected id, and what it is after the run.
+#[derive(Serialize)]
+struct CarriedWire {
+    entity: EntityRef,
+    now: Vec<EntityRef>,
 }
 
 /// A measure step's index in the request and what it measured.
@@ -158,6 +171,11 @@ pub fn ran_json(ran: &Ran) -> String {
         steps: ran.done.iter().map(|d| done(d, ran.units)).collect(),
         failed: ran.failed.as_ref().map(|f| failed(f, ran.units)),
         diagnostics: used.iter().map(|r| report_value(r, ran.units)).collect(),
+        selection: ran
+            .selection
+            .as_ref()
+            .map(|carried| carried.iter().map(|c| CarriedWire { entity: c.was, now: c.now.clone() }).collect()),
+        highlight_cleared: ran.highlight_cleared,
     };
     serde_json::to_string(&wire).unwrap_or_default()
 }

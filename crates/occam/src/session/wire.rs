@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 use super::{Answered, PerId};
 use crate::run::{Ran, report_value};
+use crate::selection::Carried;
 
 #[derive(Serialize)]
 struct AnsweredWire {
@@ -145,7 +146,21 @@ pub fn ran_words(ran: &Ran) -> Vec<(bool, String)> {
         let at = failed.step.map_or_else(String::new, |step| format!("step {step} failed: "));
         lines.extend(failed.reports.iter().map(|report| (false, format!("{at}{}", report.message(ran.units)))));
     }
+    lines.extend(ran.selection.iter().flatten().map(|carried| (true, carried_words(carried))));
+    if ran.highlight_cleared {
+        lines.push((true, "The highlight is cleared.".to_string()));
+    }
     lines
+}
+
+/// What became of a selected id, in a line.
+fn carried_words(carried: &Carried) -> String {
+    let was = carried.was.text();
+    match carried.now.as_slice() {
+        [] => format!("{was} was selected and is gone, so the selection drops it."),
+        [now] if *now == carried.was => format!("{was} stays selected."),
+        now => format!("{was} was selected and is now {}, which the selection names instead.", texts(now).join(" ")),
+    }
 }
 
 /// What one step did, in a line.

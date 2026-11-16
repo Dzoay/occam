@@ -24,6 +24,10 @@ flowchart LR
   time to whichever worker is free. Each range's arrays are numbered from their own start, and its edges are sampled
   as the whole mesh samples them, so the ranges laid end to end in id order are the buffers `occam mesh` gives, bit
   for bit. Each range is checked watertight as far as it reaches.
+- **A pick is asked of one mesh worker,** the first that has not stopped, about the model it was given last. It meshes
+  that model whole the first time, as `occam mesh` does, and keeps the mesh and its box trees for the next pick, so the
+  page picks against the CPU mesh and maps no GPU buffer. The same worker gives the samples of the edges the page
+  outlines.
 - **No wasm runs on the page's main thread.** Only the workers fetch the kernel's module, `occam.wasm`, built with
   simd128.
 - **Nothing is shared,** so the page needs no `SharedArrayBuffer`, and no COOP or COEP headers: bytes and arrays are
@@ -43,6 +47,9 @@ flowchart LR
 | `load` | page, mesh worker | a model's number and its own copy of the twin |
 | `mesh` | page, mesh worker | a call's number, the model's, the limits, and the range of faces |
 | `meshed` or `failed` | mesh worker, page | the range's arrays and faces' table, with the reports refusing any of it; or why it could not mesh at all |
+| `pick` | page, a mesh worker | an ask's number, the model's, the limits, a click's ray in `f64`, and the edge tolerance a millimetre along it |
+| `samples` | page, a mesh worker | an ask's number, the model's, the limits, and the edges selected or highlighted, to outline |
+| `picked`, `sampled` or `unanswered` | mesh worker, page | `occam pick`'s JSON for the ray; each edge's samples; or why it could not answer |
 
 [`web/src/protocol.ts`](../../web/src/protocol.ts) declares them.
 

@@ -69,8 +69,27 @@ pub enum Command {
     /// generation, its first vertex and how many, its first triangle and how many), all little-endian. A face or edge
     /// refused gives a report; its use-deflection remedy names a --deflection at which it meshes.
     Mesh(MeshArgs),
+    /// The face or edge a ray hits first, by id, with the point hit: what a click in `occam view`'s page picks.
+    ///
+    /// The ray starts at --from and goes along --direction, or towards the point --towards gives. It is tested against
+    /// the model's mesh, made to --deflection and --angle as the viewer's page makes it, never against the GPU's. The
+    /// face it crosses first is hit, unless an edge within --tolerance of the ray wins over it: one no further along the
+    /// ray than that face, or one of that face's own edges within --tolerance of where the ray crosses it. A ray that
+    /// hits nothing is refused with mesh.ray-missed, whose aim-at remedy names a point for --towards.
+    Pick(PickArgs),
     /// The distance between two points, to a tolerance.
     Distance(DistanceArgs),
+    /// Describe what the person has selected in `occam view`'s page, as describe does.
+    ///
+    /// The page writes the selection beside the model as <model>.selection, the ids in the order they were selected,
+    /// and `occam run` carries it over through its changes. A selection made on another model than the file holds is
+    /// stale: it is refused with view.selection-stale, and the person must select again.
+    Selection(ModelArgs),
+    /// Show these ids in `occam view`'s page, in a colour of their own, as what is about to change; --clear removes them.
+    ///
+    /// Writes them beside the model as <model>.highlight, which the page follows. Each id is described as describe
+    /// does, and one that names nothing is refused alone. `occam run` clears the highlight once it changes the model.
+    Highlight(HighlightArgs),
     /// Show the model live in a page on this machine, which redraws it each time a run saves it, and return.
     ///
     /// Starts the model's viewer if none runs, a server of its own that watches the model file, prints the page's
@@ -78,7 +97,9 @@ pub enum Command {
     /// model prints the same address and starts nothing. --json gives the address, its token and the model's digest.
     /// A file that is not a model, or is not there, is reported here and in the page, and the viewer keeps watching.
     /// --status says whether the viewer runs and where, and --stop stops it; it also stops itself once no page has
-    /// been open for an hour. The page needs a browser with WebGPU.
+    /// been open for an hour. The page needs a browser with WebGPU. A click in the page selects the face or edge under
+    /// it, shift-click adds or removes one, and `occam selection` describes what is selected; `occam highlight` shows
+    /// ids in the page in a colour of their own.
     #[cfg(not(target_family = "wasm"))]
     View(ViewArgs),
 }
@@ -150,6 +171,52 @@ pub struct MeshArgs {
     /// Where to write the buffers. Beside the model, as <model>.mesh, if not given.
     #[arg(long, value_name = "FILE")]
     pub out: Option<PathBuf>,
+}
+
+/// What `pick` takes.
+#[derive(Debug, Args)]
+pub struct PickArgs {
+    /// The model.
+    #[command(flatten)]
+    pub model: ModelArgs,
+    /// Where the ray starts, in millimetres.
+    #[arg(long, value_name = "X,Y,Z", value_parser = numbers::<3>, allow_hyphen_values = true)]
+    pub from: [f64; 3],
+    /// The way the ray goes, of any length but zero.
+    #[arg(
+        long,
+        value_name = "X,Y,Z",
+        value_parser = numbers::<3>,
+        allow_hyphen_values = true,
+        required_unless_present = "towards"
+    )]
+    pub direction: Option<[f64; 3]>,
+    /// A point the ray goes towards from --from, instead of --direction.
+    #[arg(long, value_name = "X,Y,Z", value_parser = numbers::<3>, allow_hyphen_values = true, conflicts_with = "direction")]
+    pub towards: Option<[f64; 3]>,
+    /// How near an edge must come to the ray to be hit, in millimetres.
+    #[arg(long, value_name = "LENGTH", value_parser = number, default_value_t = 0.0)]
+    pub tolerance: f64,
+    /// The farthest a triangle may stray from its face, in millimetres, as the viewer's page meshes.
+    #[arg(long, value_name = "LENGTH", value_parser = number, default_value_t = 0.1)]
+    pub deflection: f64,
+    /// The most an edge may turn between two of its samples, in radians, as the viewer's page meshes.
+    #[arg(long, value_name = "ANGLE", value_parser = number, default_value_t = 0.35)]
+    pub angle: f64,
+}
+
+/// What `highlight` takes.
+#[derive(Debug, Args)]
+pub struct HighlightArgs {
+    /// The model.
+    #[command(flatten)]
+    pub model: ModelArgs,
+    /// The ids to show, each as kind:slot/generation, such as edge:41/1.
+    #[arg(value_name = "ID", value_parser = entity, required_unless_present = "clear")]
+    pub ids: Vec<EntityRef>,
+    /// Remove the highlight.
+    #[arg(long, conflicts_with = "ids")]
+    pub clear: bool,
 }
 
 /// What `view` takes.

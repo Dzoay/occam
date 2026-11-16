@@ -29,6 +29,10 @@ text_enum! {
         MakeModel = "make-model",
         /// Ask `occam view` for no port, so that it listens on a free one.
         UseAnyPort = "use-any-port",
+        /// Pick again from the same start, towards the point in the `point` parameter, which lies on the mesh.
+        AimAt = "aim-at",
+        /// Select again in the viewer's page, which draws the model as its file holds it now.
+        SelectAgain = "select-again",
     }
 }
 
@@ -58,6 +62,12 @@ impl RemedyKind {
                 "Make the model by running a request on it with `occam run --model`; the viewer draws it once it is written."
             }
             Self::UseAnyPort => "Leave out --port, so that the viewer listens on a free port.",
+            Self::AimAt => {
+                "Pick again from the same point with --towards at the point given, the centre of a triangle of the mesh."
+            }
+            Self::SelectAgain => {
+                "Select again in the viewer's page, which draws the model as the file holds it now; ask the person to, if the selection is theirs."
+            }
         }
     }
 
@@ -68,10 +78,15 @@ impl RemedyKind {
             Self::UseSchema => &["version"],
             Self::UseModelTolerance => &["tolerance"],
             Self::UseThreads => &["threads"],
-            Self::MeetAt => &["point"],
+            Self::MeetAt | Self::AimAt => &["point"],
             Self::UseCircle => &["centre", "radius", "normal"],
             Self::UseDeflection => &["deflection"],
-            Self::UseWebgpuBrowser | Self::TurnOnWebgpu | Self::ReloadPage | Self::MakeModel | Self::UseAnyPort => &[],
+            Self::UseWebgpuBrowser
+            | Self::TurnOnWebgpu
+            | Self::ReloadPage
+            | Self::MakeModel
+            | Self::UseAnyPort
+            | Self::SelectAgain => &[],
         }
     }
 }

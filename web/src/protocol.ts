@@ -53,7 +53,34 @@ export type FromEditing =
   | Opened
   | { readonly kind: "failed"; readonly id: number; readonly reason: string };
 
-/** What the page asks a mesh worker: hold model `model`, the twin given, or mesh a range of its faces. */
+/**
+ * What the page asks a mesh worker of the model it holds, meshed whole to `deflection` and `angle` the first time and
+ * kept: what a ray hits, or the samples of some edges. Picking is against this CPU mesh, never the GPU's.
+ */
+export type Ask =
+  | {
+    readonly kind: "pick";
+    readonly ask: number;
+    readonly model: number;
+    readonly deflection: number;
+    readonly angle: number;
+    /** Where the ray starts and its direction, in millimetres in the model's frame. */
+    readonly ray: readonly number[];
+    /** The tolerance for edges a millimetre along the ray: a few pixels, at the depth of what the ray hits. */
+    readonly slope: number;
+    /** How far along the ray to take the tolerance at where it hits no face. */
+    readonly fallback: number;
+  }
+  | {
+    readonly kind: "samples";
+    readonly ask: number;
+    readonly model: number;
+    readonly deflection: number;
+    readonly angle: number;
+    readonly edges: readonly string[];
+  };
+
+/** What the page asks a mesh worker: hold model `model`, the twin given, mesh a range of its faces, or an ask. */
 export type ToMesher =
   | { readonly kind: "load"; readonly model: number; readonly twin: ArrayBuffer }
   | {
@@ -65,7 +92,8 @@ export type ToMesher =
     /** The faces from `first` up to `end`, counted in id order. */
     readonly first: number;
     readonly end: number;
-  };
+  }
+  | Ask;
 
 /** A report as occam's one JSON form gives it, with what the page shows of it. */
 export interface KernelReport {
@@ -95,10 +123,24 @@ export interface Part {
   readonly reports: readonly KernelReport[];
 }
 
-/** What a mesh worker answers a call. */
+/** An edge's samples, three numbers a point, in millimetres. */
+export interface Samples {
+  readonly id: string;
+  readonly points: Float64Array<ArrayBuffer>;
+}
+
+/** What a mesh worker answers an ask. */
+export type Answer =
+  /** The pick's one JSON form, as `occam pick --json` gives it. */
+  | { readonly kind: "picked"; readonly ask: number; readonly answer: string }
+  | { readonly kind: "sampled"; readonly ask: number; readonly edges: readonly Samples[] }
+  | { readonly kind: "unanswered"; readonly ask: number; readonly reason: string };
+
+/** What a mesh worker answers a call or an ask. */
 export type FromMesher =
   | { readonly kind: "meshed"; readonly call: number; readonly model: number; readonly part: Part }
-  | { readonly kind: "failed"; readonly call: number; readonly model: number; readonly reason: string };
+  | { readonly kind: "failed"; readonly call: number; readonly model: number; readonly reason: string }
+  | Answer;
 
 /** A worker's own end of its messages: the dom library declares no worker's global scope. */
 export interface Own<In, Out> {

@@ -497,4 +497,15 @@ exclude_re = [
     "occam-intersect/src/fit\\.rs:406:28: replace > with >= in floored$",
     "occam-intersect/src/fit\\.rs:431:48: replace > with >= in image_fit$",
     "occam-intersect/src/fit\\.rs:521:42: replace > with >= in fit_piece$",
+    # Picking's ties, by line. A triangle as near as the nearest face crossed, of the same face, is that face at that
+    # distance: taking it or keeping the one held gives the same. Where an edge's segment comes as near the ray as the
+    # one held, as far along it, of the same edge and from the same sample, it is the same segment, whose nearest point
+    # is the same. And a slab's two crossings in either order, where they are equal, are the same pair.
+    "occam-mesh/src/pick\\.rs:185:62: replace < with <= in Picker::first_face$",
+    "occam-mesh/src/pick\\.rs:299:58: replace < with <= in Near::before$",
+    "occam-mesh/src/pick/tree\\.rs:132:35: replace < with <= in crosses$",
+    # The 3D orientation's first bound, by line: `7 eps + permanent` is never below `7 eps * permanent`, so the mutant only
+    # holds back more volumes for the exact stage, which gives the same side; it changes the cost, never the answer.
+    # (Dividing by the permanent instead is caught: far out it lets a volume plain arithmetic turns over through.)
+    "occam-mesh/src/predicates\\.rs:114:32: replace \\* with \\+ in orient3d$",
 ]

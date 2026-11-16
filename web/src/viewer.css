@@ -102,3 +102,36 @@ html, body {
 .watched .report {
   margin: 0 0 8px;
 }
+
+.marked {
+  position: fixed;
+  top: 52px;
+  left: 12px;
+  max-width: 32em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marked p {
+  margin: 0;
+}
+
+.marked code {
+  margin-left: 6px;
+  font-family: ui-monospace, monospace;
+  user-select: all;
+}
+
+.marked .selected code {
+  color: #a5520a;
+}
+
+.marked .highlighted code {
+  color: #1d7a3a;
+}
+
+.marked .report {
+  margin: 4px 0 0;
+  padding: 8px 12px;
+}

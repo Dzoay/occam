@@ -1,15 +1,29 @@
 // The viewer: the scene, the camera and the frame loop, all outside the component tree. The controls reach it only
-// through its methods, and it tells them what changed only through signals.
+// through its methods, and it tells them what changed only through signals. It draws the selection and the highlight
+// in a colour each, the faces through their marks and the edges as lines, and builds a click's ray from its camera.
 
-import { Camera } from "./camera.ts";
+import { effect } from "@preact/signals";
+
+import { Camera, FIELD_OF_VIEW } from "./camera.ts";
 import type { Gpu } from "./gpu.ts";
 import { FrameLoop } from "./loop.ts";
-import { type Mesh, centre } from "./mesh.ts";
-import { CAMERA_FLOATS, Renderer } from "./renderer.ts";
+import { type Mesh, type Vec3, centre } from "./mesh.ts";
+import { CAMERA_FLOATS, HIGHLIGHTED, LINE_FLOATS, Renderer, SELECTED } from "./renderer.ts";
 import { report } from "./report.ts";
 import { Scene } from "./scene.ts";
-import { failure, notice, selection, status } from "./state.ts";
+import { failure, highlight, notice, selection, status } from "./state.ts";
 import { type Piece, Uploads } from "./uploads.ts";
+
+/** What a click asks a mesh worker: its ray, the tolerance a millimetre along it, and how far along to take it. */
+export interface Aim {
+  /** Where the ray starts and its direction, in millimetres in the model's frame. */
+  readonly ray: readonly number[];
+  readonly slope: number;
+  readonly fallback: number;
+}
+
+/** An edge outlined: its id, and its samples, three numbers a point. */
+export type Outline = readonly [id: string, points: Float64Array];
 
 export interface Options {
   /** Bytes a frame may upload. */
@@ -28,6 +42,9 @@ export class Viewer {
   readonly loop: FrameLoop;
   /** The last mesh shown. */
   mesh: Mesh | null = null;
+  /** The edges outlined, and the origin their lines were packed against, if they are packed. */
+  outlines: readonly Outline[] = [];
+  private packed: Vec3 | null = null;
   private readonly gpu: Gpu;
   private readonly canvas: HTMLCanvasElement;
   private fitted = false;
@@ -43,6 +60,55 @@ export class Viewer {
     void gpu.device.lost.then((lost) => {
       failure.value = report("view.device-lost", lost.message || lost.reason);
     });
+    effect(() => {
+      void [selection.value, highlight.value];
+      this.packed = null;
+      this.loop.wake();
+    });
+  }
+
+  /** Whether `id` is selected, highlighted, or both. */
+  mark(id: string): number {
+    return (selection.peek().includes(id) ? SELECTED : 0) | (highlight.peek().includes(id) ? HIGHLIGHTED : 0);
+  }
+
+  /**
+   * What a click at the point `(x, y)` of the window asks: the ray through it from the eye, in `f64` in the model's
+   * frame, and a tolerance of `pixels` pixels at the depth of what it hits, as a length a millimetre along it, with
+   * the distance along it of the camera's target, where it hits nothing.
+   */
+  rayAt(x: number, y: number, pixels: number): Aim {
+    const box = this.canvas.getBoundingClientRect();
+    const across = (2 * (x - box.left)) / Math.max(1, box.width) - 1;
+    const up = 1 - (2 * (y - box.top)) / Math.max(1, box.height);
+    const { from, direction } = this.camera.ray(across, up, this.aspect());
+    const length = Math.hypot(...direction);
+    const pixel = (2 * Math.tan(FIELD_OF_VIEW / 2)) / Math.max(1, box.height);
+    return { ray: [...from, ...direction], slope: (pixels * pixel) / length, fallback: this.camera.distance * length };
+  }
+
+  /** Draws `edges` as lines through their samples, over the faces, each in its mark's colour. */
+  outline(edges: readonly Outline[]): void {
+    this.outlines = edges;
+    this.packed = null;
+    this.loop.wake();
+  }
+
+  /** The outlines as line segments, `LINE_FLOATS` a vertex, against the scene's origin. */
+  private lines(origin: Vec3): Float32Array<ArrayBuffer> {
+    const segments = this.outlines.reduce((sum, [, points]) => sum + points.length / 3 - 1, 0);
+    const out = new Float32Array(segments * 2 * LINE_FLOATS);
+    let at = 0;
+    for (const [id, points] of this.outlines) {
+      const mark = this.mark(id);
+      for (let k = 3; k < points.length; k += 3) {
+        for (const p of [k - 3, k]) {
+          out.set([points[p] - origin[0], points[p + 1] - origin[1], points[p + 2] - origin[2], mark], at);
+          at += LINE_FLOATS;
+        }
+      }
+    }
+    return out;
   }
 
   /** Shows `mesh`, uploading only the faces not already on the GPU, and fits the first model to the window. */
@@ -116,7 +182,12 @@ export class Viewer {
     if (failure.peek()) return false;
     this.resize();
     this.uploads.flush(this.gpu.device.queue, frame);
-    this.renderer.draw(this.scene, this.uniform());
+    const origin = this.scene.origin ?? [0, 0, 0];
+    if (this.packed === null || this.packed.some((x, axis) => x !== origin[axis])) {
+      this.renderer.outline(this.lines(origin));
+      this.packed = origin;
+    }
+    this.renderer.draw(this.scene, this.uniform(), (id) => this.mark(id));
     const pending = this.uploads.pending;
     let [faces, triangles] = [0, 0];
     for (const face of this.scene.faces()) {

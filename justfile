@@ -99,7 +99,7 @@ clippy:
 web-check: web-deps
     web/node_modules/.bin/tsc --noEmit -p web
 
-# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, its workers' meshes against the native `occam mesh`, and the page `occam view` serves, built in, following the model file
+# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, its workers' meshes against the native `occam mesh`, the page `occam view` serves, built in, following the model file, and its clicks against `occam pick`
 [env("CARGO_TARGET_DIR", target)]
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
 [group('gates')]

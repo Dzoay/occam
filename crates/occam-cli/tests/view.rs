@@ -235,7 +235,7 @@ impl Events {
         Self { stream, text: String::new() }
     }
 
-    /// The next event: its name and its data's JSON.
+    /// The next event about the model, the selection's and the highlight's aside: its name and its data's JSON.
     fn next(&mut self) -> (String, Value) {
         let mut buffer = [0_u8; 4096];
         loop {
@@ -243,6 +243,9 @@ impl Events {
                 let block: String = self.text.drain(..at + 2).collect();
                 let field =
                     |name: &str| block.lines().find_map(|line| line.strip_prefix(name)).unwrap().trim().to_string();
+                if ["selection", "highlight"].contains(&field("event:").as_str()) {
+                    continue;
+                }
                 return (field("event:"), serde_json::from_str(&field("data:")).unwrap());
             }
             if let Some(at) = self.text.find("\n\n") {

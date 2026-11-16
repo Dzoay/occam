@@ -1,12 +1,15 @@
 // What the tests read, installed as `window.occamViewer` only when the page's address has `?inspect`. CI has no GPU, so
-// the tests assert buffers, not pixels: they read back what the page uploaded and the camera it drew with. Nothing
-// else in the page maps a GPU buffer.
+// the tests assert buffers, not pixels: they read back what the page uploaded, the camera it drew with and each face's
+// mark. Nothing else in the page maps a GPU buffer: a pick never does.
 
 import type { Gpu } from "./gpu.ts";
+import type { Picked } from "./pick.ts";
 import type { Mesh, Vec3 } from "./mesh.ts";
 import type { Call, Failed, Meshing } from "./pool.ts";
 import type { KernelReport } from "./protocol.ts";
+import { LINE_FLOATS } from "./renderer.ts";
 import { type Code, REMEDIES, type RemedyKind, TEMPLATES } from "./report.ts";
+import { highlight, selection } from "./state.ts";
 import type { Piece } from "./uploads.ts";
 import type { Viewer } from "./viewer.ts";
 
@@ -38,6 +41,10 @@ export interface KernelApi {
   readonly workers: number;
   /** What the page following `occam view` has drawn, if it follows one. */
   live(): Following | null;
+  /** The last pick's answer. */
+  picked(): Picked | null;
+  /** Posts a selection to `occam view` as a click does, on a page that follows one. */
+  post(digest: string, ids: readonly string[]): Promise<void>;
 }
 
 /** What a page following `occam view` has drawn: the digest of the model drawn last, and how many it has drawn. */
@@ -65,6 +72,18 @@ export interface InspectorApi {
   live(): Following | null;
   show(mesh: Mesh): void;
   select(ids: readonly string[]): void;
+  /** What is selected and what is highlighted, and the last pick's answer. */
+  selection(): readonly string[];
+  highlight(): readonly string[];
+  picked(): Picked | null;
+  /** Posts a selection to `occam view` as a click does, on a page that follows one. */
+  post(digest: string, ids: readonly string[]): Promise<void>;
+  /** Puts the camera where `view` says. */
+  look(view: { target: Vec3; distance: number; yaw: number; pitch: number }): void;
+  /** Each face's mark as the GPU holds it, read back: 1 selected, 2 highlighted, 3 both. */
+  readMarks(): Promise<Record<string, number>>;
+  /** The edges outlined, and the lines' vertices as the GPU holds them, read back. */
+  readLines(): Promise<{ edges: string[]; vertices: Float32Array }>;
   mesh(): Mesh | null;
   origin(): Vec3 | null;
   bound(): number;
@@ -168,6 +187,25 @@ export class Inspector {
       live: () => kernel.live(),
       show: (mesh) => viewer.show(mesh),
       select: (ids) => viewer.select(ids),
+      selection: () => selection.peek(),
+      highlight: () => highlight.peek(),
+      picked: () => kernel.picked(),
+      post: (digest, ids) => kernel.post(digest, ids),
+      look: (view) => {
+        Object.assign(viewer.camera, view);
+        viewer.loop.wake();
+      },
+      readMarks: async () => {
+        const { marks, marked } = viewer.renderer;
+        const held = new Uint32Array(await read(device, marks, marks.size));
+        return Object.fromEntries(marked.map((id, k) => [id, held[k]]));
+      },
+      readLines: async () => {
+        const { lines, lineVertices } = viewer.renderer;
+        const size = lineVertices * LINE_FLOATS * 4;
+        const vertices = lines && size > 0 ? new Float32Array(await read(device, lines, size)) : new Float32Array(0);
+        return { edges: viewer.outlines.map(([id]) => id), vertices };
+      },
       mesh: () => viewer.mesh,
       origin: () => viewer.scene.origin,
       bound: () => viewer.uploads.bound,

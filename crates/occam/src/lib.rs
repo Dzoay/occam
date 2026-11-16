@@ -7,7 +7,9 @@ mod distance;
 mod mesh;
 mod model;
 pub mod operation_workloads;
+mod pick;
 mod run;
+mod selection;
 mod session;
 mod view;
 
@@ -24,6 +26,8 @@ pub use occam_report::{
     RemedyKind, Report, follow_remedy, followed_remedy,
 };
 pub use occam_units::{Angle, Length, Point, Tolerance, UvPoint, World};
+pub use pick::{Hit, Pick, Picked};
 pub use run::{Done, Failed, Ran, ToleranceFrom, ran_json, run};
+pub use selection::{Carried, Selection};
 pub use session::{Answered, Encoding, Listed, PerId, Session, ran_words};
 pub use view::{Viewed, Viewer, Watching, digest_text};

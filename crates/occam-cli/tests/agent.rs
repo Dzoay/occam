@@ -169,6 +169,40 @@ fn a_solid_is_built_from_json_alone_then_listed_described_measured_and_checked()
 }
 
 #[test]
+fn an_agent_picks_the_cylinders_side_and_describe_says_it_is_a_cylinder_of_radius_4() {
+    let dir = scratch("pick-the-side");
+    let model = dir.join("bracket.occam");
+    let (plate, bolt, _) = built(&dir, &model);
+    let (_, of_bolt) = measured(&dir, &model, (&plate, &bolt));
+    let request = dir.join("centre.json");
+    let centre = json!({"op": "measure", "target": bolt, "what": ["centre-of-mass"]});
+    std::fs::write(
+        &request,
+        json!({"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [centre]}).to_string(),
+    )
+    .unwrap();
+    let (_, ran) = occam(&["run", "--model", text(&model), text(&request)]);
+    let axis: Vec<f64> =
+        at(&ran, "/steps/0/measured/values/0/value").as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+    assert!(near(named(&of_bolt["values"], "volume"), std::f64::consts::PI * 160.0, 503.0), "{of_bolt}");
+    // The cylinder stands inside the plate, so the ray starts inside the plate too, 15 mm off the cylinder's axis,
+    // on the side away from the seam its side is closed along at +x, which a ray along x would hit.
+    let from = format!("{},{},{}", axis[0], axis[1] + 15.0, axis[2]);
+    let towards = format!("{},{},{}", axis[0], axis[1], axis[2]);
+    let (status, picked) = occam(&["pick", "--model", text(&model), "--from", &from, "--towards", &towards]);
+    assert_eq!((status, at(&picked, "/ok")), (Some(0), &json!(true)), "{picked}");
+    let side = at(&picked, "/entity").as_str().unwrap();
+    let distance = at(&picked, "/distance").as_f64().unwrap();
+    assert!((distance - 11.0).abs() <= 0.1, "4 mm short of the axis, within the mesh's deflection: {picked}");
+    let (status, described) = occam(&["describe", "--model", text(&model), side]);
+    assert_eq!(status, Some(0), "{described}");
+    let description = at(&described, "/answers/0/description");
+    assert_eq!(at(description, "/form"), "cylinder", "{described}");
+    assert!(near(named(at(description, "/values"), "radius"), 4.0, 4.0), "{described}");
+    assert!(texts(at(description, "/adjacent")).iter().any(|near| near.starts_with("shell:")), "{described}");
+}
+
+#[test]
 fn an_agent_learns_to_write_a_request_from_the_command_alone() {
     let help = words(&["--help"]);
     assert!(help.contains("`occam run --help` shows how to write the request"), "{help}");
