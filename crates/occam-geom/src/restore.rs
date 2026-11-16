@@ -173,7 +173,7 @@ pub(crate) fn poles(numbers: &mut Numbers<'_>, n: usize, rational: bool) -> Resu
 }
 
 /// The refusal of `x` where a whole number from 0 to `high` was wanted.
-fn out_of_range(x: f64, high: f64) -> Report {
+pub(crate) fn out_of_range(x: f64, high: f64) -> Report {
     Report::new(Code::OutOfRange, Fault::InvalidInput)
         .with_value(NamedValue::new("value", Quantity::Count, x))
         .with_value(NamedValue::new("low", Quantity::Count, 0.0))

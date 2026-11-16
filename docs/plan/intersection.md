@@ -16,7 +16,8 @@ flowchart LR
   trace --> fit --> hybrid
   quadrics & hybrid --> resolution
   section --> hits
-  resolution & hits --> timing
+  quadrics --> unbounded
+  resolution & hits & unbounded --> timing
 ```
 
 **Exit (gate):** `just gates`, `just mutants` and `just perf` are green, and:
@@ -42,8 +43,8 @@ scored as P5 scored, since P5's counts are in-sample. P5's speed table is rerun 
 `occam-topo`. It is std-only, computes through `occam-math`, and runs in parallel only through `Exec`. It works on
 surfaces and curves and knows nothing of faces or ids. It reads surfaces through the frozen seam only: `analytic`,
 `bounds`, `domain`, `degeneracies`, `closest` and evaluation. The hybrid needs no B-spline form, so offsets and
-mesh-backed surfaces reach it. Curves present no analytic form, and none is needed. The two families the pencil method
-adds fit the frozen traits, so the seam does not change.
+mesh-backed surfaces reach it. Curves present no analytic form, and none is needed. The curve family the pencil method
+adds, and the image family it reads it through, fit the frozen traits, so the seam does not change.
 
 Every decision goes through `occam-math`'s predicates. An undecided one is `decide.undecided`, and every result carries
 its `Tally`. Threads go across pairs, and across traces in rounds of a fixed size merged by index. Marching stays
@@ -55,46 +56,6 @@ source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted
 
 ## Steps
 
-### `intersection.quadrics`
-
-Levin's pencil method, for any two of plane, sphere, cylinder and cone that `intersection.closed` does not answer
-([decision](../decisions/2026-11-13-quadric-pairs-exact-by-levins-method.md)). Each surface's `analytic` form gives its
-4×4 matrix, and the two span a pencil. A ruled member of the pencil, such as a cylinder, a cone, a pair of planes or a
-hyperbolic paraboloid, is found from the roots of the pencil's determinant. Along each of its rulings the other surface
-gives a quadratic, so the curve is `a(u) ± b(u)√Δ(u)` (Levin 1976, 1979).
-
-The pencil is classified first, by the real roots of its determinant, their multiplicities and the ranks there (Dupont,
-Lazard, Lazard and Petitjean 2008, parts II and III; Wang, Goldman and Tu 2003):
-- A smooth quartic is parametrized by the square root.
-- A singular quartic, whose node or cusp is a crossing or a tangency, is parametrized rationally, and so is a pencil
-  that splits into lines and conics. Their singular points are kept as contacts.
-
-Every decision in the classification goes through `occam-math`'s predicates on the matrices' entries. One the band
-cannot decide is `decide.undecided`, never a guess. Roots are isolated and refined by Newton on the owned maths, with no
-new transcendental function.
-
-The curves are exact: closed forms evaluated in floating point.
-- A loop of a smooth quartic becomes a new `occam-geom` curve family. It is reparametrized so that the root's two signs
-  join smoothly where `Δ` vanishes: by an angle between two roots for a closed loop, and by `u = u₀ + t²` for a branch
-  from one root to infinity. It is then smooth, periodic or open, with derivatives to any order, and fits the frozen
-  `ParametricCurve`. Its `to_bspline` gives none, because a smooth quartic has no rational form.
-- Its images on the two surfaces, read through each quadric's closed-form inverse, are a new family under the frozen
-  parameter-curve trait. So the seam does not change.
-- Lines and conics use the existing families, and singular quartics use rational B-splines.
-
-Still through the hybrid: a torus outside `intersection.closed`'s cases, a quadric against any other family, and every
-pair with a NURBS.
-
-*Failing test first:* every quadric pair in P5's set is intersected exactly, and so is a seeded generated set under
-rigid placements with every degenerate class built in by construction:
-- two equal cylinders whose axes cross split into two ellipses;
-- Viviani's sphere and cylinder meet in a nodal quartic;
-- two cones with a shared apex meet in lines;
-- a cone and a cylinder are tangent along a ruling.
-
-Each curve lies on both surfaces within the band at dense samples, and its images map onto it within the band. Each
-degenerate pencil is classified as built, and none is fitted. Where a closed form also answers, the two agree within
-the band. A pencil nudged to within the band of a split is `decide.undecided`.
 
 ### `intersection.hybrid`
 
@@ -109,6 +70,19 @@ because it returned 256 of 577 curves with no warning.
 *Failing test first:* P5's 625-component surface against a plane gives all 577 curves; a curve through a corner shared
 by both subdivisions is found once; a rational cylinder against its analytic twin is reported as an unresolved overlap,
 not answered with curves; the output is the same bits at 1 and N threads.
+
+### `intersection.unbounded`
+
+The sections of a quadric pair that run to infinity, which `intersection.quadrics` detects, classifies and reports as
+not implemented ([decision](../decisions/2026-11-15-unbounded-branches-in-their-own-step.md)): two cones that share a
+ruling direction, a quartic with its node at infinity, and a ruling with a cubic. The first is a branch of a smooth
+quartic from a root of the discriminant to infinity; the other two are rational and unbounded, one point on each ruling,
+with a pole where the ruling's coefficient vanishes. The step chooses their form, an unbounded family under the frozen
+traits or bounded pieces up to an extent the caller gives, and the seam does not change.
+
+*Failing test first:* each of the three classes, built by construction under rigid placements, gives curves on both
+surfaces within the band over the extent asked, its images mapping onto them; none is reported as not implemented, and
+swapping the pair swaps the images.
 
 ### `intersection.resolution`
 

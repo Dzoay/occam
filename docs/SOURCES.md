@@ -31,3 +31,7 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | `bajaj-hoffmann-lynch-hopcroft-1988` | paper | n/a | Bajaj, Hoffmann, Lynch, Hopcroft. *Tracing Surface Intersections*. Computer Aided Geometric Design 5(4), 1988 |
 | `barnhill-kersey-1990` | paper | n/a | Barnhill, Kersey. *A Marching Method for Parametric Surface/Surface Intersection*. Computer Aided Geometric Design 7(1–4), 1990 |
 | `von-neumann-1950` | book | n/a | von Neumann. *Functional Operators, Volume II: The Geometry of Orthogonal Spaces*. Annals of Mathematics Studies 22, Princeton University Press, 1950 |
+| `levin-1976` | paper | n/a | Levin. *A Parametric Algorithm for Drawing Pictures of Solid Objects Composed of Quadric Surfaces*. Communications of the ACM 19(10), 1976 |
+| `levin-1979` | paper | n/a | Levin. *Mathematical Models for Determining the Intersections of Quadric Surfaces*. Computer Graphics and Image Processing 11(1), 1979 |
+| `dupont-lazard-lazard-petitjean-2008` | paper | n/a | Dupont, Lazard, Lazard, Petitjean. *Near-Optimal Parameterization of the Intersection of Quadrics*, I: *The Generic Algorithm*, II: *A Classification of Pencils*, III: *Parameterizing Singular Intersections*. Journal of Symbolic Computation 43(3), 2008 |
+| `wang-goldman-tu-2003` | paper | n/a | Wang, Goldman, Tu. *Enhancing Levin's Method for Computing Quadric-Surface Intersections*. Computer Aided Geometric Design 20(7), 2003 |
