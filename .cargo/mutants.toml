@@ -504,4 +504,8 @@ exclude_re = [
     "occam-mesh/src/pick\\.rs:185:62: replace < with <= in Picker::first_face$",
     "occam-mesh/src/pick\\.rs:299:58: replace < with <= in Near::before$",
     "occam-mesh/src/pick/tree\\.rs:132:35: replace < with <= in crosses$",
+    # The 3D orientation's first bound, by line: `7 eps + permanent` is never below `7 eps * permanent`, so the mutant only
+    # holds back more volumes for the exact stage, which gives the same side; it changes the cost, never the answer.
+    # (Dividing by the permanent instead is caught: far out it lets a volume plain arithmetic turns over through.)
+    "occam-mesh/src/predicates\\.rs:114:32: replace \\* with \\+ in orient3d$",
 ]

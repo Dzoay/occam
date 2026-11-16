@@ -250,6 +250,20 @@ mod tests {
     }
 
     #[test]
+    fn a_nearly_flat_volume_that_plain_arithmetic_turns_over_is_left_to_the_exact_stage() {
+        // Four points far out, within a few ulps of one plane, where the plain determinant rounds to -0.5 but the
+        // volume is positive: Shewchuk's first bound, scaled by the large permanent, must hold it back for the
+        // exact stage, which gives the true side.
+        let point = |bits: [u64; 3]| bits.map(f64::from_bits);
+        let a = point([4_689_333_209_751_145_840, 4_686_416_086_208_017_749, 4_688_644_573_514_994_941]);
+        let b = point([4_689_442_668_092_435_819, 4_683_948_600_556_849_059, 4_687_380_369_986_259_450]);
+        let c = point([4_685_225_973_703_301_613, 4_689_129_984_286_875_042, 4_689_124_423_054_615_481]);
+        let d = point([4_681_881_611_196_330_618, 4_667_909_576_296_125_537, 4_680_314_644_016_091_055]);
+        assert!(volume(a, b, c, d).0 < 0.0, "plain arithmetic turns it over");
+        assert_eq!(orient3d(a, b, c, d), Some(Side::Above));
+    }
+
+    #[test]
     fn a_point_above_a_plane_has_the_sign_the_exact_stage_gives_and_one_in_it_is_within() {
         let (a, b, c) = ([0.1, 0.2, 0.3], [0.7, 0.9, 0.3], [0.4, 0.1, 0.3]);
         assert_eq!(orient3d(a, b, c, [0.3, 0.3, 0.3]), Some(Side::Within), "in the plane z = 0.3");
