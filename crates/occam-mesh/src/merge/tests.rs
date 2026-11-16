@@ -6,7 +6,7 @@ use occam_report::{Code, Fault, Reason};
 use occam_units::{Angle, Length, Vec3};
 
 use super::*;
-use crate::faces::FaceMesh;
+use crate::faces::{FaceMesh, mesh_faces};
 use crate::testing::{collapsed_patch, disc, disc_drawn, model, plane_and_cylinder, sphere_half};
 
 fn limits(deflection: f64) -> Limits {

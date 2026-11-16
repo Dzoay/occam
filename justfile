@@ -208,6 +208,12 @@ corpus-test *args:
 corpus-hits *args:
     cargo nextest run -p occam-verify --test corpus_hits --run-ignored only --no-capture "$@"
 
+# The mesher's adversarial catalogue's slow case, P9's plate with 1,024 holes: minutes in a debug build, so nightly
+[env("CARGO_TARGET_DIR", target)]
+[group('test')]
+mesh-holes *args:
+    cargo nextest run -p occam-ops --lib --run-ignored only --no-capture adversarial::a_plate_with_1024_holes "$@"
+
 # Regenerate tools/corpus/imported from a clone of arris at the locked commit, taking only what the per-case gate allows
 [group('corpus')]
 corpus-import-arris repo:

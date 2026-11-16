@@ -11,8 +11,7 @@ use occam_topo::{Changes, Edge, Face, Id, Snapshot};
 use occam_units::{Angle, Length, UvPoint, Vec3};
 use serde_json::{Value, json};
 
-use crate::construct::tests::{built, request};
-use crate::meshed::sector_with_a_hole;
+use crate::construct::tests::{built, plate, request};
 use crate::{Labels, Request, execute};
 
 /// `model` meshed whole at 0.1.
@@ -148,12 +147,22 @@ fn a_body_moved_is_meshed_again_and_the_other_keeps_its_blocks() {
 
 #[test]
 fn a_face_refused_keeps_its_refusal_unmeshed_when_a_primitive_is_added() {
-    let (model, _) = built(sector_with_a_hole());
-    let before = whole(&model);
-    assert_eq!(before.refused.len(), 2, "both caps");
+    // At 1e-7, the hole's circles would need more samples than an edge may have: the caps and the hole's wall are
+    // refused, and repair, which cures only boundaries that cross, leaves them so.
+    let (model, _) = built(holed());
+    let fine = Limits::new(Length::from_millimetres(1e-7), Angle::from_radians(0.35)).unwrap();
+    let before = occam_mesh::mesh(&Exec::serial(), &model, fine);
+    assert_eq!(before.refused.len(), 4, "both caps and the hole's wall, in two halves");
     let (more, changes) = edited(&model, json!([{"op": "box", "size": [1, 1, 1], "frame": {"origin": [-5, 0, 0]}}]));
     let again = remesh(&Exec::serial(), &more, &before, &changes);
     assert_eq!(again.meshed, faces_new(&more, &model), "the box's faces alone");
-    assert_eq!(again.mesh.refused, before.refused, "the caps' refusals kept");
-    assert_eq!(again.mesh.digest(), whole(&more).digest());
+    assert_eq!(again.mesh.refused, before.refused, "the refusals kept");
+    assert_eq!(again.mesh.digest(), occam_mesh::mesh(&Exec::serial(), &more, fine).digest());
+}
+
+/// The plate of 40 by 20 with a hole of radius 3, extruded 5.
+fn holed() -> Value {
+    let mut steps = plate().as_array().cloned().unwrap_or_default();
+    steps.push(json!({"op": "extrude", "face": "plate", "vector": [0, 0, 5]}));
+    Value::Array(steps)
 }

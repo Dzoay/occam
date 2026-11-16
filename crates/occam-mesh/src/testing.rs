@@ -7,7 +7,7 @@
 
 #![expect(clippy::arithmetic_side_effects, reason = "small indices in test models")]
 
-use core::f64::consts::{FRAC_PI_2, PI};
+use core::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI};
 use std::sync::Arc;
 
 use occam_geom::{
@@ -291,4 +291,61 @@ pub(crate) fn plane_and_cylinder(radius: f64) -> Layout {
     let cylinder = Cylinder::placed(&cylinder_frame(radius, 0.0), Length::from_millimetres(radius)).unwrap();
     layout.faces.push(Patch { surface: Arc::new(cylinder), sides: bent, witness: (FRAC_PI_2 / 2.0, 0.5) });
     layout
+}
+
+/// A circle of radius 1 about +Z, `height` up it, as an edge from `points[a]` to `points[b]` over the quarter turn from
+/// an eighth of a turn, a quarter turn on.
+fn arc(height: f64, ends: (usize, usize)) -> Piece {
+    let up = Placement::<World, World>::translation(Vector::from_vec3(Vec3::new(0.0, 0.0, height)));
+    let frame = Placement::<Local, World>::identity().then(&up);
+    let circle = Circle::placed(&frame, Length::from_millimetres(1.0)).unwrap();
+    Piece { curve: Arc::new(circle), range: (FRAC_PI_4, 3.0 * FRAC_PI_4), ends }
+}
+
+/// A flat face under the arc of the unit circle from an eighth of a turn to three eighths, facing +Z: from that arc's
+/// ends down to `y = 0`, and from there up to a notch at `x`, `gap` below the arc. At a coarse deflection the arc is one
+/// chord, which cuts across the notch. A quarter of a cylinder stands on the arc, down to `z = -1`, so that the arc is
+/// an edge of two faces.
+pub(crate) fn notched(x: f64, gap: f64) -> Layout {
+    let (s, top) = (FRAC_1_SQRT_2, (1.0 - x * x).sqrt() - gap);
+    let points = vec![
+        Vec3::new(-s, 0.0, 0.0),
+        Vec3::new(x, top, 0.0),
+        Vec3::new(s, 0.0, 0.0),
+        Vec3::new(s, s, 0.0),
+        Vec3::new(-s, s, 0.0),
+        Vec3::new(s, s, -1.0),
+        Vec3::new(-s, s, -1.0),
+    ];
+    let mut edges: Vec<Piece> = [(0, 1), (1, 2), (2, 3)].map(|ends| straight(&points, ends)).into();
+    edges.push(arc(0.0, (3, 4)));
+    edges.extend([(4, 0)].map(|ends| straight(&points, ends)));
+    edges.push(arc(-1.0, (5, 6)));
+    edges.extend([(6, 4), (3, 5)].map(|ends| straight(&points, ends)));
+    let from = |a: usize, b: usize| {
+        let (p, q) = (points[a], points[b]);
+        uv_line((p.x, p.y), (q.x - p.x, q.y - p.y))
+    };
+    let drawn: Arc<dyn ParamCurve> =
+        Arc::new(UvCurve::new(Circle::placed(&Placement::identity(), Length::from_millimetres(1.0)).unwrap()).unwrap());
+    let flat = vec![
+        side(0, false, from(0, 1)),
+        side(1, false, from(1, 2)),
+        side(2, false, from(2, 3)),
+        side(3, false, drawn),
+        side(4, false, from(4, 0)),
+    ];
+    let (low, high) = (FRAC_PI_4, 3.0 * FRAC_PI_4);
+    let wall = vec![
+        side(5, false, uv_line((0.0, -1.0), (1.0, 0.0))),
+        side(6, false, uv_line((high, -1.0), (0.0, 1.0))),
+        side(3, true, uv_line((0.0, 0.0), (1.0, 0.0))),
+        side(7, false, uv_line((low, 0.0), (0.0, -1.0))),
+    ];
+    let cylinder = Cylinder::placed(&Placement::identity(), Length::from_millimetres(1.0)).unwrap();
+    let faces = vec![
+        Patch { surface: Arc::new(Plane::placed(&Placement::identity())), sides: flat, witness: (-0.6, 0.3) },
+        Patch { surface: Arc::new(cylinder), sides: wall, witness: (FRAC_PI_2, -0.5) },
+    ];
+    Layout { points, edges, faces }
 }

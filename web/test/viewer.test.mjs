@@ -37,7 +37,10 @@ const BODIES = request([
   { op: "cylinder", radius: 4, height: 10, frame: { origin: [20, 0, 0] } },
   { op: "sphere", radius: 3, frame: { origin: [0, 20, 0] } },
 ]);
-/** A sector with a hole near its rim, extruded: at 0.1 mm both caps are refused, their boundaries crossing (P9). */
+/**
+ * A sector with a hole near its rim, extruded: at 0.1 mm the coarse chord of its arc cuts across the hole's samples in
+ * both caps, until repair cuts the arc and the hole where they collided (P9).
+ */
 const SECTOR = request([
   { op: "wire", label: "rim", edges: [
     { arc: [[9.807852804032304, -1.9509032201612824, 0], [10, 0, 0], [9.807852804032304, 1.9509032201612824, 0]] },
@@ -49,6 +52,17 @@ const SECTOR = request([
   ] },
   { op: "face", label: "face", outer: "rim", holes: ["hole"] },
   { op: "extrude", face: "face", vector: [0, 0, 5] },
+]);
+/**
+ * A plate with a round hole, extruded: at 1e-7 mm the hole's circles would need more samples than an edge may have, so
+ * both caps and the hole's wall, in two halves, are refused (P9's cap), as repair, which parts boundaries that cross,
+ * cannot help them.
+ */
+const HOLED = request([
+  { op: "wire", label: "outline", points: [[0, 0, 0], [40, 0, 0], [40, 20, 0], [0, 20, 0]], closed: true },
+  { op: "wire", label: "hole", edges: [{ circle: { centre: [20, 10, 0], radius: 3, normal: [0, 0, 1] } }] },
+  { op: "face", label: "plate", outer: "outline", holes: ["hole"] },
+  { op: "extrude", face: "plate", vector: [0, 0, 5] },
 ]);
 
 let site;
@@ -279,20 +293,31 @@ test("a request run in the editing worker is meshed by four mesh workers to the 
   await clean(page);
 });
 
-test("a face that will not mesh is named, as the native mesher names it, and the rest arrive and are drawn", async () => {
-  const page = await open("&workers=4&deflection=0.1", { model: SECTOR });
+test("faces whose boundaries collide are repaired by the mesh workers to the bits the native mesher gives", async () => {
+  const page = await open("&workers=4&deflection=0.1&angle=0.35", { model: SECTOR });
   const native = await nativeMesh(SECTOR, 0.1, 0.35);
+  assert.equal(native.said.ok, true, "both caps meshed, the arc and the hole cut where they collided");
+  const state = await snapshot(page);
+  assert.equal(state.mesh.faces.length, native.said.answers.length);
+  assert.equal(sha256(fileBytes(state.mesh)), sha256(native.bytes), "each worker cut the edges its faces share alike");
+  assertUploaded(state);
+  await clean(page);
+});
+
+test("a face that will not mesh is named, as the native mesher names it, and the rest arrive and are drawn", async () => {
+  const page = await open("&workers=4&deflection=1e-7", { model: HOLED });
+  const native = await nativeMesh(HOLED, 1e-7, 0.35);
   const refusedNatively = native.said.answers.filter((answer) => answer.report).map((answer) => answer.entity);
-  assert.equal(refusedNatively.length, 2, "both caps");
+  assert.equal(refusedNatively.length, 4, "both caps and the hole's wall, in two halves");
   const shown = await page.locator(".report.refusal").evaluateAll((sections) =>
     sections.map(({ dataset }) => [dataset.code, dataset.entity, dataset.reason]));
   assert.deepEqual(shown.filter(([code]) => code === "mesh.face-not-meshed"),
-    refusedNatively.map((face) => ["mesh.face-not-meshed", face, "boundary-crosses"]));
+    refusedNatively.map((face) => ["mesh.face-not-meshed", face, "edge-not-sampled"]));
   assert.deepEqual(shown.filter(([code]) => code === "mesh.not-watertight"),
     refusedNatively.map((face) => ["mesh.not-watertight", face, "face-missing"]), "each a hole where it is");
   const state = await snapshot(page);
   const meshed = native.said.answers.filter((answer) => answer.mesh).map((answer) => answer.entity);
-  assert.equal(meshed.length, 5);
+  assert.equal(meshed.length, 4, "the four sides");
   assert.deepEqual(state.faces.map((face) => face.id).sort(), [...meshed].sort(), "the rest drawn");
   assert.equal(sha256(fileBytes(state.mesh)), sha256(native.bytes));
   assertUploaded(state);

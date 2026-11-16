@@ -12,6 +12,7 @@ use occam_topo::{Body, Edge, Face, Id, Snapshot};
 use occam_units::{Angle, Length, Point, Vec3, World};
 use serde_json::{Value, json};
 
+use crate::adversarial::under_a_chord;
 use crate::construct::tests::{built, plate};
 
 fn limits(deflection: f64) -> Limits {
@@ -168,17 +169,10 @@ fn a_spheres_normals_are_its_radii_at_its_poles_too() {
     }
 }
 
-/// A sector of radius 10 a sixteenth of a turn either side of +X, extruded: its arc is sampled at its ends and its
-/// middle at 0.1, so the chord from (10, 0) sags about 0.048 inside it. A hole of radius 0.25 comes within 1e-3 of the
-/// arc under the middle of that chord, so the chord cuts across the hole's samples, in both caps.
+/// The adversarial catalogue's hole 1e-3 under a chord: at 0.1 the coarse chord of the sector's arc cuts across the
+/// hole's samples in both caps, until repair cuts it.
 pub(crate) fn sector_with_a_hole() -> Value {
-    let (x, y) = (9.807_852_804_032_304, 1.950_903_220_161_282_4);
-    json!([
-        {"op": "wire", "label": "rim", "edges": [{"arc": [[x, -y, 0], [10, 0, 0], [x, y, 0]]}, {"line": [[x, y, 0], [0, 0, 0]]}, {"line": [[0, 0, 0], [x, -y, 0]]}]},
-        {"op": "wire", "label": "hole", "edges": [{"circle": {"centre": [9.702_055_900_327_249, 0.955_569_101_072_886_4, 0], "radius": 0.25, "normal": [0, 0, 1]}}]},
-        {"op": "face", "label": "face", "outer": "rim", "holes": ["hole"]},
-        {"op": "extrude", "face": "face", "vector": [0, 0, 5]}
-    ])
+    under_a_chord(1e-3)
 }
 
 #[test]
@@ -251,8 +245,13 @@ fn a_box_corner_moved_one_ulp_in_one_face_is_named_by_the_two_edges_it_ends() {
 }
 
 #[test]
-fn a_solid_whose_caps_will_not_mesh_has_two_holes_each_named_with_its_edges() {
-    let (model, made) = whole(sector_with_a_hole(), 0.1);
+fn a_solid_whose_caps_were_not_meshed_has_two_holes_each_named_with_its_edges() {
+    // Meshed without repair, which cures the caps (the adversarial catalogue).
+    let (model, _) = built(sector_with_a_hole());
+    let edges = sample_edges(&Exec::serial(), &model, limits(0.1));
+    let faces = mesh_faces(&Exec::serial(), &model, &edges);
+    let mut made = merge(edges, &faces);
+    made.open = watertight(&model, &made);
     let caps: Vec<Id<Face>> = made.refused.iter().map(|r| Id::from_entity(r.entities[0]).unwrap()).collect();
     assert_eq!(caps.len(), 2, "both caps are refused: {:#?}", made.refused);
     let rims = caps.iter().map(|&cap| {
@@ -263,8 +262,8 @@ fn a_solid_whose_caps_will_not_mesh_has_two_holes_each_named_with_its_edges() {
     });
     assert_eq!(holes_and_cracks(&made.open), rims.collect::<Vec<_>>());
     assert!(made.open.iter().all(|report| report.fault == Some(Fault::InvalidInput)), "as the caps were refused");
-    let again = merge(made.edges.clone(), &mesh_faces(&Exec::serial(), &model, &made.edges));
-    assert_eq!(watertight(&model, &again), made.open, "the check is the same on what merge gives");
+    let (_, cured) = whole(sector_with_a_hole(), 0.1);
+    assert_eq!((cured.refused, cured.open), (vec![], vec![]), "and meshed whole, repair cures them");
 }
 
 #[test]

@@ -13,8 +13,9 @@ use occam_units::{Direction, Point, UvPoint, Vec3, World};
 
 use crate::boundary::not_meshed;
 use crate::edges::{Edges, sample_edges};
-use crate::faces::{FaceMesh, Faces, Side, mesh_faces};
+use crate::faces::{FaceMesh, Faces, Side};
 use crate::limits::Limits;
+use crate::repair::repaired;
 use crate::watertight::watertight;
 
 /// One face's place in a [`Mesh`]: its block of vertices, its triangles, which use only those, and its uses of edges.
@@ -55,12 +56,14 @@ pub struct Mesh {
 }
 
 /// Meshes `model` to `limits` on `exec`: samples every edge its faces use once, meshes each face against those
-/// samples, merges the faces by index and checks the result watertight; the same bits at any thread count.
+/// samples, repairs the faces whose boundaries collided where finer samples cure them, cutting only the edges that
+/// collided ([`Edges::repaired`]), merges the faces by index and checks the result watertight; the same bits at any
+/// thread count.
 #[must_use]
 pub fn mesh(exec: &Exec, model: &Snapshot, limits: Limits) -> Mesh {
     let edges = sample_edges(exec, model, limits);
-    let faces = mesh_faces(exec, model, &edges);
-    let mut merged = merge(edges, &faces);
+    let (edges, faces) = repaired(exec, model, &model.ids::<Face>(), edges, &[]);
+    let mut merged = merge(edges, &Faces::new(faces));
     merged.open = watertight(model, &merged);
     merged
 }
