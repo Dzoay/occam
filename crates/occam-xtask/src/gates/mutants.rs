@@ -10,6 +10,11 @@
 //! `docs/decisions/2026-11-14-mutants-keep-the-whole-workspace.md` measured against narrower scopes. `--shard k/n` runs
 //! one of n slices of both. `--iterate` skips the mutants an earlier run in this checkout caught, to try a fix on what
 //! survived or was not reached; the gate is a run without it.
+//!
+//! First, whatever the diff, it checks that every exclusion in `.cargo/mutants.toml` still excludes a mutant
+//! (the `exclusions` module); `--exclusions` runs that check alone, as `just preflight` does.
+
+mod exclusions;
 
 use std::time::{Duration, Instant};
 
@@ -36,6 +41,8 @@ struct Options {
     shard: Option<String>,
     /// Skip what an earlier run caught.
     iterate: bool,
+    /// Only check the exclusions.
+    exclusions: bool,
 }
 
 /// What cargo-mutants wrote: one mutant per line.
@@ -51,13 +58,17 @@ fn no_diff() -> String {
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     let options = options(args)?;
+    let exclusions = exclusions::run(repo)?;
+    if options.exclusions {
+        return Ok(exclusions);
+    }
     let base = repo.base().map_err(|e| vec![e])?;
     let mut diff = code_hunks(&repo.git(&["diff", "-U0", &base, "--", "*.rs"]).map_err(|e| vec![e])?);
     for path in repo.git(&["ls-files", "--others", "--exclude-standard", "--", "*.rs"]).map_err(|e| vec![e])?.lines() {
         diff.push_str(&new_file_diff(path, &repo.read(path).map_err(|e| vec![e])?));
     }
     if diff.trim().is_empty() {
-        return Ok(no_diff());
+        return Ok(format!("{exclusions}; {}", no_diff()));
     }
     // Built first, so that the run that is timed is the tests alone.
     let suite = ["nextest", "run", "--workspace", "--cargo-profile", "mutants", "--profile", "ci"];
@@ -78,12 +89,13 @@ pub fn run(repo: &Repo, args: &[String]) -> Verdict {
             lines(unviable).count()
         ));
     }
-    Ok(format!("mutants of the changes since origin/main: {}", passes.join("; ")))
+    Ok(format!("{exclusions}; mutants of the changes since origin/main: {}", passes.join("; ")))
 }
 
-/// Reads the gate's arguments: `--shard <k>/<n>` and `--iterate`, in either order.
+/// Reads the gate's arguments: `--shard <k>/<n>`, `--iterate` and `--exclusions`, in any order.
 fn options(args: &[String]) -> Result<Options, Vec<Finding>> {
-    let remedy = "pass --shard <k>/<n> with k < n, --iterate, both or neither";
+    let remedy =
+        "pass --shard <k>/<n> with k < n, --iterate, both or neither; or --exclusions to check only the exclusions";
     let usage = |detail: String| vec![Finding::new("mutants.usage", "", detail, remedy)];
     let mut options = Options::default();
     let mut rest = args.iter();
@@ -91,6 +103,7 @@ fn options(args: &[String]) -> Result<Options, Vec<Finding>> {
         let value = if flag == "--shard" { rest.next() } else { None };
         match (flag.as_str(), value) {
             ("--iterate", _) => options.iterate = true,
+            ("--exclusions", _) => options.exclusions = true,
             ("--shard", Some(slice)) if is_shard(slice) => options.shard = Some(slice.clone()),
             (_, value) => return Err(usage(format!("unexpected: {flag} {}", value.map_or("", String::as_str)))),
         }
@@ -266,11 +279,18 @@ mod tests {
 
     #[test]
     fn the_options_combine_in_either_order() {
-        let both = Options { shard: Some("1/16".to_string()), iterate: true };
+        let both = Options { shard: Some("1/16".to_string()), iterate: true, ..Options::default() };
         assert_eq!(options(&owned(&["--iterate", "--shard", "1/16"])), Ok(both));
-        let both = Options { shard: Some("1/16".to_string()), iterate: true };
+        let both = Options { shard: Some("1/16".to_string()), iterate: true, ..Options::default() };
         assert_eq!(options(&owned(&["--shard", "1/16", "--iterate"])), Ok(both));
         assert_eq!(options(&owned(&["--iterate"])), Ok(Options { iterate: true, ..Options::default() }));
+    }
+
+    #[test]
+    fn exclusions_alone_are_checked_when_asked() {
+        assert_eq!(options(&owned(&["--exclusions"])), Ok(Options { exclusions: true, ..Options::default() }));
+        let found = options(&owned(&["--exclusion"])).unwrap_err();
+        assert!(found[0].remedy.contains("--exclusions"), "{found:?}");
     }
 
     #[test]
@@ -278,7 +298,7 @@ mod tests {
         let [(_, workspace), (_, xtask)] = PASSES;
         let plain = ["--exclude", "crates/occam-xtask/**", "--timeout", "300"];
         assert_eq!(arguments(workspace, &Options::default(), "300"), plain);
-        let options = Options { shard: Some("2/16".to_string()), iterate: true };
+        let options = Options { shard: Some("2/16".to_string()), iterate: true, ..Options::default() };
         let sliced = ["--package", "occam-xtask", "--test-workspace", "false", "--timeout", "450"];
         assert_eq!(arguments(xtask, &options, "450"), [&sliced[..], &["--shard", "2/16", "--iterate"]].concat());
         let again = Options { iterate: true, ..Options::default() };
