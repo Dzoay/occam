@@ -126,6 +126,7 @@ pub fn scan(
         tol,
         scratch: Scratch::default(),
         hits: Hits::default(),
+        depth: subdivide::DEPTH,
     };
     if let Err(report) = valid(curve.range(), span, sink.domain, patch) {
         sink.hits.failures.push(report);
@@ -196,6 +197,8 @@ pub(crate) struct Sink<'a> {
     pub(crate) tol: Tolerance,
     pub(crate) scratch: Scratch,
     hits: Hits,
+    /// How many times the subdivision splits a pair of pieces at most: `subdivide::DEPTH`.
+    pub(crate) depth: u32,
 }
 
 impl Sink<'_> {
@@ -250,6 +253,20 @@ impl Sink<'_> {
             .with_tolerance_in_force(self.tol.band().millimetres());
         self.hits.failures.push(report);
         self.hits.tally.undecided = self.hits.tally.undecided.saturating_add(1);
+    }
+}
+
+#[cfg(test)]
+impl<'a> Sink<'a> {
+    /// A sink for `curve` on `surface` over `patch`, holding nothing yet: what the subdivision's parts are tested on.
+    pub(crate) fn new(curve: &'a dyn Curve, surface: &'a dyn Surface, patch: UvBox, tol: Tolerance) -> Self {
+        let (domain, scratch, hits) = (surface.domain(), Scratch::default(), Hits::default());
+        Self { curve, surface, patch, domain, tol, scratch, hits, depth: subdivide::DEPTH }
+    }
+
+    /// What it holds.
+    pub(crate) fn found(self) -> Hits {
+        self.hits
     }
 }
 

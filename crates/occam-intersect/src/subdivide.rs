@@ -2,12 +2,14 @@
 //! A curve against a surface that presents no analytic form: the span and the patch are subdivided together by their
 //! bounds, the families' own. A pair of pieces whose boxes do not come within the band of each other is dropped, and the
 //! larger of the two is halved until both are small, a sixty-fourth of the first pair's larger box. A side whose box
-//! comes back from halving the same as before, as a B-spline's does inside a knot span, is not halved again: smaller
-//! pieces would not be told apart. On each leaf, Gauss-Newton runs from
+//! comes back from halving all but a sixteenth as large as before is not halved again: smaller pieces would not be
+//! told apart. On each leaf, Gauss-Newton runs from
 //! its middle for the nearest pair of points of the curve and the surface, and a pair found inside its leaf, within
 //! the band of each other, is a hit: a crossing where the curve meets the surface at more than the angle tolerance, a
 //! contact where it is tangent. The ends of the span are tested by the surface's foot of their points, and an end on
-//! the surface is a contact. Hits within the band of each other, found from neighbouring leaves, are one.
+//! the surface is a contact. Hits within the band of each other, found from neighbouring leaves, are one, and so are
+//! points side by side, one a crossing, whose curve stays within the band between them, as a touch found off its point
+//! gives: a contact.
 //!
 //! Every hit is decided through occam-math's predicates, and one that cannot be is `decide.undecided`. A curve lying
 //! in such a surface is not told from many contacts here: its leaves run along it until the budget is spent, which is
@@ -18,12 +20,12 @@ use occam_math::{Interval, Side, Verdict, sin};
 use occam_report::Quantity;
 use occam_units::{Bounds, UvPoint, Vec3};
 
-use crate::distance::{Spread, judge};
+use crate::distance::{Spread, judge, shrank};
 use crate::hits::{Kind, Sink, Span};
 use crate::methods::{Spent, Work};
 
-/// How many times a pair of pieces is split at most.
-const DEPTH: u32 = 40;
+/// How many times a pair of pieces is split at most: the sink's depth, which a test may set lower.
+pub(crate) const DEPTH: u32 = 40;
 
 /// A leaf's boxes are at most this fraction of the first pair's larger box.
 const LEAF: f64 = 1.0 / 64.0;
@@ -101,6 +103,14 @@ fn keep(mut found: Vec<Found>, sink: &mut Sink<'_>) {
                     last.kind = Kind::Contact;
                 }
             }
+            Some(last) if last.kind == Kind::Crossing || next.kind == Kind::Crossing => {
+                match touch(last, &next, sink) {
+                    Some(between) if last.kind == next.kind => *last = between,
+                    Some(_) if last.kind == Kind::Crossing => *last = next,
+                    Some(_) => {}
+                    None => kept.push(next),
+                }
+            }
             _ => kept.push(next),
         }
     }
@@ -110,7 +120,8 @@ fn keep(mut found: Vec<Found>, sink: &mut Sink<'_>) {
 }
 
 /// The leaves, pairs of pieces whose boxes come within the band of each other, small enough or split as far as they
-/// go, each solved as it is reached and what it finds added to `found`.
+/// go, each solved as it is reached and what it finds added to `found`. Depth first, a pair taken for each two put
+/// back, so the stack holds at most one pair a level, the sink's depth and one more, whatever the budget.
 fn leaves(span: Span, work: &mut Work, sink: &mut Sink<'_>, found: &mut Vec<Found>) -> Result<(), Spent> {
     let (curve, surface, tol) = (sink.curve, sink.surface, sink.tol);
     let first = Cell {
@@ -130,15 +141,15 @@ fn leaves(span: Span, work: &mut Work, sink: &mut Sink<'_>, found: &mut Vec<Foun
             continue;
         }
         let settled = match (cell.halved, cell.parents) {
-            (Halved::Span, Some((was, _))) => (cell.stuck.0 || was == pair.0, cell.stuck.1),
-            (Halved::Patch, Some((_, was))) => (cell.stuck.0, cell.stuck.1 || was == pair.1),
+            (Halved::Span, Some((was, _))) => (cell.stuck.0 || !shrank(&was, &pair.0), cell.stuck.1),
+            (Halved::Patch, Some((_, was))) => (cell.stuck.0, cell.stuck.1 || !shrank(&was, &pair.1)),
             _ => cell.stuck,
         };
         let cell = Cell { stuck: settled, ..cell };
         let sizes = (size(&pair.0), size(&pair.1));
         let floor = *floor.get_or_insert(if sizes.0 > sizes.1 { sizes.0 } else { sizes.1 } * LEAF);
         let small = (sizes.0 <= floor || settled.0) && (sizes.1 <= floor || settled.1);
-        match split(cell, sizes, sink).filter(|_| !small && cell.depth < DEPTH) {
+        match split(cell, sizes, sink).filter(|_| !small && cell.depth < sink.depth) {
             Some((halves, side)) => {
                 for half in halves.into_iter().rev() {
                     let (lo, hi, patch, kept) = (half.lo, half.hi, half.patch, half.stuck);
@@ -286,15 +297,29 @@ fn transversal(t: f64, uv: UvPoint, sink: &mut Sink<'_>) -> Option<Kind> {
 /// An end of the span, `t`, where its point's foot on the surface lies in the patch and within the band of it: a
 /// contact.
 fn end(t: f64, sink: &mut Sink<'_>) -> Option<Found> {
-    let point = sink.curve.point(t);
-    let foot = match sink.surface.closest(point, None, sink.tol, &mut sink.scratch) {
-        Ok(foot) => foot,
+    let uv = foot(t, None, sink)?;
+    on(t, uv, sink)?.then_some(Found { t, uv, kind: Kind::Contact })
+}
+
+/// The parameters of the foot on the surface of the curve's point at `t`, searched for from `seed`, if they lie in the
+/// patch: `None` where they do not, or where the foot cannot be found, which is reported.
+fn foot(t: f64, seed: Option<UvPoint>, sink: &mut Sink<'_>) -> Option<UvPoint> {
+    match sink.surface.closest(sink.curve.point(t), seed, sink.tol, &mut sink.scratch) {
+        Ok(foot) => sink.in_patch(foot.at),
         Err(report) => {
             sink.fail(report);
-            return None;
+            None
         }
-    };
-    let uv = sink.in_patch(foot.at)?;
+    }
+}
+
+/// Two points found side by side, one or both a crossing, as one touch, where the curve between them never leaves the
+/// band: its point halfway between them in parameter lies within the band of the surface. At this tolerance it did not
+/// pass through there: two crossings are one contact, there, and a contact takes in a crossing beside it. `None` where
+/// it lies beyond the band, or its foot is outside the patch or cannot be found or decided.
+fn touch(a: &Found, b: &Found, sink: &mut Sink<'_>) -> Option<Found> {
+    let t = middle(a.t, b.t);
+    let uv = foot(t, Some(a.uv), sink)?;
     on(t, uv, sink)?.then_some(Found { t, uv, kind: Kind::Contact })
 }
 
@@ -308,7 +333,87 @@ fn same(a: &Found, b: &Found, sink: &mut Sink<'_>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use occam_geom::{Curve, Line, OffsetCurve};
+    use occam_units::{Direction, Length, Point};
+
     use super::*;
+    use crate::methods::Budget;
+    use crate::scan;
+    use crate::tests_hits::{found, hit_at, patch, saddle, span, tol, v};
+    use crate::trace_tests::level;
+
+    #[test]
+    fn a_crossing_beside_a_contact_the_curve_touches_between_is_the_contact() {
+        // A line lying in the plane: a crossing at 0.4 and a contact at 0.5 are a touch, kept as the contact.
+        let line = Line::new(Point::from_vec3(v(0.0, 0.0, 0.0)), Direction::normalised(v(1.0, 0.0, 0.0)));
+        let plane = level(0.0);
+        let mut sink = Sink::new(&line, &plane, patch((-1.0, -1.0), (2.0, 1.0)), tol());
+        let at = |t: f64, kind| Found { t, uv: UvPoint::new(t, 0.0), kind };
+        keep(vec![at(0.4, Kind::Crossing), at(0.5, Kind::Contact)], &mut sink);
+        let hits = sink.found();
+        assert_eq!((hits.crossings.len(), hits.contacts.len()), (0, 1), "{hits:?}");
+        assert_eq!(hits.contacts[0].t, 0.5);
+        // Two contacts side by side are two: only a crossing is taken into a touch beside it.
+        let mut sink = Sink::new(&line, &plane, patch((-1.0, -1.0), (2.0, 1.0)), tol());
+        keep(vec![at(0.4, Kind::Contact), at(0.5, Kind::Contact)], &mut sink);
+        assert_eq!(sink.found().contacts.len(), 2);
+    }
+
+    #[test]
+    fn a_pair_never_small_nor_stuck_is_split_as_deep_as_the_sink_allows_and_no_deeper() {
+        // A line 20 long along z through the plane z = 0 at its middle: its box is always the larger, so its span is
+        // halved, and the two halves beside the crossing touch the plane. A pair is tested for a step each: at a depth
+        // of 2, 1 + 2 + 4 (two clear of the plane) = 7; at a depth of 3, 4 more (two clear), 11.
+        let line = Line::new(Point::from_vec3(v(0.5, 0.0, -10.0)), Direction::normalised(v(0.0, 0.0, 1.0)));
+        let plane = level(0.0);
+        let within = |depth: u32, steps: u32| {
+            let mut sink = Sink::new(&line, &plane, patch((0.0, -1.0), (1.0, 1.0)), tol());
+            sink.depth = depth;
+            leaves(span(0.0, 20.0), &mut Work::of(Budget { steps }), &mut sink, &mut Vec::new()).is_ok()
+        };
+        assert!(within(2, 7) && !within(2, 6), "7 pairs at a depth of 2");
+        assert!(within(3, 11) && !within(3, 10), "11 pairs at a depth of 3");
+    }
+
+    #[test]
+    fn a_side_is_halved_only_where_it_is_free_and_its_middle_lies_strictly_inside() {
+        let line = Line::new(Point::from_vec3(v(0.0, 0.0, 0.0)), Direction::normalised(v(1.0, 0.0, 0.0)));
+        let plane = level(0.0);
+        let sink = Sink::new(&line, &plane, patch((0.0, 0.0), (2.0, 1.0)), tol());
+        let cell = |span: (f64, f64), u: (f64, f64), v: (f64, f64), stuck| Cell {
+            lo: span.0,
+            hi: span.1,
+            patch: patch((u.0, v.0), (u.1, v.1)),
+            depth: 0,
+            parents: None,
+            halved: Halved::Neither,
+            stuck,
+        };
+        let halved = |c: Cell| split(c, (1.0, 1.0), &sink).map(|(_, side)| side);
+        let (wide, unit) = ((0.0, 2.0), (0.0, 1.0));
+        assert_eq!(halved(cell(unit, wide, unit, (false, false))), Some(Halved::Span));
+        assert_eq!(halved(cell(unit, wide, unit, (true, true))), None, "both sides stuck");
+        // A range one double wide has its middle at one of its ends, and is not halved.
+        for narrow in [(1.0, 1.0_f64.next_up()), (1.0_f64.next_down(), 1.0)] {
+            assert_eq!(halved(cell(narrow, wide, unit, (false, false))), Some(Halved::Patch), "{narrow:?}");
+            assert_eq!(halved(cell(unit, narrow, narrow, (true, false))), None, "{narrow:?}");
+        }
+    }
+
+    #[test]
+    fn a_span_whose_box_barely_shrinks_is_halved_no_further() {
+        // A line 50 to the side of one through a saddle's middle, offset back onto it: its box is 100 across whatever
+        // its piece, so the span stops being halved at once, where halving it on would spend far more than this budget.
+        let base = Line::new(Point::from_vec3(v(-10.0, 50.0, -0.1)), Direction::normalised(v(1.0, 0.0, 0.01)));
+        let up = Direction::normalised(v(0.0, 0.0, 1.0));
+        let through = OffsetCurve::new(base.trimmed(0.0, 20.0).unwrap(), Length::from_millimetres(50.0), up).unwrap();
+        let on = |t: f64| v(-10.0, 0.0, -0.1) + v(1.0, 0.0, 0.01) * (t / (1.0 + 1e-4_f64).sqrt());
+        assert!((through.point(10.0).to_vec3() - on(10.0)).norm() < 1e-12, "{:?}", through.point(10.0));
+        let got =
+            scan(&through, span(0.0, 20.0), &saddle(), patch((0.0, 0.0), (1.0, 1.0)), tol(), Budget { steps: 2000 });
+        found(&got, (1, 0, 0));
+        hit_at(&got.crossings[0], 10.0 * (1.0 + 1e-4_f64).sqrt(), &saddle());
+    }
 
     #[test]
     fn a_three_by_three_system_is_solved_and_a_singular_one_refused() {

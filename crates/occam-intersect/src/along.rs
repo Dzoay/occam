@@ -3,9 +3,8 @@
 //! curve, isolated by interval bounds over subranges (Rump 1999). A piece of the span whose box lies certainly on one
 //! side of the band is decided whole, and so is one whose box lies within it, or whose points at its ends, middle and
 //! quarters all do. Any other is halved, down to a floor, or until its box, the curve family's own, comes back from
-//! halving the same as before, as a B-spline's does inside a knot span. What is left are runs of pieces within the band
-//! or undecided,
-//! each between two decided pieces or an end of the span, and each is read by what it lies between:
+//! halving all but a sixteenth as large as before. What is left are runs of pieces within the band or undecided, each
+//! between two decided pieces or an end of the span, and each is read by what it lies between:
 //!
 //! - between the two sides, the curve crosses, and the root is found by bisection;
 //! - between one side and itself, the curve's nearest approach is found by bisection on the distance's slope along it,
@@ -27,7 +26,7 @@ use occam_math::{Interval, Side, Verdict};
 use occam_report::Quantity;
 use occam_units::Bounds;
 
-use crate::distance::{Spread, canonical, distance, gradient, judge, padded};
+use crate::distance::{Spread, canonical, distance, gradient, judge, padded, shrank};
 use crate::hits::{Kind, Sink, Span};
 use crate::methods::{Spent, Work};
 
@@ -139,7 +138,7 @@ impl Along<'_, '_> {
                 }
                 Verdict::Undecided if depth >= FLOOR || !(lo < mid && mid < hi) => Lie::Open,
                 Verdict::Undecided if self.probed_on(lo, hi) => Lie::On,
-                Verdict::Undecided if parent == Some(piece) => Lie::Open,
+                Verdict::Undecided if parent.is_some_and(|was| !shrank(&was, &piece)) => Lie::Open,
                 Verdict::Undecided => {
                     let deeper = depth.saturating_add(1);
                     stack.push((mid, hi, deeper, Some(piece)));
