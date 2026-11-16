@@ -165,10 +165,16 @@ fn step((lo, hi): (f64, f64), k: u32) -> f64 {
     if k >= STEPS { hi } else { lo + (hi - lo) * (f64::from(k) / f64::from(STEPS)) }
 }
 
-/// The length of the chords of `curve` between its points at the steps of `range`.
+/// The length of the chords of `curve` between its points at the steps of `range`, each point found once.
 fn chord(curve: &dyn Curve, range: (f64, f64)) -> f64 {
-    let points: Vec<_> = (0..=STEPS).map(|k| curve.point(step(range, k)).to_vec3()).collect();
-    points.windows(2).map(|pair| pair.get(1).zip(pair.first()).map_or(0.0, |(b, a)| (*b - *a).norm())).sum()
+    let mut before = curve.point(step(range, 0)).to_vec3();
+    let chords = (1..=STEPS).map(|k| {
+        let after = curve.point(step(range, k)).to_vec3();
+        let length = (after - before).norm();
+        before = after;
+        length
+    });
+    chords.sum()
 }
 
 /// The parameter curve of `u`, if it has one, runs along `e` on its face's surface, the same way, within the band
