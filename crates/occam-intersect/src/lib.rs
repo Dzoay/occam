@@ -8,7 +8,8 @@
 //! content, and the section is mapped back, so swapping the two surfaces swaps the section's images and changes nothing
 //! else. Each method in turn asks the surfaces what they can present and declines when it does not apply; the first
 //! that applies answers, within a [`Budget`]. Running out of it is a failure that keeps what was found. [`sections`]
-//! runs many pairs, one a task through [`occam_math::Exec`], one result each in pair order.
+//! runs many pairs, one a task through [`occam_math::Exec`], one result each in pair order. The methods so far are the
+//! closed forms, [`Closed`], and Levin's pencil method for the quadric pairs they leave, [`Pencil`].
 //!
 //! A [`Tracer`] is the hybrid's building block: from a start point where two surfaces meet, the stations along the
 //! curve they meet in, each with its parameters on both, until the curve closes, leaves a surface, ends in a touch, or
@@ -31,6 +32,7 @@ mod march;
 #[cfg(test)]
 mod march_tests;
 mod methods;
+mod pencil;
 mod project;
 mod section;
 #[cfg(test)]
@@ -41,5 +43,6 @@ mod trace_tests;
 
 pub use closed::Closed;
 pub use methods::{Answer, Budget, Method, Methods, Spent, SurfacePair, Work, sections};
+pub use pencil::Pencil;
 pub use section::{Coincidence, Contact, Section, SectionCurve};
 pub use trace::{Crossing, End, Jump, ROUND, Start, Station, Trace, Tracer, Uncertain, Which};

@@ -1,19 +1,26 @@
 //! Source: original
-//! The trace's decisions (S2, O11). Each compares a length formed from the trace's numbers with the band, through
-//! occam-math's `decide_computed`, so that it is counted in the trace's tally and one whose enclosure reaches across an
-//! edge of the band is undecided, reported, and never guessed: whether a trace closes, whether the surfaces touch or
-//! cross, whether a parameter is on or past an end of its range, whether an edge is a seam or a pole, and whether a
-//! projection moved the trace on. The numbers come from evaluation through the seam, which bounds none of its own
-//! rounding, so each is taken as it is, and the enclosure is the interval arithmetic of the decision's own formula: a
-//! length that rounding could put on either side of an edge of the band is undecided. `Ring` has no square root, so a
-//! length is formed as an [`Interval`] and decided as a predicate of one input, its value.
+//! Every decision intersection makes, through occam-math's predicates (S2, O11): a computed value, carrying its
+//! certified radius, against the band, so that it is counted in a tally, and one whose enclosure reaches across an edge
+//! of the band is undecided, reported and never guessed. `Ring` has no square root, so a length is formed as an
+//! [`Interval`] and decided as a predicate of one input, its value, or a polynomial is decided against the band scaled
+//! by its first-order size.
+//!
+//! [`Decide`] is the trace's: whether a trace closes, whether the surfaces touch or cross, whether a parameter is on or
+//! past an end of its range, whether an edge is a seam or a pole, and whether a projection moved the trace on. The
+//! numbers come from evaluation through the seam, which bounds none of its own rounding, so each is taken as it is, and
+//! the enclosure is the interval arithmetic of the decision's own formula; one undecided ends the trace with what it was
+//! on, and where.
+//!
+//! [`Decisions`] is the closed forms' and the pencil method's: a length against the length band or an angle against the
+//! angle band, each undecided one reported as `decide.undecided`, with the value, its radius and the band.
 
 use occam_math::{Interval, Predicate, Ring, Side, Tally, Verdict, decide_computed};
-use occam_units::{Length, Point, Vec3};
+use occam_report::{Code, Fault, NamedValue, Quantity, Report};
+use occam_units::{Length, Point, Tolerance, Vec3};
 
 use crate::trace::Uncertain;
 
-/// A length already formed in interval arithmetic: the predicate's value is its input.
+/// A length or an angle already formed in interval arithmetic: the predicate's value is its input.
 struct Formed;
 
 impl Predicate<1> for Formed {
@@ -101,6 +108,117 @@ pub(crate) fn past(t: f64, end: f64, rate: f64, upward: bool) -> Interval {
     let beyond =
         if upward { Interval::exact(t) - Interval::exact(end) } else { Interval::exact(end) - Interval::exact(t) };
     beyond * Interval::exact(rate)
+}
+
+/// What a decision compares: a length with the length band, or the sine of an angle with the angle band.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Measure {
+    Length,
+    Angle,
+}
+
+/// That a decision could not be made: its report is in [`Decisions::failures`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Undecided;
+
+/// The decisions a closed form made, and the reports of those the band could not make.
+pub(crate) struct Decisions {
+    tol: Tolerance,
+    /// How every decision went.
+    pub(crate) tally: Tally,
+    /// A `decide.undecided` report for each decision left unmade.
+    pub(crate) failures: Vec<Report>,
+}
+
+impl Decisions {
+    pub(crate) const fn new(tol: Tolerance) -> Self {
+        Self { tol, tally: Tally { decided: 0, exact: 0, undecided: 0 }, failures: Vec::new() }
+    }
+
+    /// The tolerance the decisions are made at.
+    pub(crate) const fn tolerance(&self) -> Tolerance {
+        self.tol
+    }
+
+    /// Where the length `value` lies against the length band.
+    ///
+    /// # Errors
+    ///
+    /// [`Undecided`] where the band cannot tell, with a report in [`Decisions::failures`].
+    pub(crate) fn length(&mut self, value: Interval) -> Result<Side, Undecided> {
+        self.side(value, Measure::Length)
+    }
+
+    /// Where the sine `value` of an angle lies against the angle band.
+    ///
+    /// # Errors
+    ///
+    /// As [`Decisions::length`].
+    pub(crate) fn angle(&mut self, value: Interval) -> Result<Side, Undecided> {
+        self.side(value, Measure::Angle)
+    }
+
+    fn side(&mut self, value: Interval, measure: Measure) -> Result<Side, Undecided> {
+        self.polynomial(&Formed, [value], 1.0, measure)
+    }
+
+    /// Where a length lies against the length band, as the value of `predicate` at `inputs`, certified intervals of
+    /// the numbers it is a polynomial in, divided by `scale`: a quadric's value at a point over the size of its
+    /// gradient there is the point's distance from it to first order.
+    ///
+    /// # Errors
+    ///
+    /// As [`Decisions::length`].
+    pub(crate) fn length_of<const N: usize, P: Predicate<N>>(
+        &mut self,
+        predicate: &P,
+        inputs: [Interval; N],
+        scale: f64,
+    ) -> Result<Side, Undecided> {
+        self.polynomial(predicate, inputs, scale, Measure::Length)
+    }
+
+    /// Where an angle lies against the angle band, as [`Decisions::length_of`] gives a length.
+    ///
+    /// # Errors
+    ///
+    /// As [`Decisions::length`].
+    pub(crate) fn angle_of<const N: usize, P: Predicate<N>>(
+        &mut self,
+        predicate: &P,
+        inputs: [Interval; N],
+        scale: f64,
+    ) -> Result<Side, Undecided> {
+        self.polynomial(predicate, inputs, scale, Measure::Angle)
+    }
+
+    /// `predicate`'s value at `inputs` against the band of `measure` times `scale`, through `decide_computed`.
+    fn polynomial<const N: usize, P: Predicate<N>>(
+        &mut self,
+        predicate: &P,
+        inputs: [Interval; N],
+        scale: f64,
+        measure: Measure,
+    ) -> Result<Side, Undecided> {
+        let band = match measure {
+            Measure::Length => self.tol.band().millimetres(),
+            Measure::Angle => self.tol.angle().radians(),
+        };
+        let mut verdicts = Vec::with_capacity(1);
+        self.tally = self.tally.merged(decide_computed(predicate, &[inputs], band * scale, &mut verdicts));
+        if let Some(Verdict::Decided(side)) = verdicts.first() {
+            return Ok(*side);
+        }
+        let value = predicate.value(&inputs);
+        let quantity = if measure == Measure::Length { Quantity::Length } else { Quantity::Angle };
+        self.failures.push(
+            Report::new(Code::Undecided, Fault::NumericallySensitive)
+                .with_value(NamedValue::new("quantity", quantity, value.mid() / scale))
+                .with_value(NamedValue::new("radius", quantity, value.radius() / scale))
+                .with_value(NamedValue::new("band", quantity, band)),
+        );
+        Err(Undecided)
+    }
 }
 
 #[cfg(test)]

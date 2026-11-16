@@ -13,8 +13,8 @@ use occam_units::{Angle, Direction, Length, Placement, Point, UvPoint, Vec3, Wor
 use crate::conformance::{self, Failure, arc, local, placement, twist};
 use crate::{
     Circle, Cone, Curve, Cylinder, Ellipse, Extrusion, Hyperbola, Line, MeshSurface, OffsetCurve, OffsetSurface,
-    Parabola, ParamCurve, Plane, Revolution, Sphere, SplineSurface, Surface, Torus, TrimmedCurve, TrimmedSurface,
-    UvBox, UvCurve,
+    Parabola, ParamCurve, Plane, Quartic, Revolution, Sphere, SplineSurface, Surface, Torus, TrimmedCurve,
+    TrimmedSurface, UvBox, UvCurve,
 };
 
 /// A row: a family's representative, the window the suite runs over, and so which suite.
@@ -96,6 +96,18 @@ fn imaged() -> Row {
     Row::Param(Box::new(crate::Image::conic(oval, chart).unwrap()), (0.0, TAU))
 }
 
+/// A loop of the quartic where the cylinder of radius 1 about [`placement`]'s X meets the one of radius 0.6 about its Z,
+/// on the thin one, round the whole turn: `0.36 sin²θ + v² = 1`.
+fn looped() -> Row {
+    let toward = |x, y, z| placement().direction(Direction::normalised(Vec3::new(x, y, z))).get();
+    let origin = local(0.0, 0.0, 0.0);
+    let axes = [origin, toward(1.0, 0.0, 0.0), toward(0.0, 1.0, 0.0), toward(0.0, 0.0, 1.0)];
+    let rest =
+        [0.0, 0.6, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.82, 0.0, 0.0, 0.18, 0.0, -1.0, 0.0, TAU, 2.0];
+    let numbers: Vec<f64> = axes.iter().flat_map(|v| [v.x, v.y, v.z]).chain(rest).collect();
+    Row::Curve(Box::new(Quartic::restore(&numbers).unwrap()), (0.0, TAU))
+}
+
 /// Defines the table: a test a row, named for the family, and the families it lists.
 macro_rules! every_family {
     ($($test:ident: $family:literal => $row:expr;)*) => {
@@ -157,6 +169,7 @@ every_family! {
         Row::Curve(Box::new(OffsetCurve::new(ring_of_ten(), mm(2.0), up()).unwrap()), (0.0, TAU));
     trimmed_curve: "TrimmedCurve" =>
         Row::Curve(Box::new(TrimmedCurve::new(ring_of_ten(), 5.0, 7.0).unwrap()), (5.0, 7.0));
+    quartic: "Quartic" => looped();
     uv_curve: "UvCurve" => in_parameters();
     image: "Image" => imaged();
 }
