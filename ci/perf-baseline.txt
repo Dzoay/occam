@@ -3,13 +3,13 @@
 # static x86_64-unknown-linux-musl build, so that no machine's libc or CPU features change them. rustc 1.99.1, gungraun 0.20.0.
 angles_w1 657175
 angles_w4 480901
-commands_describe 3592151
-commands_open 257471679
-construct_polygon_extrude 6227679791
-construct_primitives 263444948
-construct_sweeps 196767649
-construct_transforms 971248356
-construct_wire_face 10646692
+commands_describe 3596518
+commands_open 257471727
+construct_polygon_extrude 6227337268
+construct_primitives 263450551
+construct_sweeps 196757599
+construct_transforms 971900909
+construct_wire_face 10646704
 filter_w1 971612
 filter_w4 468829
 masks_w1 123749
@@ -19,7 +19,9 @@ maths_lanes4 87330348
 maths_lanes8 81902677
 maths_scalar 108976059
 measure_distance 3155
-measure_primitives 24094383
+measure_primitives 24095750
+mesh_p9_parts 265390588
+mesh_pick 15103652
 offset_curves 973293
 offset_surfaces 3792270
 sines_w1 775021
