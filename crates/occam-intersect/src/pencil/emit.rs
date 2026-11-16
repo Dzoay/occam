@@ -238,7 +238,9 @@ fn ruling_and_cubic(
     let (Some(cone), Natural::Cone { apex, .. }) = (Ruling::of(&pair.surface(o), pair.origin), pair.surface(o)) else {
         return Ok(Err("a ruling and a cubic with no cone"));
     };
-    let Kind::Slanted { sin, cos } = cone.kind else { return Ok(Err("a ruling and a cubic with no cone")) };
+    let (Kind::Slanted { sin, cos }, Kind::Upright { .. }) = (cone.kind, ruling.kind) else {
+        return Ok(Err("a ruling and a cubic with no cone and cylinder"));
+    };
     let along = cone.along(&pair.quadric(1_usize.saturating_sub(o)));
     let fan = Fan::through(cone.origin, [cone.z * cos, cone.x * sin, cone.y * sin], (&along.alpha, &along.beta));
     let cubic = match fanned(pair, &fan, fan.within(ball), charts, decide)? {

@@ -108,6 +108,26 @@ fn the_touches_on_the_rulings_agree_with_the_multiple_roots_where_those_are_real
 }
 
 #[test]
+fn a_node_at_infinity_on_two_cones_is_classified_and_reported() {
+    // Two cones tangent to one plane along parallel rulings, along `g`: the one of half-angle 0.4 about Z from the
+    // origin, and one of half-angle 0.3 from `(0, 2, 0)` whose axis is 0.3 from `g` on the same side. Their circles of
+    // directions touch at `g`, inside one another, and their tangent planes there are one: a node at infinity, along
+    // no cylinder of the pair.
+    let (sa, ca) = sin_cos(0.4);
+    let (g, n) = (v(sa, 0.0, ca), v(ca, 0.0, -sa));
+    let (sb, cb) = sin_cos(0.3);
+    let (a, b) = (cone(O, Z, 0.4), cone(v(0.0, 2.0, 0.0), g * cb - n * sb, 0.3));
+    let want = Class::Other("a quartic with its node at infinity on no cylinder");
+    for (one, other) in [(&a, &b), (&b, &a)] {
+        assert_eq!(class(one.as_ref(), other.as_ref()), want);
+    }
+    let got = alone(a.as_ref(), b.as_ref());
+    assert_eq!((got.method, got.curves.len()), (Some("pencil"), 0), "answered, so not fitted");
+    let codes: Vec<_> = got.failures.iter().map(|r| (r.code, r.fault)).collect();
+    assert_eq!(codes, [(occam_report::Code::Incomplete, Some(occam_report::Fault::NotImplemented))]);
+}
+
+#[test]
 fn a_tangency_along_a_conic_is_classified_and_reported() {
     let inscribed = (sphere(O, 1.0), cylinder(O, Z, 1.0));
     assert_eq!(class(inscribed.0.as_ref(), inscribed.1.as_ref()), Class::Other("surfaces tangent along a conic"));

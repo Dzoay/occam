@@ -187,6 +187,10 @@ fn smooth(pair: &Pair, decide: &mut Decisions) -> Result<Class, Undecided> {
 /// Whether the pair is a cylinder and a cone, the only pair whose node at infinity is the vertex of one of its own
 /// surfaces: a sphere has no direction at infinity, two cylinders with one are parallel, and the vertex of a cylinder
 /// along a direction two cones share is no surface of theirs.
+///
+/// Only a cylinder and a cone have a node at infinity and one vertex on both surfaces besides. The quartic is then
+/// a line through both singular points and a cubic. Every line on a cone passes its apex, so for two cones the line
+/// would pass both apexes, each on the other cone, two vertices, and for any other pair there is no node at infinity.
 fn cylinder_and_cone(pair: &Pair) -> bool {
     let cylinder = |s: &Natural| matches!(s, Natural::Cylinder { .. });
     let cone = |s: &Natural| matches!(s, Natural::Cone { .. });
@@ -217,11 +221,7 @@ fn classify(pair: &Pair, decide: &mut Decisions) -> Result<Class, Undecided> {
         [Multiple::AtInfinity { .. }] if ruled => Class::AtInfinity,
         [Multiple::AtInfinity { .. }] => Class::Other("a quartic with its node at infinity on no cylinder"),
         [Multiple::AtInfinity { .. }, Multiple::Vertex { .. }]
-        | [Multiple::Vertex { .. }, Multiple::AtInfinity { .. }]
-            if ruled =>
-        {
-            Class::RulingAndCubic
-        }
+        | [Multiple::Vertex { .. }, Multiple::AtInfinity { .. }] => Class::RulingAndCubic,
         [Multiple::Conjugate { line }] => Class::Conjugate { line: *line },
         [Multiple::Double] => Class::Other("surfaces tangent along a conic"),
         _ => Class::Other("more than one degenerate member"),

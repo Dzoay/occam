@@ -9,7 +9,7 @@
 //! ruling parameter is `±V` where `α V² ± 2β V + γ` vanishes, at the angles where `(α V² + γ)² − 4 V² β²` does, each of
 //! which the loop passes once or, between two roots of `Δ`, twice, once with each sign.
 
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::TAU;
 
 use occam_geom::{Curve, Quartic};
 use occam_math::{atan2, sin_cos};
@@ -35,8 +35,11 @@ impl Angle {
         match self {
             Self::Whole => vec![theta.rem_euclid(TAU)],
             Self::Between { middle, k } => {
-                let c = sin_cos(0.5 * ((theta - middle + PI).rem_euclid(TAU) - PI)).0 / k;
-                if c.abs() > 1.0 {
+                // `sin(φ/2) = sin φ / 2 cos(φ/2)`, with `2 cos(φ/2) = √(2 (1 + cos φ))` for `φ = θ − m` within a half
+                // turn: from φ's sine and cosine, which need no whole turn taken out.
+                let (sin, cos) = sin_cos(theta - middle);
+                let c = sin / (2.0 * (1.0 + cos)).sqrt() / k;
+                if c.is_nan() || c.abs() > 1.0 {
                     return Vec::new();
                 }
                 let s = atan2((1.0 - c * c).sqrt(), c);
@@ -123,6 +126,8 @@ pub(super) fn within(whole: &Loop, (ruling, along): (&Ruling, &Along), origin: V
 
 #[cfg(test)]
 mod tests {
+    use std::f64::consts::PI;
+
     use super::*;
 
     #[test]
@@ -143,5 +148,41 @@ mod tests {
         }
         assert_eq!(between.at(1.6), Vec::<f64>::new(), "past the half-width of 0.5");
         assert_eq!(between.at(0.4), Vec::<f64>::new());
+        assert_eq!(between.at(1.0 + PI), Vec::<f64>::new(), "half a turn on");
+        // At the end of its arc, where `sin(φ/2) = k` to the last bit, the loop is on the ruling once, at `s = 0`.
+        let (sin, cos) = sin_cos(0.5);
+        let end = Angle::Between { middle: 1.0, k: sin / (2.0 * (1.0 + cos)).sqrt() };
+        assert_eq!(end.at(1.5), vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_loop_is_cut_where_it_is_as_far_from_the_apex_as_the_ball_reaches() {
+        let (s, c) = sin_cos(0.7);
+        let pair = super::super::tests::unplaced(
+            super::super::tests::opening(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0), 0.5),
+            super::super::tests::opening(Vec3::new(2.0, 0.0, 0.0), Vec3::new(s, 0.0, c), 0.5),
+        );
+        let Some((_, o, ruling)) = pair.ruled() else { panic!("no ruled member") };
+        let along = ruling.along(&pair.quadric(o));
+        let apex = pair.world(ruling.origin);
+        // A ball about `(−3, 1, 0.5)`, away from the apex, so that how far it reaches along a ruling is its radius and
+        // more.
+        let (centre, radius) = (Vec3::new(-3.0, 1.0, 0.5), 4.0);
+        let ball = Ball { centre: centre - pair.origin, radius };
+        let far = radius + (apex - centre).norm();
+        let mut ends = 0;
+        for whole in &loops(&pair, &ruling, &along).unwrap() {
+            for (lo, hi) in within(whole, (&ruling, &along), pair.origin, ball) {
+                if hi - lo >= TAU {
+                    continue;
+                }
+                for t in [lo, hi] {
+                    let got = (whole.quartic.point(t).to_vec3() - apex).norm();
+                    assert!((got - far).abs() <= 1e-9 * far, "an end {got} from the apex, against {far}");
+                    ends += 1;
+                }
+            }
+        }
+        assert!(ends >= 2, "{ends} ends");
     }
 }

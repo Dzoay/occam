@@ -55,9 +55,15 @@ const WIDEST: f64 = FRAC_PI_4 * (1.0 + 1e-12);
 /// How often an arc whose weights are not all positive is halved before the stretch is given up.
 const HALVINGS: u32 = 24;
 
-/// The most arcs one B-spline is made of, however its arcs are halved: a budget no stretch of a curve the pencil gives
-/// comes near, so that one that would grow past it is given up rather than held.
+/// How many arcs one B-spline may try, halvings included, before it is given up: a budget no stretch of a curve the
+/// pencil gives comes near, so that no halving runs on and no B-spline holds more arcs, whatever its depth says.
 const MOST: usize = 1 << 12;
+
+/// How many arcs a stretch `span` wide is first cut into: the fewest, up to eight, no wider than [`WIDEST`]; `None` for
+/// a stretch wider than a turn, or not a number.
+fn arcs(span: f64) -> Option<u32> {
+    (1..=8).find(|n| span / f64::from(*n) <= WIDEST)
+}
 
 /// `f g` for two quadratics in Bernstein form, in Bernstein form of degree four.
 fn product([f0, f1, f2]: [f64; 3], [g0, g1, g2]: [f64; 3]) -> [f64; 5] {
@@ -130,22 +136,26 @@ impl Fan {
         stretches(&edge.roots(), |theta| ball.holds(self.point(theta)))
     }
 
-    /// The arc of the curve from `from` to `to`, with `D`'s sign `sign` there, put into `out`, halved `depth` more times
-    /// at most until its weights are positive: `false` where they never are.
-    fn arc(&self, (from, to): (f64, f64), sign: f64, depth: u32, out: &mut Vec<Arc>) -> bool {
+    /// The curve with `N` and `D` both times `by`: the same points.
+    fn scaled(&self, by: f64) -> Self {
+        Self { numerator: self.numerator.clone().map(|n| n.scaled(by)), weight: self.weight.scaled(by) }
+    }
+
+    /// The arc of the curve from `from` to `to`, put into `out`, halved `depth` more times at most until its weights are
+    /// positive, each try spending one of `left`: `false` where they never are, or none is left.
+    fn arc(&self, (from, to): (f64, f64), depth: u32, (left, out): (&mut usize, &mut Vec<Arc>)) -> bool {
+        let Some(rest) = left.checked_sub(1) else { return false };
+        *left = rest;
         let middle = f64::midpoint(from, to);
         let ((s0, c0), (sm, cm), (s1, c1)) = (sin_cos(from), sin_cos(middle), sin_cos(to));
         let circle = ([c0, cm, c1], [s0, sm, s1], [1.0, sin_cos(0.5 * (to - from)).1, 1.0]);
-        let weights = homogeneous(&self.weight, circle).map(|w| w * sign);
-        if out.len() >= MOST {
-            return false;
-        }
+        let weights = homogeneous(&self.weight, circle);
         if !weights.iter().all(|w| *w > 0.0 && w.is_finite()) {
             return depth > 0
-                && self.arc((from, middle), sign, depth.saturating_sub(1), out)
-                && self.arc((middle, to), sign, depth.saturating_sub(1), out);
+                && self.arc((from, middle), depth.saturating_sub(1), (left, out))
+                && self.arc((middle, to), depth.saturating_sub(1), (left, out));
         }
-        let [x, y, z] = self.numerator.clone().map(|n| homogeneous(&n, circle).map(|c| c * sign));
+        let [x, y, z] = self.numerator.clone().map(|n| homogeneous(&n, circle));
         let points = std::array::from_fn(|k| {
             let at = |b: &[f64; 5]| b.get(k).copied().unwrap_or(f64::NAN);
             Vec3::new(at(&x), at(&y), at(&z)) * (1.0 / at(&weights))
@@ -156,26 +166,20 @@ impl Fan {
 
     /// The rational B-spline of the curve from `lo` to `hi`, a stretch of a turn at most on which `D` does not vanish,
     /// in the world, its knots the angles where its arcs meet: `None` for a longer stretch, or where an arc's weights
-    /// cannot be made positive.
+    /// cannot be made positive. `N` and `D` are first taken with `D`'s sign at the stretch's middle, so that its
+    /// weights are positive.
     pub(super) fn spline(&self, pair: &Pair, (lo, hi): (f64, f64)) -> Option<SplineCurve> {
-        let span = hi - lo;
-        if span.is_nan() || span > 8.0 * WIDEST {
-            return None;
-        }
-        let sign = if self.weight.at(f64::midpoint(lo, hi)) < 0.0 { -1.0 } else { 1.0 };
-        let mut count = 1_u32;
-        while span / f64::from(count) > WIDEST {
-            count = count.saturating_add(1);
-        }
-        let mut arcs = Vec::new();
+        let (span, count) = (hi - lo, arcs(hi - lo)?);
+        let signed = self.scaled(self.weight.at(f64::midpoint(lo, hi)).signum());
+        let (mut made, mut left) = (Vec::new(), MOST);
         for i in 0..count {
             let at = |k: u32| if k == count { hi } else { lo + span * f64::from(k) / f64::from(count) };
-            if !self.arc((at(i), at(i.saturating_add(1))), sign, HALVINGS, &mut arcs) {
+            if !signed.arc((at(i), at(i.saturating_add(1))), HALVINGS, (&mut left, &mut made)) {
                 return None;
             }
         }
         let (mut knots, mut poles, mut weights) = (vec![lo; 5], Vec::new(), Vec::new());
-        for (i, arc) in arcs.iter().enumerate() {
+        for (i, arc) in made.iter().enumerate() {
             for k in usize::from(i != 0)..5 {
                 poles.push(Point::from_vec3(pair.world(arc.points.get(k).copied().unwrap_or(arc.points[0]))));
                 weights.push(arc.weights.get(k).copied().unwrap_or(f64::NAN));
@@ -235,36 +239,60 @@ mod tests {
         Fan { numerator, weight: Trig(weight.to_vec()) }
     }
 
+    /// The pair the tests' curves are put in the world by, its frame about `(1, 0, 0)`.
+    fn pair() -> Pair {
+        super::super::tests::unplaced(
+            super::super::tests::ball(Vec3::new(0.0, 0.0, 0.0), 1.0),
+            super::super::tests::upright(Vec3::new(2.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0), 1.0),
+        )
+    }
+
+    #[test]
+    fn a_stretch_is_cut_into_the_fewest_arcs_no_wider_than_an_eighth_of_a_turn() {
+        assert_eq!(arcs(0.0), Some(1));
+        assert_eq!(arcs(WIDEST), Some(1), "one as wide as the widest");
+        assert_eq!(arcs(1.5 * FRAC_PI_4), Some(2));
+        assert_eq!(arcs(TAU), Some(8), "a whole turn");
+        assert_eq!(arcs(TAU + 4.0 * f64::EPSILON), Some(8), "a whole turn an ulp or two over");
+        assert_eq!(arcs(8.0 * WIDEST), Some(8));
+        assert_eq!((arcs(1.01 * TAU), arcs(f64::INFINITY), arcs(f64::NAN)), (None, None, None), "more than a turn");
+    }
+
     #[test]
     fn an_arc_whose_weights_are_not_all_positive_is_halved_until_they_are() {
         // `1.01 − cos θ` is least at 0, and its weights on the arc either side of it dip below zero.
         let fan = circle(&[1.01, -1.0, 0.0]);
-        let mut whole = Vec::new();
-        assert!(!fan.arc((-FRAC_PI_8, FRAC_PI_8), 1.0, 0, &mut whole), "not halved, refused");
-        assert!(fan.arc((-FRAC_PI_8, FRAC_PI_8), 1.0, HALVINGS, &mut whole));
-        assert!(whole.len() > 1 && whole.iter().all(|a| a.weights.iter().all(|w| *w > 0.0)), "{}", whole.len());
-        let pair = super::super::tests::unplaced(
-            super::super::tests::ball(Vec3::new(0.0, 0.0, 0.0), 1.0),
-            super::super::tests::upright(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0), 1.0),
-        );
-        let spline = fan.spline(&pair, (-FRAC_PI_8, FRAC_PI_8)).unwrap();
+        let (mut whole, mut left) = (Vec::new(), MOST);
+        assert!(!fan.arc((-FRAC_PI_8, FRAC_PI_8), 0, (&mut left, &mut whole)), "not halved, refused");
+        assert_eq!((whole.len(), left), (0, MOST - 1), "one try spent");
+        assert!(fan.arc((-FRAC_PI_8, FRAC_PI_8), HALVINGS, (&mut left, &mut whole)));
+        assert_eq!((whole.len(), left), (2, MOST - 4), "halved once: the arc and its two halves tried");
+        assert!(whole.iter().all(|a| a.weights.iter().all(|w| *w > 0.0)));
+        let mut short = 2;
+        assert!(!fan.arc((-FRAC_PI_8, FRAC_PI_8), HALVINGS, (&mut short, &mut Vec::new())), "out of tries");
+        let spline = fan.spline(&pair(), (-FRAC_PI_8, FRAC_PI_8)).unwrap();
         for arc in &whole {
-            let (got, want) = (spline.point(arc.to).to_vec3(), pair.world(fan.point(arc.to)));
+            let (got, want) = (spline.point(arc.to).to_vec3(), pair().world(fan.point(arc.to)));
             assert!((got - want).norm() <= 1e-13, "at {}: {got:?} against {want:?}", arc.to);
         }
-        let flipped = Fan { numerator: fan.numerator.clone().map(|n| n.scaled(-1.0)), weight: fan.weight.scaled(-1.0) };
-        let other = flipped.spline(&pair, (-FRAC_PI_8, FRAC_PI_8)).unwrap();
+        let flipped = fan.scaled(-1.0);
+        let other = flipped.spline(&pair(), (-FRAC_PI_8, FRAC_PI_8)).unwrap();
         assert!(
             (other.point(0.1).to_vec3() - spline.point(0.1).to_vec3()).norm() <= 1e-13,
             "a negative weight flipped"
         );
-        assert!(circle(&[0.0, 1.0, 0.0]).spline(&pair, (1.0, 2.0)).is_none(), "a weight that changes sign at π/2");
-        assert!(fan.spline(&pair, (1.0, 1.0 + 1.01 * TAU)).is_none(), "more than a turn");
-        assert!(fan.spline(&pair, (1.0, f64::INFINITY)).is_none(), "no end");
-        assert!(circle(&[1.0]).spline(&pair, (1.0, 1.0 + TAU)).is_some(), "a whole turn");
-        let mut many = vec![Arc { to: 0.0, weights: [1.0; 5], points: [Vec3::new(0.0, 0.0, 0.0); 5] }; MOST - 1];
-        assert!(circle(&[1.0]).arc((0.0, 0.1), 1.0, 0, &mut many), "one arc short of the most");
-        assert!(!circle(&[1.0]).arc((0.0, 0.1), 1.0, 0, &mut many), "the most");
+    }
+
+    #[test]
+    fn a_weight_of_zero_or_that_changes_sign_is_never_taken() {
+        // `sin θ` from 0: its first weight is zero, exactly.
+        let mut out = Vec::new();
+        assert!(!circle(&[0.0, 0.0, 1.0]).arc((0.0, 0.5), 0, (&mut MOST.clone(), &mut out)), "a weight of zero");
+        assert!(circle(&[0.0, 0.0, 1.0]).arc((0.1, 0.5), 0, (&mut MOST.clone(), &mut out)), "clear of it");
+        assert!(circle(&[0.0, 1.0, 0.0]).spline(&pair(), (1.0, 2.0)).is_none(), "a weight that changes sign at π/2");
+        assert!(circle(&[1.0]).spline(&pair(), (1.0, 1.0 + 1.01 * TAU)).is_none(), "more than a turn");
+        assert!(circle(&[1.0]).spline(&pair(), (1.0, f64::INFINITY)).is_none(), "no end");
+        assert!(circle(&[1.0]).spline(&pair(), (1.0, 1.0 + TAU)).is_some(), "a whole turn");
     }
 
     #[test]
