@@ -2,10 +2,12 @@
 //! Where pieces meet, on numbers whose answers are known: a segment and a circle, and two circles, at two points, at
 //! the one where they touch, and nowhere; an arc's point square to a slanting segment; an end exactly as far from where
 //! two pieces meet as counts as away from it; two pieces that meet at both ends and run along each other; an arc tangent
-//! to a segment that turns back along it, and tangent pieces that do not; and the limits of `least` and of how finely an
-//! arc is cut.
+//! to a segment that turns back along it, and tangent pieces that do not; pieces that meet at one end and cross further
+//! on, and the arcs of a needle's tip, which do not; and the limits of `least` and of how finely an arc is cut.
 
-use core::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI, SQRT_2};
+use core::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI, SQRT_2};
+
+use occam_math::{atan2, sin_cos};
 
 use super::tests::{circle, seg};
 use super::*;
@@ -106,6 +108,68 @@ fn pieces_that_run_along_each_other_from_where_they_meet_meet_at_the_middle_of_o
     assert_eq!(meet_elsewhere(line, cusp, &corner, band), None, "turning back away from it");
     let round = Flat::Arc { c: [2.0, 1.0], r: 1.0, from: -FRAC_PI_2, sweep: PI };
     assert_eq!(meet_elsewhere(line, round, &corner, band), None, "round the end of a slot");
+}
+
+#[test]
+fn pieces_that_meet_at_one_end_and_cross_further_on_meet_where_their_curves_meet_again() {
+    // An arc of radius 2.5 about (2.5, 2) from the segment's end at (4, 0), clockwise under it and up across it at
+    // (1, 0) to (0, 2): no end or middle of either is near the other, so only the crossing says they meet.
+    let band = 1e-7;
+    let line = seg([0.0, 0.0], [4.0, 0.0]);
+    let from = atan2(-2.0, 1.5);
+    let under = Flat::Arc { c: [2.5, 2.0], r: 2.5, from, sweep: -PI - from };
+    let met = meet_elsewhere(line, under, &[[4.0, 0.0]], band).unwrap();
+    assert!(close(met, [1.0, 0.0]), "a segment, then an arc: {met:?}");
+    let (first, second) = (under.reversed(), line.reversed());
+    let met = meet_elsewhere(first, second, &[first.end()], band).unwrap();
+    assert!(close(met, [1.0, 0.0]), "an arc, then a segment: {met:?}");
+    // Arcs of radius 1 about (1, 0) and (0, 1), the first ending and the second beginning at (0, 0): their circles meet
+    // again at (1, 1), which both reach, and which the second stops short of if it turns by an eighth.
+    let first = Flat::Arc { c: [1.0, 0.0], r: 1.0, from: FRAC_PI_4, sweep: 3.0 * FRAC_PI_4 };
+    let second = Flat::Arc { c: [0.0, 1.0], r: 1.0, from: -FRAC_PI_2, sweep: 3.0 * FRAC_PI_4 };
+    let met = meet_elsewhere(first, second, &[first.end()], band).unwrap();
+    assert!(close(met, [1.0, 1.0]), "two arcs: {met:?}");
+    let short = Flat::Arc { c: [0.0, 1.0], r: 1.0, from: -FRAC_PI_2, sweep: FRAC_PI_4 };
+    assert_eq!(meet_elsewhere(first, short, &[first.end()], band), None, "one stopping short of where they meet again");
+}
+
+#[test]
+fn a_segment_folded_back_across_the_one_before_it_crosses_it_where_their_numbers_say() {
+    // From a point within the band of the first segment's end, back across it to below it: the two cross at (1.5, 0),
+    // strictly within both, which comes before the second's end within the band of the first.
+    let (first, back) = (seg([0.0, 0.0], [2.0, 0.0]), seg([2.0, 1e-9], [1.0, -1e-9]));
+    let met = meet_elsewhere(first, back, &[[2.0, 0.0]], 1e-7).unwrap();
+    assert!(close(met, [1.5, 0.0]), "{met:?}");
+}
+
+#[test]
+fn the_arcs_of_a_needle_s_tip_meet_only_there() {
+    // Arcs of radius 100 and 1 leaving a tip 1e-7 radians apart, each bending away from the other, as construction reads
+    // the catalogue's needle's in its plane: they are 1.8e-12 apart 1.8e-6 from the tip, where solving for both places
+    // their circles meet at once found them crossing. Their circles meet again 2e-7 behind the tip, beyond both arcs.
+    let far = Flat::Arc {
+        c: [-5.000_001_812_592_913_5e-6, -100.000_000_000_200_84],
+        r: 100.000_000_000_200_97,
+        from: 1.570_796_276_794_878_4,
+        sweep: -0.004_999_999_999_989_953,
+    };
+    let near = Flat::Arc {
+        c: [-5.000_000_242_500_148_6e-8, 0.999_999_999_999_998_2],
+        r: 0.999_999_999_999_999_4,
+        from: -1.070_796_276_794_896_2,
+        sweep: -0.500_000_000_000_000_2,
+    };
+    let tip = [-2.223_553_535_201_103_3e-15, 0.0];
+    assert!(apart(far.start(), tip) < 1e-14 && apart(near.end(), tip) < 1e-14);
+    assert_eq!(meet_elsewhere(far, near, &[tip], 1e-7), None);
+    assert_eq!(meet_elsewhere(far, near, &[tip], 1e-9), None, "nor where the band is narrower");
+    // The same needle drawn from its tip's own numbers.
+    let half = 5e-8;
+    let (sin, cos) = sin_cos(half);
+    let far = Flat::Arc { c: [-100.0 * sin, -100.0 * cos], r: 100.0, from: FRAC_PI_2 - half, sweep: -0.005 };
+    let near = Flat::Arc { c: [-sin, cos], r: 1.0, from: half - FRAC_PI_2 + 0.5, sweep: -0.5 };
+    assert!(apart(far.start(), [0.0, 0.0]) < 1e-14 && apart(near.end(), [0.0, 0.0]) < 1e-14);
+    assert_eq!(meet_elsewhere(far, near, &[near.end()], 1e-9), None);
 }
 
 #[test]

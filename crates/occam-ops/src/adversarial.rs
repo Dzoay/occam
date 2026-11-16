@@ -162,9 +162,9 @@ fn crescent(width: f64) -> Case {
 }
 
 /// A needle: two arcs from one tip `tip` radians apart, of radius 1 and 100, bending away from each other, closed by a
-/// line and extruded, so that its walls bend 100 to 1 apart. At a band of 1e-7, construction reads the arcs of the
-/// needle 1e-7 radians wide as crossing 1.8e-6 from its tip, where they are 1.8e-12 apart, so the needles are built to
-/// a band of 1e-5.
+/// line and extruded, so that its walls bend 100 to 1 apart, at the default band of 1e-7. The arcs of the needle 1e-7
+/// radians wide stay within that band of each other for 4.4e-4 from its tip, a sharp corner, as two pieces that meet do
+/// near where they meet.
 fn needle(tip: f64) -> Case {
     let (near, far, half) = (1.0, 100.0, tip / 2.0);
     // Round its centre above the tip, the near arc leaves it at half the tip above +X; round its centre below, the far
@@ -178,7 +178,7 @@ fn needle(tip: f64) -> Case {
         {"arc": [upper(reach), upper(reach / 2.0), at(0.0, 0.0, 0.0)]}
     ]);
     let steps = and(&bounded(&edges), &[extruded()]);
-    Case { family: "needle", value: tip, steps, tolerance: 1e-5, deflection: 0.01 }
+    Case { family: "needle", value: tip, steps, tolerance: 1e-7, deflection: 0.01 }
 }
 
 /// A square of 10 whose top bulges in, as an arc down to 8 in its middle, with a hole of radius 1 `gap` under it.
