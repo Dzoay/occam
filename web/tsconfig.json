@@ -1,0 +1,33 @@
+// `tsc --noEmit` checks the viewer, strict, declaration files included; esbuild builds it without checking.
+//
+// The browser's types, WebGPU's among them, are @types/web's. TypeScript 7.0.2's own "dom" library declares only part
+// of WebGPU, and Preact's JSX types ask for "dom" by name, so lib replacement gives "dom" and "dom.iterable" from
+// @types/web in its place: `paths` maps the names TypeScript looks up for them to that package.
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "libReplacement": true,
+    "paths": {
+      "@typescript/lib-dom": ["./node_modules/@types/web"],
+      "@typescript/lib-dom/*": ["./node_modules/@types/web/*"]
+    },
+    "types": [],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src"]
+}

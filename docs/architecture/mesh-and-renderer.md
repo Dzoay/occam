@@ -1,6 +1,6 @@
 # Mesh and renderer
 
-[Architecture](../ARCHITECTURE.md) › Mesh and renderer · crate [`occam-mesh`](../../crates/occam-mesh/src/lib.rs)
+[Architecture](../ARCHITECTURE.md) › Mesh and renderer · crate [`occam-mesh`](../../crates/occam-mesh/src/lib.rs) · page `web/`
 
 Triangles for display: shared edges first, so neighbouring faces meet exactly, then faces, then a check.
 

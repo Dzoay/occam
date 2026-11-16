@@ -589,6 +589,43 @@ catalogue! {
         "The mesh is not watertight: a face is missing, a segment is not used once each way, or a shell's counts are wrong.",
         "The mesh is not watertight, for the reason given, at the entities named.",
     }
+
+    /// The viewer's page is open in a browser that has no WebGPU, which the page draws with.
+    WebgpuMissing = "view.webgpu-missing" {
+        Error, [UseWebgpuBrowser],
+        "The browser has no WebGPU, which the viewer draws with.",
+        "This browser has no WebGPU, which the viewer draws with.",
+    }
+
+    /// The browser has WebGPU, but gave the viewer's page no adapter: it is turned off, or the GPU is blocked.
+    NoAdapter = "view.no-adapter" {
+        Error, [TurnOnWebgpu],
+        "The browser has WebGPU but gave the page no GPU adapter.",
+        "The browser has WebGPU but gave the page no GPU adapter, so the viewer cannot draw.",
+    }
+
+    /// The GPU adapter refused the viewer's page a device.
+    NoDevice = "view.no-device" {
+        Error, [ReloadPage],
+        "The GPU adapter would not give the page a device.",
+        "The GPU adapter would not give the page a device: {reason}",
+    }
+
+    /// The viewer's GPU device was lost, so the page has stopped drawing.
+    DeviceLost = "view.device-lost" {
+        Error, [ReloadPage],
+        "The GPU device was lost, so the page has stopped drawing.",
+        "The GPU device was lost, so the page has stopped drawing: {reason}",
+    }
+
+    /// The viewer's page was given a mesh without the renderer contract's layout, and draws the last good one. Its
+    /// fix, meshing again with the `occam` that serves the page, is in its wording: no test can follow it until the
+    /// page meshes through `occam` (`view.workers`, `view.live`).
+    MeshMalformed = "view.mesh-malformed" {
+        Error, [],
+        "The mesh the page was given does not have the renderer contract's layout.",
+        "The mesh the page was given does not have the renderer contract's layout: {reason}. Mesh the model again with the `occam` that serves this page.",
+    }
 }
 
 #[cfg(test)]
@@ -1326,6 +1363,51 @@ mod tests {
         ])
     }
 
+    fn view_codes() -> Value {
+        json!([
+            {
+                "name": "WebgpuMissing",
+                "code": "view.webgpu-missing",
+                "severity": "error",
+                "summary": "The browser has no WebGPU, which the viewer draws with.",
+                "template": "This browser has no WebGPU, which the viewer draws with.",
+                "remedies": ["use-webgpu-browser"]
+            },
+            {
+                "name": "NoAdapter",
+                "code": "view.no-adapter",
+                "severity": "error",
+                "summary": "The browser has WebGPU but gave the page no GPU adapter.",
+                "template": "The browser has WebGPU but gave the page no GPU adapter, so the viewer cannot draw.",
+                "remedies": ["turn-on-webgpu"]
+            },
+            {
+                "name": "NoDevice",
+                "code": "view.no-device",
+                "severity": "error",
+                "summary": "The GPU adapter would not give the page a device.",
+                "template": "The GPU adapter would not give the page a device: {reason}",
+                "remedies": ["reload-page"]
+            },
+            {
+                "name": "DeviceLost",
+                "code": "view.device-lost",
+                "severity": "error",
+                "summary": "The GPU device was lost, so the page has stopped drawing.",
+                "template": "The GPU device was lost, so the page has stopped drawing: {reason}",
+                "remedies": ["reload-page"]
+            },
+            {
+                "name": "MeshMalformed",
+                "code": "view.mesh-malformed",
+                "severity": "error",
+                "summary": "The mesh the page was given does not have the renderer contract's layout.",
+                "template": "The mesh the page was given does not have the renderer contract's layout: {reason}. Mesh the model again with the `occam` that serves this page.",
+                "remedies": []
+            }
+        ])
+    }
+
     fn remedies() -> Value {
         json!([
             {
@@ -1364,6 +1446,24 @@ mod tests {
                 "summary": "Mesh at the deflection given, at which the edge the report names fits under its cap.",
                 "parameters": ["deflection"],
             },
+            {
+                "name": "UseWebgpuBrowser",
+                "kind": "use-webgpu-browser",
+                "summary": "Open the page in a current Chromium or Firefox, which draw with WebGPU.",
+                "parameters": [],
+            },
+            {
+                "name": "TurnOnWebgpu",
+                "kind": "turn-on-webgpu",
+                "summary": "Turn on WebGPU and hardware acceleration in the browser's settings; in Chromium, chrome://gpu says why WebGPU is off.",
+                "parameters": [],
+            },
+            {
+                "name": "ReloadPage",
+                "kind": "reload-page",
+                "summary": "Reload the page.",
+                "parameters": [],
+            },
         ])
     }
 
@@ -1390,6 +1490,7 @@ mod tests {
             transform_codes(),
             intersect_codes(),
             mesh_codes(),
+            view_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())
