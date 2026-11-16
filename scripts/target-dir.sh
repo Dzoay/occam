@@ -60,10 +60,12 @@ serve() {
 }
 
 take() {
-  # The fingerprints sit in `.fingerprint/` under each profile, target and nested target directory (the gates' `simd`
-  # and `shim`). A directory without one, cargo's layout or not, starts empty.
-  if [ -n "$(find "$1" -mindepth 2 -maxdepth 4 -type d -name .fingerprint -print -quit 2>/dev/null)" ]; then
-    find "$1" -mindepth 3 -maxdepth 5 -type d -path '*/.fingerprint/occam-*' -prune -exec rm -rf {} +
+  # The fingerprints sit under each profile, target and nested target directory (the gates' `simd` and `shim`): up to
+  # cargo 1.99 in `.fingerprint/<package>-<hash>/`, from 1.100 in `build/<package>/<hash>/fingerprint/`. A directory
+  # with neither, cargo's layout or not, starts empty.
+  local any='*/build/*/*/fingerprint' old='*/.fingerprint/occam-*' new='*/build/occam-*/*/fingerprint'
+  if [ -n "$(find "$1" -mindepth 2 -maxdepth 7 -type d \( -name .fingerprint -o -path "$any" \) -print -quit 2>/dev/null)" ]; then
+    find "$1" -mindepth 3 -maxdepth 7 -type d \( -path "$old" -o -path "$new" \) -prune -exec rm -rf {} +
   else
     rm -rf "$1"
   fi
