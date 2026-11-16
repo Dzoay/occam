@@ -159,16 +159,18 @@ fn samples(patch: UvBox) -> [UvPoint; 5] {
     [middle(patch), c0, c1, c2, c3]
 }
 
-/// The start point `pair` settles onto from `seed`, where it is inside `p`'s part and, if given, `q`'s.
-fn settled(pair: &Pair<'_>, seed: &Here, p: UvBox, q: Option<UvBox>) -> Option<Here> {
-    let here = pair.settle(seed)?;
+/// Where `pair` settles from `seed`: `Ok` with the point where it is inside `p`'s part and, if given, `q`'s, `Ok(None)`
+/// where it settles outside them, onto a curve of another leaf, and `Err` where it settles nowhere.
+fn settled(pair: &Pair<'_>, seed: &Here, p: UvBox, q: Option<UvBox>) -> Result<Option<Here>, ()> {
+    let here = pair.settle(seed).ok_or(())?;
     let ours = inside(p, here.p, pair.p.domain(), EDGE) && q.is_none_or(|q| inside(q, here.q, pair.q.domain(), EDGE));
-    ours.then_some(here)
+    Ok(ours.then_some(here))
 }
 
 /// What the leaf of `p`'s part and, if given, `q`'s, `reach` across, gives on `pair` from its middle `seed`: the start
-/// Newton's method settles onto inside it and the start of a second curve beside it, or where Newton's method finds
-/// none and the leaf is `near`, the start alternating projections come to rest on inside it.
+/// Newton's method settles onto inside it and the start of a second curve beside it, or where Newton's method settles
+/// nowhere and the leaf is `near`, as where it loses rank near a tangency, the start alternating projections come to
+/// rest on inside it.
 fn begun(
     pair: &Pair<'_>,
     seed: &Here,
@@ -176,9 +178,9 @@ fn begun(
     (reach, near): (f64, bool),
 ) -> (Option<Seed>, Beside) {
     match settled(pair, seed, p, q) {
-        Some(here) => (Some(seed_of(pair, &here)), Beside { twin: twin(pair, &here, reach), ..Beside::default() }),
-        None if near => projected(pair, seed, (p, q), EDGE),
-        None => (None, Beside::default()),
+        Ok(Some(here)) => (Some(seed_of(pair, &here)), Beside { twin: twin(pair, &here, reach), ..Beside::default() }),
+        Err(()) if near => projected(pair, seed, (p, q), EDGE),
+        Ok(None) | Err(()) => (None, Beside::default()),
     }
 }
 
@@ -471,8 +473,8 @@ mod tests {
             p: UvPoint::new(0.0, 0.0),
             q: UvPoint::new(0.95, 0.95),
         };
-        assert!(settled(&pair, &seed, whole, Some(whole)).is_some());
-        assert!(settled(&pair, &seed, whole, Some(corner)).is_none());
+        assert!(matches!(settled(&pair, &seed, whole, Some(whole)), Ok(Some(_))));
+        assert_eq!(settled(&pair, &seed, whole, Some(corner)), Ok(None));
     }
 
     #[test]

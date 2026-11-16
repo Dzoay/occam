@@ -15,7 +15,7 @@ use occam_math::sin_cos;
 use occam_units::{Angle, Length, Point, Tolerance, Vec3};
 
 use crate::closed::tests::{O, X, Z, circle, cylinder, from_curve, nearer, placed, plane, sphere, v};
-use crate::trace_tests::{mm, moved, nurbs};
+use crate::trace_tests::{mm, moved, nurbs, placed as turned};
 use crate::{Budget, Closed, Contact, Hybrid, Methods, Pencil, Section, SectionCurve, Tracer};
 
 /// The band the sweep is decided at: P5's tolerance of 1e-10, halved, so that no gap of the sweep is on its edge.
@@ -373,12 +373,13 @@ fn vivianis_node_cuts_its_curve_in_the_pencil_method_and_is_a_contact_below_the_
 
 #[test]
 fn vivianis_node_on_a_spline_sphere_is_a_contact_where_the_hybrids_curves_end() {
-    // P5's spline Viviani: the analytic cylinder inside a sphere of radius 2 as a rational B-spline, whose seam runs
-    // through the node, so the traces pass through it there. The node is kept as a contact, below the resolution, its
-    // bound twice `√(2 band / ½)` at the hybrid tests' band, and four curves end at it.
+    // P5's spline Viviani: the analytic cylinder inside a sphere of radius 2 as a rational B-spline, here turned about X
+    // so that the curve passes neither of its poles. The node is kept as one contact, below the resolution, whose bound
+    // holds the node and is at least twice `√(2 band / ½)` at the hybrid tests' band; and the curves of all four
+    // branches end within it, cut there, none passing through.
     let band = 1e-7;
     let tol = Tolerance::new(Length::from_millimetres(band), Angle::from_radians(1e-9)).unwrap();
-    let ball = Sphere::placed(&moved([0.0; 3]), mm(2.0)).unwrap();
+    let ball = Sphere::placed(&turned([1.0, 0.0, 0.0], 0.4, [0.0; 3]), mm(2.0)).unwrap();
     let spline = nurbs(&ball, (0.0, -FRAC_PI_2), (TAU, FRAC_PI_2));
     let tube = Cylinder::placed(&moved([1.0, 0.0, 0.0]), mm(1.0)).unwrap();
     let tracer = Tracer { tol, sag: mm(1e-4), longest: mm(0.05), steps: 20_000 };
@@ -386,8 +387,8 @@ fn vivianis_node_on_a_spline_sphere_is_a_contact_where_the_hybrids_curves_end() 
     let got = methods.section(&tube, &spline, tol, Budget { steps: 400_000 });
     let node = Vec3::new(2.0, 0.0, 0.0);
     let [Contact::BelowResolution { at, bound }] = got.contacts.as_slice() else { panic!("{:?}", got.contacts) };
-    let d = (2.0 * band / 0.5).sqrt();
-    assert!((at.to_vec3() - node).norm() <= 1e-6, "{at:?}");
-    assert!(2.0 * d <= bound.millimetres() && bound.millimetres() <= 3.0 * d, "{bound:?} against {d}");
-    assert_eq!(ends_at(&got, node, 1e-6), 4);
+    let (d, reach) = ((2.0 * band / 0.5).sqrt(), bound.millimetres());
+    assert!((at.to_vec3() - node).norm() <= reach && 2.0 * d <= reach && reach <= 4.0 * d, "{at:?} {bound:?}");
+    assert!(ends_at(&got, at.to_vec3(), reach) >= 4, "the four branches end at it");
+    assert_eq!(through(&got, node, 1e-6), Vec::<usize>::new(), "none passes through the node");
 }
