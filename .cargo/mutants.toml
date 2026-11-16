@@ -490,8 +490,10 @@ exclude_re = [
     # The tube, by line. A chord's two ends at one coordinate give the same cubes in either order. Where the bends
     # either side of a chord are equal, or its sag is the tracer's, keeping either gives the same number. A closed
     # trace of one station has one chord from it to itself at the tracer's sag either way, which is the chord its lone
-    # station is given otherwise; an open trace's extra span has no station after it, and is dropped.
+    # station is given otherwise; an open trace's extra span has no station after it, and is dropped. The half cosine
+    # of the turn between a chord's stations is below nought only by rounding, and at nought either branch gives nought.
     "occam-intersect/src/tube\\.rs:117:18: replace < with <= in Tube::file$",
+    "occam-intersect/src/tube\\.rs:259:55: replace > with >= in between$",
     "occam-intersect/src/tube\\.rs:(164:47|165:16): replace > with >= in Tube::radius$",
     "occam-intersect/src/tube\\.rs:175:31: replace && with \\|\\| in Tube::add$",
     "occam-intersect/src/tube\\.rs:175:47: replace > with >= in Tube::add$",

@@ -467,6 +467,25 @@ mod tests {
     }
 
     #[test]
+    fn a_point_off_the_curve_is_on_it_where_the_gap_it_makes_between_the_surfaces_is_within_the_band() {
+        // On the torus's inner circle the surfaces meet at a sine of 0.01, so the band places the curve only to within
+        // 1e-5 across it: a point 5e-6 outside it is on it, and one 5e-5 outside is not.
+        let torus = Torus::placed(&moved([0.0; 3]), mm(10.0), mm(1.0)).unwrap();
+        let height = (1.0 - 1e-4_f64).sqrt();
+        let plane = level(height);
+        let pair = Pair::new(&plane, &torus, tol());
+        let on = |radius: f64, angle: f64| {
+            let (sin, cos) = sin_cos(angle);
+            pair.seed(start_near(&plane, &torus, point(radius * cos, radius * sin, height)))
+        };
+        let ends = [on(9.99, 0.0), on(9.99, 0.2)];
+        let mut decide = Decide::new(BAND);
+        let near = same(&pair, &on(9.99 + 5e-6, 0.1), ends, 0.5, &mut decide);
+        let far = same(&pair, &on(9.99 + 5e-5, 0.1), ends, 0.5, &mut decide);
+        assert_eq!((near, far), (Ok(true), Ok(false)));
+    }
+
+    #[test]
     fn the_cubics_point_has_the_parameters_of_its_feet_on_both_surfaces_held_by_them() {
         // Two curved graphs, each held by its parameters, which meet along one curve through a corner of both: a quarter
         // of the way along the cubic between two stations of its trace, the feet on both are as near as the cubic is to
