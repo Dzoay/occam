@@ -44,7 +44,7 @@ pub(super) fn scale(a: P2, k: f64) -> P2 {
     [a[0] * k, a[1] * k]
 }
 
-fn dot(a: P2, b: P2) -> f64 {
+pub(super) fn dot(a: P2, b: P2) -> f64 {
     a[0] * b[0] + a[1] * b[1]
 }
 
@@ -274,7 +274,7 @@ fn reaches(arc: Flat, p: P2) -> bool {
 }
 
 /// Where the pieces `x` and `y` cross or meet, each place on both.
-fn crossings(x: Flat, y: Flat) -> Vec<P2> {
+pub(super) fn crossings(x: Flat, y: Flat) -> Vec<P2> {
     let found = match (x, y) {
         (Flat::Seg { a, b }, Flat::Seg { a: c, b: d }) => segments_cross(a, b, c, d).into_iter().collect(),
         (Flat::Seg { a, b }, Flat::Arc { c, r, .. }) | (Flat::Arc { c, r, .. }, Flat::Seg { a, b }) => {
