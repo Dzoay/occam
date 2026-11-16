@@ -10,10 +10,12 @@
 //! next, two lengths for each surface are decided against the band through occam-math's predicates, and tallied: the
 //! curve's distance from the surface, to first order the part along the surface's normal of the gap between the curve
 //! and the surface's point at the image, twice over; and that whole gap, which is how far the image maps from the
-//! curve. Where either is not certainly within the band, the span between chosen stations gains the station halfway
-//! along it, or where it has none, a new one that the trace's corrector settles onto both surfaces halfway between its
-//! ends, and the curves are made again: until every length is within the band, no span that misses can gain a
-//! station, or 16 rounds are done. New stations are for a surface parametrized with less smoothness than its shape, as
+//! curve. Refining aims at half the band: where either length, twice over, is not certainly within it, the span
+//! between chosen stations gains the station halfway along it, or where it has none, a new one that the trace's
+//! corrector settles onto both surfaces halfway between its ends, and the curves are made again: until every length
+//! meets the aim, no span that misses can gain a station, or 16 rounds are done. The answer is the band: where a length
+//! misses the aim, it is decided again as it is. Aiming at the band itself left a loop whose spans all fit at its edge
+//! refined one span a round, each tipping its neighbour over, for longer than the rounds allow. New stations are for a surface parametrized with less smoothness than its shape, as
 //! a rational circle is at its knots, where an image is less smooth than its curve.
 //!
 //! The curve's fit is twice its largest distance from a surface: doubling leaves as much again for what lies between
@@ -289,6 +291,17 @@ impl Found {
         }
     }
 
+    /// Whether `length` at `at`, twice over, is certainly within the band, as refining aims: within half of it, so that
+    /// a span refined beside one does not tip it over the band. Where it is not, `length` itself is decided as the
+    /// answer, and the span is refined. An aim the band cannot place is refined too, and only the answer reported.
+    fn aim(&mut self, decide: &mut Decide, length: Interval, at: Vec3) -> bool {
+        if decide.side(Interval::exact(2.0) * length, at) == Ok(Side::Within) {
+            return true;
+        }
+        self.within(decide, length, at);
+        false
+    }
+
     /// Notes that span `span` missed.
     fn miss(&mut self, span: usize) {
         if self.missed.last() != Some(&span) {
@@ -308,7 +321,7 @@ fn gaps(surface: &dyn Surface, uv: UvPoint, at: Vec3) -> (Interval, Interval) {
 }
 
 /// The curve's distance from each surface at `samples`, twice over, and the gap between it and each surface's point at
-/// its image, each decided against the band.
+/// its image, each decided against the band as refining aims and, where it misses, as the answer.
 fn measure(
     surfaces: [&dyn Surface; 2],
     through: &Through,
@@ -324,8 +337,8 @@ fn measure(
             let (off, whole) = gaps(*surface, flat(image.point(t)), at);
             found.off.note(off, at);
             found.image.note(whole, at);
-            let near = found.within(decide, Interval::exact(2.0) * off, at);
-            let maps = found.within(decide, whole, at);
+            let near = found.aim(decide, Interval::exact(2.0) * off, at);
+            let maps = found.aim(decide, whole, at);
             missed |= !(near && maps);
         }
         if missed {

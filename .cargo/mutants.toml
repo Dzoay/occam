@@ -369,9 +369,9 @@ exclude_re = [
     # coordinate a fit's floor is taken from, a fit at its floor, and an image's largest step to a foot. Where the
     # largest gap is found twice, or an image's gap equals the curve's fit, the fit reached is the same, and the place
     # named is as far as the other.
-    "occam-intersect/src/fit\\.rs:251:57: replace > with >= in Worst::note$",
-    "occam-intersect/src/fit\\.rs:392:65: replace > with >= in floored$",
-    "occam-intersect/src/fit\\.rs:393:28: replace > with >= in floored$",
-    "occam-intersect/src/fit\\.rs:418:48: replace > with >= in image_fit$",
-    "occam-intersect/src/fit\\.rs:508:42: replace > with >= in fit_piece$",
+    "occam-intersect/src/fit\\.rs:253:57: replace > with >= in Worst::note$",
+    "occam-intersect/src/fit\\.rs:405:65: replace > with >= in floored$",
+    "occam-intersect/src/fit\\.rs:406:28: replace > with >= in floored$",
+    "occam-intersect/src/fit\\.rs:431:48: replace > with >= in image_fit$",
+    "occam-intersect/src/fit\\.rs:521:42: replace > with >= in fit_piece$",
 ]

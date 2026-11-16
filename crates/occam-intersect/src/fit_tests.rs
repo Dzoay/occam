@@ -406,3 +406,35 @@ fn a_piece_of_two_stations_is_a_line_and_one_of_fewer_is_nothing() {
         assert!(found.curves.is_empty() && found.failures.is_empty(), "{} stations", few.len());
     }
 }
+
+#[test]
+fn a_loop_whose_steps_all_fit_at_the_edge_of_the_band_is_refined_within_its_rounds() {
+    // The plane z = 0.5 across a torus of radii 3 and 1, traced round its outer circle: at every fourth station, a
+    // cubic lies within 5e-8 of the torus all the way round, at the edge of half the band, so that refining a span
+    // tips its neighbour over it, and halving each in turn walked round the loop for longer than the rounds allow.
+    let (plane, torus) = (level(0.5), Torus::placed(&moved([0.0; 3]), mm(3.0), mm(1.0)).unwrap());
+    let start = start_near(&plane, &torus, point(3.0 + 0.75_f64.sqrt(), 0.0, 0.52));
+    let trace = tracer(1e-4, 0.5, 20_000).trace(&plane, &torus, start);
+    assert_eq!(trace.ends, [End::Closed; 2]);
+    let Fitted { curves, failures, tally } = fit(&plane, &torus, &trace, tol());
+    assert!(failures.is_empty(), "{failures:?}");
+    let [curve] = curves.as_slice() else { panic!("{}", curves.len()) };
+    let fit = curve.curve.fit().unwrap().millimetres();
+    assert!(fit <= BAND && tally.undecided == 0, "{fit:e} {tally:?}");
+    lies_within("the torus's outer circle", curve, (&plane, &torus), (trace.stations.len().saturating_mul(4), fit));
+}
+
+#[test]
+fn refining_aims_at_half_the_band_and_answers_at_the_band() {
+    // Parallel planes, between which no station can be settled: two tenths of the band apart the curve through its
+    // first three stations meets the aim, and three tenths apart it is within the band but not the aim, so that every
+    // station is chosen. Neither is a failure.
+    for (height, poles) in [(0.2 * BAND, 3), (0.3 * BAND, 10)] {
+        let (flat, above, trace) = on_two_planes(height);
+        let Fitted { curves, failures, .. } = fit(flat.as_ref(), above.as_ref(), &trace, tol());
+        assert!(failures.is_empty(), "{height:e}: {failures:?}");
+        let [curve] = curves.as_slice() else { panic!("{}", curves.len()) };
+        let range = curve.curve.range();
+        assert_eq!(curve.curve.to_bspline(range.lo, range.hi).unwrap().poles.len(), poles, "{height:e}");
+    }
+}
