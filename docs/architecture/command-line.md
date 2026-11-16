@@ -13,7 +13,7 @@ and gives one result per id. `occam --help`, and `--help` after any command, say
 | `occam adjacent --model part.occam edge:41/1` | Lists each entity's neighbours |
 | `occam describe --model part.occam edge:41/1 face:5/1` | Describes entities, with the [one resolver](reports.md#how-an-agent-learns-what-an-entity-is) |
 | `occam check --model part.occam` | Checks the whole model |
-| `occam mesh` | Meshes the model (`view`) |
+| `occam mesh --model part.occam --deflection 0.1` | Meshes the model, writes its [buffers](mesh-and-renderer.md#the-buffers) beside it, and says how each face meshed |
 | `occam pick` | The face or edge a ray hits first (`view`) |
 | `occam view`, `occam selection`, `occam highlight` | The [live view](live-view.md): the page, what the person selected, what the agent shows (`view`) |
 | `occam skill --install` | Copies the occam skill into this project's `.claude/skills/`, for the [live view](live-view.md) (`view`) |
@@ -37,7 +37,9 @@ flowchart LR
 - **One answer per id.** An id that names nothing is `topo.stale-id` for that id alone, and the others are answered.
 - **The JSON form** of `list`, `adjacent`, `describe` and `check` is `{"schema", "ok", "answers", "reports"}`: an answer
   per id or kind, each with the report refusing it if it has none, and the reports that refused the command whole or
-  that the check found. `run` gives the run's own form.
+  that the check found. `run` gives the run's own form. `mesh` adds the limits, the buffers' counts and the file it
+  wrote; each face's answer is its vertex block and its triangles, and its `reports` refuse edges or say where the
+  watertight check found the mesh open. A face or edge refused offers `use-deflection`, which `--deflection` takes.
 - **In words,** answers go to standard output and refusals to standard error.
 - **The exit status** is 0 when everything asked was answered, 1 when anything was refused, and 2 when the command line
   is wrong (`cli.bad-argument`, naming the argument, what was given and what was wanted).

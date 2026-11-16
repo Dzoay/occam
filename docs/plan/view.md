@@ -58,18 +58,6 @@ detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes af
 
 ## Steps
 
-### `view.buffers`
-
-The mesh as [the renderer contract](../architecture/mesh-and-renderer.md#the-renderer-contract) wants it: flat arrays of
-`f64` positions, unit normals, each vertex's `(u, v)` on its face (kept for [write-through](../decisions/2026-11-14-write-through-after-the-first-release.md)) and `u32` indices,
-with a vertex block and a triangle range per face. After an edit, only the faces it touched and those sharing an edge
-whose samples changed are meshed again; the rest keep their blocks bit for bit. `occam mesh` writes them, with a
-`--json` summary, and `occam-wasm` exposes the same.
-
-*Failing test first:* a cube's and a cylinder's buffers are asserted (counts, strides, per-face ranges, indices in
-range, and each vertex within the band of its face's surface at its `(u, v)`); adding a second primitive leaves the
-first's blocks unchanged and unmeshed; `occam mesh --json` gives one result per face.
-
 ### `view.workers`
 
 `occam`'s `Session` made real and wrapped by `occam-wasm`. One editing worker holds the model, runs requests and

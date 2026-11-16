@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn a_bad_argument_is_named_with_what_was_given_and_wanted() {
-        let commands = Some("run, list, adjacent, describe, check, distance".to_string());
+        let commands = Some("run, list, adjacent, describe, check, mesh, distance".to_string());
         assert_eq!(
             wrong(&["cut"]),
             ("COMMAND".to_string(), Some("cut".to_string()), commands.clone()),

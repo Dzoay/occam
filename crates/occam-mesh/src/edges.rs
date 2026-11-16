@@ -42,6 +42,11 @@ pub struct Edges {
 }
 
 impl Edges {
+    /// `list`, sampled to `limits`, in id order.
+    pub(crate) const fn new(list: Vec<(Id<Edge>, Result<EdgeSamples, Report>)>, limits: Limits) -> Self {
+        Self { list, limits }
+    }
+
     /// The limits the edges were sampled to.
     #[must_use]
     pub const fn limits(&self) -> Limits {
@@ -72,16 +77,31 @@ impl Edges {
 /// fits, and the other edges are sampled as if it were not there.
 #[must_use]
 pub fn sample_edges(exec: &Exec, model: &Snapshot, limits: Limits) -> Edges {
+    let list = sample_some(exec, model, &model.ids::<Face>(), &|_| true, limits);
+    Edges { list, limits }
+}
+
+/// The edges `faces` use that `wanted` keeps, each sampled once on `exec` as finely as the finest of `faces` that use
+/// it asks within `limits`, in id order; the same bits at any thread count. Every face that uses a wanted edge must be
+/// among `faces`, in id order, for the edge to take the step [`sample_edges`] gives it.
+pub(crate) fn sample_some(
+    exec: &Exec,
+    model: &Snapshot,
+    faces: &[Id<Face>],
+    wanted: &dyn Fn(Id<Edge>) -> bool,
+    limits: Limits,
+) -> Vec<(Id<Edge>, Result<EdgeSamples, Report>)> {
     let model = Arc::new(model.clone());
-    let faces: Arc<[Id<Face>]> = model.ids::<Face>().into();
+    let faces: Arc<[Id<Face>]> = faces.into();
     let (read, of) = (Arc::clone(&model), Arc::clone(&faces));
     let bends = exec.map(faces.len(), Grain::Each, move |k| of.get(k).map_or(0.0, |&f| curvature::of_face(&read, f)));
-    let jobs: Arc<[(Id<Edge>, f64)]> = finest(&model, &faces, &bends).into();
+    let jobs: Vec<(Id<Edge>, f64)> = finest(&model, &faces, &bends).into_iter().filter(|&(e, _)| wanted(e)).collect();
+    let jobs: Arc<[(Id<Edge>, f64)]> = jobs.into();
     let (read, of) = (Arc::clone(&model), Arc::clone(&jobs));
     let sampled = exec.map(jobs.len(), Grain::Each, move |k| {
         of.get(k).map(|&(edge, bend)| (edge, sample_edge(&read, edge, bend, limits)))
     });
-    Edges { list: sampled.into_iter().flatten().collect(), limits }
+    sampled.into_iter().flatten().collect()
 }
 
 /// Each edge `faces` use, in id order, with the largest curvature of the faces that use it, `bends` holding each face's.
