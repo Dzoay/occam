@@ -8,16 +8,21 @@ use std::f64::consts::TAU;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use occam_geom::{BsplineSurface, Content, Cylinder, Plane, Scratch, SplineSurface, Surface, Torus};
-use occam_math::Exec;
-use occam_report::{Code, Fault, NamedValue, Reason, Value};
-use occam_units::{Angle, Direction, Placement, Point, UvPoint, Vec3, Vector, World};
+use occam_geom::{
+    BsplineSurface, Content, Cylinder, Domain, FamilyName, Jet1, Jet2, ParamRange, Parametric, Plane, Scratch, Shape,
+    SplineSurface, Surface, Torus, UvBox, Wrap,
+};
+use occam_math::{Exec, Real};
+use occam_report::{Code, Fault, NamedValue, Reason, Report, Value};
+use occam_units::{
+    Angle, Bounds, Direction, ParamKind, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, Vector, World,
+};
 
 use crate::decide::Decide;
 use crate::on::On;
 use crate::trace_tests::{BAND, ball, gap, level, mm, moved, nurbs_cylinder, point, tol, tracer, upright};
 use crate::traverse::{DEPTH, held, traverse};
-use crate::{Answer, Budget, Contact, Hybrid, Method, Methods, Section, SurfacePair, Work, sections};
+use crate::{Answer, Budget, Contact, Hybrid, Method, Methods, Section, SurfacePair, Tracer, Work, sections};
 
 /// A turn and a shift that align nothing with an axis, as P5 placed every case.
 fn rigid() -> Placement<World, World> {
@@ -110,8 +115,11 @@ fn alone(method: Hybrid) -> Methods {
     Methods::new(vec![Box::new(method)])
 }
 
-/// A budget no case here comes near.
-const PLENTY: Budget = Budget { steps: 50_000_000 };
+/// A budget about four times what a case spends, so that a subdivision sent on without end runs out of it at once,
+/// not out of time or memory.
+const fn within(steps: u32) -> Budget {
+    Budget { steps }
+}
 
 /// The hybrid for the many-loops surfaces.
 fn for_loops() -> Hybrid {
@@ -120,9 +128,9 @@ fn for_loops() -> Hybrid {
 
 /// Checks the section of P5's many-loops surface for `l` against its answer: `l^2 + 1` closed curves, one about each
 /// peak and one about the domain, each where `wave(u) + wave(v)` is the cut, with every decision decided.
-fn the_loops_are_all_found(l: usize) {
+fn the_loops_are_all_found(l: usize, budget: Budget) {
     let (plane, spline) = many_loops(l);
-    let found = alone(for_loops()).section(&plane, &spline, tol(), PLENTY);
+    let found = alone(for_loops()).section(&plane, &spline, tol(), budget);
     assert_eq!(found.method, Some("hybrid"));
     assert!(found.failures.is_empty(), "{:?}", found.failures);
     assert!(found.tally.decided > 0 && found.tally.undecided == 0, "{:?}", found.tally);
@@ -166,13 +174,13 @@ fn cell(at: f64, l: usize) -> usize {
 
 #[test]
 fn p5s_25_component_surface_against_a_plane_gives_all_17_curves() {
-    the_loops_are_all_found(4);
+    the_loops_are_all_found(4, within(70_000));
 }
 
 #[test]
 #[ignore = "P5's 625-component surface takes minutes in a debug build, so it runs nightly: `just hybrid-many-loops`"]
 fn p5s_625_component_surface_against_a_plane_gives_all_577_curves() {
-    the_loops_are_all_found(24);
+    the_loops_are_all_found(24, within(1_300_000));
 }
 
 /// The biquadratic graph over `[-1, 1]^2` of `ax x^2 + bx x + ay y^2 + by y`, placed rigidly: its parameters are `x`
@@ -197,7 +205,7 @@ fn graph((ax, bx): (f64, f64), (ay, by): (f64, f64)) -> SplineSurface {
 
 /// Two curved graphs that differ by `x - 0.7 y + 0.25 x^2 - 0.15 y^2`, which is nought along one curve across the
 /// square, through the middle of both domains: a corner of every level of both subdivisions from the second on.
-fn crossing_at_a_corner() -> (SplineSurface, SplineSurface) {
+pub(crate) fn crossing_at_a_corner() -> (SplineSurface, SplineSurface) {
     (graph((0.3, 0.5), (0.2, -0.4)), graph((0.05, -0.5), (0.35, 0.3)))
 }
 
@@ -206,7 +214,8 @@ fn starts(a: &dyn Surface, b: &dyn Surface, method: Hybrid) -> Vec<Vec3> {
     let on = On::Here(a, b);
     let held = held(a, b, tol()).unwrap();
     let mut decide = Decide::new(BAND);
-    let traversal = traverse(on, (held, method.leaf.millimetres()), &mut Work::of(PLENTY), &mut decide).unwrap();
+    let traversal =
+        traverse(on, (held, method.leaf.millimetres()), &mut Work::of(within(25_000)), &mut decide).unwrap();
     crate::hybrid::starts(on, held, tol(), traversal.leaves, &mut decide)
 }
 
@@ -214,7 +223,7 @@ fn starts(a: &dyn Surface, b: &dyn Surface, method: Hybrid) -> Vec<Vec3> {
 fn a_curve_through_a_corner_both_subdivisions_share_is_found_once() {
     let (a, b) = crossing_at_a_corner();
     let method = hybrid(1e-4, 0.05, 0.2);
-    let found = alone(method).section(&a, &b, tol(), PLENTY);
+    let found = alone(method).section(&a, &b, tol(), within(25_000));
     assert!(found.failures.is_empty(), "{:?}", found.failures);
     assert!(found.tally.decided > 0 && found.tally.undecided == 0, "{:?}", found.tally);
     let [curve] = found.curves.as_slice() else { panic!("{} curves", found.curves.len()) };
@@ -234,7 +243,7 @@ fn a_curve_through_a_corner_both_subdivisions_share_is_found_once() {
 fn a_rational_cylinder_on_its_analytic_twin_is_an_unresolved_overlap_with_no_curves() {
     let twin = Cylinder::placed(&moved([0.0; 3]), mm(2.0)).unwrap();
     let rational = nurbs_cylinder((0.0, TAU));
-    let found = alone(hybrid(1e-4, 0.05, 0.25)).section(&twin, &rational, tol(), PLENTY);
+    let found = alone(hybrid(1e-4, 0.05, 0.25)).section(&twin, &rational, tol(), within(10_000));
     assert_eq!(found.method, Some("hybrid"));
     assert!(found.curves.is_empty() && found.contacts.is_empty(), "{} curves", found.curves.len());
     let [report] = found.failures.as_slice() else { panic!("{:?}", found.failures) };
@@ -253,7 +262,7 @@ fn a_rational_cylinder_on_its_analytic_twin_is_an_unresolved_overlap_with_no_cur
 fn a_torus_is_subdivided_against_a_planes_implicit_form_where_the_plane_has_no_ends() {
     // They meet in two circles about the axis, of radii 3 - sqrt(0.75) and 3 + sqrt(0.75).
     let torus = Torus::placed(&moved([0.0; 3]), mm(3.0), mm(1.0)).unwrap();
-    let found = alone(hybrid(1e-5, 0.1, 0.5)).section(&level(0.5), &torus, tol(), PLENTY);
+    let found = alone(hybrid(1e-5, 0.1, 0.5)).section(&level(0.5), &torus, tol(), within(180_000));
     assert!(found.failures.is_empty(), "{:?}", found.failures);
     let radius = |p: Point<World>| {
         let v = p.to_vec3();
@@ -269,7 +278,7 @@ fn a_torus_is_subdivided_against_a_planes_implicit_form_where_the_plane_has_no_e
 #[test]
 fn a_sphere_touching_a_plane_is_one_contact() {
     let (plane, sphere) = (upright(0.0), ball(2.0, [2.0, 0.0, 0.0]));
-    let found = alone(hybrid(1e-4, 0.05, 0.25)).section(&plane, &sphere, tol(), PLENTY);
+    let found = alone(hybrid(1e-4, 0.05, 0.25)).section(&plane, &sphere, tol(), within(2_000));
     assert!(found.curves.is_empty() && found.failures.is_empty(), "{} {:?}", found.curves.len(), found.failures);
     let [Contact::Point { at, .. }] = found.contacts.as_slice() else { panic!("{:?}", found.contacts) };
     assert!(at.to_vec3().norm() < 1e-6, "where they touch: {at:?}");
@@ -307,7 +316,7 @@ fn parts_still_larger_than_a_leaf_when_halved_as_far_as_they_go_are_reported_unr
     // Only the parts at the corner come within the band of the plane, and none halved 48 times is as small as these
     // leaves.
     let (plane, patch) = touching_at_a_corner();
-    let found = alone(hybrid(1e-4, 0.05, 1e-12)).section(&plane, &patch, tol(), PLENTY);
+    let found = alone(hybrid(1e-4, 0.05, 1e-12)).section(&plane, &patch, tol(), within(2_000));
     assert!(found.curves.is_empty() && found.contacts.is_empty());
     let [report] = found.failures.as_slice() else { panic!("{:?}", found.failures) };
     let kind = (report.code, report.fault, report.reason);
@@ -325,7 +334,7 @@ fn parts_still_larger_than_a_leaf_when_halved_as_far_as_they_go_are_reported_unr
 fn a_pair_with_no_surface_it_can_subdivide_is_declined() {
     let (a, b) = (level(0.0), upright(0.0));
     let mut section = Section::default();
-    let answer = for_loops().attempt(&a, &b, tol(), &mut Work::of(PLENTY), &mut section);
+    let answer = for_loops().attempt(&a, &b, tol(), &mut Work::of(within(1_000)), &mut section);
     assert_eq!(answer.ok(), Some(Answer::Declined));
 }
 
@@ -355,15 +364,109 @@ fn sections_are_the_same_bits_at_one_and_many_threads() {
         (twin, Arc::new(nurbs_cylinder((0.0, TAU)))),
     ];
     let (methods, pairs): (_, Arc<[SurfacePair]>) = (Arc::new(alone(for_loops())), pairs.into());
-    let one = sections(&Exec::serial(), Arc::clone(&methods), Arc::clone(&pairs), tol(), PLENTY);
+    let one = sections(&Exec::serial(), Arc::clone(&methods), Arc::clone(&pairs), tol(), within(70_000));
     let many = Exec::threads(NonZeroUsize::new(4).unwrap()).unwrap();
-    let other = sections(&many, Arc::clone(&methods), Arc::clone(&pairs), tol(), PLENTY);
+    let other = sections(&many, Arc::clone(&methods), Arc::clone(&pairs), tol(), within(70_000));
     assert_eq!(one.len(), 3);
     assert!(
         one.iter().all(|found| found.method == Some("hybrid")) && one[0].curves.len() == 5 && one[1].curves.len() == 1
     );
     for ((alone, together), (a, b)) in one.iter().zip(&other).zip(pairs.iter()) {
         assert_eq!(digest(together), digest(alone), "{} threads", many.thread_count());
-        assert_eq!(digest(&methods.section(a.as_ref(), b.as_ref(), tol(), PLENTY)), digest(alone), "on this thread");
+        assert_eq!(
+            digest(&methods.section(a.as_ref(), b.as_ref(), tol(), within(70_000))),
+            digest(alone),
+            "on this thread"
+        );
     }
+}
+
+#[test]
+fn the_traces_and_fits_work_to_the_sections_tolerance_not_the_tracers_own() {
+    let coarse = Tolerance::new(mm(1e-2), Angle::from_radians(1e-3)).unwrap();
+    let method = Hybrid { tracer: Tracer { tol: coarse, ..tracer(1e-4, 0.1, 20_000) }, leaf: mm(0.5) };
+    let found = alone(method).section(&level(0.5), &ball(2.0, [0.0; 3]), tol(), within(50_000));
+    assert!(found.failures.is_empty() && !found.curves.is_empty(), "{:?}", found.failures);
+    for curve in &found.curves {
+        let fit = curve.curve.fit().unwrap().millimetres();
+        assert!(fit <= BAND, "fitted to the section's band: {fit:e}");
+    }
+}
+
+/// A plane over the unit square that presents no analytic form, and whose box over any part is `bounds`, which a test
+/// places to the bit.
+struct Boxed {
+    plane: Plane,
+    bounds: Bounds,
+}
+
+impl Parametric for Boxed {
+    fn eval_point<R: Real>(&self, uv: UvPoint<R>) -> Point<World, R> {
+        self.plane.eval_point(uv)
+    }
+
+    fn eval_first<R: Real>(&self, uv: UvPoint<R>) -> Jet1<R> {
+        self.plane.eval_first(uv)
+    }
+
+    fn eval_second<R: Real>(&self, uv: UvPoint<R>) -> Jet2<R> {
+        self.plane.eval_second(uv)
+    }
+
+    fn derivatives(
+        &self,
+        uv: UvPoint,
+        order: u8,
+        out: &mut Vec<Tangent<World>>,
+        scratch: &mut Scratch,
+    ) -> Result<(), Report> {
+        Parametric::derivatives(&self.plane, uv, order, out, scratch)
+    }
+
+    fn domain(&self) -> Domain {
+        let unit = ParamRange { lo: 0.0, hi: 1.0, wrap: Wrap::Open, kind: ParamKind::Length };
+        Domain { u: unit, v: unit }
+    }
+
+    fn bounds(&self, _: UvBox) -> Bounds {
+        self.bounds
+    }
+
+    fn invert(
+        &self,
+        p: Point<World>,
+        seed: Option<UvPoint>,
+        tol: Tolerance,
+        scratch: &mut Scratch,
+    ) -> Result<UvPoint, Report> {
+        Parametric::invert(&self.plane, p, seed, tol, scratch)
+    }
+
+    fn family(&self) -> FamilyName {
+        FamilyName("boxed")
+    }
+
+    fn content(&self, out: &mut Content) {
+        Parametric::content(&self.plane, out);
+    }
+
+    fn shape(&self) -> Shape {
+        Parametric::shape(&self.plane)
+    }
+}
+
+#[test]
+fn a_box_test_the_band_cannot_decide_keeps_the_part_and_is_reported() {
+    // Two planes 5 apart whose boxes are said to be the band apart along x, exactly: the gap's rounding reaches across
+    // the edge of the band, so the test is undecided, the pair kept, and `decide.undecided` given.
+    let corner = |x, y, z| Point::from_vec3(Vec3::new(x, y, z));
+    let low = Boxed { plane: level(0.0), bounds: Bounds::of([corner(-1.0, 0.0, 0.0), corner(0.0, 1.0, 1.0)]).unwrap() };
+    let high =
+        Boxed { plane: level(5.0), bounds: Bounds::of([corner(BAND, 0.0, 0.0), corner(1.0, 1.0, 1.0)]).unwrap() };
+    let found = alone(hybrid(1e-4, 0.05, 2.0)).section(&low, &high, tol(), within(1_000));
+    assert!(found.curves.is_empty() && found.contacts.is_empty());
+    let [report] = found.failures.as_slice() else { panic!("{:?}", found.failures) };
+    assert_eq!(report.code, Code::Undecided);
+    assert_eq!(report.value("quantity").and_then(NamedValue::number), Some(BAND));
+    assert_eq!(found.tally.undecided, 1, "{:?}", found.tally);
 }

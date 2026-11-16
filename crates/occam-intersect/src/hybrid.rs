@@ -369,3 +369,132 @@ fn reports(notes: &Notes, tol: Tolerance, found: &Section) -> Vec<Report> {
 pub(crate) fn starts(on: On<'_>, held: Held, tol: Tolerance, cells: Vec<Cell>, decide: &mut Decide) -> Vec<Vec3> {
     leaves(on, held, tol, cells, decide, &mut Notes::default()).seeds.iter().map(|seed| seed.at).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use occam_geom::{ParamRange, Wrap};
+    use occam_math::Tally;
+    use occam_report::Code;
+    use occam_units::{ParamKind, Point};
+
+    use super::*;
+    use crate::hybrid_tests::crossing_at_a_corner;
+    use crate::trace::Station;
+    use crate::trace_tests::{BAND, level, tol, tracer, upright};
+
+    fn patch(u: (f64, f64), v: (f64, f64)) -> UvBox {
+        UvBox::new(UvPoint::new(u.0, v.0), UvPoint::new(u.1, v.1))
+    }
+
+    /// A trace through `points`, at their own `x` and `y` as parameters on both surfaces, ending as `ends`.
+    fn trace(points: &[(f64, f64, f64)], ends: [End; 2]) -> Trace {
+        let station = |&(x, y, z): &(f64, f64, f64)| {
+            let uv = UvPoint::new(x, y);
+            Station { at: Point::from_vec3(Vec3::new(x, y, z)), on_a: uv, on_b: uv }
+        };
+        Trace {
+            stations: points.iter().map(station).collect(),
+            crossings: vec![],
+            ends,
+            steps: 0,
+            tally: Tally::default(),
+            undecided: vec![],
+        }
+    }
+
+    /// `count` points from `from` to `to`, both included.
+    fn run(from: (f64, f64), to: (f64, f64), count: u32) -> Vec<(f64, f64, f64)> {
+        let at = |k: u32| {
+            let f = f64::from(k) / f64::from(count.saturating_sub(1));
+            (from.0 + (to.0 - from.0) * f, from.1 + (to.1 - from.1) * f, 0.0)
+        };
+        (0..count).map(at).collect()
+    }
+
+    #[test]
+    fn a_point_is_inside_a_part_a_hair_past_its_edges_and_inside_the_domain() {
+        let range = ParamRange { lo: 0.0, hi: 10.0, wrap: Wrap::Open, kind: ParamKind::Knot };
+        let (part, whole) = (patch((3.0, 4.0), (1.0, 2.0)), Domain { u: range, v: range });
+        let hair = 1.0 / 1024.0;
+        for (u, v, want) in [
+            (3.5, 1.5, true),
+            (3.0 + 0.5 * hair, 1.5, true),
+            (4.0 - 0.5 * hair, 1.5, true),
+            (3.0 - 0.5 * hair, 1.5, true),
+            (4.0 + 0.5 * hair, 1.5, true),
+            (4.0 + 1.2 * hair, 1.5, false),
+            (3.0 - 1.2 * hair, 1.5, false),
+            (3.5, 2.0 + 1.2 * hair, false),
+            (3.5, 1.0 - 1.2 * hair, false),
+            (8.0, 1.5, false),
+            (3.5, 8.0, false),
+            (8.0, 8.0, false),
+        ] {
+            assert_eq!(inside(part, UvPoint::new(u, v), whole), want, "{u} {v}");
+        }
+        let at_the_end = patch((9.0, 10.0), (1.0, 2.0));
+        assert!(!inside(at_the_end, UvPoint::new(10.0 + 0.5 * hair, 1.5), whole), "a hair past the domain");
+    }
+
+    #[test]
+    fn a_start_point_from_two_parts_lies_in_both() {
+        // From the middle of the first and a corner of the second, the start settles on the first, far from that corner.
+        let (a, b) = crossing_at_a_corner();
+        let pair = Pair { p: &a, q: &b, other: Other::Parametric, swapped: false, tol: tol() };
+        let (whole, corner) = (patch((-1.0, 1.0), (-1.0, 1.0)), patch((0.9, 1.0), (0.9, 1.0)));
+        let seed = Here {
+            at: a.point(UvPoint::new(0.0, 0.0)).to_vec3(),
+            p: UvPoint::new(0.0, 0.0),
+            q: UvPoint::new(0.95, 0.95),
+        };
+        assert!(settled(&pair, &seed, whole, Some(whole)).is_some());
+        assert!(settled(&pair, &seed, whole, Some(corner)).is_none());
+    }
+
+    #[test]
+    fn start_points_are_taken_in_rounds_of_every_so_many() {
+        let order = spread(70);
+        let mut sorted = order.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, (0..70).collect::<Vec<_>>());
+        assert_eq!((order.len(), order.get(..4)), (70, Some(&[0, 3, 6, 9][..])));
+        assert_eq!(spread(0), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn a_trace_found_again_is_dropped_by_its_first_middle_and_last_stations() {
+        // A bump from 0.3 to 0.7 along the line, 0.3 high: a curve of its own, though it runs on the line either side,
+        // its second station included, and leaves it only in the middle.
+        let line = trace(&run((0.0, 0.0), (1.0, 0.0), 21), [End::Edge; 2]);
+        let mut bump = run((0.0, 0.0), (0.3, 0.0), 7);
+        for (from, to, count) in [((0.3, 0.0), (0.5, 0.3), 6), ((0.5, 0.3), (0.7, 0.0), 6), ((0.7, 0.0), (1.0, 0.0), 7)]
+        {
+            bump.extend(run(from, to, count).into_iter().skip(1));
+        }
+        let again = trace(&run((0.0, 1e-5), (1.0, 1e-5), 21), [End::Edge; 2]);
+        let (mut decide, mut notes, mut section) = (Decide::new(BAND), Notes::default(), Section::default());
+        let found = vec![line.clone(), trace(&bump, [End::Edge; 2]), again];
+        let kept = distinct(found, &tracer(1e-4, 0.1, 100), &mut decide, &mut notes, &mut section);
+        assert_eq!(kept.iter().map(|t| t.stations.len()).collect::<Vec<_>>(), [21, 23]);
+        assert_eq!(kept[0], line);
+    }
+
+    #[test]
+    fn a_stalled_trace_is_reported_not_fitted_and_a_touch_alone_is_a_contact() {
+        // The planes z = 0 and x = 0 meet along the y axis.
+        let (a, b) = (level(0.0), upright(0.0));
+        let mut scratch = occam_geom::Scratch::default();
+        let mut on_y = |y: f64| {
+            let at = Point::from_vec3(Vec3::new(0.0, y, 0.0));
+            let on_b = b.invert(at, None, tol(), &mut scratch).unwrap();
+            Station { at, on_a: UvPoint::new(0.0, y), on_b }
+        };
+        let stations: Vec<Station> = (0..11).map(|k| on_y(0.05 * f64::from(k))).collect();
+        let stalled = Trace { stations, ends: [End::Stalled, End::Edge], ..trace(&[], [End::Edge; 2]) };
+        let touch = Trace { stations: vec![on_y(2.0)], ends: [End::Touch; 2], ..trace(&[], [End::Edge; 2]) };
+        let mut section = Section::default();
+        finish(On::Here(&a, &b), &tracer(1e-4, 0.1, 100), &[stalled, touch], &mut section);
+        assert_eq!((section.curves.len(), section.contacts.len()), (0, 1));
+        assert_eq!(section.failures.iter().map(|r| r.code).collect::<Vec<_>>(), [Code::Incomplete]);
+    }
+}

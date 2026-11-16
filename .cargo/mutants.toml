@@ -515,4 +515,11 @@ exclude_re = [
     "occam-intersect/src/tube\\.rs:(142:47|143:16): replace > with >= in Tube::radius$",
     "occam-intersect/src/tube\\.rs:153:31: replace && with \\|\\| in Tube::add$",
     "occam-intersect/src/tube\\.rs:153:47: replace > with >= in Tube::add$",
+    # The hybrid, by line. A trace of one station gives one piece of one station, which the fit returns from at once
+    # with nothing, so fitting it or not is the same. A box's reach either side of its middle: where the two are equal,
+    # keeping either is the same number.
+    "occam-intersect/src/hybrid\\.rs:324:57: replace > with >= in finish$",
+    "occam-intersect/src/traverse\\.rs:117:31: replace > with >= in clear$",
+    # Hits' subdivision, by line: the floor is the larger of the first pair's two sizes, which on a tie are one number.
+    "occam-intersect/src/subdivide\\.rs:149:53: replace > with >= in leaves$",
 ]

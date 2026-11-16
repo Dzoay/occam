@@ -285,6 +285,53 @@ mod tests {
         assert!(matches!(held(&spline, &nurbs_cylinder((0.0, 3.0)), tol()), Some(Held::Both)));
     }
 
+    /// A part over the unit square whose box is `bounds`, `size` across.
+    fn part(bounds: Bounds, size: f64) -> Piece {
+        let patch = UvBox::new(UvPoint::new(0.0, 0.0), UvPoint::new(1.0, 1.0));
+        Piece { patch, bounds, size, wide_u: true, depth: 0 }
+    }
+
+    fn everything() -> Bounds {
+        Bounds::around(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0)), Length::from_millimetres(f64::INFINITY))
+    }
+
+    #[test]
+    fn a_box_is_as_clear_of_a_plane_as_its_middle_less_its_half_diagonal() {
+        let plane = Implicit::of(level(0.0).analytic(tol()).unwrap());
+        let gap = clear(&plane, &cube([-1.0, -2.0, 3.0], [1.0, 2.0, 5.0]));
+        // Each reach is the upper end of its difference's enclosure, so the half diagonal is a rounding or two long.
+        assert!((gap.mid() - (4.0 - 6.0_f64.sqrt())).abs() < 1e-14, "{gap:?}");
+        // A box one double wide, whose middle rounds to its low end: its half diagonal is its whole width.
+        let width = 1.0_f64.next_up() - 1.0;
+        let thin = clear(&plane, &cube([1.0, 0.0, 0.0], [1.0_f64.next_up(), 0.0, 0.0]));
+        assert!((thin.mid() + width).abs() < 1e-6 * width, "{thin:?}");
+    }
+
+    #[test]
+    fn a_part_whose_box_is_not_finite_is_not_tested() {
+        let (held, open) = (part(cube([0.0; 3], [1.0; 3]), 1.0), part(everything(), 1.0));
+        let one = Held::One { side: Which::A, form: Implicit::of(level(0.0).analytic(tol()).unwrap()) };
+        let both = |a: Piece, b: Piece| tests(&Cell { a: Some(a), b: Some(b) }, Held::Both, None).len();
+        assert_eq!((both(held, held), both(held, open), both(open, held)), (1, 0, 0));
+        let alone = |a: Piece, other: Option<&Bounds>| tests(&Cell { a: Some(a), b: None }, one, other).len();
+        let (near, far) = (cube([0.0; 3], [2.0; 3]), everything());
+        assert_eq!(
+            (alone(held, None), alone(held, Some(&near)), alone(held, Some(&far)), alone(open, Some(&near))),
+            (1, 2, 1, 0)
+        );
+    }
+
+    #[test]
+    fn a_cell_is_a_leaf_when_every_part_is_at_most_a_leaf_across() {
+        let box_ = cube([0.0; 3], [1.0; 3]);
+        let (small_part, large_part) = (part(box_, 0.5), part(box_, 1.5));
+        assert!(small(&Cell { a: Some(small_part), b: Some(part(box_, 1.0)) }, 1.0));
+        assert!(!small(&Cell { a: Some(small_part), b: Some(large_part) }, 1.0));
+        assert!(
+            small(&Cell { a: None, b: Some(small_part) }, 1.0) && !small(&Cell { a: Some(large_part), b: None }, 1.0)
+        );
+    }
+
     #[test]
     fn a_halved_part_is_boxed_on_its_own_surface() {
         let (a, b) = (level(0.0), level(5.0));

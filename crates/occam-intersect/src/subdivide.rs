@@ -332,7 +332,71 @@ fn same(a: &Found, b: &Found, sink: &mut Sink<'_>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use occam_geom::{Curve, Line, OffsetCurve};
+    use occam_units::{Direction, Length, Point};
+
     use super::*;
+    use crate::methods::Budget;
+    use crate::scan;
+    use crate::tests_hits::{found, hit_at, patch, saddle, span, tol, v};
+    use crate::trace_tests::level;
+
+    #[test]
+    fn a_crossing_beside_a_contact_the_curve_touches_between_is_the_contact() {
+        // A line lying in the plane: a crossing at 0.4 and a contact at 0.5 are a touch, kept as the contact.
+        let line = Line::new(Point::from_vec3(v(0.0, 0.0, 0.0)), Direction::normalised(v(1.0, 0.0, 0.0)));
+        let plane = level(0.0);
+        let mut sink = Sink::new(&line, &plane, patch((-1.0, -1.0), (2.0, 1.0)), tol());
+        let at = |t: f64, kind| Found { t, uv: UvPoint::new(t, 0.0), kind };
+        keep(vec![at(0.4, Kind::Crossing), at(0.5, Kind::Contact)], &mut sink);
+        let hits = sink.found();
+        assert_eq!((hits.crossings.len(), hits.contacts.len()), (0, 1), "{hits:?}");
+        assert_eq!(hits.contacts[0].t, 0.5);
+        // Two contacts side by side are two: only a crossing is taken into a touch beside it.
+        let mut sink = Sink::new(&line, &plane, patch((-1.0, -1.0), (2.0, 1.0)), tol());
+        keep(vec![at(0.4, Kind::Contact), at(0.5, Kind::Contact)], &mut sink);
+        assert_eq!(sink.found().contacts.len(), 2);
+    }
+
+    #[test]
+    fn a_side_is_halved_only_where_it_is_free_and_its_middle_lies_strictly_inside() {
+        let line = Line::new(Point::from_vec3(v(0.0, 0.0, 0.0)), Direction::normalised(v(1.0, 0.0, 0.0)));
+        let plane = level(0.0);
+        let sink = Sink::new(&line, &plane, patch((0.0, 0.0), (2.0, 1.0)), tol());
+        let cell = |span: (f64, f64), u: (f64, f64), v: (f64, f64), stuck| Cell {
+            lo: span.0,
+            hi: span.1,
+            patch: patch((u.0, v.0), (u.1, v.1)),
+            depth: 0,
+            parents: None,
+            halved: Halved::Neither,
+            stuck,
+        };
+        let halved = |c: Cell| split(c, (1.0, 1.0), &sink).map(|(_, side)| side);
+        let (wide, unit) = ((0.0, 2.0), (0.0, 1.0));
+        assert_eq!(halved(cell(unit, wide, unit, (false, false))), Some(Halved::Span));
+        assert_eq!(halved(cell(unit, wide, unit, (true, true))), None, "both sides stuck");
+        // A range one double wide has its middle at one of its ends, and is not halved.
+        for narrow in [(1.0, 1.0_f64.next_up()), (1.0_f64.next_down(), 1.0)] {
+            assert_eq!(halved(cell(narrow, wide, unit, (false, false))), Some(Halved::Patch), "{narrow:?}");
+            assert_eq!(halved(cell(unit, narrow, narrow, (true, false))), None, "{narrow:?}");
+        }
+    }
+
+    #[test]
+    fn a_span_whose_box_barely_shrinks_is_halved_no_further() {
+        // A line 50 to the side of one through a saddle's middle, offset back onto it: its box is 100 across whatever
+        // its piece, so the span stops being halved at once, where halving it on would spend far more than this budget.
+        let base = Line::new(Point::from_vec3(v(-10.0, 50.0, -0.1)), Direction::normalised(v(1.0, 0.0, 0.01)));
+        let up = Direction::normalised(v(0.0, 0.0, 1.0));
+        let through = OffsetCurve::new(base.trimmed(0.0, 20.0).unwrap(), Length::from_millimetres(50.0), up).unwrap();
+        let on = |t: f64| v(-10.0, 0.0, -0.1) + v(1.0, 0.0, 0.01) * (t / (1.0 + 1e-4_f64).sqrt());
+        assert!((through.point(10.0).to_vec3() - on(10.0)).norm() < 1e-12, "{:?}", through.point(10.0));
+        let got =
+            scan(&through, span(0.0, 20.0), &saddle(), patch((0.0, 0.0), (1.0, 1.0)), tol(), Budget { steps: 2000 });
+        found(&got, (1, 0, 0));
+        hit_at(&got.crossings[0], 10.0 * (1.0 + 1e-4_f64).sqrt(), &saddle());
+    }
 
     #[test]
     fn a_three_by_three_system_is_solved_and_a_singular_one_refused() {

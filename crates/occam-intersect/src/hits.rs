@@ -254,6 +254,20 @@ impl Sink<'_> {
 }
 
 #[cfg(test)]
+impl<'a> Sink<'a> {
+    /// A sink for `curve` on `surface` over `patch`, holding nothing yet: what the subdivision's parts are tested on.
+    pub(crate) fn new(curve: &'a dyn Curve, surface: &'a dyn Surface, patch: UvBox, tol: Tolerance) -> Self {
+        let (domain, scratch, hits) = (surface.domain(), Scratch::default(), Hits::default());
+        Self { curve, surface, patch, domain, tol, scratch, hits }
+    }
+
+    /// What it holds.
+    pub(crate) fn found(self) -> Hits {
+        self.hits
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use occam_units::ParamKind;
 
