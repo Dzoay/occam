@@ -303,9 +303,9 @@ fn arc(height: f64, ends: (usize, usize)) -> Piece {
 }
 
 /// A flat face under the arc of the unit circle from an eighth of a turn to three eighths, facing +Z: from that arc's
-/// ends down to `y = 0`, and from there up to a notch at `x`, `gap` below the arc. At a coarse deflection the arc is one
-/// chord, which cuts across the notch. A quarter of a cylinder stands on the arc, down to `z = -1`, so that the arc is
-/// an edge of two faces.
+/// ends down to `y = 0`, and from there up to a notch at `x`, `gap` below the arc. At a coarse deflection the arc is
+/// one chord, which cuts across the notch. A quarter of a cylinder stands on the arc, down to `z = -1`, so that the arc
+/// is an edge of two faces.
 pub(crate) fn notched(x: f64, gap: f64) -> Layout {
     let (s, top) = (FRAC_1_SQRT_2, (1.0 - x * x).sqrt() - gap);
     let points = vec![
@@ -348,4 +348,24 @@ pub(crate) fn notched(x: f64, gap: f64) -> Layout {
         Patch { surface: Arc::new(cylinder), sides: wall, witness: (FRAC_PI_2, -0.5) },
     ];
     Layout { points, edges, faces }
+}
+
+/// A flat lens facing +Z between quarter turns of two circles of radius 1, centred `sqrt(1/2)` below and above the
+/// origin: the arc of the upper circle runs along its bottom, and that of the lower along its top. At a deflection of 1
+/// each arc is one piece, so its loop joins up to two points.
+pub(crate) fn lens() -> Layout {
+    let s = FRAC_1_SQRT_2;
+    let circle = |y: f64| {
+        let shift = Placement::<World, World>::translation(Vector::from_vec3(Vec3::new(0.0, y, 0.0)));
+        Circle::placed(&Placement::<Local, World>::identity().then(&shift), Length::from_millimetres(1.0)).unwrap()
+    };
+    let (under, over) = (circle(s), circle(-s));
+    let edges = vec![
+        Piece { curve: Arc::new(under), range: (5.0 * FRAC_PI_4, 7.0 * FRAC_PI_4), ends: (0, 1) },
+        Piece { curve: Arc::new(over), range: (FRAC_PI_4, 3.0 * FRAC_PI_4), ends: (1, 0) },
+    ];
+    let drawn = |circle: Circle| -> Arc<dyn ParamCurve> { Arc::new(UvCurve::new(circle).unwrap()) };
+    let sides = vec![side(0, false, drawn(under)), side(1, false, drawn(over))];
+    let flat = Patch { surface: Arc::new(Plane::placed(&Placement::identity())), sides, witness: (0.0, 0.0) };
+    Layout { points: vec![Vec3::new(-s, 0.0, 0.0), Vec3::new(s, 0.0, 0.0)], edges, faces: vec![flat] }
 }

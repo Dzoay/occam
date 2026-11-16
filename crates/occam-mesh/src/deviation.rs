@@ -46,16 +46,22 @@ fn closest(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
 
 /// How thin a triangle may be, as twice its area over its longest side squared, for the region test: 2^-13. Its dot
 /// products are of the size of the longest side to the fourth, and their differences of twice the area squared, so a
-/// thinner triangle's are lost to rounding (the catalogue's sliver walls: 20 long and 1e-5 high, a point on one was read
-/// as 0.28 from it). At this ratio they are good to 2^-26 of themselves.
+/// thinner triangle's are lost to rounding (the catalogue's sliver walls: 20 long and 1e-5 high, a point on one was
+/// read as 0.28 from it). At this ratio they are good to 2^-26 of themselves.
 const THIN: f64 = 1.0 / 8192.0;
 
-/// How far `p` is from the triangle `a`, `b`, `c`: by the region test, or for a triangle thinner than [`THIN`], by
-/// [`sliver`].
-pub(crate) fn distance(p: Vec3, [a, b, c]: [Vec3; 3]) -> f64 {
+/// Whether the triangle `a`, `b`, `c` is thick enough for the region test: twice its area more than [`THIN`] times its
+/// longest side squared. One with no area, or whose numbers are not, is not.
+fn thick(a: Vec3, b: Vec3, c: Vec3) -> bool {
     let twice = (b - a).cross(c - a).norm();
     let longest = higher(higher((b - a).dot(b - a), (c - b).dot(c - b)), (a - c).dot(a - c));
-    if twice > THIN * longest {
+    twice > THIN * longest
+}
+
+/// How far `p` is from the triangle `a`, `b`, `c`: by the region test where it is [`thick`], and otherwise by
+/// [`sliver`].
+pub(crate) fn distance(p: Vec3, [a, b, c]: [Vec3; 3]) -> f64 {
+    if thick(a, b, c) {
         return (p - closest(p, a, b, c)).norm();
     }
     sliver(p, [a, b, c])
@@ -162,6 +168,31 @@ mod tests {
             }
             assert!((distance(Vec3::new(40.0, 10.0, -1e-3), corners) - 1e-3).abs() < 1e-12, "{height}: under it");
             assert!((distance(Vec3::new(40.0, 25.0, 0.0), corners) - 5.0).abs() < 1e-12, "{height}: past its end");
+        }
+    }
+
+    #[test]
+    fn a_triangle_is_thick_where_twice_its_area_is_more_than_2_to_the_minus_13_of_its_longest_side_squared() {
+        // Exactly at the bound, in exact numbers: twice the area is 4 * 2^-11, and the longest side squared 16.
+        let tip = 1.0 / 2048.0;
+        assert!(!thick(Vec3::new(0.0, 0.0, 0.0), Vec3::new(4.0, 0.0, 0.0), Vec3::new(2.0, tip, 0.0)), "at the bound");
+        assert!(!thick(A, A, B), "no area");
+        assert!(!thick(A, B, Vec3::new(f64::NAN, 0.0, 0.0)), "not a number");
+        // A side of 4 along `along` and an apex `h` off it along `off`, tilted so that every side has a part along
+        // every axis, and moved 1000 either way along each: a side's length read as anything else, as `|b|^2 - |a|^2`,
+        // is thousands where it should be 16, or below the next side's.
+        let (along, off) = (Vec3::new(2.0, 1.0, 2.0) * (1.0 / 3.0), Vec3::new(1.0, 2.0, -2.0) * (1.0 / 3.0));
+        let away = [1000.0, -1000.0];
+        let offsets =
+            away.into_iter().flat_map(|k| [Vec3::new(k, 0.0, 0.0), Vec3::new(0.0, k, 0.0), Vec3::new(0.0, 0.0, k)]);
+        for at in offsets.chain([Vec3::new(0.0, 0.0, 0.0)]) {
+            let triangle = |h: f64| (at, at + along * 4.0, at + along * 2.0 + off * h);
+            let (a, b, c) = triangle(4.0 / 4096.0);
+            assert!(thick(a, b, c), "twice the area 2^-12 of the longest squared, at {at:?}");
+            assert!(thick(b, c, a) && thick(c, a, b), "whichever corner comes first, at {at:?}");
+            let (a, b, c) = triangle(4.0 / 16384.0);
+            assert!(!thick(a, b, c), "2^-14, at {at:?}");
+            assert!(!thick(b, c, a) && !thick(c, a, b), "whichever corner comes first, at {at:?}");
         }
     }
 

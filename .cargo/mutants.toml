@@ -508,4 +508,10 @@ exclude_re = [
     # holds back more volumes for the exact stage, which gives the same side; it changes the cost, never the answer.
     # (Dividing by the permanent instead is caught: far out it lets a volume plain arithmetic turns over through.)
     "occam-mesh/src/predicates\\.rs:114:32: replace \\* with \\+ in orient3d$",
+    # Which faces repair looks at (view.hardening), by line. `crossed` keeps for repair only the faces refused because
+    # their boundaries cross. Any other face it let through, meshed or refused for another reason, gets no cut from
+    # `cuts`, whose first try finds its boundary triangulates, cannot be drawn, or fails where no cut can part it. So
+    # letting every face through, or every refusal, changes the cost, never the answer.
+    "occam-mesh/src/repair\\.rs:103:5: replace crossed -> bool with true$",
+    "occam-mesh/src/repair\\.rs:105:65: replace && with \\|\\| in crossed$",
 ]

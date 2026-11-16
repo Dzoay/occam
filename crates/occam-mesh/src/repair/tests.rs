@@ -13,7 +13,7 @@ use crate::faces::mesh_faces;
 use crate::merge::{Mesh, mesh};
 use crate::part::mesh_part;
 use crate::remesh::remesh;
-use crate::testing::{model, notched};
+use crate::testing::{lens, model, notched};
 use crate::triangulation::Fail;
 
 /// A deflection at which the arc of [`notched`] is one chord.
@@ -83,9 +83,12 @@ fn repair_stops_at_its_tries_and_at_the_cap_on_samples_and_keeps_no_cut() {
     assert!(tries(1).is_none(), "one try does not cure it");
     let cured = tries(Limits::REPAIRS_PER_FACE).unwrap();
     assert_eq!(cured, cuts(&snapshot, flat, &first));
-    // A piece with no middle strictly inside it, and an edge already at the cap.
+    // Pieces with no middle strictly inside them, and an edge already at the cap.
     let at = |from: f64, to: f64| Piece { edge: edges[3], from, to };
-    assert!(!cut(&mut Cuts::new(), &[at(1.0, 1.0_f64.next_up())], &first));
+    assert!(!cut(&mut Cuts::new(), &[at(1.0, 1.0_f64.next_up())], &first), "its middle rounds to its lower end");
+    let up = 1.0_f64.next_up();
+    assert_eq!(0.5 * up + 0.5 * up.next_up(), up.next_up());
+    assert!(!cut(&mut Cuts::new(), &[at(up, up.next_up())], &first), "its middle rounds to its upper end");
     let full = vec![0.0; usize::try_from(Limits::SAMPLES_PER_EDGE).unwrap() - 2];
     let mut capped = Cuts::from([(edges[3], full)]);
     assert!(!cut(&mut capped, &[at(1.0, 2.0)], &first), "two samples and the cap less two, and one more");
@@ -139,6 +142,23 @@ fn an_edge_cut_twice_at_one_place_takes_one_sample_there_in_order_and_keeps_its_
     assert_eq!(now.points[1], circle.curve().unwrap().first(quarter).0, "a cut's point is its curve's there");
     assert_eq!(cut.repaired(), [arc]);
     assert_eq!(cut.get(edges[0]), first.get(edges[0]), "an edge not cut is as it was");
+}
+
+#[test]
+fn a_loop_of_two_points_is_short_its_pieces_both_its_arcs_and_repair_cuts_both() {
+    let (snapshot, edges) = model(&[lens()]);
+    let (face, arcs) = (snapshot.ids::<Face>()[0], edges[0].clone());
+    let first = sample_edges(&Exec::serial(), &snapshot, coarse());
+    let outline = boundary::of(&snapshot, snapshot.view(face).unwrap(), &first).unwrap();
+    let ends = |p: &Piece| (p.edge, p.from, p.to);
+    let pieces: Vec<_> = outline.short_pieces().unwrap().iter().map(ends).collect();
+    let quarter = core::f64::consts::FRAC_PI_4;
+    assert_eq!(pieces, [(arcs[0], 5.0 * quarter, 7.0 * quarter), (arcs[1], quarter, 3.0 * quarter)]);
+    let (notched_model, [flat, _], _) = notch(0.3, 0.5);
+    let full = sample_edges(&Exec::serial(), &notched_model, coarse());
+    assert_eq!(boundary::of(&notched_model, notched_model.view(flat).unwrap(), &full).unwrap().short_pieces(), None);
+    let made = mesh(&Exec::serial(), &snapshot, coarse());
+    assert_eq!((made.refused.clone(), made.open.clone(), made.edges.repaired()), (vec![], vec![], &arcs[..]));
 }
 
 /// `limits` with the faces of `model` meshed in parts, each face alone, laid end to end.
