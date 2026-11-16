@@ -7,7 +7,8 @@ export const DEFAULT_BOUND = 4 * 1024 * 1024;
 /** The largest single `writeBuffer` call: P12's final run wrote vertex data in calls of at most this. */
 export const CALL_LIMIT = 2 * 1024 * 1024;
 
-export type Kind = "vertices" | "indices";
+/** A face's vertex block, its triangles' indices, or its triangle edges for the "show mesh" overlay. */
+export type Kind = "vertices" | "indices" | "wire";
 
 /** One `writeBuffer` call, as the page's inspector records it. */
 export interface Piece {
@@ -47,9 +48,9 @@ export class Uploads {
     this.queued.push({ ...job, written: 0, cancelled: false });
   }
 
-  /** Drops what is left to write for `face`, whose buffers are going. */
-  cancel(face: string): void {
-    for (const job of this.queued) if (job.face === face) job.cancelled = true;
+  /** Drops what is left to write of `face`'s buffers of the kinds `kinds`, which are going. */
+  cancel(face: string, kinds: readonly Kind[]): void {
+    for (const job of this.queued) if (job.face === face && kinds.includes(job.kind)) job.cancelled = true;
   }
 
   /** Bytes still to write. */

@@ -75,6 +75,10 @@ The `f64` arrays start on a multiple of eight bytes, so each can be read in plac
 **GPU results are display-only:** never in digests, caches, meshes, picking, measurement, export or the watertight
 check ([the GPU drawing decision](../decisions/2026-11-09-gpu-drawing.md)).
 
+**"Show mesh",** a toggle in the page, off by default, draws each face's triangle edges over its shading, each once
+within its face, as pairs of indices into the vertex buffer its triangles are drawn from; an edit gives new lines only
+to the faces it meshes again ([decision](../decisions/2026-11-16-the-page-can-show-its-mesh.md)).
+
 **During a continuous edit**, once the editing tools arrive after the first release, the GPU writes the touched faces'
 blocks at each vertex's `(u, v)` on its face, until the CPU mesh replaces them
 ([decision](../decisions/2026-11-14-write-through-after-the-first-release.md)).

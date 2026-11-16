@@ -102,7 +102,7 @@ export class Scene {
   private stopArriving(id: string): void {
     const face = this.arriving.get(id);
     if (!face) return;
-    this.uploads.cancel(id);
+    this.uploads.cancel(id, ["vertices", "indices"]);
     this.arriving.delete(id);
     release(face);
   }

@@ -1,12 +1,16 @@
 // Draws the scene's faces: one indexed draw a face, recorded once into a render bundle and recorded again only when
 // the set of faces drawn changes, so a frame costs the same however many faces there are. Each draw's instance is its
 // face's place in the bundle, which reads the face's mark from a storage buffer written each frame: whether it is
-// selected, highlighted, or both, drawn in a colour each. The edges selected or highlighted are drawn after, as lines
-// through their samples, over the faces.
+// selected, highlighted, or both, drawn in a colour each. With "show mesh" on, each face's triangle edges are drawn
+// next, from a second bundle, as lines from the face's own vertex buffer through pairs of its indices, in a colour of
+// their own; the faces are pushed back a step of depth, as a polygon offset, so the lines on the faces in front pass
+// the depth test and those behind do not. The edges selected or highlighted are drawn last, as lines through their
+// samples, over everything.
 
 import type { Gpu } from "./gpu.ts";
-import { VERTEX_LAYOUT } from "./layout.ts";
+import { STRIDE, VERTEX_LAYOUT } from "./layout.ts";
 import type { Scene } from "./scene.ts";
+import type { Wire } from "./wire.ts";
 
 /** A face's or an edge's mark: selected, highlighted, or both. */
 export const SELECTED = 1;
@@ -24,12 +28,16 @@ fn marked(mark: u32, base: vec3f) -> vec3f {
 }
 `;
 
-const SHADER = /* wgsl */ `
+const CAMERA = /* wgsl */ `
 struct Camera {
   view_projection: mat4x4f,
   light: vec4f,
 }
 @group(0) @binding(0) var<uniform> camera: Camera;
+`;
+
+const SHADER = /* wgsl */ `
+${CAMERA}
 @group(0) @binding(1) var<storage, read> marks: array<u32>;
 
 struct Varyings {
@@ -55,12 +63,7 @@ fn fs_main(in: Varyings) -> @location(0) vec4f {
 `;
 
 const LINES = /* wgsl */ `
-struct Camera {
-  view_projection: mat4x4f,
-  light: vec4f,
-}
-@group(0) @binding(0) var<uniform> camera: Camera;
-
+${CAMERA}
 struct Varyings {
   @builtin(position) position: vec4f,
   @location(0) @interpolate(flat) mark: u32,
@@ -77,6 +80,23 @@ ${COLOURS}
 @fragment
 fn fs_line(in: Varyings) -> @location(0) vec4f {
   return vec4f(marked(in.mark, vec3f(0.1, 0.1, 0.1)), 1.0);
+}
+`;
+
+/**
+ * The "show mesh" overlay: a face's vertex block read for its offsets alone, drawn in a deep violet, apart from the
+ * shading's grey-blue, the selection's orange, the highlight's green and the outlines' near-black.
+ */
+const WIRE = /* wgsl */ `
+${CAMERA}
+@vertex
+fn vs_wire(@location(0) offset_u: vec4f) -> @builtin(position) vec4f {
+  return camera.view_projection * vec4f(offset_u.xyz, 1.0);
+}
+
+@fragment
+fn fs_wire() -> @location(0) vec4f {
+  return vec4f(0.36, 0.12, 0.56, 1.0);
 }
 `;
 
@@ -101,25 +121,30 @@ export class Renderer {
   private readonly pipeline: GPURenderPipeline;
   private readonly linePipeline: GPURenderPipeline;
   private readonly lineGroup: GPUBindGroup;
+  private readonly wirePipeline: GPURenderPipeline;
+  private readonly wireGroup: GPUBindGroup;
   private bindGroup: GPUBindGroup;
   private written = new Uint32Array(0);
   private depth: GPUTexture | null = null;
   private bundle: GPURenderBundle | null = null;
   private bundled = -1;
+  private wireBundle: GPURenderBundle | null = null;
+  private wireBundled = -1;
 
   /** `usage` adds to the camera's, the marks' and the lines' buffers' usage, as the inspector's read-back needs. */
   constructor(gpu: Gpu, usage = 0) {
     this.gpu = gpu;
     this.usage = usage;
     const { device } = gpu;
-    const depthStencil: GPUDepthStencilState = { format: DEPTH, depthWriteEnabled: true, depthCompare: "less" };
+    const depth = (depthWriteEnabled: boolean, depthCompare: GPUCompareFunction): GPUDepthStencilState =>
+      ({ format: DEPTH, depthWriteEnabled, depthCompare });
     const module = device.createShaderModule({ code: SHADER });
     this.pipeline = device.createRenderPipeline({
       layout: "auto",
       vertex: { module, entryPoint: "vs_main", buffers: [VERTEX_LAYOUT] },
       fragment: { module, entryPoint: "fs_main", targets: [{ format: gpu.format }] },
       primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil,
+      depthStencil: { ...depth(true, "less"), depthBias: 1, depthBiasSlopeScale: 1 },
     });
     const lines = device.createShaderModule({ code: LINES });
     const attributes: GPUVertexAttribute[] = [{ shaderLocation: 0, offset: 0, format: "float32x4" }];
@@ -128,7 +153,15 @@ export class Renderer {
       vertex: { module: lines, entryPoint: "vs_line", buffers: [{ arrayStride: LINE_FLOATS * 4, attributes }] },
       fragment: { module: lines, entryPoint: "fs_line", targets: [{ format: gpu.format }] },
       primitive: { topology: "line-list" },
-      depthStencil: { ...depthStencil, depthWriteEnabled: false, depthCompare: "always" },
+      depthStencil: depth(false, "always"),
+    });
+    const wire = device.createShaderModule({ code: WIRE });
+    this.wirePipeline = device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: wire, entryPoint: "vs_wire", buffers: [{ arrayStride: STRIDE, attributes }] },
+      fragment: { module: wire, entryPoint: "fs_wire", targets: [{ format: gpu.format }] },
+      primitive: { topology: "line-list" },
+      depthStencil: depth(false, "less-equal"),
     });
     this.camera = device.createBuffer({
       size: CAMERA_FLOATS * 4,
@@ -136,8 +169,13 @@ export class Renderer {
     });
     this.marks = this.markBuffer(64);
     this.bindGroup = this.faceGroup();
-    this.lineGroup = device.createBindGroup({
-      layout: this.linePipeline.getBindGroupLayout(0),
+    this.lineGroup = this.cameraGroup(this.linePipeline);
+    this.wireGroup = this.cameraGroup(this.wirePipeline);
+  }
+
+  private cameraGroup(pipeline: GPURenderPipeline): GPUBindGroup {
+    return this.gpu.device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
       entries: [{ binding: 0, resource: { buffer: this.camera } }],
     });
   }
@@ -154,12 +192,13 @@ export class Renderer {
     });
   }
 
+  private bundleEncoder(): GPURenderBundleEncoder {
+    return this.gpu.device.createRenderBundleEncoder({ colorFormats: [this.gpu.format], depthStencilFormat: DEPTH });
+  }
+
   private record(scene: Scene): GPURenderBundle {
     if (this.bundle && this.bundled === scene.version) return this.bundle;
-    const encoder = this.gpu.device.createRenderBundleEncoder({
-      colorFormats: [this.gpu.format],
-      depthStencilFormat: DEPTH,
-    });
+    const encoder = this.bundleEncoder();
     encoder.setPipeline(this.pipeline);
     encoder.setBindGroup(0, this.bindGroup);
     let place = 0;
@@ -174,6 +213,25 @@ export class Renderer {
     this.bundle = encoder.finish();
     this.bundled = scene.version;
     return this.bundle;
+  }
+
+  /** The overlay's bundle: each face's triangle edges, drawn from its own vertex buffer; null if there are none. */
+  private recordWire(wire: Wire): GPURenderBundle | null {
+    if (this.wireBundled === wire.version) return this.wireBundle;
+    const drawn = wire.drawn();
+    this.wireBundled = wire.version;
+    this.wireBundle = null;
+    if (drawn.length === 0) return null;
+    const encoder = this.bundleEncoder();
+    encoder.setPipeline(this.wirePipeline);
+    encoder.setBindGroup(0, this.wireGroup);
+    for (const { face, pairs, count } of drawn) {
+      encoder.setVertexBuffer(0, face.vertices);
+      encoder.setIndexBuffer(pairs, "uint32");
+      encoder.drawIndexed(count);
+    }
+    this.wireBundle = encoder.finish();
+    return this.wireBundle;
   }
 
   /** Writes each face's mark, as `mark` gives it, where it changed, growing the buffer, and so the bundle, if need be. */
@@ -214,8 +272,11 @@ export class Renderer {
     return this.depth.createView();
   }
 
-  /** Writes the camera and each face's mark, as `mark` gives it, and submits one frame of the scene and the lines. */
-  draw(scene: Scene, camera: Float32Array, mark: (id: string) => number): void {
+  /**
+   * Writes the camera and each face's mark, as `mark` gives it, and submits one frame of the scene, the overlay's
+   * lines, `wire`, and the outlines.
+   */
+  draw(scene: Scene, wire: Wire, camera: Float32Array, mark: (id: string) => number): void {
     const { device, context } = this.gpu;
     device.queue.writeBuffer(this.camera, 0, camera.buffer, camera.byteOffset, camera.byteLength);
     this.mark(scene, mark);
@@ -235,7 +296,9 @@ export class Renderer {
         depthStoreOp: "discard",
       },
     });
-    pass.executeBundles([this.record(scene)]);
+    const faces = this.record(scene);
+    const overlay = this.recordWire(wire);
+    pass.executeBundles(overlay ? [faces, overlay] : [faces]);
     if (this.lines && this.lineVertices > 0) {
       pass.setPipeline(this.linePipeline);
       pass.setBindGroup(0, this.lineGroup);

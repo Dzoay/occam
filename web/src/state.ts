@@ -31,4 +31,6 @@ export const selection = signal<readonly string[]>([]);
 export const highlight = signal<readonly string[]>([]);
 /** Why `occam view` refused the selection the page posted last, if it did: it was made on an older model. */
 export const refusedSelection = signal<KernelReport | null>(null);
+/** Whether the page draws each face's triangle edges over its shading, as the "Show mesh" toggle says: off at first. */
+export const meshShown = signal(false);
 export const status = signal<Status>({ faces: 0, triangles: 0, pending: 0, fallback: false });

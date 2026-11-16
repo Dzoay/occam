@@ -954,3 +954,134 @@ test("a selection the page posts for an older model is refused, and the page say
     await view.done();
   }
 });
+
+// The "show mesh" overlay (docs/architecture/mesh-and-renderer.md): each face's triangle edges drawn over its shading,
+// read back as each segment's pair of indices and the offsets the pair picks from the face's vertex buffer. It is
+// display only: nothing meshed, picked or selected reads it.
+
+/** The page's lines once the "Show mesh" toggle is turned `on` or off and they are built, written or dropped. */
+async function showMesh(page, on) {
+  const toggle = page.getByRole("checkbox", { name: "Show mesh" });
+  await (on ? toggle.check() : toggle.uncheck());
+  await page.evaluate(() => window.occamViewer.settled());
+  return page.evaluate(() => window.occamViewer.readWire());
+}
+
+/** Each edge of the triangles `indices`, once, as its two ends, the smaller first. */
+function uniqueEdges(indices) {
+  const seen = new Set();
+  for (let t = 0; t < indices.length; t += 3) {
+    for (let k = 0; k < 3; k += 1) {
+      const [a, b] = [indices[t + k], indices[t + ((k + 1) % 3)]];
+      seen.add(`${Math.min(a, b)} ${Math.max(a, b)}`);
+    }
+  }
+  return seen;
+}
+
+/**
+ * The lines `wire` holds are each drawn face's triangle edges, each once, and their vertices are its positions as `f32`
+ * offsets from the page's origin. Gives how many segments there are.
+ */
+function assertWire({ mesh, origin, faces }, wire) {
+  assert.deepEqual(Object.keys(wire).sort(), faces.map((face) => face.id).sort(), "lines for every face drawn");
+  let segments = 0;
+  for (const [id, { pairs, vertices }] of Object.entries(wire)) {
+    const { positions, indices } = block(mesh, id);
+    const drawn = [];
+    for (let k = 0; k < pairs.length; k += 2) {
+      const [a, b] = [pairs[k], pairs[k + 1]];
+      drawn.push(`${Math.min(a, b)} ${Math.max(a, b)}`);
+    }
+    const want = uniqueEdges(indices);
+    assert.equal(drawn.length, want.size, `${id}: a segment for each edge of its triangles`);
+    assert.deepEqual(new Set(drawn), want, `${id}: each edge once`);
+    pairs.forEach((index, k) => {
+      for (let axis = 0; axis < 3; axis += 1) {
+        const offset = Math.fround(positions[index * 3 + axis] - origin[axis]);
+        assert.equal(vertices[k * 3 + axis], offset, `${id} line vertex ${k}: the position, as an f32 offset`);
+      }
+    });
+    segments += drawn.length;
+  }
+  return segments;
+}
+
+test("Show mesh draws each face's triangle edges once from its own vertex buffer, bounded per frame, and nothing while off", async () => {
+  const page = await open("&upload-bound=64");
+  const state = await snapshot(page);
+  const uploads = () => page.evaluate(() => window.occamViewer.uploads());
+  assert.equal(await page.getByRole("checkbox", { name: "Show mesh" }).isChecked(), false, "off at first");
+  assert.deepEqual((await uploads()).filter((piece) => piece.kind === "wire"), [], "off, no lines uploaded");
+  assert.deepEqual(await page.evaluate(() => window.occamViewer.readWire()), {}, "and none drawn");
+  await page.evaluate(() => window.occamViewer.clearUploads());
+  const wire = await showMesh(page, true);
+  const segments = assertWire(state, wire);
+  assert.equal(segments, 6 * 5, "each of the cube's squares: four sides and a diagonal");
+  const pieces = await uploads();
+  assert.ok(pieces.every((piece) => piece.kind === "wire"), "turned on, only lines uploaded");
+  const perFrame = new Map();
+  for (const piece of pieces) perFrame.set(piece.frame, (perFrame.get(piece.frame) ?? 0) + piece.size);
+  assert.equal([...perFrame.values()].reduce((a, b) => a + b, 0), segments * 2 * 4, "two u32 a segment, once");
+  assert.ok([...perFrame.values()].every((bytes) => bytes <= 64), "no frame over the bound");
+  for (const id of CUBE_FACES) {
+    const mine = pieces.filter((p) => p.face === id);
+    mine.reduce((at, p) => (assert.equal(p.offset, at, `${id} in order`), at + p.size), 0);
+  }
+  assert.deepEqual(await showMesh(page, false), {}, "turned off, none drawn");
+  await clean(page);
+});
+
+test("an occam run that adds a cylinder with the mesh shown builds only the cylinder's faces' lines, and the cube's keep theirs", async () => {
+  const view = await viewed(CUBE);
+  try {
+    const page = await following(view);
+    await snapshot(page);
+    const before = await showMesh(page, true);
+    assert.deepEqual(Object.keys(before).sort(), CUBE_FACES, "the cube's lines");
+    await page.evaluate(() => window.occamViewer.clearUploads());
+    const ran = await runOn(view.file, CYLINDER);
+    await drawn(page, await nextDigest(view.file, view.started.digest));
+    const state = await snapshot(page);
+    const wire = await page.evaluate(() => window.occamViewer.readWire());
+    const made = ran.steps[0].created.filter((id) => id.startsWith("face:"));
+    const pieces = await page.evaluate(() => window.occamViewer.uploads());
+    const lined = new Set(pieces.filter((piece) => piece.kind === "wire").map((piece) => piece.face));
+    assert.deepEqual([...lined].sort(), [...made].sort(), "only the cylinder's faces' lines built and uploaded");
+    for (const id of CUBE_FACES) assert.deepEqual(wire[id], before[id], `${id} keeps its lines`);
+    assertWire(state, wire);
+    await clean(page);
+  } finally {
+    await view.done();
+  }
+});
+
+test("a click on a line of the overlay picks the id it picks with the mesh hidden, and maps no GPU buffer", async () => {
+  const page = await open();
+  const { mesh, origin } = await snapshot(page);
+  const top = faceOn(mesh, 2);
+  const middle = middleOf(mesh, top);
+  const [x, y] = await pixelOf(page, middle);
+  const click = async () => {
+    await page.evaluate(() => (window.pickedBefore = window.occamViewer.picked()));
+    await page.mouse.click(x, y);
+    await page.waitForFunction(() => window.occamViewer.picked() !== window.pickedBefore);
+    return page.evaluate(() => window.occamViewer.picked());
+  };
+  const hidden = await click();
+  assert.equal(hidden.entity, top, "the camera starts above the cube");
+  const { vertices } = (await showMesh(page, true))[top] ?? { vertices: [] };
+  const at = middle.map((m, axis) => m - origin[axis]);
+  const through = [];
+  for (let k = 0; k < vertices.length; k += 6) {
+    const mid = [0, 1, 2].map((axis) => (vertices[k + axis] + vertices[k + 3 + axis]) / 2);
+    through.push(mid.every((m, axis) => Math.abs(m - at[axis]) < 1e-3));
+  }
+  assert.ok(through.includes(true), "the square's diagonal is drawn through the click");
+  await spyOnMaps(page);
+  const shown = await click();
+  assert.equal(await page.evaluate(() => window.mapped), 0, "the pick maps no GPU buffer");
+  assert.deepEqual(shown, hidden, "the same ray, and the same answer, bit for bit");
+  assert.deepEqual(await page.evaluate(() => window.occamViewer.selection()), [top]);
+  await clean(page);
+});

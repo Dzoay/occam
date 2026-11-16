@@ -24,6 +24,12 @@ export interface FaceState {
   readonly indexUsage: number;
 }
 
+/** A face's lines in the "show mesh" overlay, read back. */
+export interface WireState {
+  readonly pairs: Uint32Array;
+  readonly vertices: Float32Array;
+}
+
 /** What the page can report: each code, its wording and its fix, for the test that holds them to the catalogue. */
 export interface ReportEntry {
   readonly code: Code;
@@ -84,6 +90,11 @@ export interface InspectorApi {
   readMarks(): Promise<Record<string, number>>;
   /** The edges outlined, and the lines' vertices as the GPU holds them, read back. */
   readLines(): Promise<{ edges: string[]; vertices: Float32Array }>;
+  /**
+   * The "show mesh" overlay's lines drawn, by face, as the GPU holds them, read back: each segment's pair of indices,
+   * and the offsets each index picks from the face's vertex buffer, three floats a line vertex.
+   */
+  readWire(): Promise<Record<string, WireState>>;
   mesh(): Mesh | null;
   origin(): Vec3 | null;
   bound(): number;
@@ -206,6 +217,17 @@ export class Inspector {
         const vertices = lines && size > 0 ? new Float32Array(await read(device, lines, size)) : new Float32Array(0);
         return { edges: viewer.outlines.map(([id]) => id), vertices };
       },
+      readWire: async () => {
+        const out: Record<string, WireState> = {};
+        for (const { face, pairs: buffer, count } of viewer.wire.drawn()) {
+          const pairs = new Uint32Array(await read(device, buffer, count * 4));
+          const block = new Float32Array(await read(device, face.vertices, face.block.positions.length / 3 * 32));
+          const vertices = new Float32Array(count * 3);
+          pairs.forEach((index, k) => vertices.set(block.subarray(index * 8, index * 8 + 3), k * 3));
+          out[face.block.id] = { pairs, vertices };
+        }
+        return out;
+      },
       mesh: () => viewer.mesh,
       origin: () => viewer.scene.origin,
       bound: () => viewer.uploads.bound,
@@ -228,7 +250,7 @@ export class Inspector {
         return { target, distance, yaw, pitch };
       },
       settled: async () => {
-        while (viewer.uploads.pending > 0 || viewer.scene.waiting > 0) await nextFrame();
+        while (viewer.busy()) await nextFrame();
         viewer.loop.wake();
         await nextFrame();
         await nextFrame();

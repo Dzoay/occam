@@ -36,6 +36,13 @@ html, body {
   cursor: pointer;
 }
 
+.controls .toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
 .controls button:disabled {
   color: #9a9ea8;
   cursor: default;

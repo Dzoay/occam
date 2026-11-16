@@ -1,6 +1,7 @@
 // The viewer: the scene, the camera and the frame loop, all outside the component tree. The controls reach it only
 // through its methods, and it tells them what changed only through signals. It draws the selection and the highlight
 // in a colour each, the faces through their marks and the edges as lines, and builds a click's ray from its camera.
+// With "show mesh" on, it draws each face's triangle edges over its shading too, which nothing else reads.
 
 import { effect } from "@preact/signals";
 
@@ -11,8 +12,9 @@ import { type Mesh, type Vec3, centre } from "./mesh.ts";
 import { CAMERA_FLOATS, HIGHLIGHTED, LINE_FLOATS, Renderer, SELECTED } from "./renderer.ts";
 import { report } from "./report.ts";
 import { Scene } from "./scene.ts";
-import { failure, highlight, notice, selection, status } from "./state.ts";
+import { failure, highlight, meshShown, notice, selection, status } from "./state.ts";
 import { type Piece, Uploads } from "./uploads.ts";
+import { Wire } from "./wire.ts";
 
 /** What a click asks a mesh worker: its ray, the tolerance a millimetre along it, and how far along to take it. */
 export interface Aim {
@@ -39,6 +41,8 @@ export class Viewer {
   readonly uploads: Uploads;
   readonly scene: Scene;
   readonly renderer: Renderer;
+  /** The "show mesh" overlay's lines. */
+  readonly wire: Wire;
   readonly loop: FrameLoop;
   /** The last mesh shown. */
   mesh: Mesh | null = null;
@@ -55,6 +59,7 @@ export class Viewer {
     this.uploads = new Uploads(options.uploadBound, options.record);
     this.scene = new Scene(gpu.device, this.uploads, options.usage);
     this.renderer = new Renderer(gpu, options.usage);
+    this.wire = new Wire(gpu.device, this.uploads, options.usage);
     this.loop = new FrameLoop((frame) => this.step(frame));
     status.value = { ...status.peek(), fallback: gpu.fallback };
     void gpu.device.lost.then((lost) => {
@@ -63,6 +68,10 @@ export class Viewer {
     effect(() => {
       void [selection.value, highlight.value];
       this.packed = null;
+      this.loop.wake();
+    });
+    effect(() => {
+      void meshShown.value;
       this.loop.wake();
     });
   }
@@ -125,6 +134,16 @@ export class Viewer {
     selection.value = ids;
   }
 
+  /** Draws each face's triangle edges over its shading, or stops. */
+  showMesh(on: boolean): void {
+    meshShown.value = on;
+  }
+
+  /** Whether anything is still to upload, to arrive, or to build, write or drop of the overlay. */
+  busy(): boolean {
+    return this.uploads.pending > 0 || this.scene.waiting > 0 || this.wire.waiting(this.scene, meshShown.peek());
+  }
+
   aspect(): number {
     return Math.max(1, this.canvas.width) / Math.max(1, this.canvas.height);
   }
@@ -177,17 +196,18 @@ export class Viewer {
     if (this.canvas.height !== height) this.canvas.height = height;
   }
 
-  /** One frame: the bounded uploads, then the draw. Says whether uploads are still pending. */
+  /** One frame: the bounded uploads, the overlay's lines made to match the faces, then the draw. Says if it is busy. */
   private step(frame: number): boolean {
     if (failure.peek()) return false;
     this.resize();
     this.uploads.flush(this.gpu.device.queue, frame);
+    this.wire.sync(this.scene, meshShown.peek());
     const origin = this.scene.origin ?? [0, 0, 0];
     if (this.packed === null || this.packed.some((x, axis) => x !== origin[axis])) {
       this.renderer.outline(this.lines(origin));
       this.packed = origin;
     }
-    this.renderer.draw(this.scene, this.uniform(), (id) => this.mark(id));
+    this.renderer.draw(this.scene, this.wire, this.uniform(), (id) => this.mark(id));
     const pending = this.uploads.pending;
     let [faces, triangles] = [0, 0];
     for (const face of this.scene.faces()) {
@@ -198,6 +218,6 @@ export class Viewer {
     if (now.faces !== faces || now.triangles !== triangles || now.pending !== pending) {
       status.value = { faces, triangles, pending, fallback: this.gpu.fallback };
     }
-    return pending > 0 || this.scene.waiting > 0;
+    return this.busy();
   }
 }
