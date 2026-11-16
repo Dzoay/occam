@@ -191,7 +191,110 @@ impl Tube {
 
 #[cfg(test)]
 mod tests {
+    use occam_math::Tally;
+    use occam_units::{Point, UvPoint};
+
     use super::*;
+    use crate::trace::Station;
+    use crate::trace_tests::{BAND, tracer};
+
+    /// A tube for a tracer of sag 1e-4 and longest step 0.1, at a band of 1e-7: cubes 0.1 and twice the square root of
+    /// the band on a side.
+    fn tube() -> Tube {
+        Tube::new(&tracer(1e-4, 0.1, 100))
+    }
+
+    fn at(x: f64, y: f64, z: f64) -> Vec3 {
+        Vec3::new(x, y, z)
+    }
+
+    /// A trace through `points` in order, ending as `ends`.
+    fn trace(points: &[Vec3], ends: [End; 2]) -> Trace {
+        let station =
+            |p: &Vec3| Station { at: Point::from_vec3(*p), on_a: UvPoint::new(0.0, 0.0), on_b: UvPoint::new(0.0, 0.0) };
+        let stations = points.iter().map(station).collect();
+        Trace { stations, crossings: vec![], ends, steps: 0, tally: Tally::default(), undecided: vec![] }
+    }
+
+    /// Whether `tube` holds `point`, and how many chords it measured to say so.
+    fn holds(tube: &Tube, point: Vec3) -> (bool, u64) {
+        let mut decide = Decide::new(BAND);
+        let held = tube.holds(point, &mut decide).unwrap();
+        (held, decide.tally.decided)
+    }
+
+    #[test]
+    fn a_cube_is_counted_from_nought_and_has_no_negative_zero() {
+        assert_eq!((cube(0.75, 0.5), cube(-0.25, 0.5), cube(2.0, 0.5)), (1.0, -1.0, 4.0));
+        assert_eq!(cube(-0.0, 0.5).to_bits(), 0.0_f64.to_bits());
+    }
+
+    #[test]
+    fn a_point_is_measured_only_against_the_chords_near_it_and_the_long_ones() {
+        let mut tube = tube();
+        // Two chords far from the origin, one across the first cube's edge, and one three cubes long, which is long.
+        for (from, to) in [
+            (at(1.0, 1.0, 1.0), at(1.05, 1.0, 1.0)),
+            (at(1.5, 1.5, 1.5), at(1.55, 1.5, 1.5)),
+            (at(0.09, 0.5, 0.5), at(0.11, 0.5, 0.5)),
+            (at(0.05, 0.9, 0.9), at(0.32, 0.9, 0.9)),
+        ] {
+            tube.file(Chord { from, to, radius: 1e-4 });
+        }
+        assert_eq!((tube.long.len(), tube.grid.values().flatten().count()), (1, 2 + 2 + 2));
+        assert_eq!(holds(&tube, at(5.0, 5.0, 5.0)), (false, 1), "far from all: only the long chord");
+        assert_eq!(holds(&tube, at(1.02, 1.0, 1.00005)), (true, 1), "beside the first");
+        assert_eq!(
+            holds(&tube, at(1.02, 1.0, 1.001)),
+            (false, 2),
+            "in the first's cube but outside its tube, and the long"
+        );
+        assert!(holds(&tube, at(0.2, 0.9, 0.90005)).0, "beside the long one");
+    }
+
+    #[test]
+    fn a_point_on_a_chord_across_nought_is_found_from_a_negative_zero() {
+        let mut tube = tube();
+        tube.file(Chord { from: at(0.0, 1.0, 1.0), to: at(0.0, 1.05, 1.0), radius: 1e-4 });
+        assert_eq!(holds(&tube, at(-0.0, 1.02, 1.0)), (true, 1));
+    }
+
+    #[test]
+    fn a_chords_radius_is_twice_its_sag_from_the_circles_either_side_and_no_less_than_the_tracers() {
+        let tube = tube();
+        // Stations 0.3 apart in angle on a circle of radius 2: each chord sags 2 - 2 cos(0.15), its bend a half.
+        let circle: Vec<Vec3> = (0..5)
+            .map(|k| {
+                let (sin, cos) = occam_math::sin_cos(0.3 * f64::from(k));
+                at(2.0 * cos, 2.0 * sin, 0.0)
+            })
+            .collect();
+        let length = (circle[2] - circle[1]).norm();
+        let want = length * length * 0.5 / 4.0;
+        assert!(
+            (tube.radius(&circle, 1, false) - want).abs() < 1e-12 * want,
+            "{} {want}",
+            tube.radius(&circle, 1, false)
+        );
+        // The bend before a chord counts where it is the larger, and a station repeated after it bends nothing.
+        let turning = [circle[0], circle[1], circle[2], circle[2] + (circle[2] - circle[1])];
+        assert!((tube.radius(&turning, 1, false) - want).abs() < 1e-12 * want, "the bend before");
+        let repeated = [circle[0], circle[1], circle[2], circle[2]];
+        assert!((tube.radius(&repeated, 1, false) - want).abs() < 1e-12 * want, "a station repeated after");
+        let straight = [at(0.0, 0.0, 0.0), at(0.1, 0.0, 0.0), at(0.2, 0.0, 0.0), at(0.3, 0.0, 0.0)];
+        assert_eq!(tube.radius(&straight, 1, false), 1e-4, "the tracer's sag");
+    }
+
+    #[test]
+    fn a_touch_at_an_end_is_held_to_the_square_root_of_the_band() {
+        let line = [at(0.0, 0.0, 0.0), at(0.05, 0.0, 0.0), at(0.1, 0.0, 0.0)];
+        let beyond = |x: f64| at(x, 2e-4, 0.0);
+        for (ends, first, last) in [([End::Edge, End::Touch], false, true), ([End::Touch, End::Edge], true, false)] {
+            let mut tube = tube();
+            tube.add(&trace(&line, ends));
+            assert_eq!((holds(&tube, beyond(-1e-4)).0, holds(&tube, beyond(0.1001)).0), (first, last), "{ends:?}");
+        }
+    }
 
     #[test]
     fn a_chords_foot_is_the_nearest_point_of_it() {
