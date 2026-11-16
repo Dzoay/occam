@@ -16,6 +16,7 @@ use occam::{
 use crate::args::{
     Cli, Command, DistanceArgs, HighlightArgs, IdsArgs, ListArgs, MeshArgs, ModelArgs, PickArgs, RunArgs, kind,
 };
+use crate::skill::skill;
 #[cfg(not(target_family = "wasm"))]
 use crate::view::view;
 
@@ -70,6 +71,7 @@ fn command(command: Command, json: bool) -> Said {
         Command::Distance(args) => distance(&args, json),
         Command::Selection(args) => selection(&args, json),
         Command::Highlight(args) => highlight(&args, json),
+        Command::Skill(args) => skill(&args, json),
         #[cfg(not(target_family = "wasm"))]
         Command::View(args) => view(&args, json),
     }
@@ -209,12 +211,18 @@ fn session(path: &Path, binary: bool) -> Result<Session, Vec<Report>> {
 
 /// Writes `bytes` to `path`, given as `parameter`, whole or not at all, through a file beside it.
 pub fn write(parameter: &str, path: &Path, bytes: &[u8]) -> Result<(), Report> {
-    let writing = beside(path, ".writing");
-    let written = std::fs::write(&writing, bytes).and_then(|()| std::fs::rename(&writing, path));
-    written.map_err(|_| {
-        let _ = std::fs::remove_file(&writing);
+    whole(path, bytes).map_err(|_| {
         Report::new(Code::FileNotWritten, Fault::InvalidInput)
             .with_input(Input::at(parameter).given(&path.display().to_string()))
+    })
+}
+
+/// Writes `bytes` to `path` whole or not at all: to a file beside it, renamed over it, so that a reader never sees half
+/// of it. The file beside it is removed if that fails.
+pub fn whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let writing = beside(path, ".writing");
+    std::fs::write(&writing, bytes).and_then(|()| std::fs::rename(&writing, path)).inspect_err(|_| {
+        let _ = std::fs::remove_file(&writing);
     })
 }
 
