@@ -87,6 +87,9 @@ occam-verify, occam-xtask                             oracles, corpus, gates; ne
 web/                                                  the renderer; consumes data only
 ```
 
+`occam-verify` and `occam-xtask` may also name any crate above them in `[dev-dependencies]`, for their tests
+([decision](decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md)).
+
 ## 5. Gates
 
 The one definition. Every `gates` subcommand has `--json` (L8) and a test proving that a seeded violation fails it.

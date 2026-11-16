@@ -439,6 +439,27 @@ exclude_re = [
     # The trace's projections, by line. A move of no length, or none that is finite, gives a point that is not a number;
     # its foot stays at the seed, whose gap is the base's, so the search gives the base, as returning it at once does.
     "occam-intersect/src/project\\.rs:69:28: replace \\|\\| with && in search$",
+    # The hits' bisections, by line. Halving stops where the middle of the two ends rounds to one of them. Going on, as
+    # these do, takes that end again, whose side or slope is its own to begin with, so neither end moves: the root and
+    # the nearest point come out the same, the rounds left over spent on nothing.
+    "occam-intersect/src/along\\.rs:241:(21|34): replace < with <= in Along<'_, '_>::root$",
+    "occam-intersect/src/along\\.rs:241:27: replace && with \\|\\| in Along<'_, '_>::root$",
+    "occam-intersect/src/along\\.rs:283:(21|34): replace < with <= in Along<'_, '_>::closest$",
+    "occam-intersect/src/along\\.rs:283:27: replace && with \\|\\| in Along<'_, '_>::closest$",
+    # The hits' boxes and sizes, by line: of two radii, coordinates or sizes that are equal, either is the larger.
+    "occam-intersect/src/distance\\.rs:30:33: replace < with <= in between$",
+    "occam-intersect/src/distance\\.rs:96:77: replace > with >= in around$",
+    "occam-intersect/src/subdivide\\.rs:139:53: replace > with >= in leaves$",
+    # A unit axis with nothing of it across Z lies along Z one way or the other, so `along` is 1 or -1 there, never 0.
+    "occam-intersect/src/distance\\.rs:122:21: replace > with >= in canonical$",
+    # The subdivision's backstops, by line. A pair of pieces is a leaf once both its boxes are a sixty-fourth of the
+    # first pair's larger one, or no longer shrink when halved. A family's box halves with its piece, or stays as it
+    # was, so that comes within a few halvings, long before the fortieth, and long before a piece of the span or the
+    # patch is two neighbouring doubles: a box that shrank more slowly would multiply the pairs and spend the budget
+    # first either way.
+    "occam-intersect/src/subdivide\\.rs:141:72: replace < with <= in leaves$",
+    "occam-intersect/src/subdivide\\.rs:163:(38|47): replace < with <= in split$",
+    "occam-intersect/src/subdivide\\.rs:164:(48|57|88|97): replace < with <= in split$",
     # The fit's ties, by line. Where two numbers are equal, keeping either gives the same number: the largest
     # coordinate a fit's floor is taken from, a fit at its floor, and an image's largest step to a foot. Where the
     # largest gap is found twice, or an image's gap equals the curve's fit, the fit reached is the same, and the place
