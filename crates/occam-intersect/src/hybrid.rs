@@ -406,7 +406,7 @@ mod tests {
     use crate::hybrid_tests::crossing_at_a_corner;
     use crate::section::Contact;
     use crate::trace::Station;
-    use crate::trace_tests::{BAND, level, tol, tracer, upright};
+    use crate::trace_tests::{BAND, level, nurbs, tol, tracer, upright};
 
     fn patch(u: (f64, f64), v: (f64, f64)) -> UvBox {
         UvBox::new(UvPoint::new(u.0, v.0), UvPoint::new(u.1, v.1))
@@ -475,6 +475,20 @@ mod tests {
         };
         assert!(matches!(settled(&pair, &seed, whole, Some(whole)), Ok(Some(_))));
         assert_eq!(settled(&pair, &seed, whole, Some(corner)), Ok(None));
+    }
+
+    #[test]
+    fn a_leaf_of_two_parts_tries_projections_only_where_the_seconds_part_is_under_the_firsts_middle() {
+        // Two parallel planes a unit apart, as B-splines: Newton's method settles nowhere, and projections, tried where
+        // the second's part holds the foot of the first's middle, come to rest apart; elsewhere they are not tried.
+        let (low, high) = (nurbs(&level(0.0), (-1.0, -1.0), (1.0, 1.0)), nurbs(&level(1.0), (-1.0, -1.0), (1.0, 1.0)));
+        let part = |s: &dyn Surface, lo: (f64, f64), hi: (f64, f64)| crate::pieces::Piece::whole(s, patch(lo, hi));
+        let first = part(&low, (-1.0, 0.0), (-1.0, 0.0));
+        let (under, aside) = (part(&high, (-1.0, 0.0), (-1.0, 0.0)), part(&high, (0.5, 1.0), (0.5, 1.0)));
+        let near = against_parts(&low, &high, (&first, &under), tol());
+        let far = against_parts(&low, &high, (&first, &aside), tol());
+        assert!(near.seed.is_none() && far.seed.is_none());
+        assert!(near.beside.tally.decided > 0 && far.beside.tally == Tally::default(), "{:?}", near.beside.tally);
     }
 
     #[test]

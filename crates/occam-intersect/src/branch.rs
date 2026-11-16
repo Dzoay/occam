@@ -39,9 +39,8 @@ fn crosses(
     decide: &mut Decide,
 ) -> Result<bool, Uncertain> {
     let Some(gap) = Near::between(surfaces.0, here.on_a, surfaces.1, here.on_b) else { return Ok(false) };
-    let [[k11, k12], [_, k22]] = gap.bend;
-    let saddle = k11 * k22 - k12 * k12 < 0.0;
-    if !saddle || gap.flat() {
+    let [first, second] = gap.eigenvalues();
+    if first.is_sign_negative() == second.is_sign_negative() || gap.flat() {
         return Ok(false);
     }
     let offset = gap.lifted(gap.critical()).norm();
@@ -126,7 +125,7 @@ fn cut(trace: &Trace, at: &[usize]) -> Vec<Trace> {
     let turned = if closed { turn(trace, first) } else { trace.clone() };
     let shift = |k: usize| if closed { k.saturating_sub(first) } else { k };
     let mut bounds: Vec<usize> = vec![0];
-    bounds.extend(at.iter().map(|k| shift(*k)).filter(|k| *k > 0));
+    bounds.extend(at.iter().map(|k| shift(*k)));
     bounds.push(turned.stations.len().saturating_sub(1));
     bounds.dedup();
     let last = bounds.len().saturating_sub(2);
@@ -298,6 +297,16 @@ mod tests {
     }
 
     #[test]
+    fn a_normal_is_of_unit_length_whatever_the_parameters_speed() {
+        // On a sphere of radius 2 the derivatives' cross product is 4 cos v long; the normal is the radius over 2.
+        let sphere = ball(2.0, [1.0, 0.0, 0.0]);
+        let uv = UvPoint::new(0.4, 0.3);
+        let got = normal(&sphere, uv).unwrap();
+        let want = (sphere.point(uv).to_vec3() - Vec3::new(1.0, 0.0, 0.0)) * 0.5;
+        assert!((got - want).norm() <= 1e-15 || (got + want).norm() <= 1e-15, "{got:?} against {want:?}");
+    }
+
+    #[test]
     fn a_surface_with_no_normal_there_has_no_sine() {
         let cone = occam_geom::Cone::placed(&moved([0.0; 3]), mm(0.0), occam_units::Angle::from_radians(0.5)).unwrap();
         let apex = Station {
@@ -337,10 +346,63 @@ mod tests {
         assert_eq!(found((&upright, &across), &off, &mut decide, &mut open), Vec::<usize>::new(), "no least inside");
         let short = trace(stations.iter().take(2).copied().collect(), vec![], [End::Edge; 2]);
         assert_eq!(found((&upright, &across), &short, &mut decide, &mut open), Vec::<usize>::new());
+        let three = trace(stations.iter().skip(2).take(3).copied().collect(), vec![], [End::Edge; 2]);
+        assert_eq!(found((&upright, &across), &three, &mut decide, &mut open), [1], "three stations are enough");
         assert!(open.is_empty() && decide.tally.decided >= 1, "{open:?}");
         let got = branched((&upright, &across), vec![open_trace], &mut decide, &mut open);
         assert_eq!((got.traces.len(), got.contacts.len()), (2, 1));
         assert!((got.contacts[0].at.to_vec3() - Vec3::new(0.0, 1.0, 0.0)).norm() <= 1e-9);
+    }
+
+    #[test]
+    fn two_cylinders_crossing_at_a_slant_are_a_saddle_however_the_plane_is_turned() {
+        // The unit cylinders about Z and about (sin 0.5, 0, cos 0.5) touch at (0, 1, 0), where the relative
+        // curvature, over X and Z, is [[-s², -c s], [-c s, s²]]: a saddle whose axes are not the plane's.
+        let (s, c) = sin_cos(0.5);
+        let upright = Cylinder::placed(&moved([0.0; 3]), mm(1.0)).unwrap();
+        let slant = Cylinder::placed(&placed([0.0, 1.0, 0.0], 0.5, [0.0; 3]), mm(1.0)).unwrap();
+        let node = station(&upright, &slant, Vec3::new(0.0, 1.0, 0.0));
+        let near = |x: f64| Station { at: Point::from_vec3(Vec3::new(x, 1.0, 0.0)), ..node };
+        let model = Near::between(&upright, node.on_a, &slant, node.on_b).unwrap();
+        let [[k11, k12], [_, k22]] = model.bend;
+        assert!((k11 * k22 - k12 * k12 + s * s).abs() <= 1e-12 && (k12.abs() - c * s).abs() <= 1e-12, "{model:?}");
+        let mut decide = Decide::new(BAND);
+        assert_eq!(crosses((&upright, &slant), (&near(-0.1), &node, &near(0.1)), &mut decide), Ok(true));
+    }
+
+    #[test]
+    fn a_station_beside_the_node_is_not_it_where_the_node_lies_beyond_half_its_steps() {
+        // On an ellipse of the slanted pair, 1e-3 round from the node, with neighbours 1e-4 either side: the node is
+        // further than half a step, so this station is not where the branches cross; at the node itself it is.
+        let (s, c) = sin_cos(0.5);
+        let upright = Cylinder::placed(&moved([0.0; 3]), mm(1.0)).unwrap();
+        let slant = Cylinder::placed(&placed([0.0, 1.0, 0.0], 0.5, [0.0; 3]), mm(1.0)).unwrap();
+        let normal = Vec3::new(0.0, 1.0, 0.0).cross(Vec3::new(s, 0.0, 1.0 + c));
+        let on = |t: f64| {
+            let (sine, cosine) = sin_cos(t);
+            station(&upright, &slant, Vec3::new(cosine, sine, -normal.x * cosine / normal.z))
+        };
+        let node = std::f64::consts::FRAC_PI_2;
+        let mut decide = Decide::new(BAND);
+        let at =
+            |t: f64, decide: &mut Decide| crosses((&upright, &slant), (&on(t - 1e-4), &on(t), &on(t + 1e-4)), decide);
+        assert_eq!((at(node + 1e-3, &mut decide), at(node, &mut decide)), (Ok(false), Ok(true)));
+    }
+
+    #[test]
+    fn a_touch_from_above_or_below_is_no_saddle() {
+        // A sphere resting on a plane or hanging under it: the relative curvature has one sign either way.
+        // From above the relative curvature is positive, from below negative.
+        let plane = level(0.0);
+        let mut decide = Decide::new(BAND);
+        for (height, sign) in [(2.0, 1.0), (-2.0, -1.0)] {
+            let sphere = ball(2.0, [0.0, 0.0, height]);
+            let here = station(&plane, &sphere, Vec3::new(0.0, 0.0, 0.0));
+            let near = |x: f64| Station { at: Point::from_vec3(Vec3::new(x, 0.0, 0.0)), ..here };
+            let model = Near::between(&plane, here.on_a, &sphere, here.on_b).unwrap();
+            assert!(model.eigenvalues().iter().all(|k| (k - 0.5 * sign).abs() <= 1e-12), "{model:?}");
+            assert_eq!(crosses((&plane, &sphere), (&near(-0.1), &here, &near(0.1)), &mut decide), Ok(false));
+        }
     }
 
     #[test]

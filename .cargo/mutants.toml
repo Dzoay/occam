@@ -400,18 +400,18 @@ exclude_re = [
     "occam-intersect/src/march\\.rs:161:22: replace > with >= in Run<'p, 's>::scaled$",
     "occam-intersect/src/march\\.rs:162:14: replace < with <= in Run<'p, 's>::scaled$",
     "occam-intersect/src/project\\.rs:72:61: replace > with >= in search$",
-    "occam-intersect/src/march\\.rs:359:34: replace < with <= in Run<'p, 's>::again$",
-    "occam-intersect/src/march\\.rs:360:20: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/march\\.rs:365:34: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/march\\.rs:366:20: replace < with <= in Run<'p, 's>::again$",
     # The trace. By line. A computed sag or turn exactly at its limit, and a loop's start exactly a step and a half
     # ahead: no test can place a computed value on the boundary, and either side of it is as good. A step at the limit
     # is within it, and a closure put off at the boundary is tried at the next station, nearer.
-    "occam-intersect/src/march\\.rs:227:17: replace > with >= in Run<'p, 's>::next$",
-    "occam-intersect/src/march\\.rs:227:49: replace > with >= in Run<'p, 's>::next$",
-    "occam-intersect/src/march\\.rs:188:49: replace > with >= in Run<'p, 's>::closes$",
+    "occam-intersect/src/march\\.rs:233:17: replace > with >= in Run<'p, 's>::next$",
+    "occam-intersect/src/march\\.rs:233:49: replace > with >= in Run<'p, 's>::next$",
+    "occam-intersect/src/march\\.rs:193:49: replace > with >= in Run<'p, 's>::closes$",
     # The trace's closure, by line: a march tries to close only with three stations. A loop has at least 2 pi / 0.3, 21,
     # as no step turns by more than 0.3, before its start can be ahead within a step and a half; with one station the
     # start is under the march, with two behind it. So the guard decides nothing at fewer than three or at three.
-    "occam-intersect/src/march\\.rs:188:32: replace < with (==|<=) in Run<'p, 's>::closes$",
+    "occam-intersect/src/march\\.rs:193:32: replace < with (==|<=) in Run<'p, 's>::closes$",
     # The trace's normal where a surface's derivatives lose a direction, by line. The declared line it lies on is asked
     # for only there, which is only on such a line, at its own parameter, put there exactly by the march: the parameter
     # is the line's to the bit, and any tolerance at or above nought finds the same line.
@@ -510,7 +510,7 @@ exclude_re = [
     # The hybrid, by line. A trace of one station gives one piece of one station, which the fit returns from at once
     # with nothing, so fitting it or not is the same. A box's reach either side of its middle: where the two are equal,
     # keeping either is the same number.
-    "occam-intersect/src/hybrid\\.rs:321:57: replace > with >= in finish$",
+    "occam-intersect/src/hybrid\\.rs:349:57: replace > with >= in finish$",
     "occam-intersect/src/traverse\\.rs:127:31: replace > with >= in clear$",
     # Picking's ties, by line. A triangle as near as the nearest face crossed, of the same face, is that face at that
     # distance: taking it or keeping the one held gives the same. Where an edge's segment comes as near the ray as the

@@ -89,6 +89,11 @@ impl Near {
         if size(first) < size(second) { (size(first), size(second)) } else { (size(second), size(first)) }
     }
 
+    /// The relative curvature's eigenvalues.
+    pub(crate) fn eigenvalues(&self) -> [f64; 2] {
+        eigen(self.bend).0
+    }
+
     /// Whether an eigenvalue of the relative curvature is nought to its precision, as both are where it is nought.
     pub(crate) fn flat(&self) -> bool {
         let (least, most) = self.sizes();
