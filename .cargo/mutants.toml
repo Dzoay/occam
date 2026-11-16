@@ -460,7 +460,7 @@ exclude_re = [
     # zero loses no root. Dividing by a ninth of a turn gives nine others, as distinct round it.
     "occam-intersect/src/pencil/trig\\.rs:135:51: replace \\* with / in Trig::roots$",
     # occam-geom's fields, by line. The lesser and greater of two values that are equal are either.
-    "occam-geom/src/field\\.rs:170:30: replace < with <= in holding$",
+    "occam-geom/src/field\\.rs:189:30: replace < with <= in holding$",
     # occam-geom's laps, by line. The least and greatest of angles that are equal are either. A crossing is on the
     # axis, neither ahead nor behind, only where the curve passes through it, which a curve read along does not. At a
     # point on the plane through the axis at `at`, `east cos + north sin` is its signed distance from the axis, and
