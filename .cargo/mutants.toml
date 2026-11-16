@@ -447,14 +447,14 @@ exclude_re = [
     # polynomial is as far from zero, either starts its half-angle's parameter without losing a root; and of two
     # rulings along which `β` is as near zero, either starts a nodal quartic at its node. A cone's 3×3 part has no eigenvalue that is zero, its vertex being a point, so none is on the fence.
     "occam-intersect/src/pencil/roots\\.rs:223:49: replace > with >= in place$",
-    "occam-intersect/src/pencil/mod\\.rs:99:78: replace > with >= in Pair::length$",
+    "occam-intersect/src/pencil/mod\\.rs:129:78: replace > with >= in Pair::length$",
     "occam-intersect/src/pencil/quadric\\.rs:111:53: replace > with >= in Quadric::toward$",
     "occam-intersect/src/pencil/trig\\.rs:137:21: replace > with >= in Trig::roots$",
-    "occam-intersect/src/pencil/nodal\\.rs:101:17: replace < with <= in node$",
-    "occam-intersect/src/pencil/nodal\\.rs:(77:45|81:42): replace > with >= in rulings$",
+    "occam-intersect/src/pencil/nodal\\.rs:87:17: replace < with <= in node$",
+    "occam-intersect/src/pencil/nodal\\.rs:(62:45|66:42): replace > with >= in rulings$",
     # By line. A smooth quartic's `Δ` has no double root, which would be a singular point of the curve, a node or a
     # point by itself, so between two neighbouring roots it is zero nowhere, its middle included.
-    "occam-intersect/src/pencil/smooth\\.rs:59:68: replace > with >= in loops$",
+    "occam-intersect/src/pencil/smooth\\.rs:103:68: replace > with >= in loops$",
     # By line. The angles a polynomial's roots start from may be any nine apart round the turn: one of degree four at
     # most that is not zero is not zero at all nine, and the start half a turn from the one where it is farthest from
     # zero loses no root. Dividing by a ninth of a turn gives nine others, as distinct round it.
