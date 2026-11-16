@@ -95,8 +95,7 @@ fn reach(one: &Shape, other: &Shape, (point, touch): (Flat, bool), band: f64) ->
     if !touch {
         return 0.0;
     }
-    let kappa = bend(one, point) - bend(other, point);
-    MARGIN * hidden(band, if kappa < 0.0 { -kappa } else { kappa })
+    MARGIN * hidden(band, (bend(one, point) - bend(other, point)).abs())
 }
 
 fn turned(point: Flat, decide: &mut Decisions) -> Result<Turned, Undecided> {

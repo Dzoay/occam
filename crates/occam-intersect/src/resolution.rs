@@ -360,6 +360,35 @@ mod tests {
     }
 
     #[test]
+    fn a_saddles_twist_turns_the_model_back_to_its_middle() {
+        // The bilinear saddle z = 0.2 x y over the plane z = 0: the gap is exactly 0.2 x y, so from (0.3, 0.1) the place
+        // where it is least or most is the origin, where it is nought; its relative curvature is all twist.
+        // Its parameters turned by `turn` from the plane's, the twist is read along axes that are not its own.
+        for turn in [0.0, 0.5] {
+            let (sine, cosine) = occam_math::sin_cos(turn);
+            let spun = |x: f64, y: f64| (cosine * x - sine * y, sine * x + cosine * y);
+            let corner = |x: f64, y: f64| {
+                let (u, v) = spun(x, y);
+                Point::from_vec3(Vec3::new(u, v, 0.2 * x * y))
+            };
+            let form = occam_geom::BsplineSurface {
+                degree: (1, 1),
+                count: (2, 2),
+                knots_u: vec![-1.0, -1.0, 1.0, 1.0],
+                knots_v: vec![-1.0, -1.0, 1.0, 1.0],
+                poles: vec![corner(-1.0, -1.0), corner(1.0, -1.0), corner(-1.0, 1.0), corner(1.0, 1.0)],
+                weights: None,
+            };
+            let saddle = occam_geom::SplineSurface::new(&form).unwrap();
+            let (u, v) = spun(0.3, 0.1);
+            let model = Near::between(&level(0.0), UvPoint::new(u, v), &saddle, UvPoint::new(0.3, 0.1)).unwrap();
+            let [x, y] = model.critical();
+            assert!((x + u).abs() <= 0.01 && (y + v).abs() <= 0.01, "{turn}: {x} {y}: {model:?}");
+            assert!(model.extremal().abs() <= 1e-3 && close(model.gap, 0.006), "{turn}: {model:?}");
+        }
+    }
+
+    #[test]
     fn a_surface_whose_derivatives_span_no_plane_there_gives_no_model() {
         // A cone's apex, where its derivative round the axis is nought.
         let cone = occam_geom::Cone::placed(&moved([0.0; 3]), mm(0.0), occam_units::Angle::from_radians(0.5)).unwrap();

@@ -72,7 +72,8 @@ pub(crate) fn twin(pair: &Pair<'_>, here: &Here, reach: f64) -> Option<Seed> {
     if !beside {
         return None;
     }
-    let moved = Here { at: here.at + by, p: nudged(pair.p, here.p, by), q: nudged(pair.q, here.q, by) };
+    // Settling reads the parameters alone, and finds the point from them.
+    let moved = Here { p: nudged(pair.p, here.p, by), q: nudged(pair.q, here.q, by), ..*here };
     pair.settle(&moved).map(|found| seed_of(pair, &found))
 }
 
@@ -125,9 +126,6 @@ fn touched(kept: &[Trace]) -> Vec<Station> {
     for trace in kept {
         if let ([station], [End::Touch, End::Touch]) = (trace.stations.as_slice(), trace.ends) {
             out.push(*station);
-            continue;
-        }
-        if trace.stations.len() < 2 {
             continue;
         }
         let ends = [(trace.ends[0], trace.stations.first()), (trace.ends[1], trace.stations.last())];
@@ -267,18 +265,20 @@ mod tests {
             trace(vec![s(1.0), s(1.5)], [End::Touch, End::Edge]),
             trace(vec![s(2.0), s(2.5)], [End::Edge, End::Touch]),
             trace(vec![s(3.0), s(3.5), s(3.7)], [End::Closed; 2]),
+            trace(vec![s(6.0), s(6.5), s(6.7)], [End::Edge, End::Touch]),
             trace(vec![s(4.0)], [End::Apart; 2]),
             trace(vec![s(5.0)], [End::Undecided; 2]),
             trace(vec![], [End::Touch; 2]),
         ];
         let got: Vec<f64> = touched(&kept).iter().map(|s| s.at.to_vec3().x).collect();
-        assert_eq!(got, [0.0, 1.0, 2.5]);
+        assert_eq!(got, [0.0, 1.0, 2.5, 6.7]);
     }
 
     #[test]
     fn touches_within_each_others_bounds_are_one_contact_and_those_apart_are_two() {
         // A sphere of radius 2 touching the plane z = 0 at the origin: each touch near it is bounded by about
-        // 2 √(2 band / ½), and two 1e-5 apart are one, its bound grown by what the second adds; one 1.5 away is another.
+        // 2 √(2 band / ½), and two 1e-5 apart are one, its bound grown to hold the second's, 1e-5 off its middle: by
+        // 1e-5 and twice that. One 1.5 away is another.
         let (plane, sphere) = (level(0.0), ball(2.0, [0.0, 0.0, 2.0]));
         let near = |x: f64| station(&plane, &sphere, Vec3::new(x, 0.0, 2.0 - (4.0 - x * x).sqrt()));
         let kept = [
@@ -294,7 +294,7 @@ mod tests {
             panic!("{got:?}")
         };
         let d = (2.0 * BAND / 0.5).sqrt();
-        assert!(at.to_vec3().norm() <= 1e-12 && (2.0 * d..=2.0 * d + 4e-5).contains(&bound.millimetres()), "{bound:?}");
+        assert!(at.to_vec3().norm() <= 1e-12 && (bound.millimetres() - (2.0 * d + 3e-5)).abs() <= 1e-6, "{bound:?}");
         assert!((other.to_vec3().x - 1.5).abs() <= 1e-9, "{other:?}");
     }
 
