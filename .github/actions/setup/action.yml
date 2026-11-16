@@ -21,7 +21,7 @@ runs:
         COMPONENTS: ${{ inputs.components }}
         TARGETS: ${{ inputs.targets }}
       run: |
-        toolchain=1.99.1
+        toolchain=1.100.0
         args=(--profile minimal)
         if [ -n "$COMPONENTS" ]; then args+=(--component "$COMPONENTS"); fi
         if [ -n "$TARGETS" ]; then args+=(--target "$TARGETS"); fi
