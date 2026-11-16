@@ -20,10 +20,13 @@ pub struct SectionCurve {
     pub on_b: Arc<dyn ParamCurve>,
 }
 
-/// Where the two surfaces touch with no curve between them.
+/// Where the two surfaces touch with no curve between them, or where branches of their section cross. Every method
+/// gives one by one rule (O24): a point only where the decision certifies that nothing the band hides there reaches
+/// beyond the band, and else below the resolution, with the bound of what may.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Contact {
-    /// A point where they touch, certified by the decision that found it.
+    /// A point where they touch, certified by the decision that found it: no tangency, as at a cone's apex, or one
+    /// whose bound is decided within the band.
     Point {
         /// The point in space.
         at: Point<World>,
@@ -36,7 +39,8 @@ pub enum Contact {
     BelowResolution {
         /// Where it is.
         at: Point<World>,
-        /// How large it can be.
+        /// How large it can be: every point of what hides there lies within this of `at`. Infinite where the surfaces
+        /// are tangent along a curve through it, which no relative curvature bounds.
         bound: Length,
     },
 }

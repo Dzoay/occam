@@ -22,7 +22,7 @@ flowchart TD
 | A `Section` holds | Meaning |
 |---|---|
 | curves | Each with its image on both surfaces |
-| contacts | A point of tangency, or `BelowResolution`: a contact or loop smaller than this tolerance can tell apart (O24) |
+| contacts | A point the decision certifies, or `BelowResolution`: a contact or loop smaller than this tolerance can tell apart, with a bound that holds it ([below](#what-the-tolerance-cannot-tell-apart), O24) |
 | coincidence | Coplanar or coaxial (O25) |
 | failures | A stalled trace, a spent budget, an unresolved leaf, an undecided predicate |
 | tally | The decisions made, from [maths](maths.md#robust-decisions) |
@@ -80,8 +80,47 @@ flowchart TD
 - **The tube** about the curves found is twice each chord's sag wide, and the square root of the band about a touch. A
   start inside it is not traced, and a trace whose ends and middle all lie in it is dropped. Rounds take every so many
   start points, so a round's points are far apart.
+- **Near a tangency** the leaves and traces work as [below](#what-the-tolerance-cannot-tell-apart): projections where
+  Newton's method loses rank, a mirrored start for a second close curve, branch points cut, and every touch a contact by
+  the rule.
 - **Lattice seeding alone is not offered:** on P5's 625-component surface it returned 256 of 577 curves and said
   nothing. The hybrid finds all 577 (`just hybrid-many-loops`, nightly).
+
+### What the tolerance cannot tell apart
+
+```mermaid
+flowchart LR
+  touch(["A contact:<br/>a touch or a branch point"]) --> apex{"At a cone's<br/>apex?"}
+  apex -->|"yes"| point[("Point")]
+  apex -->|"no"| bound["Bound from the band<br/>and the relative curvature"]
+  bound --> within{"Bound within<br/>the band?"}
+  within -->|"yes"| point
+  within -->|"no, or undecided"| below[("BelowResolution { at, bound }")]
+```
+
+- **One rule, every method** ([`resolution`](../../crates/occam-intersect/src/resolution.rs), which derives it). Where the
+  normals are parallel, the gap between the surfaces is `g₀ + ½ xᵀ K x` to second order, `K` the relative curvature.
+  The band cannot tell a gap within it from none, so a loop smaller than `d = √(2 band / κ)`, `κ` the least size of
+  `K`'s eigenvalues, cannot be told from a contact. Two unit spheres `ε` into each other have `κ = 2` and a loop of
+  radius about `√ε` (P5).
+- **The bound** is twice what the model gives: `2 d` where the method has the contact itself, as the closed forms read
+  from their meridians and the pencil method from its quadrics; `2 (|c − p| + √(2 (|g₀| + band) / κ))` where the hybrid
+  reads the model at a station `p` its trace ended at, `c` where the gap is least or most. Where `K` has an eigenvalue
+  nought to its precision, along a tangency along a curve, the bound is infinite.
+- **A point is certified** only where its bound is decided within the band. Every smooth tangency hides more than the
+  band, so it is `BelowResolution`; a contact at a cone's apex is no tangency, and is a point
+  ([decided](../decisions/2026-11-16-every-smooth-tangency-is-a-bounded-touch.md)).
+- **Branch points,** where two branches cross, are kept as contacts by the same rule, and every bounded curve through
+  one is cut there: the pencil method's nodal quartic at its node and its split conics where they cross. A line through
+  a cone's apex has no ends to cut, and is kept whole beside the apex's contact. The hybrid finds one where the sine
+  between the normals is least along a trace and the model there is a saddle whose gap is within the band.
+- **The hybrid near a tangency:** a leaf where Newton's method settles nowhere is given to alternating projections; a
+  start where the surfaces cross at a small angle has a second start mirrored through where the gap is least, traced
+  after the leaves' own, one a round, for the second of two close curves. A trace closes where the corrector lands
+  within the band over the sine between the surfaces of its start, the curve's own resolution there. Touches within
+  each other's bounds are one contact.
+- **Not done here:** the hybrid does not trace a tangency along a curve, which is one `BelowResolution` with an infinite
+  bound; and its tube, twice the tracer's sag wide, is a resolution of its own, below which a second curve is lost.
 
 ## Edge against surface
 
@@ -116,9 +155,10 @@ flowchart TD
 <summary>Evidence</summary>
 
 - [P5](../evidence/2026-11-09-p5.md): closed forms 58 of 58 within 1e-12. The hybrid 104 of 110, with 2 silent failures,
-  against 13 for marching alone, none of which marching reported: hence failures kept in the result. Lattice-seeded
-  marching returned 256 of 577 curves with no warning, so it is not a route to completeness. Rejection bounds carry a
-  rounding margin.
+  against 13 for marching alone, none of which marching reported: hence failures kept in the result. Its near-tangent
+  sweep, rebuilt at a band of 5e-11, had 13 silent failures here before the rule and has none after it: 40 correct and
+  8 `BelowResolution`, each bound holding its true section. Lattice-seeded marching returned 256 of 577 curves with no
+  warning, so it is not a route to completeness. Rejection bounds carry a rounding margin.
 - [S4](../evidence/2026-11-09-s4.md): the ordered method list, and canonical pair order.
 - [P8](../evidence/2026-11-09-p8.md): the edge box test removed 66 to 86% of scans.
 - The hybrid reaching offsets and mesh-backed surfaces: B:13.

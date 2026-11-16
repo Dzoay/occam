@@ -303,8 +303,8 @@ exclude_re = [
     # dividing by it is multiplying by it; and a cone's two rulings through its apex in a plane less steep than its
     # side are each other's mirror, both made, so taking the part across away instead of adding it swaps them.
     "closed/conic\\.rs:111:28: replace \\* with / in plane_cone$",
-    "closed/conic\\.rs:131:94: replace \\* with / in through_apex$",
-    "closed/conic\\.rs:131:79: replace \\+ with - in through_apex$",
+    "closed/conic\\.rs:132:94: replace \\* with / in through_apex$",
+    "closed/conic\\.rs:132:79: replace \\+ with - in through_apex$",
     # Ties, which give the same value either way: a cosine or a difference of radii of exactly nought, which is its own
     # magnitude; two world axes as little along a normal, either square to it; a parabola's `d` times its slant exactly
     # nought, which only a plane through the apex has, decided before; and circles of one radius, which touch inside
@@ -313,10 +313,10 @@ exclude_re = [
     "closed/conic\\.rs:111:36: replace > with >= in plane_cone$",
     "closed/meet\\.rs:116:16: replace < with <= in magnitude$",
     "closed/meet\\.rs:137:38: replace < with <= in circles$",
-    "closed/piece\\.rs:60:17: replace < with <= in square_to$",
+    "closed/piece\\.rs:75:17: replace < with <= in square_to$",
     # By line. A point two meridians of a coaxial pair meet in twice on the axis is a cone's apex, and a pair with a
     # cone measures its heights from the apex: nought and twice nought are one height.
-    "closed/coaxial\\.rs:118:33: replace - with \\+ in seen$",
+    "closed/coaxial\\.rs:144:33: replace - with \\+ in seen$",
     # By line. A sine or a cosine is at most 1, so four machine epsilons over it is at least four of it: a wider
     # enclosure, still certified, which only a value within a few ulps of a band's edge could tell, and none is.
     "closed/(conic|coaxial)\\.rs:(77|33):41: replace \\* with / in computed$",
@@ -387,18 +387,18 @@ exclude_re = [
     "occam-intersect/src/march\\.rs:161:22: replace > with >= in Run<'p, 's>::scaled$",
     "occam-intersect/src/march\\.rs:162:14: replace < with <= in Run<'p, 's>::scaled$",
     "occam-intersect/src/project\\.rs:72:61: replace > with >= in search$",
-    "occam-intersect/src/march\\.rs:359:34: replace < with <= in Run<'p, 's>::again$",
-    "occam-intersect/src/march\\.rs:360:20: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/march\\.rs:365:34: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/march\\.rs:366:20: replace < with <= in Run<'p, 's>::again$",
     # The trace. By line. A computed sag or turn exactly at its limit, and a loop's start exactly a step and a half
     # ahead: no test can place a computed value on the boundary, and either side of it is as good. A step at the limit
     # is within it, and a closure put off at the boundary is tried at the next station, nearer.
-    "occam-intersect/src/march\\.rs:227:17: replace > with >= in Run<'p, 's>::next$",
-    "occam-intersect/src/march\\.rs:227:49: replace > with >= in Run<'p, 's>::next$",
-    "occam-intersect/src/march\\.rs:188:49: replace > with >= in Run<'p, 's>::closes$",
+    "occam-intersect/src/march\\.rs:233:17: replace > with >= in Run<'p, 's>::next$",
+    "occam-intersect/src/march\\.rs:233:49: replace > with >= in Run<'p, 's>::next$",
+    "occam-intersect/src/march\\.rs:193:49: replace > with >= in Run<'p, 's>::closes$",
     # The trace's closure, by line: a march tries to close only with three stations. A loop has at least 2 pi / 0.3, 21,
     # as no step turns by more than 0.3, before its start can be ahead within a step and a half; with one station the
     # start is under the march, with two behind it. So the guard decides nothing at fewer than three or at three.
-    "occam-intersect/src/march\\.rs:188:32: replace < with (==|<=) in Run<'p, 's>::closes$",
+    "occam-intersect/src/march\\.rs:193:32: replace < with (==|<=) in Run<'p, 's>::closes$",
     # The trace's normal where a surface's derivatives lose a direction, by line. The declared line it lies on is asked
     # for only there, which is only on such a line, at its own parameter, put there exactly by the march: the parameter
     # is the line's to the bit, and any tolerance at or above nought finds the same line.
@@ -497,8 +497,21 @@ exclude_re = [
     # The hybrid, by line. A trace of one station gives one piece of one station, which the fit returns from at once
     # with nothing, so fitting it or not is the same. A box's reach either side of its middle: where the two are equal,
     # keeping either is the same number.
-    "occam-intersect/src/hybrid\\.rs:321:57: replace > with >= in finish$",
+    "occam-intersect/src/hybrid\\.rs:349:57: replace > with >= in finish$",
     "occam-intersect/src/traverse\\.rs:127:31: replace > with >= in clear$",
+    # What the tolerance cannot tell apart (intersection.resolution), by line. Ties that give the same number or the same
+    # answer either way: the larger of a leaf's two sizes, of a station's two half steps, of two bounds merged, and of an
+    # eigenvalue's two sizes, where the two are equal; a node exactly half a step from a station; a second curve's start
+    # exactly the band from the first. Normals square to each other give no finite slope, so no model, whichever way
+    # one is turned. The pencil's relative curvature negated has eigenvalues of the same sizes, which are all a bound
+    # reads.
+    "occam-intersect/src/branch\\.rs:49:(15|26): replace > with >= in crosses$",
+    "occam-intersect/src/hybrid\\.rs:217:27: replace > with >= in against_parts$",
+    "occam-intersect/src/resolution\\.rs:89:24: replace < with <= in Near::sizes$",
+    "occam-intersect/src/resolution\\.rs:151:61: replace < with <= in Near::between$",
+    "occam-intersect/src/tangency\\.rs:71:22: replace > with >= in twin$",
+    "occam-intersect/src/tangency\\.rs:166:44: replace > with >= in contacts$",
+    "occam-intersect/src/pencil/emit\\.rs:154:49: delete - in touch$",
     # Picking's ties, by line. A triangle as near as the nearest face crossed, of the same face, is that face at that
     # distance: taking it or keeping the one held gives the same. Where an edge's segment comes as near the ray as the
     # one held, as far along it, of the same edge and from the same sample, it is the same segment, whose nearest point

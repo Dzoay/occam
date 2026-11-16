@@ -12,9 +12,10 @@ use occam_geom::Analytic;
 use occam_math::Side;
 use occam_units::{Direction, ParamKind, Point, Vec3};
 
+use super::emit::touch;
 use super::quadric::{Natural, Ruling};
 use super::{Pair, cut};
-use crate::closed::{Found, Plan, cross3, exact3, minus, norm3, solve, unit};
+use crate::closed::{Found, Plan, Touch, cross3, exact3, minus, norm3, solve, unit};
 use crate::decide::{Decisions, Undecided};
 
 /// Points of each conic or line, in the world, to hold it to the other surface: at parameters spread over a closed
@@ -128,7 +129,11 @@ pub(super) fn conics(
     decide: &mut Decisions,
 ) -> Result<Result<Found, &'static str>, Undecided> {
     let (r, o) = cut(pair);
-    let mut found = Found { contacts: crossings(pair, r, planes, decide)?, ..Found::default() };
+    let mut contacts = Vec::new();
+    for at in crossings(pair, r, planes, decide)? {
+        contacts.push(touch(pair, at, decide)?);
+    }
+    let mut found = Found { contacts, ..Found::default() };
     for plane in planes {
         let Some(part) = section(pair, (r, o), plane, decide)? else { return Ok(Err("a plane with no conic")) };
         for plan in part.curves {
@@ -150,7 +155,7 @@ pub(super) fn rulings(pair: &Pair, decide: &mut Decisions) -> Result<Result<Foun
     let mut candidates = alpha.roots();
     candidates.extend(alpha.rate().roots());
     let apex = pair.surfaces[0].at();
-    let mut found = Found { contacts: vec![apex], ..Found::default() };
+    let mut found = Found { contacts: vec![Touch::point(apex)], ..Found::default() };
     let mut ways: Vec<Vec3> = Vec::new();
     for theta in candidates {
         let g = first.direction(theta);

@@ -18,7 +18,9 @@ use occam_geom::{Analytic, Sphere, Surface};
 use occam_units::{Bounds, Direction, Placement, Point, Vec3, World};
 
 use super::{Class, Pair, Pencil, classify};
-use crate::closed::tests::{Want, contact_maps, frame_by, from_curve, lies_on_both, mm, nearer, scale, size, tol};
+use crate::closed::tests::{
+    Want, contact_maps, frame_by, from_curve, is_contact, lies_on_both, mm, nearer, scale, size, tol,
+};
 use crate::decide::Decisions;
 use crate::{Budget, Closed, Contact, Methods, Section};
 
@@ -92,9 +94,10 @@ fn check(case: &Case) {
         let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, nearer);
         assert!(near <= 1e-9 * size(), "{name}: no curve passes through {p:?}: the nearest is {near} away");
     }
-    for p in want.contacts.iter().map(|p| moved(&case.place, *p)) {
-        let near = |c: &Contact| matches!(c, Contact::Point { at, .. } if (at.to_vec3() - p).norm() <= 1e-10 * size());
-        assert!(got.contacts.iter().any(near), "{name}: no contact at {p:?} in {:?}", got.contacts);
+    for (k, p) in want.contacts.iter().map(|p| moved(&case.place, *p)).enumerate() {
+        let bound = want.bounds.get(k).copied().flatten();
+        let near = |c: &Contact| is_contact(c, p, bound, 1e-10 * size());
+        assert!(got.contacts.iter().any(near), "{name}: no contact at {p:?}, {bound:?}, in {:?}", got.contacts);
     }
     for found in &got.contacts {
         contact_maps(name, found, a, b);

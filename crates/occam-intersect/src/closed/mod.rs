@@ -27,16 +27,33 @@ use self::coaxial::{Axis, coaxial};
 pub(crate) use self::piece::{Plan, square_to};
 use crate::decide::{Decisions, Undecided};
 use crate::methods::{Answer, Method, Spent, Work};
+use crate::resolution::contact;
 use crate::section::{Coincidence, Contact, Section, SectionCurve};
 
 /// The closed forms, which answer the pairs that have one and decline the rest.
 pub struct Closed;
 
+/// A point where the surfaces meet with no curve through it, or where curves cross, and how far from it what the band
+/// hides there reaches: nought where it is no tangency, as at a cone's apex, which the band moves only by its own order
+/// (O24, [`resolution`](crate::resolution)).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Touch {
+    pub(crate) at: Vec3,
+    pub(crate) bound: f64,
+}
+
+impl Touch {
+    /// A contact that is no tangency.
+    pub(crate) const fn point(at: Vec3) -> Self {
+        Self { at, bound: 0.0 }
+    }
+}
+
 /// What a closed form found, in space.
 #[derive(Default)]
 pub(crate) struct Found {
     pub(crate) curves: Vec<Plan>,
-    pub(crate) contacts: Vec<Vec3>,
+    pub(crate) contacts: Vec<Touch>,
     pub(crate) coincidence: Option<Coincidence>,
 }
 
@@ -201,30 +218,38 @@ fn off_axis(first: Analytic, second: Analytic, decide: &mut Decisions) -> Result
     }))
 }
 
-/// Puts what was found into `section`, each curve with its images on both surfaces, or gives `false`, having put
-/// nothing, where a curve or an image cannot be made.
+/// Puts what was found into `section`, each curve with its images on both surfaces and cut where it passes through a
+/// contact, as two conics are where they cross, or gives `false`, having put nothing, where a curve or an image cannot
+/// be made. Each contact is decided by [`resolution`](crate::resolution)'s rule.
 pub(crate) fn emit(
     found: Found,
     charts: [&Chart; 2],
     decide: &mut Decisions,
     section: &mut Section,
 ) -> Result<bool, Undecided> {
+    let through: Vec<Vec3> = found.contacts.iter().map(|touch| touch.at).collect();
     let mut curves = Vec::new();
     for plan in found.curves {
-        let Some(made) = piece::pieces(plan, charts, decide)? else { return Ok(false) };
+        let Some(made) = piece::pieces(plan, charts, &through, decide)? else { return Ok(false) };
         curves.extend(made.into_iter().map(|m| {
             let [on_a, on_b] = m.on;
             SectionCurve { curve: m.curve, on_a, on_b }
         }));
     }
     section.curves.extend(curves);
-    section.contacts.extend(found.contacts.into_iter().map(|at| Contact::Point {
-        at: Point::from_vec3(at),
-        on_a: charts[0].parameters(Point::from_vec3(at)),
-        on_b: charts[1].parameters(Point::from_vec3(at)),
-    }));
+    for touch in found.contacts {
+        section.contacts.push(decided(touch, charts, decide));
+    }
     section.coincidence = found.coincidence;
     Ok(true)
+}
+
+/// `touch` as a contact, with its parameters through both charts: a point where its bound is decided within the band,
+/// and else below the resolution, as where the band cannot decide it, which is reported.
+pub(crate) fn decided(touch: Touch, charts: [&Chart; 2], decide: &mut Decisions) -> Contact {
+    let at = Point::from_vec3(touch.at);
+    let certified = touch.bound.is_finite() && decide.length(Interval::exact(touch.bound)) == Ok(Side::Within);
+    contact(touch.at, (charts[0].parameters(at), charts[1].parameters(at)), touch.bound, certified)
 }
 
 impl Method for Closed {

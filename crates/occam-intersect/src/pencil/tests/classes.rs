@@ -165,11 +165,13 @@ fn the_pencils_planes_are_cut_with_a_cylinder_before_a_sphere_before_a_cone() {
     assert_eq!(cut(c.as_ref(), cylinder(O, X, 0.5).as_ref()), (0, 1), "of two alike, the first");
 }
 
+/// The unit sphere and the unit cylinder about the line through `(2, 0, 0)` along Z touch at `(1, 0, 0)`, curving away
+/// from each other by 2 across Z and 1 along it: a tangency below the resolution, of `κ = 1`.
 #[test]
 fn an_isolated_touch_is_a_contact_and_no_curve() {
     let (a, b) = (sphere(O, 1.0), cylinder(v(2.0, 0.0, 0.0), Z, 1.0));
     assert!(matches!(class(a.as_ref(), b.as_ref()), Class::Node { kind: super::super::Singular::Isolated, .. }));
-    let want = Want { contacts: vec![X], ..Want::default() };
+    let want = Want { contacts: vec![X], ..Want::default() }.below(1.0);
     check(&Case { name: "isolated".to_string(), a, b, want, place: rigid(), unnamed: 0 });
 }
 

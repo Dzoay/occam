@@ -18,7 +18,8 @@ use crate::closed::tests::{O, SIZE, Want, X, Z, cone, cylinder, from_curve, near
 use crate::{Budget, Methods, Pencil, Section};
 
 /// Two cylinders of radius `r` whose axes cross at the origin at the angle `psi`: two ellipses, in the planes through
-/// the common normal Y and either bisector of the axes, crossing at `(0, ±r, 0)`.
+/// the common normal Y and either bisector of the axes, crossing at `(0, ±r, 0)`, where each is cut. The relative
+/// curvature there is the difference of the two cylinders' `1/r` across their axes, of eigenvalues `±sin psi / r`.
 pub(super) fn equal_crossing(seed: &mut Seeded, index: u32) -> Case {
     let place = seed.rigid();
     let (radius, psi) = (seed.next(0.5, 1.2), seed.next(0.5, 1.4));
@@ -32,13 +33,14 @@ pub(super) fn equal_crossing(seed: &mut Seeded, index: u32) -> Case {
             on.push(v(radius * c, radius * s, -normal.x * radius * c / normal.z));
         }
     }
-    let want = Want { curves: 2, contacts: vec![v(0.0, radius, 0.0), v(0.0, -radius, 0.0)], on, ..Want::default() };
+    let crossings = vec![v(0.0, radius, 0.0), v(0.0, -radius, 0.0)];
+    let want = Want { curves: 4, contacts: crossings, on, ..Want::default() }.below(sine / radius);
     let (a, b) = (cylinder_by(O, Z, radius, &place), cylinder_by(O, along, radius, &place));
     Case { name: format!("equal_crossing[{index}]"), a, b, want, place, unnamed: 0 }
 }
 
 /// Viviani's pair at any size: the cylinder of radius `r` about the axis through `(r, 0, 0)` inside the sphere of radius
-/// `2r` about the origin, whose own axis leans, so that the curve passes neither pole.
+/// `2r` about the origin, whose own axis leans, so that the curve passes neither pole, and is cut at its node only.
 pub(super) fn viviani(seed: &mut Seeded, index: u32) -> Case {
     let place = seed.rigid();
     let radius = seed.next(0.5, 1.0);
@@ -50,7 +52,7 @@ pub(super) fn viviani(seed: &mut Seeded, index: u32) -> Case {
             v(radius + radius * c, radius * s, 2.0 * radius * sin_cos(0.5 * turn).0)
         })
         .collect();
-    let want = Want { curves: 1, contacts: vec![v(2.0 * radius, 0.0, 0.0)], on, ..Want::default() };
+    let want = Want { curves: 2, contacts: vec![v(2.0 * radius, 0.0, 0.0)], on, ..Want::default() }.below(0.5 / radius);
     let (a, b) = (cylinder_by(v(radius, 0.0, 0.0), Z, radius, &place), sphere_along(O, lean, 2.0 * radius, &place));
     Case { name: format!("viviani[{index}]"), a, b, want, place, unnamed: 0 }
 }
@@ -125,7 +127,7 @@ fn a_pencil_nudged_to_the_edge_of_the_band_of_a_split_is_undecided_and_nothing_i
     assert!(got.tally.undecided >= 1, "{:?}", got.tally);
     let split = nudged(2.0 * NUDGE);
     assert!(split.failures.is_empty(), "{:?}", split.failures);
-    assert_eq!((split.curves.len(), split.contacts.len()), (2, 2), "within the band, a split");
+    assert_eq!((split.curves.len(), split.contacts.len()), (4, 2), "within the band, a split, cut where it crosses");
     let apart = nudged(0.5 * NUDGE);
     assert!(apart.failures.is_empty(), "{:?}", apart.failures);
     assert_eq!((apart.curves.len(), apart.contacts.len()), (2, 0), "clear of it, two loops");

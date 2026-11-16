@@ -185,7 +185,7 @@ fn p5s_625_component_surface_against_a_plane_gives_all_577_curves() {
 
 /// The biquadratic graph over `[-1, 1]^2` of `ax x^2 + bx x + ay y^2 + by y`, placed rigidly: its parameters are `x`
 /// and `y`, as the poles' Greville abscissae are.
-fn graph((ax, bx): (f64, f64), (ay, by): (f64, f64)) -> SplineSurface {
+pub(crate) fn graph((ax, bx): (f64, f64), (ay, by): (f64, f64)) -> SplineSurface {
     let side = |a: f64, b: f64| [a - b, -a, a + b];
     let (fx, fy) = (side(ax, bx), side(ay, by));
     let at = [-1.0, 0.0, 1.0];
@@ -276,12 +276,16 @@ fn a_torus_is_subdivided_against_a_planes_implicit_form_where_the_plane_has_no_e
 }
 
 #[test]
-fn a_sphere_touching_a_plane_is_one_contact() {
+fn a_sphere_touching_a_plane_is_one_contact_below_the_resolution() {
+    // The relative curvature is the sphere's, a half: the band hides a loop of radius `√(2 band / ½)` there, and the
+    // touch is where the surfaces are within the band of each other, so the bound is at least twice that.
     let (plane, sphere) = (upright(0.0), ball(2.0, [2.0, 0.0, 0.0]));
     let found = alone(hybrid(1e-4, 0.05, 0.25)).section(&plane, &sphere, tol(), within(2_000));
     assert!(found.curves.is_empty() && found.failures.is_empty(), "{} {:?}", found.curves.len(), found.failures);
-    let [Contact::Point { at, .. }] = found.contacts.as_slice() else { panic!("{:?}", found.contacts) };
+    let [Contact::BelowResolution { at, bound }] = found.contacts.as_slice() else { panic!("{:?}", found.contacts) };
     assert!(at.to_vec3().norm() < 1e-6, "where they touch: {at:?}");
+    let d = (2.0 * BAND / 0.5).sqrt();
+    assert!(2.0 * d <= bound.millimetres() && bound.millimetres() <= 4.0 * d, "{bound:?} against {d}");
 }
 
 #[test]
