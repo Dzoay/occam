@@ -3,6 +3,8 @@
 //! any geometry, with a code for each kind of bad input naming where it is (S6). Its steps then run in order through the
 //! edit, in the `occam` crate's runner. What this build does, and what it refuses by name, is [`listing`].
 
+#[cfg(test)]
+mod adversarial;
 mod args;
 #[cfg(test)]
 mod buffered;

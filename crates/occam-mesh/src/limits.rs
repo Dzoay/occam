@@ -41,6 +41,11 @@ impl Limits {
     /// if need be, and says so (P9's hard limit on triangles per face).
     pub const TRIANGLES_PER_FACE: u32 = 1 << 20;
 
+    /// The most times repair may cut the pieces of a face's boundary that collided and try it again: each try cuts at
+    /// most four pieces, never an edge past [`Self::SAMPLES_PER_EDGE`], so a face it does not cure costs at most this
+    /// many triangulations of its boundary, and keeps no cut.
+    pub const REPAIRS_PER_FACE: u32 = 64;
+
     /// The limits of a mesh no point of whose edges' chords is further than `deflection` from its edge, and none of
     /// whose edges turns through more than `angle` between two samples. An angle of a whole turn or more leaves the
     /// turning to the deflection.

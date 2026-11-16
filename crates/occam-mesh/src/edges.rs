@@ -11,7 +11,7 @@
 //! report gives the first deflection, doubling from the one asked, at which it fits.
 
 use core::f64::consts::FRAC_PI_2;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use occam_geom::Curve;
@@ -33,24 +33,52 @@ pub struct EdgeSamples {
     pub points: Vec<Point<World>>,
 }
 
-/// Every edge any face of a model uses, each with its samples or the report refusing it, in id order, and the limits
-/// they were sampled to, which its faces are meshed to.
+/// Every edge any face of a model uses, each with its samples or the report refusing it, in id order, the limits
+/// they were sampled to, which its faces are meshed to, and those that repair cut finer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Edges {
     list: Vec<(Id<Edge>, Result<EdgeSamples, Report>)>,
     limits: Limits,
+    repaired: Vec<Id<Edge>>,
 }
 
 impl Edges {
-    /// `list`, sampled to `limits`, in id order.
+    /// `list`, sampled to `limits`, in id order, none of them repaired.
     pub(crate) const fn new(list: Vec<(Id<Edge>, Result<EdgeSamples, Report>)>, limits: Limits) -> Self {
-        Self { list, limits }
+        Self { list, limits, repaired: Vec::new() }
     }
 
     /// The limits the edges were sampled to.
     #[must_use]
     pub const fn limits(&self) -> Limits {
         self.limits
+    }
+
+    /// The edges repair cut finer than they were sampled, where a face's boundary collided along them and finer
+    /// samples cured it, in id order: none where no face needed it.
+    #[must_use]
+    pub fn repaired(&self) -> &[Id<Edge>] {
+        &self.repaired
+    }
+
+    /// These edges with a sample added at each parameter `cuts` gives one of them, each strictly between two of its
+    /// samples, the point there its curve's; those it cuts are repaired. An edge whose curve `model` does not have
+    /// is refused as stale.
+    pub(crate) fn cut(&self, model: &Snapshot, cuts: &BTreeMap<Id<Edge>, Vec<f64>>) -> Self {
+        let each = |(edge, sampled): &(Id<Edge>, Result<EdgeSamples, Report>)| match (sampled, cuts.get(edge)) {
+            (Ok(samples), Some(at)) => (*edge, split(model, *edge, samples, at)),
+            _ => (*edge, sampled.clone()),
+        };
+        let list = self.list.iter().map(each).collect();
+        let repaired = self.repaired.iter().chain(cuts.keys()).copied().collect::<BTreeSet<_>>();
+        Self { list, limits: self.limits, repaired: repaired.into_iter().collect() }
+    }
+
+    /// The edges of these that `keep` keeps.
+    pub(crate) fn only(self, keep: &dyn Fn(Id<Edge>) -> bool) -> Self {
+        let list = self.list.into_iter().filter(|(edge, _)| keep(*edge)).collect();
+        let repaired = self.repaired.into_iter().filter(|&edge| keep(edge)).collect();
+        Self { list, limits: self.limits, repaired }
     }
 
     /// The samples of `edge`, or the report refusing it; `None` for an edge no face uses.
@@ -78,7 +106,7 @@ impl Edges {
 #[must_use]
 pub fn sample_edges(exec: &Exec, model: &Snapshot, limits: Limits) -> Edges {
     let list = sample_some(exec, model, &model.ids::<Face>(), &|_| true, limits);
-    Edges { list, limits }
+    Edges::new(list, limits)
 }
 
 /// The edges `faces` use that `wanted` keeps, each sampled once on `exec` as finely as the finest of `faces` that use
@@ -137,6 +165,19 @@ fn sample_edge(model: &Snapshot, edge: Id<Edge>, bend: f64, limits: Limits) -> R
         }
         None => Err(over_cap(edge, limits, piece.fitting(bend, limits))),
     }
+}
+
+/// `samples` of `edge` with one at each of `at`, strictly between two of them, the point there its curve's, in order,
+/// each once.
+fn split(model: &Snapshot, edge: Id<Edge>, samples: &EdgeSamples, at: &[f64]) -> Result<EdgeSamples, Report> {
+    let view = model.view(edge).ok_or_else(|| stale(model, edge))?;
+    let curve = view.curve().ok_or_else(|| stale(model, view.curve_id()))?;
+    let mut all: Vec<(f64, Point<World>)> =
+        samples.params.iter().copied().zip(samples.points.iter().copied()).collect();
+    all.extend(at.iter().map(|&t| (t, curve.first(t).0)));
+    all.sort_by(|a, b| a.0.total_cmp(&b.0));
+    all.dedup_by(|a, b| a.0.total_cmp(&b.0).is_eq());
+    Ok(EdgeSamples { params: all.iter().map(|&(t, _)| t).collect(), points: all.into_iter().map(|(_, p)| p).collect() })
 }
 
 /// The samples as the faces read them, the ends at the edge's vertices where it has them.
