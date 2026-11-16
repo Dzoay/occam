@@ -28,13 +28,15 @@ flowchart LR
 - **Nothing is shared,** so the page needs no `SharedArrayBuffer`, and no COOP or COEP headers: bytes and arrays are
   transferred.
 - **Each call's output is deterministic.** The page's assembly of the parts is display-only, like GPU output.
-- **A face that will not mesh is named** in the page by the kernel's report, and the rest of the model is drawn.
+- **A face that will not mesh is named** in the page by the kernel's report, and the rest of the model is drawn. A
+  call that throws instead, as when a worker's kernel will not load, is `view.mesh-failed`, naming the faces it held;
+  every other face is drawn, and a reload meshes them again.
 - **An edit is one long call** on its worker. Splitting a boolean across calls waits for the `view` milestone's timing.
 
 | Message | From, to | What it carries |
 |---|---|---|
 | `run` | page, editing worker | the request, and how many copies of the twin to make |
-| `ran` | editing worker, page | the run's one JSON form, the model's face count, and the copies, if it changed |
+| `ran` | editing worker, page | the run's one JSON form, each face's id, and the copies, if it changed |
 | `load` | page, mesh worker | a model's number and its own copy of the twin |
 | `mesh` | page, mesh worker | a call's number, the model's, the limits, and the range of faces |
 | `meshed` or `failed` | mesh worker, page | the range's arrays and faces' table, with the reports refusing any of it; or why it could not mesh at all |

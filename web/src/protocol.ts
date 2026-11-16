@@ -18,8 +18,8 @@ export type FromEditing =
     readonly id: number;
     /** The run's one JSON form, as `occam run --json` gives it. */
     readonly ran: string;
-    /** How many faces the model has now. */
-    readonly faces: number;
+    /** Each face's id, in id order, as its slot and generation. */
+    readonly faces: Uint32Array<ArrayBuffer>;
     /** The binary twin, one copy for each mesh worker, if the run changed the model; none if it did not. */
     readonly twins: readonly ArrayBuffer[];
   }

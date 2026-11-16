@@ -13,7 +13,8 @@ import { INSPECT_USAGE, Inspector } from "./inspect.ts";
 import { attach } from "./input.ts";
 import { Kernel } from "./kernel.ts";
 import type { Limits, Meshing } from "./pool.ts";
-import { failure, refusals } from "./state.ts";
+import { report } from "./report.ts";
+import { failure, notice, refusals } from "./state.ts";
 import { DEFAULT_BOUND } from "./uploads.ts";
 import { Viewer } from "./viewer.ts";
 
@@ -31,14 +32,18 @@ function asked(params: URLSearchParams, name: string, fits: (n: number) => boole
 
 const positive = (n: number) => Number.isFinite(n) && n > 0;
 
-/** Runs `request` in the editing worker and shows the model it made, once the pool has meshed it. */
+/**
+ * Runs `request` in the editing worker and shows the model it made, once the pool has meshed it: every face that
+ * meshed, and, if a call threw, `view.mesh-failed` naming the faces it held, unless the mesh broke the contract.
+ */
 async function follow(kernel: Kernel, viewer: Viewer, limits: Limits, request: string): Promise<[string, Meshing | null]> {
   const { ran, meshing } = await kernel.run(request, limits);
   const meshed = meshing && (await meshing);
   if (meshed) {
-    for (const reason of meshed.failed) console.error(`a mesh worker could not mesh ${reason}`);
     viewer.show(meshed.mesh);
     refusals.value = meshed.reports;
+    const [first] = meshed.failed;
+    if (first && !notice.peek()) notice.value = report("view.mesh-failed", first.reason, meshed.failed.flatMap((f) => f.faces));
   }
   return [ran, meshed];
 }

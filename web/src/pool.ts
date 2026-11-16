@@ -23,14 +23,20 @@ export interface Call {
   worker: number | null;
 }
 
+/** A call that threw instead of meshing its range: the faces it held, by id, and what it said. */
+export interface Failed {
+  readonly faces: readonly string[];
+  readonly reason: string;
+}
+
 /** A model meshed: the parts laid end to end, what refused any of it, and how it was dealt out. */
 export interface Meshing {
   readonly model: number;
   readonly mesh: Mesh;
   readonly reports: readonly KernelReport[];
   readonly calls: readonly Call[];
-  /** Why any call could not mesh its range at all: a fault in the page or the kernel, never a face refused. */
-  readonly failed: readonly string[];
+  /** Each call that could not mesh its range at all, in id order: a fault in the page or a worker, never a face refused. */
+  readonly failed: readonly Failed[];
 }
 
 /** `faces` faces cut into at most `calls` ranges of one size, the last perhaps shorter. */
@@ -84,18 +90,32 @@ export function assemble(parts: readonly Part[]): { mesh: Mesh; reports: KernelR
 /** One model's faces being meshed. */
 class Job {
   readonly parts: (Part | null)[];
-  readonly failed: string[] = [];
+  /** Why each call threw, if it did. */
+  readonly failures: (string | null)[];
   next = 0;
   left: number;
 
   constructor(
     readonly model: number,
+    /** Each face's slot and generation, in id order. */
+    readonly ids: Uint32Array,
     readonly calls: Call[],
     readonly limits: Limits,
     readonly finish: (meshing: Meshing | null) => void,
   ) {
     this.parts = calls.map(() => null);
+    this.failures = calls.map(() => null);
     this.left = calls.length;
+  }
+
+  /** The calls that threw, in id order, each with its faces named. */
+  failed(): Failed[] {
+    const name = (k: number) => `face:${this.ids[2 * k]}/${this.ids[2 * k + 1]}`;
+    return this.calls.flatMap(({ first, end }, call) => {
+      const reason = this.failures[call];
+      if (reason === null) return [];
+      return [{ faces: Array.from({ length: end - first }, (_, k) => name(first + k)), reason }];
+    });
   }
 }
 
@@ -126,16 +146,16 @@ export class Pool {
   }
 
   /**
-   * Gives each worker its own copy of a model, `twins` one each, and meshes its `faces` faces to `limits`. Resolves
-   * with the parts laid end to end, or with null if another model came first.
+   * Gives each worker its own copy of a model, `twins` one each, and meshes its faces, whose slots and generations are
+   * `ids`, to `limits`. Resolves with the parts laid end to end, or with null if another model came first.
    */
-  mesh(twins: readonly ArrayBuffer[], faces: number, limits: Limits): Promise<Meshing | null> {
+  mesh(twins: readonly ArrayBuffer[], ids: Uint32Array, limits: Limits): Promise<Meshing | null> {
     if (twins.length !== this.size) throw new Error(`${twins.length} copies of the model for ${this.size} workers`);
     this.model += 1;
     this.job?.finish(null);
     this.workers.forEach((worker, k) => this.post(worker, { kind: "load", model: this.model, twin: twins[k] }, [twins[k]]));
     return new Promise((resolve) => {
-      const job = new Job(this.model, cut(faces), limits, resolve);
+      const job = new Job(this.model, ids, cut(ids.length / 2), limits, resolve);
       this.job = job;
       this.last = job.calls;
       if (job.left === 0) this.done(job);
@@ -189,7 +209,7 @@ export class Pool {
   }
 
   private fail(job: Job, call: number, reason: string): void {
-    job.failed.push(`faces ${job.calls[call].first} to ${job.calls[call].end}: ${reason}`);
+    job.failures[call] = reason;
     this.arrived(job);
   }
 
@@ -201,6 +221,6 @@ export class Pool {
   private done(job: Job): void {
     if (this.job === job) this.job = null;
     const parts = job.parts.filter((part): part is Part => part !== null);
-    job.finish({ model: job.model, ...assemble(parts), calls: job.calls, failed: job.failed });
+    job.finish({ model: job.model, ...assemble(parts), calls: job.calls, failed: job.failed() });
   }
 }

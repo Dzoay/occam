@@ -24,7 +24,8 @@ async function answer({ id, request, copies: count }: Run): Promise<void> {
     const ran = session.run(request);
     const twin = session.take_saved();
     const twins = twin ? copies(twin, count) : [];
-    port.postMessage({ kind: "ran", id, ran, faces: session.face_count(), twins }, twins);
+    const faces = session.face_ids();
+    port.postMessage({ kind: "ran", id, ran, faces, twins }, [faces.buffer, ...twins]);
   } catch (error) {
     port.postMessage({ kind: "failed", id, reason: said(error) }, []);
   }

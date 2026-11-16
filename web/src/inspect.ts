@@ -4,7 +4,7 @@
 
 import type { Gpu } from "./gpu.ts";
 import type { Mesh, Vec3 } from "./mesh.ts";
-import type { Call, Meshing } from "./pool.ts";
+import type { Call, Failed, Meshing } from "./pool.ts";
 import type { KernelReport } from "./protocol.ts";
 import { type Code, REMEDIES, type RemedyKind, TEMPLATES } from "./report.ts";
 import type { Piece } from "./uploads.ts";
@@ -45,7 +45,7 @@ export interface Followed {
   /** Whether a model it made was meshed and shown, what refused any of it, and why any call failed. */
   readonly shown: boolean;
   readonly reports: readonly KernelReport[];
-  readonly failed: readonly string[];
+  readonly failed: readonly Failed[];
 }
 
 export interface InspectorApi {

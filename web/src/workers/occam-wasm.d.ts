@@ -22,6 +22,8 @@ declare module "occam-wasm" {
     constructor();
     free(): void;
     face_count(): number;
+    /** Each face's slot and generation, in id order. */
+    face_ids(): Uint32Array<ArrayBuffer>;
     /** Throws the reports refusing the limits, as JSON text. */
     mesh_part(deflection: number, angle: number, first: number, end: number): Meshed;
     /** Throws the reports refusing the bytes, as JSON text. */

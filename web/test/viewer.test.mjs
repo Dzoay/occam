@@ -68,9 +68,9 @@ after(async () => {
 /**
  * A page of the viewer with one mesh worker unless `query` says otherwise, once it reports or has run `model` in its
  * editing worker and shown what its mesh workers made of it, which `page.ran` keeps; its uncaught errors are kept on
- * `page.errorsSeen`.
+ * `page.errorsSeen`. `before` runs in the page before its scripts, and `intercept` is given the page before it loads.
  */
-async function open(query = "", { on = browser, before: prepare, model = CUBE } = {}) {
+async function open(query = "", { on = browser, before: prepare, intercept, model = CUBE } = {}) {
   const page = await on.newPage();
   // Generous, for a loaded machine: where the browser gets only idle CPU, a step can take a minute.
   page.setDefaultTimeout(120_000);
@@ -78,6 +78,7 @@ async function open(query = "", { on = browser, before: prepare, model = CUBE } 
   page.on("pageerror", (error) => page.errorsSeen.push(String(error)));
   page.on("console", (message) => message.type() === "error" && page.errorsSeen.push(message.text()));
   if (prepare) await page.addInitScript(prepare);
+  if (intercept) await intercept(page);
   const workers = /&workers=/.test(query) ? "" : "&workers=1";
   await page.goto(`${site.url}/?inspect${workers}${query}`);
   return ready(page, model);
@@ -499,20 +500,22 @@ test("a malformed mesh is reported by name, and the last good model stays drawn"
 });
 
 /**
- * Follows the remedy of the report `page` shows in place of its canvas (L2): the report has `code` and offers the fix
- * `kind`, and `retry`, which does what the fix says, gives a page that draws the model. `gates errors` counts each
- * call as the test that follows its pair, as it counts `followed_remedy!` in Rust, so name the pair on the call's line.
+ * Follows the remedy of the report `page` shows in place of its canvas, or `over` it as it goes on drawing (L2): the
+ * report has `code` and offers the fix `kind`, and `retry`, which does what the fix says, gives a page that draws the
+ * whole model with no report. `gates errors` counts each call as the test that follows its pair, as it counts
+ * `followed_remedy!` in Rust, so name the pair on the call's line.
  */
-async function followedRemedy(page, code, kind, retry) {
-  const shown = page.locator(".report.failure");
+async function followedRemedy(page, code, kind, retry, { over = false } = {}) {
+  const shown = page.locator(over ? ".report.notice" : ".report.failure");
   await shown.waitFor();
   assert.equal(await shown.getAttribute("data-code"), code);
   assert.equal(await shown.getAttribute("data-remedy"), kind);
   assert.ok((await shown.locator(".remedy").textContent()).length > 0, "with its remedy");
-  assert.ok(!(await page.locator("#view").isVisible()), "the report, not a blank canvas");
+  assert.equal(await page.locator("#view").isVisible(), over, over ? "drawing what it can" : "not a blank canvas");
   const retried = await retry();
   const { faces } = await snapshot(retried);
   assert.equal(faces.length, 6, "following the remedy, the page draws");
+  assert.equal(await retried.locator(".report").count(), 0, "and reports nothing");
   for (const each of new Set([page, retried])) await clean(each);
 }
 
@@ -546,6 +549,30 @@ test("a page whose device is lost shows the report, and reloaded draws", async (
   await snapshot(page);
   await page.evaluate(() => window.occamViewer.loseDevice());
   await followedRemedy(page, "view.device-lost", "reload-page", () => page.reload().then(() => ready(page)));
+});
+
+/** Gives the first mesh worker to fetch the kernel's module bytes that are not one, once, so its calls throw. */
+async function breakOneMeshWorker(page) {
+  let broken = false;
+  await page.route("**/occam.wasm", (route) => {
+    // A worker's fetch names its own script as the referrer.
+    if (broken || !(route.request().headers().referer ?? "").endsWith("/mesher.js")) return route.continue();
+    broken = true;
+    return route.fulfill({ contentType: "application/wasm", body: "not a module" });
+  });
+}
+
+test("a mesh call that throws is reported by the faces it held, the rest are drawn, and reloaded the page draws all", async () => {
+  const page = await open("&workers=2", { intercept: breakOneMeshWorker });
+  const { faces } = await snapshot(page);
+  const drawn = faces.map((face) => face.id);
+  assert.ok(drawn.length > 0 && drawn.length < 6, `the other worker's faces drawn: ${drawn}`);
+  const shown = page.locator(".report.notice");
+  assert.equal(await shown.count(), 1, "a report over the drawing");
+  const missing = CUBE_FACES.filter((id) => !drawn.includes(id));
+  assert.equal(await shown.getAttribute("data-entities"), missing.join(" "), "naming every face not drawn");
+  assert.match(await shown.locator(".message").textContent(), new RegExp(`mesh ${missing.join(", ")}, .*CompileError`));
+  await followedRemedy(page, "view.mesh-failed", "reload-page", () => page.reload().then(() => ready(page)), { over: true });
 });
 
 test("every report the page can show is in occam-report's catalogue, worded as there, with the same remedy", async () => {

@@ -2,7 +2,7 @@
 //! The browser build: a thin facade over the `occam` crate. A JavaScript caller passes numbers, in millimetres and radians, and
 //! requests as JSON text, and gets the one JSON form of the result or the report (L8, L25).
 
-use occam::{Answered, DistanceQuery, Encoding, Exec, distance_json, ran_json};
+use occam::{Answered, DistanceQuery, Encoding, EntityKind, Exec, distance_json, ran_json};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A model in the browser, as the editing worker keeps it (P10). Its requests run as the command line's do: one that goes
@@ -70,6 +70,14 @@ impl Session {
     #[must_use]
     pub fn face_count(&self) -> u32 {
         u32::try_from(self.session.face_count()).unwrap_or(u32::MAX)
+    }
+
+    /// Each face's id, in id order, as two numbers, its slot and generation: what the page names the faces of a range
+    /// by when a mesh worker could not mesh it.
+    #[must_use]
+    pub fn face_ids(&self) -> Vec<u32> {
+        let listed = self.session.list(&[EntityKind::Face]);
+        listed.iter().flat_map(|kind| kind.entities.iter().flat_map(|id| [id.slot, id.generation])).collect()
     }
 
     /// The model's faces from `first` up to `end`, counted in id order, meshed to a chordal `deflection` in millimetres
@@ -261,6 +269,8 @@ mod tests {
             {"op": "cylinder", "radius": 1, "height": 2, "frame": {"origin": [5, 0, 0]}}]}"#,
         );
         assert_eq!(session.face_count(), 10);
+        let ids: Vec<u32> = (0..10).flat_map(|slot| [slot, 1]).collect();
+        assert_eq!(session.face_ids(), ids, "each face's slot and generation, in id order");
         let parts: Vec<Meshed> =
             [(0, 4), (4, 9), (9, 64)].map(|(first, end)| session.mesh_part(0.1, 0.35, first, end).unwrap()).into();
         let whole = session.mesh(0.1, 0.35).unwrap();

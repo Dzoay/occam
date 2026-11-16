@@ -618,13 +618,21 @@ catalogue! {
         "The GPU device was lost, so the page has stopped drawing: {reason}",
     }
 
-    /// The viewer's page was given a mesh without the renderer contract's layout, and draws the last good one. Its
-    /// fix, meshing again with the `occam` that serves the page, is in its wording only, as no one can follow it: the
-    /// page's own workers mesh through that `occam`, and meshing again gives the same bits (`view.workers`).
+    /// The viewer's page was given a mesh without the renderer contract's layout, and draws the last good one. The
+    /// page's own workers mesh through the `occam` that serves it, and meshing again gives the same bits, so such a
+    /// mesh is a bug in occam, and no remedy can be followed.
     MeshMalformed = "view.mesh-malformed" {
         Error, [],
-        "The mesh the page was given does not have the renderer contract's layout.",
-        "The mesh the page was given does not have the renderer contract's layout: {reason}. Mesh the model again with the `occam` that serves this page.",
+        "The page was given a mesh that breaks the renderer contract, which is a bug in occam.",
+        "The page was given a mesh that breaks the renderer contract, which is a bug in occam: {reason}. It still draws the last good model.",
+    }
+
+    /// A call to one of the viewer's mesh workers threw instead of meshing its range of faces: its kernel would not
+    /// load, say, or it stopped. The page names those faces and draws every other face.
+    MeshFailed = "view.mesh-failed" {
+        Error, [ReloadPage],
+        "A mesh worker could not mesh some of the model's faces, so the page draws the model without them.",
+        "A mesh worker could not mesh {faces}, so the page draws the model without them: {reason}",
     }
 }
 
@@ -1401,9 +1409,17 @@ mod tests {
                 "name": "MeshMalformed",
                 "code": "view.mesh-malformed",
                 "severity": "error",
-                "summary": "The mesh the page was given does not have the renderer contract's layout.",
-                "template": "The mesh the page was given does not have the renderer contract's layout: {reason}. Mesh the model again with the `occam` that serves this page.",
+                "summary": "The page was given a mesh that breaks the renderer contract, which is a bug in occam.",
+                "template": "The page was given a mesh that breaks the renderer contract, which is a bug in occam: {reason}. It still draws the last good model.",
                 "remedies": []
+            },
+            {
+                "name": "MeshFailed",
+                "code": "view.mesh-failed",
+                "severity": "error",
+                "summary": "A mesh worker could not mesh some of the model's faces, so the page draws the model without them.",
+                "template": "A mesh worker could not mesh {faces}, so the page draws the model without them: {reason}",
+                "remedies": ["reload-page"]
             }
         ])
     }

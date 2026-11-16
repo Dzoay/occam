@@ -43,6 +43,7 @@ assert.deepEqual(kept, [true, true, true, true, true, true, false, false, false,
 
 // A mesh worker's part: a range of faces, its arrays numbered from its own start, the parts laid end to end the whole.
 assert.equal(session.face_count(), 10);
+assert.deepEqual([...session.face_ids()], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((slot) => [slot, 1]), "slot, generation");
 const whole = session.mesh(0.1, 0.35);
 const parts = [[0, 3], [3, 7], [7, 64]].map(([first, end]) => session.mesh_part(0.1, 0.35, first, end));
 const joined = (name) => parts.flatMap((part) => [...part[name]()]);
