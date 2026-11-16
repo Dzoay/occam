@@ -96,7 +96,10 @@ fn a_face_that_would_number_past_u32_max_is_refused_with_its_budget_spent() {
     assert_eq!(placed(face, &own, (last, 0)).map(|block| block.vertices.end), Some(u32::MAX), "the last that fits");
     assert_eq!(placed(face, &own, (last + 1, 0)), None, "a vertex past u32::MAX");
     assert_eq!(placed(face, &own, (0, most - own.triangles.len() + 1)), None, "a triangle past it");
-    assert_eq!(placed(face, &own, (most + 1, 0)), None);
+    // On a 32-bit target (wasm32) no vertex count can pass u32::MAX, so there is nothing further to refuse.
+    if let Some(past) = most.checked_add(1) {
+        assert_eq!(placed(face, &own, (past, 0)), None);
+    }
 }
 
 #[test]
