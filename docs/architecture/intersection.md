@@ -108,7 +108,8 @@ flowchart LR
   reads the model at a station `p` its trace ended at, `c` where the gap is least or most. Where `K` has an eigenvalue
   nought to its precision, along a tangency along a curve, the bound is infinite.
 - **A point is certified** only where its bound is decided within the band. Every smooth tangency hides more than the
-  band, so it is `BelowResolution`; a contact at a cone's apex is no tangency, and is a point.
+  band, so it is `BelowResolution`; a contact at a cone's apex is no tangency, and is a point
+  ([decided](../decisions/2026-11-16-every-smooth-tangency-is-a-bounded-touch.md)).
 - **Branch points,** where two branches cross, are kept as contacts by the same rule, and every bounded curve through
   one is cut there: the pencil method's nodal quartic at its node and its split conics where they cross. A line through
   a cone's apex has no ends to cut, and is kept whole beside the apex's contact. The hybrid finds one where the sine
