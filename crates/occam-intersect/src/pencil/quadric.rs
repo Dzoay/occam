@@ -111,6 +111,27 @@ impl Quadric {
         decide.angle_of(&Toward, inputs, if turning > 1e-3 * size { turning } else { 1e-3 * size })
     }
 
+    /// Whether a line of a family, its unit direction `way(θ)`, runs along its asymptotic cone, where `α`, its 3×3
+    /// part at the direction, crosses zero or touches it: each decided against the angle band. So a curve on the lines
+    /// reaches infinity there.
+    ///
+    /// # Errors
+    ///
+    /// [`Undecided`] where the band cannot tell.
+    pub(super) fn reached(
+        &self,
+        alpha: &Trig,
+        way: impl Fn(f64) -> Vec3,
+        decide: &mut Decisions,
+    ) -> Result<bool, Undecided> {
+        for theta in alpha.roots().into_iter().chain(alpha.rate().roots()) {
+            if self.toward(way(theta), decide)? == Side::Within {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// The quadric whose 3×3 part is `m` with `q` and `c` placed for the point `at`: `(X − at)ᵀ m (X − at) + k`.
     fn about(m: [Vec3; 3], at: Vec3, k: f64) -> Self {
         let mut quadric = Self { m, q: Vec3::new(0.0, 0.0, 0.0), c: 0.0, apex: None };

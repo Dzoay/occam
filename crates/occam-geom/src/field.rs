@@ -29,6 +29,10 @@ pub(crate) trait Field: Clone {
     fn root(&self) -> Self;
     /// The sine and the cosine.
     fn sin_cos(&self) -> (Self, Self);
+    /// `self` where the first of `by` is at least as large as the second, and `other` where it is not: of two forms of
+    /// one value, the one whose part named first has lost no digits to cancellation. Lane by lane, and by the value
+    /// alone, so that the rates are those of the form picked.
+    fn pick(&self, other: &Self, by: (&Self, &Self)) -> Self;
 }
 
 /// A value and its first two rates with respect to one parameter, in lanes.
@@ -91,6 +95,16 @@ impl<R: Real> Field for Jet<R> {
         let up = Self { value: sin, first: cos * f, second: cos * s - sin * f * f };
         let across = Self { value: cos, first: -(sin * f), second: -(cos * f * f) - sin * s };
         (up, across)
+    }
+
+    fn pick(&self, other: &Self, (larger, smaller): (&Self, &Self)) -> Self {
+        let keep = smaller.value.abs().le(larger.value.abs());
+        let choose = |a: R, b: R| R::select(keep, a, b);
+        Self {
+            value: choose(self.value, other.value),
+            first: choose(self.first, other.first),
+            second: choose(self.second, other.second),
+        }
     }
 }
 
@@ -156,6 +170,11 @@ impl Field for Taylor {
         }
         (Self(s), Self(c))
     }
+
+    fn pick(&self, other: &Self, (larger, smaller): (&Self, &Self)) -> Self {
+        let value = |x: &Self| x.0.first().copied().unwrap_or(0.0).abs();
+        if value(smaller) <= value(larger) { self.clone() } else { other.clone() }
+    }
 }
 
 /// Whether some `at + 2kπ` lies from `lo` to `hi`: the first at or after `lo`. Rounding can only miss one that is at an
@@ -216,10 +235,17 @@ impl Field for Interval {
         let cos = holding([c0, c1], (reaches(0.0, lo, hi), reaches(PI, lo, hi)));
         (sin, cos)
     }
+
+    /// By the middles: both forms hold every value, and the one picked is the one whose denominator keeps from zero.
+    fn pick(&self, other: &Self, (larger, smaller): (&Self, &Self)) -> Self {
+        if smaller.mid().abs() <= larger.mid().abs() { *self } else { *other }
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use occam_math::Lanes;
+
     use super::*;
 
     /// `sin(t²) / (1 + t)`, `√(2 + cos t)` and their sum, in any field.
@@ -311,6 +337,31 @@ mod tests {
                 assert_eq!((got.lower(), got.upper()), (all.lower(), all.upper()), "every value, with no end to pad");
             }
         }
+    }
+
+    #[test]
+    fn of_two_forms_the_one_picked_is_the_first_where_its_part_is_at_least_as_large() {
+        let (one, other) = (Jet::variable(2.0_f64), Jet::variable(5.0_f64).scaled(3.0));
+        let pick = |a: f64, b: f64| one.pick(&other, (&one.constant(a), &one.constant(b)));
+        assert_eq!(pick(-3.0, 2.0).value, 2.0, "larger in size");
+        assert_eq!(pick(2.0, -2.0).value, 2.0, "as large");
+        let got = pick(1.0, -2.0);
+        assert_eq!((got.value, got.first), (15.0, 3.0), "smaller, the other's value and rates");
+        let lanes = |x: [f64; 2]| {
+            let mut it = x.into_iter();
+            Lanes::<2>::from_fn(|| it.next().unwrap_or(0.0))
+        };
+        let (first, second) = (Jet::variable(lanes([1.0, 2.0])), Jet::variable(lanes([7.0, 8.0])));
+        let (larger, smaller) = (Jet::variable(lanes([3.0, 1.0])), Jet::variable(lanes([2.0, 4.0])));
+        let mut picked = Vec::new();
+        first.pick(&second, (&larger, &smaller)).value.for_each_lane(|x| picked.push(x));
+        assert_eq!(picked, [1.0, 8.0], "lane by lane");
+        let (low, high) = (Taylor::variable(0.5, 2), Taylor::variable(4.0, 2));
+        assert_eq!(low.pick(&high, (&low, &high)).0, high.0, "a series by its value");
+        assert_eq!(low.pick(&high, (&high, &low)).0, low.0);
+        let (near, far) = (span(1.0, 2.0), span(5.0, 6.0));
+        assert_eq!(near.pick(&far, (&span(-3.0, -2.0), &span(1.0, 3.0))), near, "an interval by its middle");
+        assert_eq!(near.pick(&far, (&span(-1.0, 2.0), &span(1.0, 3.0))), far);
     }
 
     #[test]

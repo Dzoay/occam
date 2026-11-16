@@ -316,8 +316,8 @@ exclude_re = [
     # dividing by it is multiplying by it; and a cone's two rulings through its apex in a plane less steep than its
     # side are each other's mirror, both made, so taking the part across away instead of adding it swaps them.
     "closed/conic\\.rs:111:28: replace \\* with / in plane_cone$",
-    "closed/conic\\.rs:131:94: replace \\* with / in through_apex$",
-    "closed/conic\\.rs:131:79: replace \\+ with - in through_apex$",
+    "closed/conic\\.rs:132:94: replace \\* with / in through_apex$",
+    "closed/conic\\.rs:132:79: replace \\+ with - in through_apex$",
     # Ties, which give the same value either way: a cosine or a difference of radii of exactly nought, which is its own
     # magnitude; two world axes as little along a normal, either square to it; a parabola's `d` times its slant exactly
     # nought, which only a plane through the apex has, decided before; and circles of one radius, which touch inside
@@ -326,10 +326,10 @@ exclude_re = [
     "closed/conic\\.rs:111:36: replace > with >= in plane_cone$",
     "closed/meet\\.rs:116:16: replace < with <= in magnitude$",
     "closed/meet\\.rs:137:38: replace < with <= in circles$",
-    "closed/piece\\.rs:60:17: replace < with <= in square_to$",
+    "closed/piece\\.rs:75:17: replace < with <= in square_to$",
     # By line. A point two meridians of a coaxial pair meet in twice on the axis is a cone's apex, and a pair with a
     # cone measures its heights from the apex: nought and twice nought are one height.
-    "closed/coaxial\\.rs:118:33: replace - with \\+ in seen$",
+    "closed/coaxial\\.rs:144:33: replace - with \\+ in seen$",
     # By line. A sine or a cosine is at most 1, so four machine epsilons over it is at least four of it: a wider
     # enclosure, still certified, which only a value within a few ulps of a band's edge could tell, and none is.
     "closed/(conic|coaxial)\\.rs:(77|33):41: replace \\* with / in computed$",
@@ -447,20 +447,20 @@ exclude_re = [
     # polynomial is as far from zero, either starts its half-angle's parameter without losing a root; and of two
     # rulings along which `β` is as near zero, either starts a nodal quartic at its node. A cone's 3×3 part has no eigenvalue that is zero, its vertex being a point, so none is on the fence.
     "occam-intersect/src/pencil/roots\\.rs:223:49: replace > with >= in place$",
-    "occam-intersect/src/pencil/mod\\.rs:99:78: replace > with >= in Pair::length$",
+    "occam-intersect/src/pencil/mod\\.rs:129:78: replace > with >= in Pair::length$",
     "occam-intersect/src/pencil/quadric\\.rs:111:53: replace > with >= in Quadric::toward$",
     "occam-intersect/src/pencil/trig\\.rs:137:21: replace > with >= in Trig::roots$",
-    "occam-intersect/src/pencil/nodal\\.rs:101:17: replace < with <= in node$",
-    "occam-intersect/src/pencil/nodal\\.rs:(77:45|81:42): replace > with >= in rulings$",
+    "occam-intersect/src/pencil/nodal\\.rs:87:17: replace < with <= in node$",
+    "occam-intersect/src/pencil/nodal\\.rs:(62:45|66:42): replace > with >= in rulings$",
     # By line. A smooth quartic's `Δ` has no double root, which would be a singular point of the curve, a node or a
     # point by itself, so between two neighbouring roots it is zero nowhere, its middle included.
-    "occam-intersect/src/pencil/smooth\\.rs:59:68: replace > with >= in loops$",
+    "occam-intersect/src/pencil/smooth\\.rs:103:68: replace > with >= in loops$",
     # By line. The angles a polynomial's roots start from may be any nine apart round the turn: one of degree four at
     # most that is not zero is not zero at all nine, and the start half a turn from the one where it is farthest from
     # zero loses no root. Dividing by a ninth of a turn gives nine others, as distinct round it.
     "occam-intersect/src/pencil/trig\\.rs:135:51: replace \\* with / in Trig::roots$",
     # occam-geom's fields, by line. The lesser and greater of two values that are equal are either.
-    "occam-geom/src/field\\.rs:170:30: replace < with <= in holding$",
+    "occam-geom/src/field\\.rs:189:30: replace < with <= in holding$",
     # occam-geom's laps, by line. The least and greatest of angles that are equal are either. A crossing is on the
     # axis, neither ahead nor behind, only where the curve passes through it, which a curve read along does not. At a
     # point on the plane through the axis at `at`, `east cos + north sin` is its signed distance from the axis, and
@@ -516,17 +516,15 @@ exclude_re = [
     # answer either way: the larger of a leaf's two sizes, of a station's two half steps, of two bounds merged, and of an
     # eigenvalue's two sizes, where the two are equal; a node exactly half a step from a station; a second curve's start
     # exactly the band from the first. Normals square to each other give no finite slope, so no model, whichever way
-    # one is turned. Two rulings through an apex built the other way round are the same two, and `way` is 1 or -1. The
-    # pencil's relative curvature negated has eigenvalues of the same sizes, which are all a bound reads.
+    # one is turned. The pencil's relative curvature negated has eigenvalues of the same sizes, which are all a bound
+    # reads.
     "occam-intersect/src/branch\\.rs:49:(15|26): replace > with >= in crosses$",
     "occam-intersect/src/hybrid\\.rs:217:27: replace > with >= in against_parts$",
     "occam-intersect/src/resolution\\.rs:89:24: replace < with <= in Near::sizes$",
     "occam-intersect/src/resolution\\.rs:151:61: replace < with <= in Near::between$",
     "occam-intersect/src/tangency\\.rs:71:22: replace > with >= in twin$",
     "occam-intersect/src/tangency\\.rs:166:44: replace > with >= in contacts$",
-    "occam-intersect/src/closed/conic\\.rs:132:79: replace \\+ with - in through_apex$",
-    "occam-intersect/src/closed/conic\\.rs:132:94: replace \\* with / in through_apex$",
-    "occam-intersect/src/pencil/emit\\.rs:148:49: delete - in touch$",
+    "occam-intersect/src/pencil/emit\\.rs:154:49: delete - in touch$",
     # Picking's ties, by line. A triangle as near as the nearest face crossed, of the same face, is that face at that
     # distance: taking it or keeping the one held gives the same. Where an edge's segment comes as near the ray as the
     # one held, as far along it, of the same edge and from the same sample, it is the same segment, whose nearest point
@@ -538,4 +536,10 @@ exclude_re = [
     # holds back more volumes for the exact stage, which gives the same side; it changes the cost, never the answer.
     # (Dividing by the permanent instead is caught: far out it lets a volume plain arithmetic turns over through.)
     "occam-mesh/src/predicates\\.rs:114:32: replace \\* with \\+ in orient3d$",
+    # Which faces repair looks at (view.hardening), by line. `crossed` keeps for repair only the faces refused because
+    # their boundaries cross. Any other face it let through, meshed or refused for another reason, gets no cut from
+    # `cuts`, whose first try finds its boundary triangulates, cannot be drawn, or fails where no cut can part it. So
+    # letting every face through, or every refusal, changes the cost, never the answer.
+    "occam-mesh/src/repair\\.rs:103:5: replace crossed -> bool with true$",
+    "occam-mesh/src/repair\\.rs:105:65: replace && with \\|\\| in crossed$",
 ]

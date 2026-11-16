@@ -136,8 +136,10 @@ pub(crate) fn mesh_face_within(
     let view = model.view(face).ok_or_else(|| stale(model, face))?;
     let surface = view.surface().ok_or_else(|| stale(model, view.surface_id()))?;
     let boundary = boundary::of(model, view, edges)?;
-    let scale = scale(surface, &boundary.uv);
-    let plane: Vec<[f64; 2]> = boundary.uv.iter().map(|uv| [uv.u() * scale, uv.v()]).collect();
+    if let Some((_, short)) = &boundary.short {
+        return Err(not_meshed(face, Reason::BoundaryCrosses, Fault::InvalidInput, short));
+    }
+    let (plane, scale) = plane(surface, &boundary);
     let failed = |fail: Fail| refusal(face, &boundary, fail);
     let mut mesh = Triangulation::new(&plane, &boundary.segments).map_err(failed)?;
     let limits = edges.limits();
@@ -150,19 +152,20 @@ pub(crate) fn mesh_face_within(
     assemble((view, surface, model.tolerance()), &mesh, points, (boundary.sides, capped))
 }
 
-/// The report for `fail`, naming `face` and the edges whose points it involves.
+/// The report for `fail`, naming `face` and the edges it involves ([`Boundary::involved`]).
 fn refusal(face: Id<Face>, boundary: &Boundary, fail: Fail) -> Report {
-    let (reason, fault, points) = match fail {
-        Fail::Coincide(a, b) => (Reason::BoundaryCrosses, Fault::InvalidInput, vec![a, b]),
-        Fail::Touches([a, b], c) => (Reason::BoundaryCrosses, Fault::InvalidInput, vec![a, b, c]),
-        Fail::Crosses([a, b], [c, d]) => (Reason::BoundaryCrosses, Fault::InvalidInput, vec![a, b, c, d]),
-        Fail::Undecided => (Reason::BelowResolution, Fault::NumericallySensitive, Vec::new()),
-        Fail::Broken => (Reason::BudgetSpent, Fault::Internal, Vec::new()),
+    let (reason, fault) = match fail {
+        Fail::Coincide(..) | Fail::Touches(..) | Fail::Crosses(..) => (Reason::BoundaryCrosses, Fault::InvalidInput),
+        Fail::Undecided => (Reason::BelowResolution, Fault::NumericallySensitive),
+        Fail::Broken => (Reason::BudgetSpent, Fault::Internal),
     };
-    let mut edges: Vec<Id<Edge>> = points.into_iter().filter_map(|p| boundary.from.get(p).copied()).collect();
-    edges.sort_unstable();
-    edges.dedup();
-    not_meshed(face, reason, fault, &edges)
+    not_meshed(face, reason, fault, &boundary.involved(fail))
+}
+
+/// The places of `boundary` in the plane its face is triangulated in, and what `u` is multiplied by there ([`scale`]).
+pub(crate) fn plane(surface: &dyn Surface, boundary: &Boundary) -> (Vec<[f64; 2]>, f64) {
+    let scale = scale(surface, &boundary.uv);
+    (boundary.uv.iter().map(|uv| [uv.u() * scale, uv.v()]).collect(), scale)
 }
 
 /// The power of two at or below the ratio of `surface`'s rates along `u` and along `v`, summed over `places`, within

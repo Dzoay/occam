@@ -57,19 +57,6 @@ source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted
 ## Steps
 
 
-### `intersection.unbounded`
-
-The sections of a quadric pair that run to infinity, which `intersection.quadrics` detects, classifies and reports as
-not implemented ([decision](../decisions/2026-11-15-unbounded-branches-in-their-own-step.md)): two cones that share a
-ruling direction, a quartic with its node at infinity, and a ruling with a cubic. The first is a branch of a smooth
-quartic from a root of the discriminant to infinity; the other two are rational and unbounded, one point on each ruling,
-with a pole where the ruling's coefficient vanishes. The step chooses their form, an unbounded family under the frozen
-traits or bounded pieces up to an extent the caller gives, and the seam does not change.
-
-*Failing test first:* each of the three classes, built by construction under rigid placements, gives curves on both
-surfaces within the band over the extent asked, its images mapping onto them; none is reported as not implemented, and
-swapping the pair swaps the images.
-
 ### `intersection.timing`
 
 The exit's measurements: `gates perf` classes for the closed forms, the pencil method, the hybrid and hits, with browser

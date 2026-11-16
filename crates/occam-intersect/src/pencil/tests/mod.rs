@@ -10,11 +10,12 @@ mod generated;
 mod p5;
 mod scale;
 mod touch;
+mod unbounded;
 
 use std::sync::Arc;
 
 use occam_geom::{Analytic, Sphere, Surface};
-use occam_units::{Direction, Placement, Point, Vec3, World};
+use occam_units::{Bounds, Direction, Placement, Point, Vec3, World};
 
 use super::{Class, Pair, Pencil, classify};
 use crate::closed::tests::{
@@ -23,14 +24,19 @@ use crate::closed::tests::{
 use crate::decide::Decisions;
 use crate::{Budget, Closed, Contact, Methods, Section};
 
+/// The extent the cases with bounded sections are asked within: far more than any of them reaches.
+fn extent() -> Bounds {
+    Bounds::around(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0)), mm(1e3 * size()))
+}
+
 /// The closed forms, then the pencil method, as `booleans` asks them.
 fn both(a: &dyn Surface, b: &dyn Surface) -> Section {
-    Methods::new(vec![Box::new(Closed), Box::new(Pencil)]).section(a, b, tol(), Budget { steps: 16 })
+    Methods::new(vec![Box::new(Closed), Box::new(Pencil::within(extent()))]).section(a, b, tol(), Budget { steps: 16 })
 }
 
 /// The pencil method alone.
 fn alone(a: &dyn Surface, b: &dyn Surface) -> Section {
-    Methods::new(vec![Box::new(Pencil)]).section(a, b, tol(), Budget { steps: 16 })
+    Methods::new(vec![Box::new(Pencil::within(extent()))]).section(a, b, tol(), Budget { steps: 16 })
 }
 
 /// The class the pencil of `a` and `b` is found to be.

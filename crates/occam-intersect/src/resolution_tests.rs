@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use occam_geom::{BsplineSurface, Curve, Cylinder, Scratch, Sphere, SplineSurface, Surface};
 use occam_math::sin_cos;
-use occam_units::{Angle, Length, Point, Tolerance, Vec3};
+use occam_units::{Angle, Bounds, Length, Point, Tolerance, Vec3};
 
 use crate::closed::tests::{O, X, Z, circle, cylinder, from_curve, nearer, placed, plane, sphere, v};
 use crate::trace_tests::{mm, moved, nurbs, placed as turned};
@@ -179,7 +179,12 @@ const GAPS: [f64; 12] = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1
 fn methods() -> Methods {
     let tracer = Tracer { tol: tol(), sag: mm(1e-5), longest: mm(0.03 * SCALE), steps: 20_000 };
     let hybrid = Hybrid { tracer, leaf: mm(0.25 * SCALE) };
-    Methods::new(vec![Box::new(Closed), Box::new(Pencil), Box::new(hybrid)])
+    Methods::new(vec![Box::new(Closed), Box::new(pencil()), Box::new(hybrid)])
+}
+
+/// The pencil method, within a box a thousand times the cases' scale about the origin, far past every part.
+fn pencil() -> Pencil {
+    Pencil::within(Bounds::around(Point::from_vec3(Vec3::new(0.0, 0.0, 0.0)), mm(1e3 * SCALE)))
 }
 
 /// The section of `case`.
@@ -359,7 +364,7 @@ fn vivianis_node_cuts_its_curve_in_the_pencil_method_and_is_a_contact_below_the_
     // The cylinder of radius 1 inside the sphere of radius 2, tangent at (2, 0, 0): the curve passes through the node
     // twice, and is cut there, every piece that comes to it ending there. The relative curvature is ±1/2.
     let (a, b) = (cylinder(X, Z, 1.0), sphere(O, 2.0));
-    let both = Methods::new(vec![Box::new(Closed), Box::new(Pencil)]);
+    let both = Methods::new(vec![Box::new(Closed), Box::new(pencil())]);
     let got = both.section(a.as_ref(), b.as_ref(), tol(), Budget { steps: 16 });
     assert_eq!(got.method, Some("pencil"), "{:?}", got.failures);
     let node = placed(v(2.0, 0.0, 0.0));

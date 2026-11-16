@@ -40,6 +40,12 @@ flowchart TD
   cylinder tangent to a cone along a ruling, which splits into that ruling and a conic. Singular points are contacts. A
   degenerate pencil of any other kind is reported as not implemented, never fitted, and a decision the band cannot make
   is `decide.undecided`. Its curves' images count their turns about each chart's axis.
+- **A section that reaches infinity** is given within an extent the caller passes, `Pencil::within(box)`, since
+  `booleans` meets only bounded faces. Two cones that share a ruling direction meet in a quartic that runs to infinity
+  along it. A cylinder along a cone's ruling direction meets it in a quartic with its node at infinity, and, through the
+  cone's apex, in that ruling and a cubic. The quartic comes in `Quartic` pieces, and the rational curves in rational
+  B-splines, one point on each ruling, each cut where it leaves a ball just round the box. Lines stay whole, as the
+  closed forms give them.
 - **The hybrid needs no B-spline form,** so offsets and mesh-backed surfaces reach it: it subdivides by `bounds` alone,
   which for a B-spline is the hull of the part's own poles and so goes on shrinking inside a knot span.
 - **Many pairs** run one pair a task, one result each, in pair order, and a method's own work, the hybrid's leaves,
