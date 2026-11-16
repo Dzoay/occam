@@ -87,6 +87,19 @@ impl Pair {
         local + self.origin
     }
 
+    /// The pair's length: the larger of its radii and the distance between the points its surfaces are placed by, or
+    /// a millimetre where all are zero, as for two cones with one apex. The pencil's members are read in it, so that
+    /// a pair a metre across is read as one a millimetre across.
+    fn length(&self) -> f64 {
+        let radius = |s: &Natural| match *s {
+            Natural::Sphere { radius, .. } | Natural::Cylinder { radius, .. } => radius,
+            Natural::Cone { .. } => 0.0,
+        };
+        let spread = (self.surfaces[0].at() - self.surfaces[1].at()).norm();
+        let most = self.surfaces.iter().map(radius).fold(spread, |a, r| if r > a { r } else { a });
+        if most > 0.0 { most } else { 1.0 }
+    }
+
     /// The surface the curve is parametrized on, the first cylinder or else the first cone, and the other's index.
     fn ruled(&self) -> Option<(usize, usize, Ruling)> {
         let upright = self.surfaces.iter().position(|s| matches!(s, Natural::Cylinder { .. }));

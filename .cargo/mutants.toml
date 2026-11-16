@@ -341,9 +341,10 @@ exclude_re = [
     "image\\.rs:378:50: replace < with <= in Image<C>::window$",
     "image\\.rs:379:(36|75): replace > with >= in Image<C>::window$",
     "image\\.rs:41[02]:\\d+: replace (> with >=|< with <=) in Image<C>::heights$",
-    "chart\\.rs:121:77: replace < with <= in Chart::of$",
-    # By line. `side` is 1 or -1, so dividing by it is multiplying by it.
+    "chart\\.rs:126:77: replace < with <= in Chart::of$",
+    # By line. `side`, and the sign of a number, are 1 or -1, so dividing by them is multiplying by them.
     "image\\.rs:237:(26|50): replace \\* with / in Image<C>::local$",
+    "chart\\.rs:99:30: replace \\* with / in read$",
     "image\\.rs:338:97: replace \\* with / in Image<C>::by_series$",
     # No range has exactly one end finite (`ParamRange`): a window and a chart's spread take a range whole, or else
     # without end both ways.
@@ -380,11 +381,11 @@ exclude_re = [
     # serves; no ruling is square to the axis, a cone's half-angle being under a right angle. And where a parameter has
     # no end the surface is a plane, cylinder or cone, or an offset or part of one, which its chart holds exactly, so a
     # probe at 1.3 fits as one at -1.3 does.
-    "chart\\.rs:122:31: replace \\+ with - in Chart::of$",
+    "chart\\.rs:127:31: replace \\+ with - in Chart::of$",
     "chart\\.rs:85:44: replace \\+ with - in read$",
     "chart\\.rs:91:42: replace < with <= in read$",
-    "chart\\.rs:178:46: replace < with <= in Chart::parameters$",
-    "chart\\.rs:208:30: replace < with <= in Chart::ruling$",
+    "chart\\.rs:183:46: replace < with <= in Chart::parameters$",
+    "chart\\.rs:213:30: replace < with <= in Chart::ruling$",
     "chart\\.rs:60:15: delete - in spread$",
     # occam-intersect's trace. By line. Ties that give the same number either way: the largest entry of a matrix, the
     # sag allowed against the band, the shortest step against the longest, a step's growth held to twice, a step held
@@ -439,13 +440,14 @@ exclude_re = [
     # The trace's projections, by line. A move of no length, or none that is finite, gives a point that is not a number;
     # its foot stays at the seed, whose gap is the base's, so the search gives the base, as returning it at once does.
     "occam-intersect/src/project\\.rs:69:28: replace \\|\\| with && in search$",
-    # occam-intersect's pencil method, by line. Ties that give the same answer either way: of two surfaces whose
-    # gradients are equal at a member's vertex, either holds it, and at a singular point of their curve the two share
-    # their tangent plane; a direction's band taken of how fast it turns or of a thousandth of the quadric's size, where
-    # those are equal; of two angles where a polynomial is as far from zero, either starts its half-angle's parameter
-    # without losing a root; and of two rulings along which `β` is as near zero, either starts a nodal quartic at its
-    # node. A cone's 3×3 part has no eigenvalue that is zero, its vertex being a point, so none is on the fence.
-    "occam-intersect/src/pencil/roots\\.rs:209:49: replace > with >= in place$",
+    # occam-intersect's pencil method, by line. Ties that give the same answer either way: the larger of a pair's
+    # radii and its spread, where they are equal; of two surfaces whose gradients are equal at a member's vertex, either
+    # holds it, and at a singular point of their curve the two share their tangent plane; a direction's band taken of
+    # how fast it turns or of a thousandth of the quadric's size, where those are equal; of two angles where a
+    # polynomial is as far from zero, either starts its half-angle's parameter without losing a root; and of two
+    # rulings along which `β` is as near zero, either starts a nodal quartic at its node. A cone's 3×3 part has no eigenvalue that is zero, its vertex being a point, so none is on the fence.
+    "occam-intersect/src/pencil/roots\\.rs:223:49: replace > with >= in place$",
+    "occam-intersect/src/pencil/mod\\.rs:99:78: replace > with >= in Pair::length$",
     "occam-intersect/src/pencil/quadric\\.rs:111:53: replace > with >= in Quadric::toward$",
     "occam-intersect/src/pencil/trig\\.rs:137:21: replace > with >= in Trig::roots$",
     "occam-intersect/src/pencil/nodal\\.rs:101:17: replace < with <= in node$",

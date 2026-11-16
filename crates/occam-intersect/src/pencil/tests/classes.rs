@@ -16,7 +16,7 @@ use crate::decide::Decisions;
 /// the cylinder of radius 1 about Z, and the cone from an apex 4 from the origin and 0.15 from Z, opening towards the
 /// origin by the half-angle whose sine is 1/4. Their circles of tangency on the sphere do not meet, so the conics do not
 /// cross where any point is real, and the two are not about one axis, so the closed forms leave them.
-fn circumscribing() -> Case {
+pub(super) fn circumscribing() -> Case {
     let (sin, cos) = sin_cos(0.15);
     let apex = v(4.0 * sin, 0.0, 4.0 * cos);
     let half = atan2(0.25, (1.0_f64 - 0.0625).sqrt());
@@ -59,7 +59,7 @@ fn a_split_whose_conics_cross_at_no_real_point_is_classified_as_a_split() {
 /// centre lies along the cone's outward normal on the ruling in the XZ plane, so that its tangent plane at the apex
 /// touches the cone along that ruling. Its curve is one loop from the cusp back to it, the rulings' parameter starting
 /// where the curve passes the apex.
-fn cusp() -> Case {
+pub(super) fn cusp() -> Case {
     let (sa, ca) = sin_cos(0.4);
     let centre = v(ca, 0.0, -sa) * 1.5;
     let on = (0..7)

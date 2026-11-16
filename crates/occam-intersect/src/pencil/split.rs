@@ -10,7 +10,7 @@
 
 use occam_geom::Analytic;
 use occam_math::Side;
-use occam_units::{Direction, Point, Vec3};
+use occam_units::{Direction, ParamKind, Point, Vec3};
 
 use super::quadric::{Natural, Ruling};
 use super::{Pair, cut};
@@ -18,9 +18,12 @@ use crate::closed::{Found, Plan, cross3, exact3, minus, norm3, solve, unit};
 use crate::decide::{Decisions, Undecided};
 
 /// Points of each conic or line, in the world, to hold it to the other surface: at parameters spread over a closed
-/// conic's turn, and along an open curve from its vertex.
-fn samples(plan: &Plan) -> Vec<Vec3> {
-    plan.curve().map_or_else(Vec::new, |c| [0.3, 0.9, 1.9, 2.6].map(|t| c.point(t).to_vec3()).to_vec())
+/// conic's turn, and along an open curve from its vertex, a parameter that is a length taken in the pair's.
+fn samples(plan: &Plan, length: f64) -> Vec<Vec3> {
+    plan.curve().map_or_else(Vec::new, |c| {
+        let unit = if c.range().kind == ParamKind::Length { length } else { 1.0 };
+        [0.3, 0.9, 1.9, 2.6].map(|t| c.point(t * unit).to_vec3()).to_vec()
+    })
 }
 
 /// The section of the plane through `at` facing `normal`, both in the pair's frame, with surface `r`, every point of
@@ -36,7 +39,7 @@ fn section(
         return Ok(None);
     };
     let other = pair.quadric(o);
-    for p in found.curves.iter().flat_map(samples) {
+    for p in found.curves.iter().flat_map(|plan| samples(plan, pair.length())) {
         if other.holds(p - pair.origin, decide)? != Side::Within {
             return Ok(None);
         }
@@ -173,6 +176,18 @@ mod tests {
     /// Whether `got` are `want`, within 1e-12.
     fn near(got: &[Vec3], want: &[Vec3]) -> bool {
         got.len() == want.len() && got.iter().zip(want).all(|(g, w)| (*g - *w).norm() <= 1e-12)
+    }
+
+    #[test]
+    fn a_line_is_sampled_along_lengths_of_the_pair_and_a_circle_round_its_turn() {
+        let line = Plan::Line { at: O, along: X };
+        for length in [1e-3, 1e5] {
+            let along: Vec<f64> = samples(&line, length).iter().map(|p| p.x / length).collect();
+            assert!(along.iter().zip([0.3, 0.9, 1.9, 2.6]).all(|(a, b)| (a - b).abs() <= 1e-12), "{length}: {along:?}");
+        }
+        let circle = Plan::Circle { centre: O, normal: Z, radius: 2.0 };
+        let round = samples(&circle, 1e5);
+        assert!(round.iter().all(|p| (p.norm() - 2.0).abs() <= 1e-12) && round.len() == 4, "{round:?}");
     }
 
     #[test]

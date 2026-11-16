@@ -19,10 +19,40 @@ use crate::{Budget, Closed, Coincidence, Contact, Methods, Section, SectionCurve
 /// The part's size: P5's cases are about four across.
 pub(crate) const SIZE: f64 = 4.0;
 
+thread_local! {
+    /// The scale this thread's cases are made at: 1, or what a test scales its surfaces by.
+    static SCALE: std::cell::Cell<f64> = const { std::cell::Cell::new(1.0) };
+}
+
+/// Checks this thread's cases at `scale`, its parts' size and its band scaled with them, until the guard it gives goes.
+pub(crate) fn at_scale(scale: f64) -> AtScale {
+    SCALE.with(|s| s.set(scale));
+    AtScale
+}
+
+/// While it lasts, this thread's cases are checked at the scale it was given.
+pub(crate) struct AtScale;
+
+impl Drop for AtScale {
+    fn drop(&mut self) {
+        SCALE.with(|s| s.set(1.0));
+    }
+}
+
+/// The scale this thread's cases are checked at.
+pub(crate) fn scale() -> f64 {
+    SCALE.with(std::cell::Cell::get)
+}
+
+/// The part's size at this thread's scale.
+pub(crate) fn size() -> f64 {
+    SIZE * scale()
+}
+
 /// The tolerance the cases are decided at: fine enough that P5's near-tangent sweep, down to a gap of 1e-12, is told
-/// apart from a tangency, as P5's closed forms told it.
+/// apart from a tangency, as P5's closed forms told it; its band scaled with the part.
 pub(crate) fn tol() -> Tolerance {
-    Tolerance::new(Length::from_millimetres(1e-13), Angle::from_radians(1e-12)).unwrap()
+    Tolerance::new(Length::from_millimetres(1e-13 * scale()), Angle::from_radians(1e-12)).unwrap()
 }
 
 pub(crate) const fn v(x: f64, y: f64, z: f64) -> Vec3 {
@@ -179,7 +209,7 @@ pub(crate) fn samples(range: ParamRange) -> Vec<f64> {
     let (lo, hi) = match (range.lo.is_finite(), range.kind) {
         (true, _) => (range.lo, range.hi),
         (false, ParamKind::Knot) => (-2.0, 2.0),
-        (false, _) => (-2.0 * SIZE, 2.0 * SIZE),
+        (false, _) => (-2.0 * size(), 2.0 * size()),
     };
     let at = |i: u32| lo + (hi - lo) * f64::from(i) / 64.0;
     if range.wrap == Wrap::Periodic { (0..64).map(at).collect() } else { (1..64).map(at).collect() }
@@ -192,11 +222,11 @@ pub(crate) fn lies_on_both(name: &str, piece: &SectionCurve, a: &dyn Surface, b:
         let (p, rate) = piece.curve.first(t);
         for (surface, image, which) in [(a, &piece.on_a, "a"), (b, &piece.on_b, "b")] {
             let gap = off(surface, p.to_vec3());
-            assert!(gap <= 1e-12 * SIZE, "{name}: the curve at {t} is {gap} off {which}");
+            assert!(gap <= 1e-12 * size(), "{name}: the curve at {t} is {gap} off {which}");
             let (uv, d) = image.first(t);
             let jet = surface.first(uv);
             let miss = (jet.point.to_vec3() - p.to_vec3()).norm();
-            assert!(miss <= 1e-12 * SIZE, "{name}: {which}'s image at {t} maps {miss} from the curve");
+            assert!(miss <= 1e-12 * size(), "{name}: {which}'s image at {t} maps {miss} from the curve");
             let carried = jet.du.rate() * d.u() + jet.dv.rate() * d.v();
             let slip = (carried - rate.rate()).norm();
             assert!(slip <= 1e-9 * (1.0 + rate.rate().norm()), "{name}: {which}'s image's rate at {t} is {slip} off");
@@ -209,7 +239,7 @@ pub(crate) fn contact_maps(name: &str, found: &Contact, a: &dyn Surface, b: &dyn
     let Contact::Point { at, on_a, on_b } = *found else { panic!("{name}: {found:?} is not a point") };
     for (surface, uv) in [(a, on_a), (b, on_b)] {
         let miss = (surface.point(uv).to_vec3() - at.to_vec3()).norm();
-        assert!(miss <= 1e-12 * SIZE, "{name}: a contact's parameters map {miss} from it");
+        assert!(miss <= 1e-12 * size(), "{name}: a contact's parameters map {miss} from it");
     }
 }
 

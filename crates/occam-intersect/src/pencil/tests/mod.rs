@@ -8,6 +8,7 @@ mod classes;
 mod degenerate;
 mod generated;
 mod p5;
+mod scale;
 mod touch;
 
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use occam_geom::{Analytic, Sphere, Surface};
 use occam_units::{Direction, Placement, Point, Vec3, World};
 
 use super::{Class, Pair, Pencil, classify};
-use crate::closed::tests::{SIZE, Want, contact_maps, frame_by, from_curve, lies_on_both, mm, nearer, tol};
+use crate::closed::tests::{Want, contact_maps, frame_by, from_curve, lies_on_both, mm, nearer, scale, size, tol};
 use crate::decide::Decisions;
 use crate::{Budget, Closed, Contact, Methods, Section};
 
@@ -68,9 +69,9 @@ pub(super) struct Case {
     unnamed: usize,
 }
 
-/// Where `place` takes `p`.
+/// Where `place` takes `p`, at this thread's scale.
 fn moved(place: &Placement<World, World>, p: Vec3) -> Vec3 {
-    place.point(occam_units::Point::from_vec3(p)).to_vec3()
+    place.point(occam_units::Point::from_vec3(p)).to_vec3() * scale()
 }
 
 /// The pencil method answers the case as it says, with every point on both surfaces and every image on its curve.
@@ -83,10 +84,10 @@ fn check(case: &Case) {
     assert_eq!((got.curves.len(), got.contacts.len()), (want.curves, contacts), "{name}");
     for p in want.on.iter().map(|p| moved(&case.place, *p)) {
         let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, nearer);
-        assert!(near <= 1e-9 * SIZE, "{name}: no curve passes through {p:?}: the nearest is {near} away");
+        assert!(near <= 1e-9 * size(), "{name}: no curve passes through {p:?}: the nearest is {near} away");
     }
     for p in want.contacts.iter().map(|p| moved(&case.place, *p)) {
-        let near = |c: &Contact| matches!(c, Contact::Point { at, .. } if (at.to_vec3() - p).norm() <= 1e-10 * SIZE);
+        let near = |c: &Contact| matches!(c, Contact::Point { at, .. } if (at.to_vec3() - p).norm() <= 1e-10 * size());
         assert!(got.contacts.iter().any(near), "{name}: no contact at {p:?} in {:?}", got.contacts);
     }
     for found in &got.contacts {

@@ -19,7 +19,7 @@ use crate::{Budget, Methods, Pencil, Section};
 
 /// Two cylinders of radius `r` whose axes cross at the origin at the angle `psi`: two ellipses, in the planes through
 /// the common normal Y and either bisector of the axes, crossing at `(0, ±r, 0)`.
-fn equal_crossing(seed: &mut Seeded, index: u32) -> Case {
+pub(super) fn equal_crossing(seed: &mut Seeded, index: u32) -> Case {
     let place = seed.rigid();
     let (radius, psi) = (seed.next(0.5, 1.2), seed.next(0.5, 1.4));
     let (sine, cosine) = sin_cos(psi);
@@ -39,7 +39,7 @@ fn equal_crossing(seed: &mut Seeded, index: u32) -> Case {
 
 /// Viviani's pair at any size: the cylinder of radius `r` about the axis through `(r, 0, 0)` inside the sphere of radius
 /// `2r` about the origin, whose own axis leans, so that the curve passes neither pole.
-fn viviani(seed: &mut Seeded, index: u32) -> Case {
+pub(super) fn viviani(seed: &mut Seeded, index: u32) -> Case {
     let place = seed.rigid();
     let radius = seed.next(0.5, 1.0);
     let lean = v(seed.next(0.3, 1.0), seed.next(0.3, 1.0), seed.next(0.2, 0.6));
@@ -58,7 +58,7 @@ fn viviani(seed: &mut Seeded, index: u32) -> Case {
 /// Two cones with their apex at the origin, of half-angles `a` and `b`, their axes `psi` apart, less than `a + b` and
 /// more than their difference: the circles of their directions cross twice, so they share two rulings, and the apex
 /// is a contact.
-fn shared_apex(seed: &mut Seeded, i: u32) -> Case {
+pub(super) fn shared_apex(seed: &mut Seeded, i: u32) -> Case {
     let place = seed.rigid();
     let (a, b) = (seed.next(0.3, 0.6), seed.next(0.3, 0.6));
     let psi = seed.next((a - b).abs() + 0.1, a + b - 0.1);
@@ -70,7 +70,7 @@ fn shared_apex(seed: &mut Seeded, i: u32) -> Case {
 
 /// A cone of half-angle `a` and a cylinder of radius `r` along its ruling in the XZ plane, tangent to it along that
 /// ruling from outside or from inside: the ruling and an ellipse, which meets the ruling at a contact.
-fn tangent_along_a_ruling(seed: &mut Seeded, index: u32) -> Case {
+pub(super) fn tangent_along_a_ruling(seed: &mut Seeded, index: u32) -> Case {
     let place = seed.rigid();
     let (half, radius) = (seed.next(0.3, 0.6), seed.next(0.3, 1.0));
     let (sine, cosine) = sin_cos(half);

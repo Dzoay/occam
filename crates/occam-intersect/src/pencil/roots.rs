@@ -52,10 +52,22 @@ pub(crate) enum Multiple {
     Double,
 }
 
-/// The pencil's members, `cos φ A + sin φ B`.
+/// The pencil's members, `cos φ A + sin φ B`, in coordinates of the pair's length.
 pub(crate) struct Members {
     a: [[f64; 4]; 4],
     b: [[f64; 4]; 4],
+}
+
+/// The matrix of a quadric in coordinates of `length`, `x / length`: its last row and column divided by `length`, the
+/// quadric itself divided by `length²`.
+fn per_length(m: [[f64; 4]; 4], length: f64) -> [[f64; 4]; 4] {
+    let scale = |i: usize| if i == 3 { 1.0 / length } else { 1.0 };
+    std::array::from_fn(|i| std::array::from_fn(|j| entry(&m, i, j) * scale(i) * scale(j)))
+}
+
+/// The plane `e · X = 0`, in coordinates of `length`, in the pair's frame: `(n, d length)`.
+fn plane_in(e: [f64; 4], length: f64) -> [f64; 4] {
+    [e[0], e[1], e[2], e[3] * length]
 }
 
 /// `m` scaled to unit size.
@@ -75,9 +87,11 @@ fn determinant(m: &[[f64; 4]; 4]) -> f64 {
 }
 
 impl Members {
-    /// The members of the pencil of `pair`'s two quadrics.
+    /// The members of the pencil of `pair`'s two quadrics, each in coordinates of the pair's length and scaled to unit
+    /// size, so that how near a member is to each rank does not depend on how large the pair is.
     pub(crate) fn of(pair: &Pair) -> Self {
-        Self { a: unit_size(pair.quadric(0).homogeneous()), b: unit_size(pair.quadric(1).homogeneous()) }
+        let read = |i: usize| unit_size(per_length(pair.quadric(i).homogeneous(), pair.length()));
+        Self { a: read(0), b: read(1) }
     }
 
     /// The member at `phi`.
@@ -204,7 +218,7 @@ fn place(pair: &Pair, vertex: [f64; 4], decide: &mut Decisions) -> Result<Place,
         }
         return Ok(Place::Infinite);
     }
-    let at = point * (1.0 / weight);
+    let at = point * (pair.length() / weight);
     let gradient = |q: &Quadric| q.half_gradient(at).norm();
     let on = usize::from(gradient(&quadrics[1]) > gradient(&quadrics[0]));
     let side = quadrics.get(on).map_or(Ok(Side::Above), |q| q.holds(at, decide))?;
@@ -229,14 +243,14 @@ fn vertex(
 }
 
 /// The planes `√|μ₃| e₃ ± √|μ₄| e₄` of a member of rank two, or none where they are conjugate or one is at infinity.
-fn planes(values: [f64; 4], vectors: [[f64; 4]; 4]) -> Option<[(Vec3, Vec3); 2]> {
+fn planes(values: [f64; 4], vectors: [[f64; 4]; 4], length: f64) -> Option<[(Vec3, Vec3); 2]> {
     let ([_, _, mu3, mu4], [_, _, e3, e4]) = (values, vectors);
     if mu3.signum() == mu4.signum() {
         return None;
     }
     let (p, q) = (e3.map(|x| x * mu3.abs().sqrt()), e4.map(|x| x * mu4.abs().sqrt()));
     let at = |e: [f64; 4], i: usize| e.get(i).copied().unwrap_or(0.0);
-    let plane = |f: fn(f64, f64) -> f64| plane_of(std::array::from_fn(|i| f(at(p, i), at(q, i))));
+    let plane = |f: fn(f64, f64) -> f64| plane_of(plane_in(std::array::from_fn(|i| f(at(p, i), at(q, i))), length));
     Some([plane(|p, q| p + q)?, plane(|p, q| p - q)?])
 }
 
@@ -255,13 +269,11 @@ fn near_zero(value: f64, size: f64) -> bool {
     value.abs() <= 1e-3 * size
 }
 
-/// How far from the middle of `pair` a vertex may be and still be decided as a point: a thousand times the distance
-/// between the points its surfaces are placed by, and one more.
-fn reach(pair: &Pair) -> f64 {
-    1e3 * (1.0 + (pair.surfaces[0].at() - pair.surfaces[1].at()).norm())
-}
+/// How far from the middle of a pair a member's vertex may be and still be decided as a point: a thousand times the
+/// pair's length.
+const REACH: f64 = 1e3;
 
-/// Whether the unit `vertex` is at infinity or beyond `reach`.
+/// Whether the unit `vertex`, in coordinates of the pair's length, is at infinity or beyond `reach`.
 fn far([x, y, z, w]: [f64; 4], reach: f64) -> bool {
     w.abs() * reach <= Vec3::new(x, y, z).norm()
 }
@@ -279,8 +291,7 @@ pub(crate) fn every_member_singular(pair: &Pair, decide: &mut Decisions) -> Resu
         }
         vertices.push(vectors[0]);
     }
-    let reach = reach(pair);
-    let near: Vec<[f64; 4]> = vertices.into_iter().filter(|v| !far(*v, reach)).take(2).collect();
+    let near: Vec<[f64; 4]> = vertices.into_iter().filter(|v| !far(*v, REACH)).take(2).collect();
     for vertex in &near {
         if matches!(place(pair, *vertex, decide)?, Place::Off) {
             return Ok(false);
@@ -296,7 +307,7 @@ pub(crate) fn singular_planes(pair: &Pair, decide: &mut Decisions) -> Result<Opt
     let minors = members.minors();
     for phi in minors.roots() {
         let (values, vectors) = eigen(members.at(phi));
-        if let Some(two) = planes(values, vectors)
+        if let Some(two) = planes(values, vectors, pair.length())
             && holds(pair, two, decide)?
         {
             return Ok(Some(two));
@@ -313,8 +324,8 @@ fn plane_of(e: [f64; 4]) -> Option<(Vec3, Vec3)> {
 }
 
 /// The real line of a member of rank two whose planes are conjugate, `e₃ · X = 0 = e₄ · X`, as those two planes.
-fn line([_, _, e3, e4]: [[f64; 4]; 4]) -> Option<[(Vec3, Vec3); 2]> {
-    Some([plane_of(e3)?, plane_of(e4)?])
+fn line([_, _, e3, e4]: [[f64; 4]; 4], length: f64) -> Option<[(Vec3, Vec3); 2]> {
+    Some([plane_of(plane_in(e3, length))?, plane_of(plane_in(e4, length))?])
 }
 
 /// The multiple roots of the pencil of `pair`, each with what its member is.
@@ -335,8 +346,8 @@ pub(crate) fn multiple(pair: &Pair, decide: &mut Decisions) -> Result<Vec<Multip
         let (values, vectors) = eigen(m);
         let multiple = match rank(values) {
             0 | 1 => Some(Multiple::Double),
-            2 => match planes(values, vectors) {
-                None => Some(Multiple::Conjugate { line: line(vectors) }),
+            2 => match planes(values, vectors, pair.length()) {
+                None => Some(Multiple::Conjugate { line: line(vectors, pair.length()) }),
                 Some(two) => holds(pair, two, decide)?.then_some(Multiple::Planes { planes: two }),
             },
             _ => vertex(pair, (phi, m), vectors[0], decide)?,
@@ -408,11 +419,14 @@ mod tests {
         let vectors = |e3: [f64; 4], e4: [f64; 4]| [[0.0; 4], [0.0; 4], e3, e4];
         let real = vectors([1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]);
         let both = Some([(X, v(-0.5, 0.0, 0.0)), (X, v(0.5, 0.0, 0.0))]);
-        assert_eq!(planes([0.0, 0.0, -4.0, 1.0], real), both, "x = ±1/2, from 4x² − 1");
-        assert_eq!(planes([0.0, 0.0, 4.0, 1.0], real), None, "4x² + 1 has no real plane");
+        assert_eq!(planes([0.0, 0.0, -4.0, 1.0], real, 1.0), both, "x = ±1/2, from 4x² − 1");
+        let twice = Some([(X, v(-1.0, 0.0, 0.0)), (X, v(1.0, 0.0, 0.0))]);
+        assert_eq!(planes([0.0, 0.0, -4.0, 1.0], real, 2.0), twice, "x / 2 = ±1/2, in coordinates of 2");
+        assert_eq!(planes([0.0, 0.0, 4.0, 1.0], real, 1.0), None, "4x² + 1 has no real plane");
         let line_of = vectors([1.0, 0.0, 0.0, -1.0], [0.0, 0.0, 2.0, -6.0]);
-        assert_eq!(line(line_of), Some([(X, X), (Z, v(0.0, 0.0, 3.0))]));
-        assert_eq!(line(vectors([1.0, 0.0, 0.0, -1.0], [0.0, 0.0, 0.0, 1.0])), None);
+        assert_eq!(line(line_of, 1.0), Some([(X, X), (Z, v(0.0, 0.0, 3.0))]));
+        assert_eq!(line(line_of, 2.0), Some([(X, X * 2.0), (Z, v(0.0, 0.0, 6.0))]), "in coordinates of 2");
+        assert_eq!(line(vectors([1.0, 0.0, 0.0, -1.0], [0.0, 0.0, 0.0, 1.0]), 1.0), None);
     }
 
     #[test]
@@ -427,8 +441,31 @@ mod tests {
         assert!(!near_zero(1.5, 1000.0));
         assert!(far([0.0, 0.0, 1.0, 0.5], 2.0) && far([0.0, 0.0, 1.0, 0.0], 2.0), "at its reach, and at infinity");
         assert!(!far([0.0, 0.0, 1.0, 0.6], 2.0));
-        let pair = unplaced(ball(v(1.0, 0.0, 0.0), 1.0), upright(v(1.0, 3.0, 0.0), Z, 1.0));
-        assert_eq!(reach(&pair), 4000.0, "a thousand times 1 + 3");
+        let per = per_length([[1.0, 0.0, 0.0, 2.0], [0.0; 4], [0.0; 4], [2.0, 0.0, 0.0, 8.0]], 2.0);
+        assert_eq!(per, [[1.0, 0.0, 0.0, 1.0], [0.0; 4], [0.0; 4], [1.0, 0.0, 0.0, 2.0]], "x² + 4x + 8 at x = 2x'");
+    }
+
+    #[test]
+    fn a_pair_is_as_long_as_its_larger_radius_or_the_distance_between_its_surfaces() {
+        let length = |a, b| unplaced(a, b).length();
+        assert_eq!(length(ball(v(1.0, 0.0, 0.0), 1.0), upright(v(1.0, 3.0, 0.0), Z, 1.0)), 3.0);
+        assert_eq!(length(ball(v(1.0, 0.0, 0.0), 5.0), upright(v(1.0, 3.0, 0.0), Z, 1.0)), 5.0);
+        assert_eq!(length(upright(v(1.0, 3.0, 0.0), Z, 4.0), ball(v(1.0, 0.0, 0.0), 1.0)), 4.0);
+        assert_eq!(length(opening(O, Z, 0.5), opening(v(0.0, 2.0, 0.0), X, 0.3)), 2.0);
+        assert_eq!(length(opening(O, Z, 0.5), opening(O, X, 0.3)), 1.0, "two cones with one apex");
+    }
+
+    #[test]
+    fn a_vertex_read_in_coordinates_of_the_pairs_length_is_placed_in_its_frame() {
+        // The sphere of radius 1 about (2, 0, 0) touches the cylinder of radius 1 about Z at (1, 0, 0); the pair's
+        // frame is about (1, 0, 2.5), and its length the distance between (2, 0, 0) and (0, 0, 5).
+        let pair = unplaced(ball(v(2.0, 0.0, 0.0), 1.0), upright(v(0.0, 0.0, 5.0), Z, 1.0));
+        let length = pair.length();
+        let local = v(0.0, 0.0, -2.5) * (1.0 / length);
+        let size = (local.norm() * local.norm() + 1.0).sqrt();
+        let vertex = [local.x / size, local.y / size, local.z / size, 1.0 / size];
+        let Ok(Place::On(at, _)) = place(&pair, vertex, &mut Decisions::new(tol())) else { panic!("not on both") };
+        assert!((at - v(0.0, 0.0, -2.5)).norm() <= 1e-12, "{at:?}");
     }
 
     #[test]
