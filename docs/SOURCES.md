@@ -33,3 +33,7 @@ project: its file must also be declared in `REUSE.toml`, and its licence must be
 | `lane-riesenfeld-1980` | paper | n/a | Lane, Riesenfeld. *A Theoretical Development for the Computer Generation and Display of Piecewise Polynomial Surfaces*. IEEE Transactions on Pattern Analysis and Machine Intelligence PAMI-2(1), 1980 |
 | `houghton-emnett-factor-sabharwal-1985` | paper | n/a | Houghton, Emnett, Factor, Sabharwal. *Implementation of a Divide-and-Conquer Method for Intersection of Parametric Surfaces*. Computer Aided Geometric Design 2(1–3), 1985 |
 | `von-neumann-1950` | book | n/a | von Neumann. *Functional Operators, Volume II: The Geometry of Orthogonal Spaces*. Annals of Mathematics Studies 22, Princeton University Press, 1950 |
+| `levin-1976` | paper | n/a | Levin. *A Parametric Algorithm for Drawing Pictures of Solid Objects Composed of Quadric Surfaces*. Communications of the ACM 19(10), 1976 |
+| `levin-1979` | paper | n/a | Levin. *Mathematical Models for Determining the Intersections of Quadric Surfaces*. Computer Graphics and Image Processing 11(1), 1979 |
+| `dupont-lazard-lazard-petitjean-2008` | paper | n/a | Dupont, Lazard, Lazard, Petitjean. *Near-Optimal Parameterization of the Intersection of Quadrics*, I: *The Generic Algorithm*, II: *A Classification of Pencils*, III: *Parameterizing Singular Intersections*. Journal of Symbolic Computation 43(3), 2008 |
+| `wang-goldman-tu-2003` | paper | n/a | Wang, Goldman, Tu. *Enhancing Levin's Method for Computing Quadric-Surface Intersections*. Computer Aided Geometric Design 20(7), 2003 |

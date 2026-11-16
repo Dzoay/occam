@@ -1,11 +1,11 @@
 //! Source: original
 //! Where two lines or circles of one plane meet: nowhere, at a touch, at two crossings, or everywhere, as the same
 //! curve. Their numbers are intervals carrying their certified radii, and every choice among those is a decision
-//! made through [`Decide`]. A meridian of a surface turned about an axis, and a cylinder's cross-section, are these.
+//! made through [`Decisions`]. A meridian of a surface turned about an axis, and a cylinder's cross-section, are these.
 
 use occam_math::{Interval, Side};
 
-use super::decide::{Decide, Undecided};
+use crate::decide::{Decisions, Undecided};
 
 /// A point of the plane.
 #[derive(Clone, Copy, Debug)]
@@ -62,7 +62,7 @@ pub(super) enum Meeting {
 }
 
 /// How `a` and `b` meet, or [`Undecided`] where a decision could not be made.
-pub(super) fn meet(a: &Shape, b: &Shape, decide: &mut Decide) -> Result<Meeting, Undecided> {
+pub(super) fn meet(a: &Shape, b: &Shape, decide: &mut Decisions) -> Result<Meeting, Undecided> {
     match (*a, *b) {
         (Shape::Line { at, along }, Shape::Line { at: other, along: way }) => lines(at, along, other, way, decide),
         (Shape::Line { at, along }, Shape::Circle { centre, radius })
@@ -75,7 +75,7 @@ pub(super) fn meet(a: &Shape, b: &Shape, decide: &mut Decide) -> Result<Meeting,
     }
 }
 
-fn lines(at: Flat, along: Flat, other: Flat, way: Flat, decide: &mut Decide) -> Result<Meeting, Undecided> {
+fn lines(at: Flat, along: Flat, other: Flat, way: Flat, decide: &mut Decisions) -> Result<Meeting, Undecided> {
     let turn = along.cross(way);
     if decide.angle(turn)? == Side::Within {
         let gap = along.cross(other.minus(at));
@@ -90,7 +90,7 @@ fn line_circle(
     along: Flat,
     centre: Flat,
     radius: Interval,
-    decide: &mut Decide,
+    decide: &mut Decisions,
 ) -> Result<Meeting, Undecided> {
     let offset = centre.minus(at);
     let across = along.cross(offset);
@@ -119,7 +119,7 @@ fn magnitude(x: Interval) -> Interval {
 fn circles(
     (centre, radius): (Flat, Interval),
     (other, size): (Flat, Interval),
-    decide: &mut Decide,
+    decide: &mut Decisions,
 ) -> Result<Meeting, Undecided> {
     let apart = other.minus(centre);
     let distance = apart.dot(apart).sqrt();
@@ -151,8 +151,8 @@ mod tests {
 
     use super::*;
 
-    fn decide() -> Decide {
-        Decide::new(Tolerance::new(Length::from_millimetres(1e-9), Angle::from_radians(1e-9)).unwrap())
+    fn decide() -> Decisions {
+        Decisions::new(Tolerance::new(Length::from_millimetres(1e-9), Angle::from_radians(1e-9)).unwrap())
     }
 
     fn circle(x: f64, y: f64, r: f64) -> Shape {

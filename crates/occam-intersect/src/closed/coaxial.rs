@@ -9,10 +9,10 @@ use occam_geom::Analytic;
 use occam_math::{Interval, Side, sin_cos};
 use occam_units::Vec3;
 
-use super::decide::{Decide, Undecided};
 use super::meet::{Flat, Meeting, Shape, meet};
 use super::piece::Plan;
 use super::{Found, along, exact3};
+use crate::decide::{Decisions, Undecided};
 
 /// An axis: a point on it and its unit direction.
 #[derive(Clone, Copy, Debug)]
@@ -73,7 +73,7 @@ enum Turned {
     Mirror,
 }
 
-fn turned(point: Flat, decide: &mut Decide) -> Result<Turned, Undecided> {
+fn turned(point: Flat, decide: &mut Decisions) -> Result<Turned, Undecided> {
     Ok(match decide.length(point.x)? {
         Side::Above => Turned::Circle(point.y.mid(), point.x.mid()),
         Side::Within => Turned::OnAxis(point.y),
@@ -82,7 +82,7 @@ fn turned(point: Flat, decide: &mut Decide) -> Result<Turned, Undecided> {
 }
 
 /// The section of `a` and `b`, both turned about `axis`, or [`Undecided`] where a decision could not be made.
-pub(super) fn coaxial(a: Analytic, b: Analytic, axis: &Axis, decide: &mut Decide) -> Result<Found, Undecided> {
+pub(super) fn coaxial(a: Analytic, b: Analytic, axis: &Axis, decide: &mut Decisions) -> Result<Found, Undecided> {
     let mut found = Found::default();
     let mut heights: Vec<Interval> = Vec::new();
     for one in meridians(a, axis) {
@@ -113,7 +113,7 @@ pub(super) fn coaxial(a: Analytic, b: Analytic, axis: &Axis, decide: &mut Decide
 }
 
 /// Whether a point of the axis at `height` is one already found, as a cone's two lines both find its apex.
-fn seen(heights: &[Interval], height: Interval, decide: &mut Decide) -> Result<bool, Undecided> {
+fn seen(heights: &[Interval], height: Interval, decide: &mut Decisions) -> Result<bool, Undecided> {
     for other in heights {
         if decide.length(*other - height)? == Side::Within {
             return Ok(true);

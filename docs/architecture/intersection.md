@@ -13,7 +13,9 @@ flowchart TD
   canon --> cf{"Both present<br/>an analytic form?"}
   cf -->|"yes"| closed["Closed form"]
   cf -->|"no"| hybrid["Hybrid: subdivide for start points,<br/>march, trace in rounds"]
+  closed -->|"declines a quadric pair"| pencil["Levin's pencil method:<br/>classify, then parametrize"]
   closed --> sec[("Section")]
+  pencil --> sec
   hybrid --> sec
 ```
 
@@ -29,6 +31,15 @@ flowchart TD
 - **A closed form's images** are its curve read through each surface's [chart](geometry.md#parameter-curves), the
   closed form of its parameters. A surface without one, such as a plane's B-spline with uneven poles, declines to the
   next method.
+- **The pencil method** answers two of a sphere, a cylinder and a cone that the closed forms leave. It classifies the
+  pencil by the real roots of its determinant, their multiplicities and the members' ranks there, each decided against
+  the band through predicates on the matrices' entries. No multiple root is a smooth quartic, in `Quartic` loops; a
+  double root of rank three with its vertex on both surfaces a nodal quartic, or a triple one a cusp, a rational
+  B-spline from its vertex; a double root of rank two a split into the conics of its pair of planes, which may cross
+  where no point is real. A determinant zero for every member is two cones with one apex, meeting in rulings, or a
+  cylinder tangent to a cone along a ruling, which splits into that ruling and a conic. Singular points are contacts. A
+  degenerate pencil of any other kind is reported as not implemented, never fitted, and a decision the band cannot make
+  is `decide.undecided`. Its curves' images count their turns about each chart's axis.
 - **The hybrid needs no B-spline form,** so offsets and mesh-backed surfaces reach it: it subdivides by `bounds` alone,
   which for a B-spline is the hull of the part's own poles and so goes on shrinking inside a knot span.
 - **Many pairs** run one pair a task, one result each, in pair order, and a method's own work, the hybrid's leaves,
