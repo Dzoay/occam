@@ -26,7 +26,7 @@ use crate::field::{Field, Jet, Taylor};
 use crate::identity::{Content, FamilyName, Shape};
 use crate::restore::{Numbers, out_of_range, wrap_code};
 use crate::series;
-use crate::support::{enclose, everything, span};
+use crate::support::{enclose, span};
 use crate::turn::turn;
 
 /// The ruled quadric that carries the loop, on [`Quartic::axes`].
@@ -241,11 +241,9 @@ impl ParametricCurve for Quartic {
     fn derivatives(&self, t: f64, order: u8, out: &mut Vec<Tangent<World>>, _: &mut Scratch) -> Result<(), Report> {
         let (_, first, second) = self.eval_second(t);
         out.extend([first, second].into_iter().take(usize::from(order)));
-        if order > 2 {
-            let [x, y, z] = self.at(&Taylor::variable(t, order)).map(|c| series::derivatives(&c.0));
-            let rates = x.into_iter().zip(y).zip(z).map(|((x, y), z)| Tangent::new(Vec3::new(x, y, z)));
-            out.extend(rates.skip(2));
-        }
+        let [x, y, z] = self.at(&Taylor::variable(t, order)).map(|c| series::derivatives(&c.0));
+        let rates = x.into_iter().zip(y).zip(z).map(|((x, y), z)| Tangent::new(Vec3::new(x, y, z)));
+        out.extend(rates.skip(2));
         Ok(())
     }
 
@@ -253,19 +251,13 @@ impl ParametricCurve for Quartic {
         self.range
     }
 
-    /// The union of boxes the closed form gives in intervals over sixteen pieces from `lo` to `hi`.
+    /// The union of boxes the closed form gives in intervals over sixteen pieces from `lo` to `hi`: all of space where
+    /// they are not finite.
     fn bounds(&self, lo: f64, hi: f64) -> Bounds {
-        if !(lo.is_finite() && hi.is_finite()) {
-            return everything();
-        }
-        let pieces: u32 = if hi > lo { 16 } else { 1 };
+        let pieces: u32 = 16;
         let step = (hi - lo) / f64::from(pieces);
-        let boxes = (0..pieces).map(|i| {
-            let from = lo + step * f64::from(i);
-            let to = if i.saturating_add(1) == pieces { hi } else { from + step };
-            self.at::<Interval>(&span(from, to))
-        });
-        enclose(boxes)
+        let end = |i: u32| if i == pieces { hi } else { lo + step * f64::from(i) };
+        enclose((0..pieces).map(|i| self.at::<Interval>(&span(end(i), end(i.saturating_add(1))))))
     }
 
     fn family(&self) -> FamilyName {
@@ -298,14 +290,7 @@ impl ParametricCurve for Quartic {
             Root::Whole { delta, sign } => Root::Whole { delta: delta.map(|d| d * k * k), sign },
             Root::Between { middle, k: half, e } => Root::Between { middle, k: half, e: e.map(|c| c * k * k) },
         };
-        let moved = Self {
-            axes: self.axes.moved(&similar),
-            ruled,
-            alpha: self.alpha,
-            beta: self.beta.map(|b| b * k),
-            root,
-            ..*self
-        };
+        let moved = Self { axes: self.axes.moved(&similar), ruled, beta: self.beta.map(|b| b * k), root, ..*self };
         Some((moved, ParamMap::IDENTITY))
     }
 }
@@ -432,5 +417,59 @@ mod tests {
         numbers[29] = 0.5;
         assert_eq!(Quartic::restore(&numbers).err().map(|r| r.code), Some(occam_report::Code::OutOfRange));
         assert_eq!(Curve::family(&round(1.0)), FamilyName("quartic"));
+    }
+
+    #[test]
+    fn a_loop_refuses_a_ruled_surface_size_or_half_width_no_loop_has() {
+        let (sa, ca) = sin_cos(0.5);
+        let cone = |sin: f64, cos: f64| [1.0, sin, cos, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let cylinder = |radius: f64, spare: f64| [0.0, radius, spare, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let whole = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+        let refused = |head: &[f64], root: &[f64]| {
+            let numbers: Vec<f64> = axes().into_iter().chain(head.iter().chain(root).copied()).chain(WHOLE).collect();
+            Quartic::restore(&numbers).err().map(|r| r.code)
+        };
+        let out = Some(occam_report::Code::OutOfRange);
+        assert_eq!(refused(&cone(sa, ca), &whole), None, "a cone it has");
+        for (sin, cos) in [(0.0, 1.0), (1.0, 0.0), (-sa, ca), (sa, -ca), (sa, ca + 1e-6)] {
+            assert_eq!(refused(&cone(sin, cos), &whole), out, "a half-angle of sine {sin} and cosine {cos}");
+        }
+        for (radius, spare) in [(0.0, 0.0), (-1.0, 0.0), (f64::INFINITY, 0.0), (1.0, 0.5)] {
+            assert_eq!(refused(&cylinder(radius, spare), &whole), out, "a radius {radius} and {spare}");
+        }
+        let halfway = |(cm, sm): (f64, f64), k: f64| [1.0, cm, sm, k, 0.8, 1.0, 0.0];
+        let head = &cylinder(1.0, 0.0)[..11];
+        assert_eq!(refused(head, &halfway((0.6, 0.8), 0.3)), None, "a half-width it has");
+        for k in [0.0, 1.0, -0.2] {
+            assert_eq!(refused(head, &halfway((0.6, 0.8), k)), out, "sin(h/2) = {k}");
+        }
+        assert_eq!(refused(head, &halfway((0.6, 0.6), 0.3)), out, "a middle that is not a direction");
+        let trimmed = between().trimmed(1.0, 2.5).unwrap();
+        assert_eq!(Curve::range(&trimmed), crate::domain::ParamRange { lo: 1.0, hi: 2.5, ..Curve::range(&trimmed) });
+        assert_eq!((Curve::range(&trimmed).lo, Curve::range(&trimmed).hi), (1.0, 2.5));
+    }
+
+    #[test]
+    fn a_loops_box_holds_it_and_is_little_larger_than_it() {
+        for q in [round(1.0), between(), on_cone(-1.0)] {
+            for (lo, hi) in [(0.0, TAU), (0.3, 1.1), (2.0, 2.4), (5.0, 5.0)] {
+                let b = Curve::bounds(&q, lo, hi);
+                let points: Vec<Vec3> =
+                    (0..=400).map(|i| q.point(lo + (hi - lo) * f64::from(i) / 400.0).to_vec3()).collect();
+                let reach = |pick: fn(Vec3) -> f64| {
+                    let values = points.iter().map(|p| pick(*p));
+                    let least = values.clone().fold(f64::INFINITY, |a, x| if x < a { x } else { a });
+                    (least, values.fold(f64::NEG_INFINITY, |a, x| if x > a { x } else { a }))
+                };
+                let (low, high) = (b.low().to_vec3(), b.high().to_vec3());
+                let picks: [fn(Vec3) -> f64; 3] = [|v| v.x, |v| v.y, |v| v.z];
+                for pick in picks {
+                    let (least, most) = reach(pick);
+                    assert!(pick(low) <= least && pick(high) >= most, "{lo}..{hi}: the box misses the loop");
+                    let slack = (least - pick(low)) + (pick(high) - most);
+                    assert!(slack <= 0.2 * (hi - lo) + 1e-12, "{lo}..{hi}: the box is {slack} larger than the loop");
+                }
+            }
+        }
     }
 }

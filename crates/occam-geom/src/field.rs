@@ -158,11 +158,10 @@ impl Field for Taylor {
     }
 }
 
-/// Whether some `at + 2kπ` lies from `lo` to `hi`, a little widened for the rounding of `2kπ`.
+/// Whether some `at + 2kπ` lies from `lo` to `hi`: the first at or after `lo`. Rounding can only miss one that is at an
+/// end, where the end's own value holds it.
 fn reaches(at: f64, lo: f64, hi: f64) -> bool {
-    let k = ((lo - at) / TAU).ceil();
-    let first = at + k * TAU;
-    first <= hi + 1e-15 * (1.0 + hi.abs()) || at + (k - 1.0) * TAU >= lo - 1e-15 * (1.0 + lo.abs())
+    at + ((lo - at) / TAU).ceil() * TAU <= hi
 }
 
 /// An interval holding `values` and, where the stretch reaches them, the extremes `top` and `bottom`, padded for the
@@ -204,10 +203,11 @@ impl Field for Interval {
         self.sqrt()
     }
 
-    /// The sine and cosine of every value held: their values at the ends, and ±1 where the stretch reaches a peak.
+    /// The sine and cosine of every value held: their values at the ends, and ±1 where the stretch reaches a peak, as
+    /// one a turn wide or more reaches every peak.
     fn sin_cos(&self) -> (Self, Self) {
         let (lo, hi) = (self.lower(), self.upper());
-        if !(lo.is_finite() && hi.is_finite()) || hi - lo >= TAU {
+        if !(lo.is_finite() && hi.is_finite()) {
             let all = span(-1.0, 1.0);
             return (all, all);
         }
@@ -245,6 +245,71 @@ mod tests {
             assert!((got[0] - jet.first).abs() < 1e-13 && (got[1] - jet.second).abs() < 1e-12, "{got:?}");
             let third = (formula(&Jet::variable(t + h)).second - formula(&Jet::variable(t - h)).second) / (2.0 * h);
             assert!((got[2] - third).abs() < 1e-5, "{t}: {} against {third}", got[2]);
+        }
+    }
+
+    /// `u = t² + 0.3 t` as a jet at `t`, with `u' = 2t + 0.3` and `u'' = 2`.
+    fn curved(t: f64) -> Jet<f64> {
+        let jet = Jet::variable(t);
+        jet.times(&jet).plus(&jet.scaled(0.3))
+    }
+
+    #[test]
+    fn a_jet_carries_the_rates_of_a_quotient_and_of_sines_and_cosines_of_a_curved_argument() {
+        for t in [-0.7, 0.4, 1.3] {
+            let (angle, du) = (t * t + 0.3 * t, 2.0 * t + 0.3);
+            let (sin, cos) = sin_cos(angle);
+            let (sine, cosine) = curved(t).sin_cos();
+            let near = |a: f64, b: f64| (a - b).abs() <= 1e-14 * (1.0 + b.abs());
+            let (s1, s2) = (sine.first, sine.second);
+            assert!(near(s1, cos * du) && near(s2, -sin * du * du + cos * 2.0), "sin at {t}: {sine:?}");
+            let (c1, c2) = (cosine.first, cosine.second);
+            assert!(near(c1, -sin * du) && near(c2, -cos * du * du - sin * 2.0), "cos at {t}: {cosine:?}");
+            // (t + 2) / (t² + 1): q' = (d − 2t n) / d², q'' = −2n / d² − 4t (d − 2t n) / d³.
+            let (n, d) = (t + 2.0, t * t + 1.0);
+            let jet = Jet::variable(t);
+            let q = jet.plus(&jet.constant(2.0)).over(&jet.times(&jet).plus(&jet.constant(1.0)));
+            let rate = (d - 2.0 * t * n) / (d * d);
+            let bend = -2.0 * n / (d * d) - 4.0 * t * (d - 2.0 * t * n) / (d * d * d);
+            assert!(near(q.value, n / d) && near(q.first, rate) && near(q.second, bend), "quotient at {t}: {q:?}");
+        }
+    }
+
+    #[test]
+    fn an_intervals_sine_and_cosine_hold_every_value_and_are_no_wider_than_their_reach() {
+        let pad = 2.0 * f64::EPSILON;
+        for (lo, hi) in
+            [(0.1, 0.2), (1.4, 1.7), (-1.7, -1.4), (-0.2, 0.3), (3.0, 3.3), (4.6, 4.8), (-7.0, -6.5), (2.0, 7.0)]
+        {
+            let x = span(lo, hi);
+            let (s, c) = x.sin_cos();
+            let points: Vec<(f64, f64)> =
+                (0..=2000).map(|i| sin_cos(x.lower() + (x.upper() - x.lower()) * f64::from(i) / 2000.0)).collect();
+            let peak = |at: f64| (-3..=3).any(|k| (x.lower()..=x.upper()).contains(&(at + TAU * f64::from(k))));
+            for (got, pick, top, bottom) in [(s, 0, peak(FRAC_PI_2), peak(-FRAC_PI_2)), (c, 1, peak(0.0), peak(PI))] {
+                let values: Vec<f64> = points.iter().map(|p| if pick == 0 { p.0 } else { p.1 }).collect();
+                let least =
+                    if bottom { -1.0 } else { values.iter().fold(f64::INFINITY, |a, v| if *v < a { *v } else { a }) };
+                let most =
+                    if top { 1.0 } else { values.iter().fold(f64::NEG_INFINITY, |a, v| if *v > a { *v } else { a }) };
+                assert!(
+                    got.lower() <= least - pad && got.upper() >= most + pad,
+                    "{lo}..{hi}: {got:?} against {least}..{most}"
+                );
+                assert!(
+                    got.lower() >= least - 1e-14 && got.upper() <= most + 1e-14,
+                    "{lo}..{hi}: {got:?} is wider than {least}..{most}"
+                );
+            }
+        }
+        // About the largest number by itself: from 0 to infinity, and from minus infinity to 0.
+        for unbounded in [Interval::new(f64::MAX, f64::MAX), Interval::new(-f64::MAX, f64::MAX)] {
+            assert!(unbounded.lower().is_finite() != unbounded.upper().is_finite(), "{unbounded:?}");
+            let (s, c) = unbounded.sin_cos();
+            for got in [s, c] {
+                let all = span(-1.0, 1.0);
+                assert_eq!((got.lower(), got.upper()), (all.lower(), all.upper()), "every value, with no end to pad");
+            }
         }
     }
 

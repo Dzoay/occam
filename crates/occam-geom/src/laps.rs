@@ -28,20 +28,19 @@ pub(crate) struct Laps {
     /// Where the curve crosses the plane, and the turns added after it to the near reading and to the far one. Unused
     /// slots cross at infinity.
     pub(crate) crossings: [(f64, f64, f64); MOST],
-    /// The turns the far reading starts with.
-    pub(crate) far: f64,
     /// The least and greatest angle the curve reaches.
     pub(crate) span: (f64, f64),
 }
+
+/// The turns the far reading starts with: the curve starts a quarter turn before `at`, where the near reading is
+/// `at − π/2` and the far one, from `at + π`, is a quarter turn on from it, `at + 3π/2`, a turn more.
+const FAR: f64 = -TAU;
 
 /// Where `f` changes sign between `lo` and `hi`, where it does, by bisection.
 fn crossing(f: &impl Fn(f64) -> f64, (mut lo, mut hi): (f64, f64)) -> f64 {
     let rising = f(hi) >= 0.0;
     for _ in 0..80 {
         let mid = 0.5 * lo + 0.5 * hi;
-        if mid <= lo || mid >= hi {
-            break;
-        }
         if (f(mid) >= 0.0) == rising {
             hi = mid;
         } else {
@@ -53,8 +52,8 @@ fn crossing(f: &impl Fn(f64) -> f64, (mut lo, mut hi): (f64, f64)) -> f64 {
 
 impl Laps {
     /// The laps of the curve whose point across the axis, in the chart's frame, `across` gives from `lo` to `hi`, both
-    /// finite, with `at` the angle of its middle. `None` where it crosses the plane through the axis more than
-    /// [`MOST`] times.
+    /// finite, with `at` a quarter turn on from the angle of its start, which its angle therefore starts at. `None`
+    /// where it crosses the plane through the axis more than [`MOST`] times.
     pub(crate) fn counted(across: impl Fn(f64) -> (f64, f64), (lo, hi): (f64, f64), at: f64) -> Option<Self> {
         let (sin, cos) = sin_cos(at);
         let normal = |t: f64| {
@@ -81,21 +80,18 @@ impl Laps {
             }
             before = now;
         }
-        let (east, north) = across(lo);
-        let start = at + angle_from(at, east, north);
-        let far = TAU * ((start - (at + PI + angle_from(at + PI, east, north))) / TAU).round();
-        Some(Self { at, crossings, far, span: Self::reach(at, far, &crossings) })
+        Some(Self { at, crossings, span: Self::reach(at, &crossings) })
     }
 
-    /// The least and greatest angle either reading can give, with every count of turns it can have.
-    fn reach(at: f64, far: f64, crossings: &[(f64, f64, f64)]) -> (f64, f64) {
-        let (mut near_turns, mut far_turns) = (0.0, far);
-        let (mut least, mut most) = (at - PI, at + PI);
+    /// The least and greatest angle either reading can give, with every count of turns it can have: at the start, from
+    /// the far reading's least, `at − 2π`, to the near one's greatest, `at + π`.
+    fn reach(at: f64, crossings: &[(f64, f64, f64)]) -> (f64, f64) {
+        let (mut near_turns, mut far_turns) = (0.0, FAR);
+        let (mut least, mut most) = (at + FAR, at + PI);
         let mut widen = |low: f64, high: f64| {
             least = if low < least { low } else { least };
             most = if high > most { high } else { most };
         };
-        widen(at + far, at + TAU + far);
         for (_, near, far) in crossings.iter().filter(|c| c.0.is_finite()) {
             near_turns += near;
             far_turns += far;
@@ -111,7 +107,7 @@ impl Laps {
     pub(crate) fn angle<R: Real>(&self, t: R, east: R, north: R) -> R {
         let (at, back) = (R::splat(self.at), R::splat(self.at + PI));
         let (near, far) = (angle_from(at, east, north), angle_from(back, east, north));
-        let (mut near_turns, mut far_turns) = (R::splat(0.0), R::splat(self.far));
+        let (mut near_turns, mut far_turns) = (R::splat(0.0), R::splat(FAR));
         for (when, n, f) in self.crossings {
             let past = R::splat(when).lt(t);
             near_turns = near_turns + R::select(past, R::splat(n), R::splat(0.0));
@@ -125,16 +121,55 @@ impl Laps {
     pub(crate) fn winding(&self) -> f64 {
         self.crossings.iter().filter(|c| c.0.is_finite()).map(|c| c.1).sum()
     }
-
-    /// The numbers that define them.
-    pub(crate) fn numbers(&self) -> Vec<f64> {
-        let mut out = vec![self.at, self.far];
-        out.extend(self.crossings.iter().flat_map(|(t, n, f)| [*t, *n, *f]));
-        out
-    }
 }
 
 /// A vector's parts along two axes.
 pub(crate) fn across(q: Vec3, (x, y): (Vec3, Vec3)) -> (f64, f64) {
     (q.dot(x), q.dot(y))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The laps of the circle about the axis from the angle `from` to `to`, its parameter from 0 to 1, and the angle
+    /// read along it.
+    fn round(from: f64, to: f64) -> (Laps, impl Fn(f64) -> f64) {
+        let across = move |u: f64| {
+            let (s, c) = sin_cos(from + (to - from) * u);
+            (c, s)
+        };
+        let laps = Laps::counted(across, (0.0, 1.0), from + FRAC_PI_2).unwrap();
+        (laps, move |u: f64| {
+            let (east, north) = across(u);
+            laps.angle(u, east, north)
+        })
+    }
+
+    #[test]
+    fn a_curve_round_the_axis_keeps_its_angle_and_counts_its_turns_either_way() {
+        for (to, turns) in [(0.3 + 3.0 * TAU, 3.0), (0.3 - 2.0 * TAU, -2.0), (0.5, 0.0)] {
+            let (laps, angle) = round(0.3, to);
+            for i in 0..=1000 {
+                let u = f64::from(i) / 1000.0;
+                let want = 0.3 + (to - 0.3) * u;
+                assert!((angle(u) - want).abs() <= 1e-12, "to {to} at {u}: {} against {want}", angle(u));
+            }
+            assert_eq!(laps.winding(), turns * TAU, "to {to}");
+            let at = 0.3 + FRAC_PI_2;
+            let span = match turns {
+                3.0 => (at - TAU, at + PI + 3.0 * TAU),
+                -2.0 => (at - 3.0 * TAU, at + PI),
+                _ => (at - TAU, at + PI),
+            };
+            assert_eq!(laps.span, span, "to {to}");
+        }
+    }
+
+    #[test]
+    fn a_crossing_is_found_where_its_function_rises_through_zero_or_falls() {
+        assert!((crossing(&|t: f64| t - 0.3, (0.0, 1.0)) - 0.3).abs() <= 1e-15);
+        assert!((crossing(&|t: f64| 0.7 - t, (0.0, 1.0)) - 0.7).abs() <= 1e-15);
+        assert!((crossing(&|t: f64| t * t - 2.0, (1.0, 2.0)) - 2.0_f64.sqrt()).abs() <= 1e-15);
+    }
 }
