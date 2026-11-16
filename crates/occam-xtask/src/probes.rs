@@ -16,9 +16,10 @@ fn parse(path: &Path) -> toml::Table {
     fs::read_to_string(path).unwrap().parse().unwrap()
 }
 
-/// A scratch workspace holding the probes under the repository's lint tables and `clippy.toml`.
-fn scratch_workspace() -> std::path::PathBuf {
-    let dir = env::temp_dir().join(format!("occam-probes-{}", process::id()));
+/// A scratch workspace holding the probes under the repository's lint tables and `clippy.toml`, for the test named
+/// `test` alone: the tests run at once and each removes its own, so the directory is named by the process and the test.
+fn scratch_workspace(test: &str) -> std::path::PathBuf {
+    let dir = env::temp_dir().join(format!("occam-probes-{}-{test}", process::id()));
     let probes = root().join("crates/occam-xtask/probes/bans");
     fs::create_dir_all(dir.join("bans/src")).unwrap();
     fs::copy(probes.join("Cargo.toml"), dir.join("bans/Cargo.toml")).unwrap();
@@ -106,7 +107,7 @@ fn banned() -> BTreeSet<String> {
 
 #[test]
 fn clippy_rejects_every_banned_pattern() {
-    let dir = scratch_workspace();
+    let dir = scratch_workspace("clippy_rejects_every_banned_pattern");
     let want = marks(&dir);
     let got = diagnostics(&dir);
     fs::remove_dir_all(&dir).unwrap();
@@ -115,7 +116,7 @@ fn clippy_rejects_every_banned_pattern() {
 
 #[test]
 fn every_banned_pattern_has_a_probe() {
-    let dir = scratch_workspace();
+    let dir = scratch_workspace("every_banned_pattern_has_a_probe");
     let marked: BTreeSet<String> = marks(&dir).into_iter().map(|(_, _, lint)| lint).collect();
     fs::remove_dir_all(&dir).unwrap();
     let banned = banned();
