@@ -1,15 +1,16 @@
 # `gates perf`: instructions per operation class, `<class> <instructions>`. `just perf --update` rewrites the numbers.
-# Recorded on an Intel Core i7-8700K (governor irrelevant: these are instruction counts under Valgrind's callgrind), from a
-# static x86_64-unknown-linux-musl build, so that no machine's libc or CPU features change them. rustc 1.99.1, gungraun 0.20.0.
+# Recorded on an Intel Core i7-1165G7, where `just perf` runs (governor irrelevant: these are instruction counts under
+# Valgrind's callgrind), from a static x86_64-unknown-linux-musl build, so that no machine's libc changes them. Counts
+# taken on another CPU can differ, so take them there. rustc 1.99.1, gungraun 0.20.0.
 angles_w1 657175
 angles_w4 480901
-commands_describe 3596269
+commands_describe 3596272
 commands_open 255555915
-construct_polygon_extrude 5989625563
+construct_polygon_extrude 5989925561
 construct_primitives 259179142
-construct_sweeps 192731806
-construct_transforms 967407097
-construct_wire_face 10079480
+construct_sweeps 192734266
+construct_transforms 968589066
+construct_wire_face 10080710
 filter_w1 971612
 filter_w4 468829
 masks_w1 123749
@@ -20,6 +21,8 @@ maths_lanes8 81902677
 maths_scalar 108976059
 measure_distance 3155
 measure_primitives 24101593
+mesh_p9_parts 274546750
+mesh_pick 15101133
 offset_curves 973293
 offset_surfaces 3792270
 sines_w1 775021
