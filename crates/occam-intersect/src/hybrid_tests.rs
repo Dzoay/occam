@@ -185,7 +185,7 @@ fn p5s_625_component_surface_against_a_plane_gives_all_577_curves() {
 
 /// The biquadratic graph over `[-1, 1]^2` of `ax x^2 + bx x + ay y^2 + by y`, placed rigidly: its parameters are `x`
 /// and `y`, as the poles' Greville abscissae are.
-fn graph((ax, bx): (f64, f64), (ay, by): (f64, f64)) -> SplineSurface {
+pub(crate) fn graph((ax, bx): (f64, f64), (ay, by): (f64, f64)) -> SplineSurface {
     let side = |a: f64, b: f64| [a - b, -a, a + b];
     let (fx, fy) = (side(ax, bx), side(ay, by));
     let at = [-1.0, 0.0, 1.0];

@@ -403,7 +403,7 @@ mod tests {
     use occam_units::{ParamKind, Point};
 
     use super::*;
-    use crate::hybrid_tests::crossing_at_a_corner;
+    use crate::hybrid_tests::{crossing_at_a_corner, graph};
     use crate::section::Contact;
     use crate::trace::Station;
     use crate::trace_tests::{BAND, level, nurbs, tol, tracer, upright};
@@ -489,6 +489,21 @@ mod tests {
         let far = against_parts(&low, &high, (&first, &aside), tol());
         assert!(near.seed.is_none() && far.seed.is_none());
         assert!(near.beside.tally.decided > 0 && far.beside.tally == Tally::default(), "{:?}", near.beside.tally);
+    }
+
+    #[test]
+    fn a_small_part_against_a_large_one_reaches_as_far_as_the_large_for_a_second_curve() {
+        // The graph of x² - 0.028 x against the flat one: the lines x = 0 and x = 0.028, crossing at a slope of 0.028.
+        // From a small part about the first, the second is beyond the small part but within the large one.
+        let (flat, bowl) = (graph((0.0, 0.0), (0.0, 0.0)), graph((1.0, -0.028), (0.0, 0.0)));
+        let part = |s: &dyn Surface, lo: (f64, f64), hi: (f64, f64)| crate::pieces::Piece::whole(s, patch(lo, hi));
+        let small = part(&flat, (-0.005, 0.005), (-0.005, 0.005));
+        let large = part(&bowl, (-1.0, 1.0), (-1.0, 1.0));
+        let found = against_parts(&flat, &bowl, (&small, &large), tol());
+        let (seed, twin) = (found.seed.unwrap(), found.beside.twin.unwrap());
+        assert!((seed.at - twin.at).norm() > 0.027 && (seed.at - twin.at).norm() < 0.029, "{seed:?} {twin:?}");
+        let other = against_parts(&bowl, &flat, (&large, &small), tol());
+        assert!(other.beside.twin.is_some(), "either way round");
     }
 
     #[test]

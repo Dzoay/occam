@@ -104,7 +104,7 @@ impl Near {
     /// nought to the precision of `K`, along whose direction the gap is flat to second order.
     pub(crate) fn critical(&self) -> [f64; 2] {
         let ([first, second], [x, y]) = eigen(self.bend);
-        let most = if size(first) > size(second) { size(first) } else { size(second) };
+        let (_, most) = self.sizes();
         let mut out = [0.0; 2];
         for (lambda, way) in [(first, [x, y]), (second, [-y, x])] {
             if size(lambda) <= self.null * most {
@@ -278,6 +278,14 @@ mod tests {
         let trough = near(0.0, [0.4, -0.6], [[2.0, 0.0], [0.0, 0.0]]);
         let [x, y] = trough.critical();
         assert!(close(x, -0.2) && y == 0.0, "{x} {y}");
+        // Nought to the precision of the greater, however small against it, whichever comes first.
+        for bend in [[[2.0, 0.0], [0.0, 1e-12]], [[1e-12, 0.0], [0.0, 2.0]]] {
+            let [x, y] = near(0.0, [0.4, 0.4], bend).critical();
+            assert!(close(x + y, -0.2) && (x == 0.0 || y == 0.0), "{bend:?}: {x} {y}");
+        }
+        // Neither axis the plane's: K = [[2, 1], [1, 2]], its inverse a third of [[2, -1], [-1, 2]].
+        let [x, y] = near(0.0, [3.0, 0.0], [[2.0, 1.0], [1.0, 2.0]]).critical();
+        assert!(close(x, -2.0) && close(y, 1.0), "{x} {y}");
         let turned = near(0.0, [1.0, 1.0], [[1.0, 1.0], [1.0, 1.0]]);
         let [x, y] = turned.critical();
         assert!(close(x, -0.5) && close(y, -0.5), "a turned trough: {x} {y}");
@@ -322,6 +330,33 @@ mod tests {
         let [x, y] = model.critical();
         let back = (x * x + y * y).sqrt();
         assert!((back - 0.2).abs() <= 0.01 && x < 0.0, "the foot is the middle, to the model's lean: {x} {y}");
+        // And off it across, the lean is the slope's other part.
+        let across = Point::from_vec3(Vec3::new(0.0, 0.2, 2.0 + 1e-3 - (4.0_f64 - 0.04).sqrt()));
+        let on_b = sphere.invert(across, None, tol(), &mut scratch).unwrap();
+        let model = Near::between(&plane, UvPoint::new(0.0, 0.2), &sphere, on_b).unwrap();
+        assert!(
+            model.slope[0].abs() <= 1e-12 && close(model.slope[1].abs(), 0.1 / (1.0_f64 - 0.01).sqrt()),
+            "{model:?}"
+        );
+    }
+
+    #[test]
+    fn a_surface_of_slanting_parameters_has_its_own_curvatures_against_its_tangent_plane() {
+        // The paraboloid z = (x² + y²) / 4, a graph whose parameters are not square to each other off its axis. At
+        // radius r its curvatures are a half over (1 + r²/4) to the powers 3/2 along the meridian and 1/2 across it.
+        let bowl = crate::hybrid_tests::graph((0.25, 0.0), (0.25, 0.0));
+        let uv = UvPoint::new(0.6, 0.4);
+        let jet = bowl.first(uv);
+        let normal = jet.du.rate().cross(jet.dv.rate());
+        let at = bowl.point(uv).to_vec3();
+        let unmoved = occam_units::Placement::identity();
+        let plane = occam_geom::Plane::placed(&crate::closed::tests::frame_by(at, normal, &unmoved));
+        let model = Near::between(&plane, UvPoint::new(0.0, 0.0), &bowl, uv).unwrap();
+        let lift: f64 = 1.0 + 0.52 / 4.0;
+        let (least, most) = model.sizes();
+        let (meridian, across) = (0.5 / (lift * lift.sqrt()), 0.5 / lift.sqrt());
+        assert!(close(least, meridian) && close(most, across), "{model:?} against {meridian} and {across}");
+        assert!(model.gap.abs() <= 1e-15 && model.slope.iter().all(|s| s.abs() <= 1e-12), "{model:?}");
     }
 
     #[test]
