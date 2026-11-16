@@ -14,6 +14,8 @@ use occam::{
 };
 
 use crate::args::{Cli, Command, DistanceArgs, IdsArgs, ListArgs, MeshArgs, ModelArgs, RunArgs, kind};
+#[cfg(not(target_family = "wasm"))]
+use crate::view::view;
 
 /// What to say, a line each with whether it goes to standard output, and the exit status: 0 when everything asked was
 /// answered, 1 when anything was refused, and 2 when the command line is wrong.
@@ -63,6 +65,8 @@ fn command(command: Command, json: bool) -> Said {
         Command::Check(args) => check(&args, json),
         Command::Mesh(args) => mesh(&args, json),
         Command::Distance(args) => distance(&args, json),
+        #[cfg(not(target_family = "wasm"))]
+        Command::View(args) => view(&args, json),
     }
 }
 
@@ -119,12 +123,12 @@ fn bad_argument(error: &Error) -> Report {
 }
 
 /// Threads for the whole-model check: as many as the machine has, which gives the same answers as one.
-fn exec() -> Exec {
+pub fn exec() -> Exec {
     std::thread::available_parallelism().ok().and_then(|count| Exec::threads(count).ok()).unwrap_or_else(Exec::serial)
 }
 
 /// `cli.file-not-read` for `path`, given as `parameter`.
-fn not_read(parameter: &str, path: &Path) -> Report {
+pub fn not_read(parameter: &str, path: &Path) -> Report {
     Report::new(Code::FileNotRead, Fault::InvalidInput)
         .with_input(Input::at(parameter).given(&path.display().to_string()))
 }
@@ -248,7 +252,7 @@ fn mesh(args: &MeshArgs, json: bool) -> Said {
 }
 
 /// The path of `model` with `suffix` added, for a file beside it.
-fn beside(model: &Path, suffix: &str) -> PathBuf {
+pub fn beside(model: &Path, suffix: &str) -> PathBuf {
     let mut name = model.as_os_str().to_owned();
     name.push(suffix);
     PathBuf::from(name)

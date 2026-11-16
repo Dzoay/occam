@@ -16,7 +16,8 @@ flowchart LR
 
 - **One editing worker** holds the model, in a `Session`, and runs requests in the order they come. A request that
   goes through and changes the model gives the model as native bytes, the binary twin, which the worker publishes as
-  one copy for each mesh worker. Each copy is an `ArrayBuffer`, which skips the UTF-16 conversion a JavaScript string
+  one copy for each mesh worker. A model [`occam view`](live-view.md) sends is opened and published the same way, with
+  the places of the faces that changed since the one it opened last (`Session.again`), which alone are meshed again. Each copy is an `ArrayBuffer`, which skips the UTF-16 conversion a JavaScript string
   needs at both ends, and the page passes it on without copying it.
 - **Mesh workers,** kept alive between requests, each open their own copy read-only and mesh ranges of faces
   (`Session.mesh_part`). The page cuts a model's faces into about 64 ranges of one size and deals them out one at a
@@ -37,6 +38,8 @@ flowchart LR
 |---|---|---|
 | `run` | page, editing worker | the request, and how many copies of the twin to make |
 | `ran` | editing worker, page | the run's one JSON form, each face's id, and the copies, if it changed |
+| `open` | page, editing worker | a twin `occam view` sent, how many copies to make, and the limits |
+| `opened` | editing worker, page | each face's id, the copies, and the faces to mesh again and what keeps its mesh |
 | `load` | page, mesh worker | a model's number and its own copy of the twin |
 | `mesh` | page, mesh worker | a call's number, the model's, the limits, and the range of faces |
 | `meshed` or `failed` | mesh worker, page | the range's arrays and faces' table, with the reports refusing any of it; or why it could not mesh at all |

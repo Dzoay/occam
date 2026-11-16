@@ -5,14 +5,17 @@
 // The kernel is occam-wasm as wasm-bindgen writes it for the web: `just web-build` builds it and gives its directory
 // as OCCAM_WASM_JS, and each worker's bundle takes its JavaScript in as "occam-wasm".
 //
-// Usage: OCCAM_WASM_JS=<wasm-bindgen's output> node web/build.mjs [output directory, by default web/dist]
+// It builds into crates/occam-cli/page/ unless given another directory: the directory the `occam` binary embeds as
+// `occam view`'s page when it is next built, and the one the viewer's tests serve.
+//
+// Usage: OCCAM_WASM_JS=<wasm-bindgen's output> node web/build.mjs [output directory]
 import { copyFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
-const out = resolve(process.argv[2] ?? resolve(here, "dist"));
+const out = resolve(process.argv[2] ?? resolve(here, "../crates/occam-cli/page"));
 const kernel = process.env.OCCAM_WASM_JS;
 if (!kernel) throw new Error("OCCAM_WASM_JS is not set: build the viewer with `just web-build`");
 await mkdir(out, { recursive: true });

@@ -1,6 +1,6 @@
 // The messages between the page and its workers (docs/architecture/browser.md). No wasm runs on the page's main thread:
-// the editing worker holds the model and runs requests, and each mesh worker meshes ranges of faces from its own copy
-// of the binary twin. Bytes and arrays move by transfer, never through shared memory, so the page needs no
+// the editing worker holds the model and runs requests, or opens each model `occam view` sends, and each mesh worker
+// meshes ranges of faces from its own copy of the binary twin. Bytes and arrays move by transfer, never through shared memory, so the page needs no
 // SharedArrayBuffer and its server sends no COOP or COEP headers.
 
 /** What the page asks the editing worker: run `request` on the model, and give `copies` copies of the model it makes. */
@@ -9,6 +9,33 @@ export interface Run {
   readonly id: number;
   readonly request: string;
   readonly copies: number;
+}
+
+/**
+ * What the page asks the editing worker when `occam view` sends it a model: open `twin`, give `copies` copies of it,
+ * and say which faces must be meshed again, to `deflection` and `angle`, after the model it last opened.
+ */
+export interface Open {
+  readonly kind: "open";
+  readonly id: number;
+  readonly twin: ArrayBuffer;
+  readonly copies: number;
+  readonly deflection: number;
+  readonly angle: number;
+}
+
+/** What the editing worker answers an open: the model's faces and copies, and what to mesh again after the last. */
+export interface Opened {
+  readonly kind: "opened";
+  readonly id: number;
+  /** Each face's id, in id order, as its slot and generation. */
+  readonly faces: Uint32Array<ArrayBuffer>;
+  readonly twins: readonly ArrayBuffer[];
+  /**
+   * The places, among the faces in id order, of those to mesh again, and the ids of what keeps its mesh from the model
+   * opened last; null for the first model, every face of which is meshed.
+   */
+  readonly again: { readonly faces: readonly number[]; readonly kept: readonly string[] } | null;
 }
 
 /** What the editing worker answers a run. */
@@ -23,6 +50,7 @@ export type FromEditing =
     /** The binary twin, one copy for each mesh worker, if the run changed the model; none if it did not. */
     readonly twins: readonly ArrayBuffer[];
   }
+  | Opened
   | { readonly kind: "failed"; readonly id: number; readonly reason: string };
 
 /** What the page asks a mesh worker: hold model `model`, the twin given, or mesh a range of its faces. */
@@ -46,6 +74,13 @@ export interface KernelReport {
   /** The entities it names, the first the one it is about. */
   readonly entities: readonly string[];
   readonly reason?: string;
+}
+
+/** What the page shows of `report`, a report in occam's one JSON form. */
+export function kernelReport(report: Record<string, unknown>): KernelReport {
+  const entities = Array.isArray(report.entities) ? report.entities.map(String) : [];
+  const reason = typeof report.reason === "string" ? { reason: report.reason } : {};
+  return { code: String(report.code), message: String(report.message), entities, ...reason };
 }
 
 /** What one call meshed: its arrays, numbered from their own start, and what refused any of it. */

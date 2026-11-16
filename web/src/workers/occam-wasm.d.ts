@@ -21,6 +21,8 @@ declare module "occam-wasm" {
   export class Session {
     constructor();
     free(): void;
+    /** What to mesh again to draw this model after `before`'s, in its one JSON form; throws the limits' refusal. */
+    again(before: Session, deflection: number, angle: number): string;
     face_count(): number;
     /** Each face's slot and generation, in id order. */
     face_ids(): Uint32Array<ArrayBuffer>;

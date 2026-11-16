@@ -3,7 +3,7 @@
 
 import type { KernelReport } from "./protocol.ts";
 import type { Report } from "./report.ts";
-import { failure, notice, refusals, selection, status } from "./state.ts";
+import { failure, notice, refusals, selection, status, watched } from "./state.ts";
 
 export interface Actions {
   fit(): void;
@@ -71,15 +71,31 @@ function Refusals({ reports }: { reports: readonly KernelReport[] }) {
   );
 }
 
+/** Why the model file does not read, as `occam view` names it; the drawing goes on with the last model that did. */
+function Watched({ reports }: { reports: readonly KernelReport[] }) {
+  return (
+    <div class="watched" role="alert" aria-label="The model file">
+      {reports.map((each) => (
+        <section class="report model" data-code={each.code} data-entity={each.entities[0]}>
+          <p class="code">{each.code}</p>
+          <p class="message">{each.message}</p>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 /** The controls over the drawing, or, when the page cannot draw, the report in its place. */
 export function App({ actions }: { actions: Actions | null }) {
   const failed = failure.value;
   if (failed) return <Shown shown={failed} kind="failure" />;
   const shown = notice.value;
   const refused = refusals.value;
+  const unread = watched.value;
   return (
     <>
       {actions && <Controls actions={actions} />}
+      {unread.length > 0 && <Watched reports={unread} />}
       {shown && <Shown shown={shown} kind="notice" />}
       {refused.length > 0 && <Refusals reports={refused} />}
     </>

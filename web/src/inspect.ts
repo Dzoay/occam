@@ -36,6 +36,14 @@ export interface KernelApi {
   /** The calls the last model was cut into, and which worker meshed each. */
   calls(): readonly Call[];
   readonly workers: number;
+  /** What the page following `occam view` has drawn, if it follows one. */
+  live(): Following | null;
+}
+
+/** What a page following `occam view` has drawn: the digest of the model drawn last, and how many it has drawn. */
+export interface Following {
+  readonly digest: string | null;
+  readonly models: number;
 }
 
 /** What a request gave, as the tests read it. */
@@ -53,6 +61,8 @@ export interface InspectorApi {
   run(request: string): Promise<Followed>;
   calls(): Call[];
   workers(): number;
+  /** What the page following `occam view` has drawn, or null on a page no server follows. */
+  live(): Following | null;
   show(mesh: Mesh): void;
   select(ids: readonly string[]): void;
   mesh(): Mesh | null;
@@ -155,6 +165,7 @@ export class Inspector {
       },
       calls: () => kernel.calls().map((call) => ({ ...call })),
       workers: () => kernel.workers,
+      live: () => kernel.live(),
       show: (mesh) => viewer.show(mesh),
       select: (ids) => viewer.select(ids),
       mesh: () => viewer.mesh,

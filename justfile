@@ -67,7 +67,7 @@ fmt:
 web-deps:
     if [ ! web/node_modules/.package-lock.json -nt web/package-lock.json ]; then npm ci --prefix web --no-audit --no-fund; fi
 
-# Build the viewer with esbuild into web/dist, or the directory given: `just web-build <directory>`; its workers' kernel is occam-wasm, built for the browser with simd128
+# Build the viewer with esbuild into crates/occam-cli/page, which `occam` embeds as `occam view`'s page when next built, or into the directory given; its workers' kernel is occam-wasm, built for the browser with simd128
 [env("CARGO_TARGET_DIR", target)]
 [group('build')]
 web-build *args: web-deps
@@ -99,7 +99,7 @@ clippy:
 web-check: web-deps
     web/node_modules/.bin/tsc --noEmit -p web
 
-# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, and its workers' meshes against the native `occam mesh`
+# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, its workers' meshes against the native `occam mesh`, and the page `occam view` serves, built in, following the model file
 [env("CARGO_TARGET_DIR", target)]
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
 [group('gates')]

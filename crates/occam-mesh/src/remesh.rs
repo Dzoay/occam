@@ -65,7 +65,7 @@ pub fn remesh<'a>(
 type Meshes = BTreeMap<Id<Face>, Result<FaceMesh, Report>>;
 
 /// Each edge the faces of `model` use, in id order, with the faces that use it, in id order: `faces`, all of them.
-fn users(model: &Snapshot, faces: &[Id<Face>]) -> BTreeMap<Id<Edge>, Vec<Id<Face>>> {
+pub(crate) fn users(model: &Snapshot, faces: &[Id<Face>]) -> BTreeMap<Id<Edge>, Vec<Id<Face>>> {
     let mut users: BTreeMap<Id<Edge>, Vec<Id<Face>>> = BTreeMap::new();
     for &face in faces {
         for edge in model.view(face).map(View::<Face>::edges).unwrap_or_default() {
@@ -121,7 +121,7 @@ fn resampled(
 
 /// Whether anything the mesh of `face` is drawn from is in `touched`: the face, its surface, its loops, their uses and
 /// the uses' curves in its parameters, and the uses' edges with their curves and vertices.
-fn drawn_from(model: &Snapshot, face: Id<Face>, touched: &BTreeSet<EntityRef>) -> bool {
+pub(crate) fn drawn_from(model: &Snapshot, face: Id<Face>, touched: &BTreeSet<EntityRef>) -> bool {
     let Some(view) = model.view(face) else { return true };
     let mut parts = vec![face.entity(), view.surface_id().entity()];
     for each in view.loops() {
@@ -148,7 +148,7 @@ fn edge_parts(model: &Snapshot, edge: Id<Edge>) -> Vec<EntityRef> {
 
 /// Whether `now` is what `before` held for an edge, every number to the bit: never for an edge `before` did not
 /// sample.
-fn same(before: Option<Result<&EdgeSamples, &Report>>, now: Result<&EdgeSamples, &Report>) -> bool {
+pub(crate) fn same(before: Option<Result<&EdgeSamples, &Report>>, now: Result<&EdgeSamples, &Report>) -> bool {
     before.is_some_and(|was| was.map(bits) == now.map(bits))
 }
 

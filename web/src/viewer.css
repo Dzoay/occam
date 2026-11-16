@@ -91,3 +91,14 @@ html, body {
 .report.refusal .message {
   margin: 0;
 }
+
+.watched {
+  position: fixed;
+  top: 52px;
+  right: 12px;
+  max-width: 32em;
+}
+
+.watched .report {
+  margin: 0 0 8px;
+}

@@ -71,6 +71,16 @@ pub enum Command {
     Mesh(MeshArgs),
     /// The distance between two points, to a tolerance.
     Distance(DistanceArgs),
+    /// Show the model live in a page on this machine, which redraws it each time a run saves it, and return.
+    ///
+    /// Starts the model's viewer if none runs, a server of its own that watches the model file, prints the page's
+    /// address and opens it in a browser, the one $BROWSER names or the system's. A second `occam view` of the same
+    /// model prints the same address and starts nothing. --json gives the address, its token and the model's digest.
+    /// A file that is not a model, or is not there, is reported here and in the page, and the viewer keeps watching.
+    /// --status says whether the viewer runs and where, and --stop stops it; it also stops itself once no page has
+    /// been open for an hour. The page needs a browser with WebGPU.
+    #[cfg(not(target_family = "wasm"))]
+    View(ViewArgs),
 }
 
 /// A model to read.
@@ -140,6 +150,33 @@ pub struct MeshArgs {
     /// Where to write the buffers. Beside the model, as <model>.mesh, if not given.
     #[arg(long, value_name = "FILE")]
     pub out: Option<PathBuf>,
+}
+
+/// What `view` takes.
+#[derive(Debug, Args)]
+#[expect(clippy::struct_excessive_bools, reason = "clap reads each flag of the command line as a bool")]
+pub struct ViewArgs {
+    /// The model to show. It need not be there yet: the page draws it once a run writes it.
+    #[arg(long, value_name = "FILE")]
+    pub model: PathBuf,
+    /// Say whether the model's viewer runs, and where, starting nothing.
+    #[arg(long, conflicts_with = "stop")]
+    pub status: bool,
+    /// Stop the model's viewer.
+    #[arg(long)]
+    pub stop: bool,
+    /// Do not open the page in a browser.
+    #[arg(long)]
+    pub no_open: bool,
+    /// Listen on this port of 127.0.0.1, rather than on a free one.
+    #[arg(long, value_name = "PORT")]
+    pub port: Option<u16>,
+    /// Run as the viewer itself, which `occam view` starts.
+    #[arg(long, hide = true)]
+    pub serve: bool,
+    /// How long the viewer runs with no page open before it stops itself.
+    #[arg(long, hide = true, value_name = "SECONDS", default_value_t = 3600)]
+    pub idle: u64,
 }
 
 /// What `distance` takes.

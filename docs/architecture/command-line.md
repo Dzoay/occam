@@ -15,7 +15,8 @@ and gives one result per id. `occam --help`, and `--help` after any command, say
 | `occam check --model part.occam` | Checks the whole model |
 | `occam mesh --model part.occam --deflection 0.1` | Meshes the model, writes its [buffers](mesh-and-renderer.md#the-buffers) beside it, and says how each face meshed |
 | `occam pick` | The face or edge a ray hits first (`view`) |
-| `occam view`, `occam selection`, `occam highlight` | The [live view](live-view.md): the page, what the person selected, what the agent shows (`view`) |
+| `occam view --model part.occam` | Starts the model's [live view](live-view.md) if none runs, prints the page's address and returns; `--status`, `--stop` |
+| `occam selection`, `occam highlight` | The [live view](live-view.md): what the person selected, what the agent shows (`view`) |
 | `occam skill --install` | Copies the occam skill into this project's `.claude/skills/`, for the [live view](live-view.md) (`view`) |
 | `occam export --step` | Writes STEP (`exchange`) |
 
@@ -40,6 +41,9 @@ flowchart LR
   that the check found. `run` gives the run's own form. `mesh` adds the limits, the buffers' counts and the file it
   wrote; each face's answer is its vertex block and its triangles, and its `reports` refuse edges or say where the
   watertight check found the mesh open. A face or edge refused offers `use-deflection`, which `--deflection` takes.
+  `view` gives `{"schema", "ok", "model", "running", "started", "stopped", "reports"}`, and where a viewer runs its
+  `url`, `token`, `port`, `pid`, open `pages`, the model's `digest` and whether it `opened` the page; its `reports` say
+  why the command was refused or why the model does not read.
 - **In words,** answers go to standard output and refusals to standard error.
 - **The exit status** is 0 when everything asked was answered, 1 when anything was refused, and 2 when the command line
   is wrong (`cli.bad-argument`, naming the argument, what was given and what was wanted).

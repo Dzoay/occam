@@ -80,6 +80,19 @@ impl Session {
         listed.iter().flat_map(|kind| kind.entities.iter().flat_map(|id| [id.slot, id.generation])).collect()
     }
 
+    /// What a page that drew `before`'s model, meshed to a chordal `deflection` in millimetres and an `angle` in radians,
+    /// must mesh again to draw this one: the editing worker asks it of each model `occam view` sends, so the mesh
+    /// workers mesh only the faces that changed. Its one JSON form gives the faces' places, counted in id order as
+    /// [`Session::mesh_part`] counts them, and the ids of what keeps its mesh.
+    ///
+    /// # Errors
+    ///
+    /// The reports refusing the limits, in the commands' one JSON form.
+    pub fn again(&self, before: &Self, deflection: f64, angle: f64) -> Result<String, String> {
+        let again = self.session.again(&before.session, &Exec::serial(), deflection, angle);
+        again.map(|again| again.json()).map_err(|r| Answered::Refused(r).json())
+    }
+
     /// The model's faces from `first` up to `end`, counted in id order, meshed to a chordal `deflection` in millimetres
     /// and an `angle` in radians: what a mesh worker gives for its range. Its arrays are numbered from its own start,
     /// and each face's block holds the bits [`Session::mesh`] gives it, so the parts of the model's faces, laid end to
@@ -286,6 +299,25 @@ mod tests {
         assert_eq!(parts[1].faces()[2], 0, "each part numbered from its own start");
         let refused =
             serde_json::from_str::<serde_json::Value>(&session.mesh_part(0.1, -1.0, 0, 1).err().unwrap()).unwrap();
+        assert_eq!(refused["reports"][0]["code"], "mesh.limit-not-positive");
+    }
+
+    #[test]
+    fn a_model_opened_after_another_names_the_faces_to_mesh_again_and_what_keeps_its_mesh() {
+        let mut first = Session::new();
+        let _ = first.run(BOX);
+        let mut grown = Session::open(&first.take_saved().unwrap()).unwrap();
+        let _ = grown.run(
+            r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+            {"op": "sphere", "radius": 1, "frame": {"origin": [5, 0, 0]}}]}"#,
+        );
+        let opened = Session::open(&grown.take_saved().unwrap()).unwrap();
+        let again: serde_json::Value = serde_json::from_str(&opened.again(&first, 0.1, 0.35).unwrap()).unwrap();
+        assert_eq!(again["faces"], serde_json::json!([6, 7]), "the sphere's two faces alone");
+        assert_eq!(again["kept"][0], "face:0/1");
+        assert_eq!(again["kept"].as_array().map(Vec::len), Some(6 + 12), "the box's faces and edges");
+        let refused =
+            serde_json::from_str::<serde_json::Value>(&opened.again(&first, 0.1, 0.0).err().unwrap()).unwrap();
         assert_eq!(refused["reports"][0]["code"], "mesh.limit-not-positive");
     }
 
