@@ -6,6 +6,7 @@
 
 mod args;
 mod commands;
+mod skill;
 #[cfg(not(target_family = "wasm"))]
 mod view;
 
@@ -81,8 +82,9 @@ mod tests {
     #[test]
     fn a_bad_argument_is_named_with_what_was_given_and_wanted() {
         let listed = if cfg!(target_family = "wasm") { "" } else { ", view" };
-        let commands =
-            Some(format!("run, list, adjacent, describe, check, mesh, pick, distance, selection, highlight{listed}"));
+        let commands = Some(format!(
+            "run, list, adjacent, describe, check, mesh, pick, distance, selection, highlight, skill{listed}"
+        ));
         assert_eq!(
             wrong(&["cut"]),
             ("COMMAND".to_string(), Some("cut".to_string()), commands.clone()),

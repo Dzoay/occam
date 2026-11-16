@@ -33,6 +33,8 @@ text_enum! {
         AimAt = "aim-at",
         /// Select again in the viewer's page, which draws the model as its file holds it now.
         SelectAgain = "select-again",
+        /// Run the same command again with `--force`, which replaces the file the report names.
+        UseForce = "use-force",
     }
 }
 
@@ -68,6 +70,7 @@ impl RemedyKind {
             Self::SelectAgain => {
                 "Select again in the viewer's page, which draws the model as the file holds it now; ask the person to, if the selection is theirs."
             }
+            Self::UseForce => "Run the same command again with --force, which replaces the file the report names.",
         }
     }
 
@@ -86,7 +89,8 @@ impl RemedyKind {
             | Self::ReloadPage
             | Self::MakeModel
             | Self::UseAnyPort
-            | Self::SelectAgain => &[],
+            | Self::SelectAgain
+            | Self::UseForce => &[],
         }
     }
 }

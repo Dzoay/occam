@@ -90,6 +90,14 @@ pub enum Command {
     /// Writes them beside the model as <model>.highlight, which the page follows. Each id is described as describe
     /// does, and one that names nothing is refused alone. `occam run` clears the highlight once it changes the model.
     Highlight(HighlightArgs),
+    /// Print occam's skill for Claude Code, or with --install copy it into this project, where Claude Code finds it.
+    ///
+    /// The skill says what the command's guide does not, for working with a person who watches the model in `occam
+    /// view`'s page: start the viewer and say where to look, build in runs that can be checked, read the selection,
+    /// highlight before a change, measure to confirm, and stop the viewer when the person is done. --install writes it
+    /// to .claude/skills/occam/SKILL.md under the current directory, and says where. If another skill is there it is
+    /// left as it was, refused with cli.skill-present, unless --force is given, which replaces it.
+    Skill(SkillArgs),
     /// Show the model live in a page on this machine, which redraws it each time a run saves it, and return.
     ///
     /// Starts the model's viewer if none runs, a server of its own that watches the model file, prints the page's
@@ -217,6 +225,17 @@ pub struct HighlightArgs {
     /// Remove the highlight.
     #[arg(long, conflicts_with = "ids")]
     pub clear: bool,
+}
+
+/// What `skill` takes.
+#[derive(Debug, Args)]
+pub struct SkillArgs {
+    /// Copy the skill into .claude/skills/occam/ under the current directory, rather than print it.
+    #[arg(long)]
+    pub install: bool,
+    /// Replace a skill that is there already, with --install.
+    #[arg(long, requires = "install")]
+    pub force: bool,
 }
 
 /// What `view` takes.
