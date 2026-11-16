@@ -55,21 +55,6 @@ source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted
 
 ## Steps
 
-### `intersection.closed`
-
-Closed forms where both surfaces present an analytic form: a plane with a plane, sphere, cylinder or cone (conics
-included); a sphere with a sphere; and a cylinder with a cylinder, coaxial, parallel or tangent (Patrikalakis and
-Maekawa 2002, ch. 5; Sarraga 1983; Levin 1976, 1979). Coaxial surfaces of revolution meet in circles where their
-meridians cross, a torus included. Curves come back as `occam-geom`'s exact families, with their parameter curves on
-both surfaces. Tangencies come back as contacts, and coplanar or coaxial coincident surfaces are detected (O25).
-Rejection bounds carry a rounding margin. `occam-geom`'s B-spline surface presents a plane when all its control points
-lie in one within the tolerance (S4). Other quadric pairs, such as a sphere or a cone with a cylinder off their common
-axis, decline to `intersection.quadrics`, and a torus with most surfaces declines to the hybrid.
-
-*Failing test first:* P5's 58 closed-form cases under rigid placements, every point within 1e-12 of the part's size of
-both surfaces; a plane exactly tangent to a sphere gives a contact (P5's rounding-margin bug); a B-spline patch that is
-really a plane takes the closed form (S4); a cone with a cylinder off its axis declines.
-
 ### `intersection.quadrics`
 
 Levin's pencil method, for any two of plane, sphere, cylinder and cone that `intersection.closed` does not answer
