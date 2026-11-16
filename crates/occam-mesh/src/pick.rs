@@ -150,7 +150,7 @@ impl Picker {
 
     /// The ends of the segment `(edge, first)`.
     fn segment(&self, (edge, first): (u32, u32)) -> [Vec3; 2] {
-        let points = self.edges.get(place(edge)).map(|samples| samples.points.as_slice()).unwrap_or_default();
+        let points = self.edges.get(place(edge)).map_or_default(|samples| samples.points.as_slice());
         let at = |k: usize| points.get(k).copied().unwrap_or(ZERO);
         [at(place(first)), at(place(first).saturating_add(1))]
     }

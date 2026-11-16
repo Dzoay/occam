@@ -242,7 +242,7 @@ fn off(truth: &[Vec<Vec3>], p: Vec3) -> f64 {
 fn spurious(case: &Case, got: &Section) -> bool {
     let tol = case.truth.iter().map(|component| near(component)).fold(f64::INFINITY, nearer) + 0.05;
     let off_truth = |c: &SectionCurve| {
-        let first = case.truth.first().map(Vec::as_slice).unwrap_or_default();
+        let first = case.truth.first().map_or_default(Vec::as_slice);
         along(c.curve.as_ref(), first).iter().any(|p| off(&case.truth, *p) > tol)
     };
     got.curves.iter().any(off_truth)

@@ -27,8 +27,8 @@ use crate::watertight::within;
 #[must_use]
 pub fn mesh_part(exec: &Exec, model: &Snapshot, limits: Limits, faces: &[Id<Face>]) -> Mesh {
     let part: BTreeSet<Id<Face>> = faces.iter().copied().collect();
-    let edges_of = |face: Id<Face>| model.view(face).map(View::<Face>::edges).unwrap_or_default();
-    let faces_of = |edge: Id<Edge>| model.view(edge).map(View::<Edge>::faces).unwrap_or_default();
+    let edges_of = |face: Id<Face>| model.view(face).map_or_default(View::<Face>::edges);
+    let faces_of = |edge: Id<Edge>| model.view(edge).map_or_default(View::<Edge>::faces);
     let wanted: BTreeSet<Id<Edge>> = part.iter().flat_map(|&face| edges_of(face)).collect();
     // The faces outside the part along a wanted edge, whose boundaries repair checks, as they may cut it.
     let ring: BTreeSet<Id<Face>> =

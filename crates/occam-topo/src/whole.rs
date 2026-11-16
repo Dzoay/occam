@@ -102,7 +102,7 @@ fn checked(model: Model, exec: &Exec, per: NonZeroU32) -> Vec<Report> {
     let whole = Arc::clone(&model);
     let tasks = Arc::new(tasks(&model, per));
     let count = tasks.len();
-    let run = move |index: usize| tasks.get(index).map(|&task| run(&model, &members, task, per)).unwrap_or_default();
+    let run = move |index: usize| tasks.get(index).map_or_default(|&task| run(&model, &members, task, per));
     let mut found: Vec<Report> = exec.map(count, Grain::Each, run).into_iter().flatten().collect();
     if found.is_empty() {
         check::solids(&whole, &mut found);

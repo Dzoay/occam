@@ -15,7 +15,7 @@ fn main() {
     println!("cargo::rerun-if-changed={}", stub.display());
     let (source, built) = embed::source(&page, &stub);
     println!("cargo::rustc-env=OCCAM_PAGE={}", if built { "built" } else { "stub" });
-    let out = std::env::var_os("OUT_DIR").map(PathBuf::from).unwrap_or_default().join("page.rs");
+    let out = std::env::var_os("OUT_DIR").map_or_default(PathBuf::from).join("page.rs");
     if let Err(error) = std::fs::write(&out, source) {
         println!("cargo::error=the embedded page could not be written to {}: {error}", out.display());
     }

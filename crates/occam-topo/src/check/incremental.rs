@@ -116,7 +116,7 @@ fn counted(model: &Model, entity: EntityRef, out: &mut BTreeSet<EntityRef>) {
         EntityKind::Loop => typed(entity).into_iter().for_each(|l| a_loop(l, out)),
         EntityKind::Face => {
             out.insert(entity);
-            let all = typed::<Face>(entity).map(|f| loops(model, f).items()).unwrap_or_default();
+            let all = typed::<Face>(entity).map_or_default(|f| loops(model, f).items());
             for l in all {
                 a_loop(l, out);
             }

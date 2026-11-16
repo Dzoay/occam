@@ -72,7 +72,7 @@ fn check_shell(
     inside: &dyn Fn(Id<Face>) -> bool,
     shell: Id<Shell>,
 ) -> Vec<Report> {
-    let faces = model.view(shell).map(View::<Shell>::faces).unwrap_or_default();
+    let faces = model.view(shell).map_or_default(View::<Shell>::faces);
     let mine: Vec<Id<Face>> = faces.iter().copied().filter(|&face| inside(face)).collect();
     let held: Vec<usize> = mine.iter().filter_map(|face| blocks.get(face).copied()).collect();
     let missing: Vec<Id<Face>> = mine.iter().copied().filter(|face| !blocks.contains_key(face)).collect();
@@ -175,7 +175,7 @@ fn named(model: &Snapshot, mesh: &Mesh, missing: &[Id<Face>], open: &[Use], alon
             }
             continue;
         };
-        let faces = model.view(edge).map(View::<Edge>::faces).unwrap_or_default();
+        let faces = model.view(edge).map_or_default(View::<Edge>::faces);
         let missed = faces.into_iter().find(|face| holes.contains_key(face));
         match missed.and_then(|face| holes.get_mut(&face)) {
             Some((rim, unmatched)) => {
@@ -187,7 +187,7 @@ fn named(model: &Snapshot, mesh: &Mesh, missing: &[Id<Face>], open: &[Use], alon
     }
     let mut found: Vec<Report> = holes.into_iter().map(|(face, (rim, n))| hole(mesh, face, &rim, n)).collect();
     for (edge, uses) in edges {
-        let faces = model.view(edge).map(View::<Edge>::faces).unwrap_or_default();
+        let faces = model.view(edge).map_or_default(View::<Edge>::faces);
         let named: Vec<EntityRef> = std::iter::once(edge.entity()).chain(faces.into_iter().map(Id::entity)).collect();
         found.push(crack(mesh, &named, &uses));
     }

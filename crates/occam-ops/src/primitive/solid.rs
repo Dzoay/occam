@@ -209,7 +209,7 @@ fn shells(solid: &Solid) -> Shells {
         // Each face is marked as it joins the walk, so it joins once: the walk never holds more than every face.
         let mut walk = vec![start];
         while let Some(f) = walk.pop() {
-            for e in solid.faces.get(f).map(edges).unwrap_or_default() {
+            for e in solid.faces.get(f).map_or_default(edges) {
                 for &g in by_edge.get(e).into_iter().flatten() {
                     if let Some(slot @ None) = of.get_mut(g) {
                         *slot = Some(shell);

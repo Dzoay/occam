@@ -108,7 +108,7 @@ pub fn serve(model: &Path, port: Option<u16>, idle: Duration) -> Said {
     };
     let viewer = Viewer {
         pid: std::process::id(),
-        port: listener.local_addr().map(|address| address.port()).unwrap_or_default(),
+        port: listener.local_addr().map_or_default(|address| address.port()),
         token: state::token(),
     };
     let mut watcher = Watcher::new(model.to_path_buf());
@@ -303,7 +303,7 @@ fn report_json(report: &Report) -> String {
 async fn elsewhere(State(app): State<Arc<App>>, uri: Uri) -> Response {
     let base = format!("/{}", app.viewer.token);
     if uri.path() == base {
-        let query = uri.query().map(|query| format!("?{query}")).unwrap_or_default();
+        let query = uri.query().map_or_default(|query| format!("?{query}"));
         return Redirect::permanent(&format!("{base}/{query}")).into_response();
     }
     if uri.path().starts_with(&format!("{base}/")) {

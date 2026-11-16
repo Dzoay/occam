@@ -136,7 +136,7 @@ pub(crate) fn sample_some(
 fn finest(model: &Snapshot, faces: &[Id<Face>], bends: &[f64]) -> Vec<(Id<Edge>, f64)> {
     let mut edges: BTreeMap<Id<Edge>, f64> = BTreeMap::new();
     for (&face, &bend) in faces.iter().zip(bends) {
-        for edge in model.view(face).map(View::<Face>::edges).unwrap_or_default() {
+        for edge in model.view(face).map_or_default(View::<Face>::edges) {
             let most = edges.entry(edge).or_insert(0.0);
             *most = higher(*most, bend);
         }
