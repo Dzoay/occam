@@ -7,7 +7,9 @@
 //! its middle for the nearest pair of points of the curve and the surface, and a pair found inside its leaf, within
 //! the band of each other, is a hit: a crossing where the curve meets the surface at more than the angle tolerance, a
 //! contact where it is tangent. The ends of the span are tested by the surface's foot of their points, and an end on
-//! the surface is a contact. Hits within the band of each other, found from neighbouring leaves, are one.
+//! the surface is a contact. Hits within the band of each other, found from neighbouring leaves, are one, and so are
+//! points side by side, one a crossing, whose curve stays within the band between them, as a touch found off its point
+//! gives: a contact.
 //!
 //! Every hit is decided through occam-math's predicates, and one that cannot be is `decide.undecided`. A curve lying
 //! in such a surface is not told from many contacts here: its leaves run along it until the budget is spent, which is
@@ -99,6 +101,14 @@ fn keep(mut found: Vec<Found>, sink: &mut Sink<'_>) {
             Some(last) if same(last, &next, sink) => {
                 if next.kind == Kind::Contact {
                     last.kind = Kind::Contact;
+                }
+            }
+            Some(last) if last.kind == Kind::Crossing || next.kind == Kind::Crossing => {
+                match touch(last, &next, sink) {
+                    Some(between) if last.kind == next.kind => *last = between,
+                    Some(_) if last.kind == Kind::Crossing => *last = next,
+                    Some(_) => {}
+                    None => kept.push(next),
                 }
             }
             _ => kept.push(next),
@@ -286,15 +296,29 @@ fn transversal(t: f64, uv: UvPoint, sink: &mut Sink<'_>) -> Option<Kind> {
 /// An end of the span, `t`, where its point's foot on the surface lies in the patch and within the band of it: a
 /// contact.
 fn end(t: f64, sink: &mut Sink<'_>) -> Option<Found> {
-    let point = sink.curve.point(t);
-    let foot = match sink.surface.closest(point, None, sink.tol, &mut sink.scratch) {
-        Ok(foot) => foot,
+    let uv = foot(t, None, sink)?;
+    on(t, uv, sink)?.then_some(Found { t, uv, kind: Kind::Contact })
+}
+
+/// The parameters of the foot on the surface of the curve's point at `t`, searched for from `seed`, if they lie in the
+/// patch: `None` where they do not, or where the foot cannot be found, which is reported.
+fn foot(t: f64, seed: Option<UvPoint>, sink: &mut Sink<'_>) -> Option<UvPoint> {
+    match sink.surface.closest(sink.curve.point(t), seed, sink.tol, &mut sink.scratch) {
+        Ok(foot) => sink.in_patch(foot.at),
         Err(report) => {
             sink.fail(report);
-            return None;
+            None
         }
-    };
-    let uv = sink.in_patch(foot.at)?;
+    }
+}
+
+/// Two points found side by side, one or both a crossing, as one touch, where the curve between them never leaves the
+/// band: its point halfway between them in parameter lies within the band of the surface. At this tolerance it did not
+/// pass through there: two crossings are one contact, there, and a contact takes in a crossing beside it. `None` where
+/// it lies beyond the band, or its foot is outside the patch or cannot be found or decided.
+fn touch(a: &Found, b: &Found, sink: &mut Sink<'_>) -> Option<Found> {
+    let t = middle(a.t, b.t);
+    let uv = foot(t, Some(a.uv), sink)?;
     on(t, uv, sink)?.then_some(Found { t, uv, kind: Kind::Contact })
 }
 
