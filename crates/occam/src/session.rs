@@ -8,18 +8,19 @@
 mod wire;
 
 use std::borrow::Cow;
+use std::ops::Range;
 
 use occam_math::Exec;
 use occam_mesh::Mesh;
 use occam_ops::default_tolerance;
 use occam_report::{Description, EntityKind, EntityRef, Report};
-use occam_topo::{Changes, Snapshot};
+use occam_topo::{Changes, Face, Snapshot};
 
 pub use wire::ran_words;
 pub(crate) use wire::{answer, line};
 
 use crate::describe::{self, Source};
-use crate::mesh::{Meshed, limits};
+use crate::mesh::{Again, Meshed, limits};
 use crate::run::{Failed, Ran};
 
 /// Which of the native format's two encodings a model is saved in.
@@ -134,10 +135,26 @@ impl Session {
 
     /// `model` in the session's encoding.
     fn encode(&self, model: &Snapshot) -> Result<Vec<u8>, Report> {
-        match self.encoding {
-            Encoding::Json => occam_io::save(model),
-            Encoding::Binary => occam_io::save_binary(model),
-        }
+        encode(model, self.encoding)
+    }
+
+    /// The model's bytes in `encoding`, once there is a model: as the binary twin, what `occam view` sends its page,
+    /// whichever encoding the model came in.
+    ///
+    /// # Errors
+    ///
+    /// `io.not-saved`, as a run's failure names it, for a model the format cannot write yet.
+    #[must_use]
+    pub fn encoded(&self, encoding: Encoding) -> Option<Result<Vec<u8>, Report>> {
+        let model = self.model.as_ref()?;
+        Some(encode(model, encoding).map_err(|report| describe::report(report, &[Source::Model(model)])))
+    }
+
+    /// The model's digest (L23), once there is a model: two models with the same digest are the same model, so it is
+    /// what names the model a page shows.
+    #[must_use]
+    pub fn digest(&self) -> Option<u64> {
+        self.model.as_ref().map(Snapshot::digest)
     }
 
     /// The model to answer from: an empty one before any request has made one.
@@ -171,6 +188,55 @@ impl Session {
         Ok(answer)
     }
 
+    /// How many faces the model has, which [`Session::mesh_part`] counts its ranges in: none before a request has made
+    /// a model.
+    #[must_use]
+    pub fn face_count(&self) -> usize {
+        self.model.as_ref().map_or(0, |model| model.ids::<Face>().len())
+    }
+
+    /// The model's faces from `faces.start` up to `faces.end`, counted in id order, meshed on `exec` to a chordal
+    /// `deflection` in millimetres and an `angle` in radians, with one answer per face: a part of the mesh
+    /// [`Session::mesh`] gives, as a mesh worker meshes a range of faces. Its buffers are numbered from its own start,
+    /// and each face's block holds the bits the whole mesh's does, so the parts of the model's faces, laid end to end in
+    /// id order, are the whole mesh's buffers. Its reports refuse the edges its faces use and say what checking the part
+    /// watertight as far as it reaches found. A range past the last face stops at it. The session's last mesh is
+    /// neither used nor kept, since a mesh worker's session never changes its model.
+    ///
+    /// # Errors
+    ///
+    /// `mesh.limit-not-positive` for a deflection or an angle that is not a finite number greater than zero.
+    pub fn mesh_part(
+        &self,
+        exec: &Exec,
+        deflection: f64,
+        angle: f64,
+        faces: Range<usize>,
+    ) -> Result<Meshed, Vec<Report>> {
+        let limits = limits(deflection, angle).map_err(|report| vec![report])?;
+        let model = self.answering().map_err(|report| vec![report])?;
+        let ids = model.ids::<Face>();
+        let end = faces.end.min(ids.len());
+        let part = ids.get(faces.start.min(end)..end).unwrap_or_default();
+        let mesh = occam_mesh::mesh_part(exec, &model, limits, part);
+        Ok(Meshed::new(limits, &model, &mesh, part))
+    }
+
+    /// What a page that drew the model of `before`, meshed to a chordal `deflection` in millimetres and an `angle` in
+    /// radians, must mesh again on `exec` to draw this one meshed to them: the faces whose blocks or refusals may
+    /// differ, counted in id order as [`Session::mesh_part`] counts them, and what keeps its mesh. A session with no
+    /// model yet holds an empty one, so after it every face is meshed again.
+    ///
+    /// # Errors
+    ///
+    /// `mesh.limit-not-positive` for a deflection or an angle that is not a finite number greater than zero.
+    pub fn again(&self, before: &Self, exec: &Exec, deflection: f64, angle: f64) -> Result<Again, Vec<Report>> {
+        let limits = limits(deflection, angle).map_err(|report| vec![report])?;
+        let (was, now) = (before.answering(), self.answering());
+        let (was, now) = (was.map_err(|report| vec![report])?, now.map_err(|report| vec![report])?);
+        Ok(Again::new(exec, &was, &now, limits))
+    }
+
     /// The live ids of each of `kinds`, in the order asked; none of a kind no model holds.
     #[must_use]
     pub fn list(&self, kinds: &[EntityKind]) -> Vec<Listed> {
@@ -198,6 +264,14 @@ impl Session {
     #[must_use]
     pub fn adjacent(&self, ids: &[EntityRef]) -> Vec<PerId<Vec<EntityRef>>> {
         self.describe(ids).into_iter().map(|(id, described)| (id, described.map(|d| d.adjacent))).collect()
+    }
+}
+
+/// `model` in `encoding`.
+fn encode(model: &Snapshot, encoding: Encoding) -> Result<Vec<u8>, Report> {
+    match encoding {
+        Encoding::Json => occam_io::save(model),
+        Encoding::Binary => occam_io::save_binary(model),
     }
 }
 

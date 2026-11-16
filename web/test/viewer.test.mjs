@@ -1,10 +1,17 @@
 // The viewer in headless Chromium on its software adapter (SwiftShader). CI has no GPU, so these assert buffers, not
-// pixels: what the page uploaded, read back, and the camera it drew with.
+// pixels: what the page uploaded, read back, and the camera it drew with. Every model is a request run in the page's
+// editing worker and meshed by its mesh workers, and the meshes they make are held to the native `occam mesh`'s. The
+// last tests open the page as `occam view` serves it, built into the binary, and follow the model file.
 //
-// Run by `just web-test`, which builds the page first.
+// Run by `just web-test`, which builds the page and then `occam`, which embeds it.
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 
@@ -12,11 +19,37 @@ import { serve } from "./serve.mjs";
 
 /** The flags that give headless Chromium its software WebGPU adapter: `just web-test` gives them, and says why. */
 const WEBGPU = (process.env.OCCAM_WEBGPU_FLAGS ?? "").split(/\s+/).filter(Boolean);
-const DIST = fileURLToPath(new URL("../dist", import.meta.url));
+/** Where `just web-build` builds the page, which `occam` embeds too. */
+const DIST = fileURLToPath(new URL("../../crates/occam-cli/page", import.meta.url));
 /** occam-report's catalogue as `just errors` lists it: `just web-test` writes it there. */
 const CATALOGUE = process.env.OCCAM_CATALOGUE ?? "";
+/** The native `occam` command: `just web-test` builds it. */
+const OCCAM = process.env.OCCAM ?? "";
 const USAGE = { INDEX: 0x10, VERTEX: 0x20, STORAGE: 0x80 };
 const CUBE_FACES = ["face:0/1", "face:1/1", "face:2/1", "face:3/1", "face:4/1", "face:5/1"];
+
+const request = (steps) => JSON.stringify({ schema: 1, units: { length: "mm", angle: "deg" }, steps });
+/** A cube of side 20 so far from the world's origin that plain `f32` positions would be off by about a thousandth. */
+const CUBE = request([{ op: "box", size: [20, 20, 20], frame: { origin: [99990.3, -50010.7, 24990.1] } }]);
+/** A box, a cylinder and a sphere: twelve faces, flat and bent, for the mesh workers to share out. */
+const BODIES = request([
+  { op: "box", size: [10, 10, 10] },
+  { op: "cylinder", radius: 4, height: 10, frame: { origin: [20, 0, 0] } },
+  { op: "sphere", radius: 3, frame: { origin: [0, 20, 0] } },
+]);
+/** A sector with a hole near its rim, extruded: at 0.1 mm both caps are refused, their boundaries crossing (P9). */
+const SECTOR = request([
+  { op: "wire", label: "rim", edges: [
+    { arc: [[9.807852804032304, -1.9509032201612824, 0], [10, 0, 0], [9.807852804032304, 1.9509032201612824, 0]] },
+    { line: [[9.807852804032304, 1.9509032201612824, 0], [0, 0, 0]] },
+    { line: [[0, 0, 0], [9.807852804032304, -1.9509032201612824, 0]] },
+  ] },
+  { op: "wire", label: "hole", edges: [
+    { circle: { centre: [9.702055900327249, 0.9555691010728864, 0], radius: 0.25, normal: [0, 0, 1] } },
+  ] },
+  { op: "face", label: "face", outer: "rim", holes: ["hole"] },
+  { op: "extrude", face: "face", vector: [0, 0, 5] },
+]);
 
 let site;
 let browser;
@@ -24,6 +57,7 @@ let browser;
 before(async () => {
   assert.ok(WEBGPU.length > 0, "OCCAM_WEBGPU_FLAGS is not set: run the tests with `just web-test`");
   assert.ok(CATALOGUE, "OCCAM_CATALOGUE is not set: run the tests with `just web-test`");
+  assert.ok(OCCAM, "OCCAM is not set: run the tests with `just web-test`");
   site = await serve(DIST);
   browser = await chromium.launch({ headless: true, args: WEBGPU });
 });
@@ -33,22 +67,35 @@ after(async () => {
   site?.server.close();
 });
 
-/** A page of the viewer, once it draws or reports; its uncaught errors are kept on `page.errorsSeen`. */
-async function open(query = "", { on = browser, before: prepare } = {}) {
+/**
+ * A page of the viewer with one mesh worker unless `query` says otherwise, once it reports or has run `model` in its
+ * editing worker and shown what its mesh workers made of it, which `page.ran` keeps; its uncaught errors are kept on
+ * `page.errorsSeen`. `before` runs in the page before its scripts, and `intercept` is given the page before it loads.
+ */
+async function open(query = "", { on = browser, before: prepare, intercept, model = CUBE } = {}) {
+  const page = await fresh(on);
+  if (prepare) await page.addInitScript(prepare);
+  if (intercept) await intercept(page);
+  const workers = /&workers=/.test(query) ? "" : "&workers=1";
+  await page.goto(`${site.url}/?inspect${workers}${query}`);
+  return ready(page, model);
+}
+
+/** A new page in `on`, its uncaught errors kept on `page.errorsSeen`. */
+async function fresh(on = browser) {
   const page = await on.newPage();
   // Generous, for a loaded machine: where the browser gets only idle CPU, a step can take a minute.
   page.setDefaultTimeout(120_000);
   page.errorsSeen = [];
   page.on("pageerror", (error) => page.errorsSeen.push(String(error)));
   page.on("console", (message) => message.type() === "error" && page.errorsSeen.push(message.text()));
-  if (prepare) await page.addInitScript(prepare);
-  await page.goto(`${site.url}/?inspect${query}`);
-  return ready(page);
+  return page;
 }
 
-/** The page, once it draws or reports. */
-async function ready(page) {
+/** The page, once it reports or has run `model` and shown its mesh. */
+async function ready(page, model = CUBE) {
   await page.waitForFunction(() => window.occamViewer || document.querySelector(".report.failure"));
+  page.ran = await page.evaluate((r) => window.occamViewer?.run(r) ?? null, model);
   return page;
 }
 
@@ -174,6 +221,116 @@ function without(mesh, id) {
   return { positions: join("positions", Float64Array), normals: join("normals", Float64Array),
     uvs: join("uvs", Float64Array), indices: join("indices", Uint32Array), faces };
 }
+
+const exec = promisify(execFile);
+
+/**
+ * The native `occam`'s answer for `model` meshed to `deflection` and `angle`: `occam run` builds it in a model file of
+ * its own, and `occam mesh` writes its buffers; their bytes, and what `occam mesh --json` says.
+ */
+async function nativeMesh(model, deflection, angle) {
+  const dir = await mkdtemp(join(tmpdir(), "occam-web-"));
+  try {
+    const [part, ops, out] = ["part.occam", "ops.json", "part.occam.mesh"].map((name) => join(dir, name));
+    await writeFile(ops, model);
+    await exec(OCCAM, ["run", "--model", part, "--binary", ops]);
+    const asked = ["mesh", "--model", part, "--deflection", String(deflection), "--angle", String(angle), "--json"];
+    // `occam mesh` exits 1 when anything is refused, and writes the buffers all the same.
+    const { stdout } = await exec(OCCAM, asked).catch((refused) => refused);
+    return { bytes: await readFile(out), said: JSON.parse(stdout) };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** The page's mesh as `occam mesh` writes a mesh (docs/architecture/mesh-and-renderer.md), little-endian. */
+function fileBytes(mesh) {
+  const [vertices, triangles] = [mesh.positions.length / 3, mesh.indices.length / 3];
+  const view = new DataView(new ArrayBuffer(24 + 64 * vertices + 12 * triangles + 24 * mesh.faces.length));
+  let at = 0;
+  const put = (write, size) => (value) => (write.call(view, at, value, true), (at += size));
+  [vertices, triangles, mesh.faces.length].map(BigInt).forEach(put(view.setBigUint64, 8));
+  for (const reals of [mesh.positions, mesh.normals, mesh.uvs]) reals.forEach(put(view.setFloat64, 8));
+  mesh.indices.forEach(put(view.setUint32, 4));
+  for (const { id, vertices: v, triangles: t } of mesh.faces) {
+    const [, slot, generation] = id.match(/^face:(\d+)\/(\d+)$/).map(Number);
+    [slot, generation, v.first, v.count, t.first, t.count].forEach(put(view.setUint32, 4));
+  }
+  assert.equal(at, view.byteLength);
+  return new Uint8Array(view.buffer);
+}
+
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+test("a request run in the editing worker is meshed by four mesh workers to the hash the native mesher gives", async () => {
+  const page = await open("&workers=4&deflection=0.1&angle=0.35", { model: BODIES });
+  assert.equal(JSON.parse(page.ran.ran).ok, true);
+  assert.equal(await page.evaluate(() => window.occamViewer.workers()), 4);
+  const state = await snapshot(page);
+  const native = await nativeMesh(BODIES, 0.1, 0.35);
+  assert.equal(native.said.ok, true);
+  assert.equal(state.mesh.faces.length, native.said.answers.length);
+  assert.equal(sha256(fileBytes(state.mesh)), sha256(native.bytes), "the parts laid end to end, bit for bit");
+  const calls = await page.evaluate(() => window.occamViewer.calls());
+  assert.deepEqual(calls.map(({ first, end }) => [first, end]), state.mesh.faces.map((_, k) => [k, k + 1]),
+    "under 64 faces, a call a face, in id order");
+  assert.deepEqual(new Set(calls.map((call) => call.worker)), new Set([0, 1, 2, 3]), "each worker meshed some");
+  assertUploaded(state);
+  await clean(page);
+});
+
+test("a face that will not mesh is named, as the native mesher names it, and the rest arrive and are drawn", async () => {
+  const page = await open("&workers=4&deflection=0.1", { model: SECTOR });
+  const native = await nativeMesh(SECTOR, 0.1, 0.35);
+  const refusedNatively = native.said.answers.filter((answer) => answer.report).map((answer) => answer.entity);
+  assert.equal(refusedNatively.length, 2, "both caps");
+  const shown = await page.locator(".report.refusal").evaluateAll((sections) =>
+    sections.map(({ dataset }) => [dataset.code, dataset.entity, dataset.reason]));
+  assert.deepEqual(shown.filter(([code]) => code === "mesh.face-not-meshed"),
+    refusedNatively.map((face) => ["mesh.face-not-meshed", face, "boundary-crosses"]));
+  assert.deepEqual(shown.filter(([code]) => code === "mesh.not-watertight"),
+    refusedNatively.map((face) => ["mesh.not-watertight", face, "face-missing"]), "each a hole where it is");
+  const state = await snapshot(page);
+  const meshed = native.said.answers.filter((answer) => answer.mesh).map((answer) => answer.entity);
+  assert.equal(meshed.length, 5);
+  assert.deepEqual(state.faces.map((face) => face.id).sort(), [...meshed].sort(), "the rest drawn");
+  assert.equal(sha256(fileBytes(state.mesh)), sha256(native.bytes));
+  assertUploaded(state);
+  await clean(page);
+});
+
+/** Notes on `window.wasmSeen` every use of WebAssembly's API in the page's main thread, which workers do not share. */
+function watchWebAssembly() {
+  window.wasmSeen = [];
+  for (const name of ["compile", "compileStreaming", "instantiate", "instantiateStreaming", "validate"]) {
+    const real = WebAssembly[name];
+    WebAssembly[name] = (...args) => (window.wasmSeen.push(name), real.apply(WebAssembly, args));
+  }
+  for (const name of ["Module", "Instance", "Memory"]) {
+    const construct = (target, args) => (window.wasmSeen.push(name), Reflect.construct(target, args));
+    WebAssembly[name] = new Proxy(WebAssembly[name], { construct });
+  }
+}
+
+test("the main thread never loads the kernel's module, each worker loads its own, and no COOP or COEP is needed", async () => {
+  const page = await open("&workers=4", { before: watchWebAssembly });
+  const { faces } = await snapshot(page);
+  assert.equal(faces.length, 6, "drawn from the workers' buffers");
+  const main = await page.evaluate(() => ({
+    seen: window.wasmSeen,
+    fetched: performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => name.endsWith(".wasm")),
+    isolated: crossOriginIsolated,
+  }));
+  assert.deepEqual(main, { seen: [], fetched: [], isolated: false });
+  const workers = page.workers();
+  assert.equal(workers.length, 5, "the editing worker and four mesh workers");
+  const loaded = await Promise.all(workers.map((worker) =>
+    worker.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.endsWith("/occam.wasm")).length)));
+  assert.deepEqual(loaded, [1, 1, 1, 1, 1], "each its own");
+  const script = await readFile(join(DIST, "viewer.js"), "utf8");
+  assert.ok(!script.includes("WebAssembly"), "the main thread's script holds nothing that loads a module");
+  await clean(page);
+});
 
 test("the page draws a cube, and the buffers it uploaded match the mesh, as f32 offsets from its f64 origin", async () => {
   const page = await open();
@@ -351,20 +508,22 @@ test("a malformed mesh is reported by name, and the last good model stays drawn"
 });
 
 /**
- * Follows the remedy of the report `page` shows in place of its canvas (L2): the report has `code` and offers the fix
- * `kind`, and `retry`, which does what the fix says, gives a page that draws the model. `gates errors` counts each
- * call as the test that follows its pair, as it counts `followed_remedy!` in Rust, so name the pair on the call's line.
+ * Follows the remedy of the report `page` shows in place of its canvas, or `over` it as it goes on drawing (L2): the
+ * report has `code` and offers the fix `kind`, and `retry`, which does what the fix says, gives a page that draws the
+ * whole model with no report. `gates errors` counts each call as the test that follows its pair, as it counts
+ * `followed_remedy!` in Rust, so name the pair on the call's line.
  */
-async function followedRemedy(page, code, kind, retry) {
-  const shown = page.locator(".report.failure");
+async function followedRemedy(page, code, kind, retry, { over = false } = {}) {
+  const shown = page.locator(over ? ".report.notice" : ".report.failure");
   await shown.waitFor();
   assert.equal(await shown.getAttribute("data-code"), code);
   assert.equal(await shown.getAttribute("data-remedy"), kind);
   assert.ok((await shown.locator(".remedy").textContent()).length > 0, "with its remedy");
-  assert.ok(!(await page.locator("#view").isVisible()), "the report, not a blank canvas");
+  assert.equal(await page.locator("#view").isVisible(), over, over ? "drawing what it can" : "not a blank canvas");
   const retried = await retry();
   const { faces } = await snapshot(retried);
   assert.equal(faces.length, 6, "following the remedy, the page draws");
+  assert.equal(await retried.locator(".report").count(), 0, "and reports nothing");
   for (const each of new Set([page, retried])) await clean(each);
 }
 
@@ -400,6 +559,30 @@ test("a page whose device is lost shows the report, and reloaded draws", async (
   await followedRemedy(page, "view.device-lost", "reload-page", () => page.reload().then(() => ready(page)));
 });
 
+/** Gives the first mesh worker to fetch the kernel's module bytes that are not one, once, so its calls throw. */
+async function breakOneMeshWorker(page) {
+  let broken = false;
+  await page.route("**/occam.wasm", (route) => {
+    // A worker's fetch names its own script as the referrer.
+    if (broken || !(route.request().headers().referer ?? "").endsWith("/mesher.js")) return route.continue();
+    broken = true;
+    return route.fulfill({ contentType: "application/wasm", body: "not a module" });
+  });
+}
+
+test("a mesh call that throws is reported by the faces it held, the rest are drawn, and reloaded the page draws all", async () => {
+  const page = await open("&workers=2", { intercept: breakOneMeshWorker });
+  const { faces } = await snapshot(page);
+  const drawn = faces.map((face) => face.id);
+  assert.ok(drawn.length > 0 && drawn.length < 6, `the other worker's faces drawn: ${drawn}`);
+  const shown = page.locator(".report.notice");
+  assert.equal(await shown.count(), 1, "a report over the drawing");
+  const missing = CUBE_FACES.filter((id) => !drawn.includes(id));
+  assert.equal(await shown.getAttribute("data-entities"), missing.join(" "), "naming every face not drawn");
+  assert.match(await shown.locator(".message").textContent(), new RegExp(`mesh ${missing.join(", ")}, .*CompileError`));
+  await followedRemedy(page, "view.mesh-failed", "reload-page", () => page.reload().then(() => ready(page)), { over: true });
+});
+
 test("every report the page can show is in occam-report's catalogue, worded as there, with the same remedy", async () => {
   const catalogue = JSON.parse(await readFile(CATALOGUE, "utf8"));
   const page = await open();
@@ -414,4 +597,177 @@ test("every report the page can show is in occam-report's catalogue, worded as t
     if (shown.remedy) assert.equal(shown.remedyText, remedy?.summary, `${shown.remedy} is worded as there`);
   }
   await clean(page);
+});
+
+// The page as `occam view` serves it (docs/architecture/live-view.md): the binary's own copy of the page, on 127.0.0.1
+// behind a token, following the model file that `occam run` writes.
+
+/** A cylinder beside the cube, as a request run on the cube's model. */
+const CYLINDER = request([{ op: "cylinder", radius: 4, height: 10, frame: { origin: [100040, -50000, 25000] } }]);
+
+/** What `occam` answers `args` in JSON, whatever its exit status. */
+async function occamJson(args) {
+  const { stdout } = await exec(OCCAM, [...args, "--json"]).catch((refused) => refused);
+  return JSON.parse(stdout);
+}
+
+/** `occam run` of `steps` on the model `file`, with `extra` arguments: what the run says. */
+async function runOn(file, steps, extra = []) {
+  const ops = `${file}.request.json`;
+  await writeFile(ops, steps);
+  const ran = await occamJson(["run", "--model", file, ops, ...extra]);
+  assert.equal(ran.ok, true, JSON.stringify(ran));
+  return ran;
+}
+
+/** What `occam view --status` says of the model `file`. */
+const statusOf = (file) => occamJson(["view", "--model", file, "--status"]);
+
+/** The digest the viewer of `file` says reads whole, once it is not `old`. */
+async function nextDigest(file, old) {
+  for (let tries = 0; tries < 200; tries += 1) {
+    const { digest } = await statusOf(file);
+    if (digest && digest !== old) return digest;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`the viewer of ${file} still says ${old}`);
+}
+
+/** `occam view` of a model of its own, made by `occam run` of `model`, opening no page; `done` stops it and cleans up. */
+async function viewed(model) {
+  const dir = await mkdtemp(join(tmpdir(), "occam-live-"));
+  const file = join(dir, "part.occam");
+  await runOn(file, model);
+  const started = await occamJson(["view", "--model", file, "--no-open", "--idle", "120"]);
+  assert.equal(started.running, true, JSON.stringify(started));
+  const done = async () => {
+    await occamJson(["view", "--model", file, "--stop"]);
+    await rm(dir, { recursive: true, force: true });
+  };
+  return { dir, file, started, done };
+}
+
+/** Resolves once `page` has drawn the model whose digest is `digest`. */
+const drawn = (page, digest) => page.waitForFunction((d) => window.occamViewer?.live()?.digest === d, digest);
+
+/** The page `view` serves, with two mesh workers, once it has drawn the model the viewer started with. */
+async function following(view) {
+  const page = await fresh();
+  await page.goto(`${view.started.url}?inspect&workers=2`);
+  await drawn(page, view.started.digest);
+  return page;
+}
+
+/** The buffers the native `occam mesh` writes for the model `file`, at the page's limits. */
+async function meshOf(file) {
+  const out = `${file}.mesh`;
+  await exec(OCCAM, ["mesh", "--model", file, "--deflection", "0.1", "--angle", "0.35", "--out", out]).catch((r) => r);
+  return readFile(out);
+}
+
+test("the page occam view serves draws the model from its mesh workers, to the native mesher's bits", async () => {
+  const view = await viewed(CUBE);
+  try {
+    const page = await following(view);
+    assert.equal(await page.evaluate(() => document.documentElement.hasAttribute("data-live")), true);
+    const state = await snapshot(page);
+    assertCube(state.mesh);
+    assertUploaded(state);
+    assert.equal(sha256(fileBytes(state.mesh)), sha256(await meshOf(view.file)), "bit for bit");
+    assert.deepEqual(await page.evaluate(() => window.occamViewer.live().models), 1);
+    await clean(page);
+  } finally {
+    await view.done();
+  }
+});
+
+test("an occam run that adds a cylinder reaches the page, which meshes only the cylinder's faces", async () => {
+  const view = await viewed(CUBE);
+  try {
+    const page = await following(view);
+    await snapshot(page);
+    await page.evaluate(() => window.occamViewer.clearUploads());
+    const ran = await runOn(view.file, CYLINDER);
+    await drawn(page, await nextDigest(view.file, view.started.digest));
+    const state = await snapshot(page);
+    const faces = state.mesh.faces.map((face) => face.id);
+    const made = ran.steps[0].created.filter((id) => id.startsWith("face:"));
+    assert.equal(made.length, 4, "the cylinder's faces");
+    assert.deepEqual(faces, [...CUBE_FACES, ...made], "the cube's and the cylinder's, in id order");
+    const calls = await page.evaluate(() => window.occamViewer.calls());
+    assert.deepEqual(calls.flatMap(({ first, end }) => faces.slice(first, end)), made, "the workers meshed only those");
+    const uploaded = new Set((await page.evaluate(() => window.occamViewer.uploads())).map((piece) => piece.face));
+    assert.deepEqual([...uploaded].sort(), [...made].sort(), "and only those were uploaded");
+    assert.equal(sha256(fileBytes(state.mesh)), sha256(await meshOf(view.file)), "the kept blocks and the new, bit for bit");
+    assertUploaded(state);
+    await clean(page);
+  } finally {
+    await view.done();
+  }
+});
+
+test("a half-written model file is not drawn, and the whole one is", async () => {
+  const view = await viewed(CUBE);
+  try {
+    const page = await following(view);
+    const other = join(view.dir, "other.occam");
+    const made = (await runOn(other, BODIES, ["--binary"])).steps.flatMap((step) => step.created);
+    const twin = await readFile(other);
+    await writeFile(view.file, twin.subarray(0, twin.length >> 1));
+    await page.waitForTimeout(1000);
+    const meanwhile = await page.evaluate(() => window.occamViewer.live());
+    assert.deepEqual(meanwhile, { digest: view.started.digest, models: 1 }, "still the cube, and nothing else drawn");
+    assert.equal((await snapshot(page)).faces.length, 6);
+    await writeFile(view.file, twin);
+    await drawn(page, await nextDigest(view.file, view.started.digest));
+    const faces = made.filter((id) => id.startsWith("face:")).sort();
+    assert.deepEqual((await snapshot(page)).faces.map((face) => face.id).sort(), faces, "the box, cylinder and sphere");
+    await page.locator(".report.model").waitFor({ state: "detached" });
+    await clean(page);
+  } finally {
+    await view.done();
+  }
+});
+
+test("a request without the viewer's token is refused, and one with it served", async () => {
+  const view = await viewed(CUBE);
+  try {
+    const { port, url } = view.started;
+    for (const path of ["/", "/model", "/events", "/status", "/viewer.js", "/occam.wasm", "/index.html"]) {
+      assert.equal((await fetch(`http://127.0.0.1:${port}${path}`)).status, 403, path);
+    }
+    assert.equal((await fetch(`http://127.0.0.1:${port}/stop`, { method: "POST" })).status, 403);
+    for (const path of ["", "model", "viewer.js", "occam.wasm"]) {
+      assert.equal((await fetch(`${url}${path}`)).status, 200, path);
+    }
+    const page = await fresh();
+    const response = await page.goto(`http://127.0.0.1:${port}/?inspect`);
+    assert.equal(response.status(), 403);
+    assert.equal(await page.evaluate(() => window.occamViewer === undefined), true, "no viewer without the token");
+    await page.close();
+  } finally {
+    await view.done();
+  }
+});
+
+test("a model file replaced by garbage gives the named report, and the last good model stays drawn", async () => {
+  const view = await viewed(CUBE);
+  try {
+    const page = await following(view);
+    const before = await snapshot(page);
+    const good = await readFile(view.file);
+    await writeFile(view.file, "not a model");
+    const shown = page.locator(".report.model");
+    await shown.waitFor();
+    assert.equal(await shown.getAttribute("data-code"), "io.not-readable");
+    assert.match(await shown.locator(".message").textContent(), /^The file is not a native model/);
+    const after = await snapshot(page);
+    assert.deepEqual(after.faces.map((face) => face.id), before.faces.map((face) => face.id), "the cube still drawn");
+    assert.deepEqual(await page.evaluate(() => window.occamViewer.live()), { digest: view.started.digest, models: 1 });
+    await writeFile(view.file, good);
+    await shown.waitFor({ state: "detached" });
+    await clean(page);
+  } finally {
+    await view.done();
+  }
 });

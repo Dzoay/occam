@@ -2,6 +2,7 @@
 
 import { signal } from "@preact/signals";
 
+import type { KernelReport } from "./protocol.ts";
 import type { Report } from "./report.ts";
 
 export interface Status {
@@ -17,6 +18,13 @@ export interface Status {
 export const failure = signal<Report | null>(null);
 /** A report shown over the drawing, which goes on with the last good model, such as a malformed mesh's. */
 export const notice = signal<Report | null>(null);
+/** What refused any of the model shown, from the kernel: each face that did not mesh, by name, and what else it found. */
+export const refusals = signal<readonly KernelReport[]>([]);
+/**
+ * Why the model file does not read now, as `occam view` names it: shown over the drawing, which goes on with the last
+ * model that read whole. Empty while it reads, and on a page no server follows.
+ */
+export const watched = signal<readonly KernelReport[]>([]);
 /** The selected ids, in the order they were selected. */
 export const selection = signal<readonly string[]>([]);
 export const status = signal<Status>({ faces: 0, triangles: 0, pending: 0, fallback: false });

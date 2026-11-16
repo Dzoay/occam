@@ -87,6 +87,9 @@ occam-verify, occam-xtask                             oracles, corpus, gates; ne
 web/                                                  the renderer; consumes data only
 ```
 
+`occam-verify` and `occam-xtask` may also name any crate above them in `[dev-dependencies]`, for their tests
+([decision](decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md)).
+
 ## 5. Gates
 
 The one definition. Every `gates` subcommand has `--json` (L8) and a test proving that a seeded violation fails it.
@@ -101,7 +104,7 @@ same commands. Goal: a PR's CI finishes within 45 minutes (L47).
 | `test` | Every test through nextest on the host, and doctests | `bedrock.repo` |
 | `tools-test` | The Python tools' tests (the surveys, the corpus, the determinism record, the trigonometry's coefficients), standard library only | `census.freecad-api` |
 | `wasm` | Tests on wasm32-wasip2; the browser target builds; a Windows check | `bedrock.repo` |
-| `web-check`, `web-test` | The viewer's TypeScript, `tsc --noEmit` in strict mode, declaration files included, against `@types/web`'s browser and WebGPU types; its tests in headless Chromium on the software adapter, asserting the buffers it uploads, not pixels, following each report's remedy, and holding its reports to the catalogue | `view.renderer` |
+| `web-check`, `web-test` | The viewer's TypeScript, `tsc --noEmit` in strict mode, declaration files included, against `@types/web`'s browser and WebGPU types; its tests in headless Chromium on the software adapter, asserting the buffers it uploads, not pixels, following each report's remedy, holding its reports to the catalogue, its mesh workers' meshes to the native `occam mesh`'s bits, and the page `occam view` serves, built in, following the model file | `view.renderer`, `view.workers`, `view.live` |
 | `gates layers` | The crate graph matches §4 (L18) | `bedrock.gates` |
 | `gates complexity` | Function and file length, duplication, with a shrink-only exemption list (L20) | `bedrock.gates` |
 | `gates provenance` | Rust identifiers in `crates/` and `web/` against `ci/forbidden-identifiers.txt`, with `tools/oracle/` exempt. Every file in a kernel crate carries `//! Source: <key>` resolving in `docs/SOURCES.md`, or `//! Source: original`. Derived files are declared in `REUSE.toml` (L36) | `bedrock.gates` |

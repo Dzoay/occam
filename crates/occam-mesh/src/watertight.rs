@@ -10,6 +10,10 @@
 //! lies along, with that edge's faces, or by its face where it lies along none. A shell whose segments all match has
 //! the Euler characteristic of its faces, `V - E + 2F - L` (vertices, edges, faces and loops), which its mesh, counted
 //! by position, must have too, as `V - E + T`: two places pinched to one position, or a piece too many, show there.
+//!
+//! A part of a mesh, some of a model's faces meshed alone ([`crate::mesh_part`]), is checked as far as it reaches: a
+//! segment along an edge that a face outside the part uses may be used once, a face outside is no hole, and only a
+//! shell whose faces are all inside has its characteristic counted.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -48,21 +52,35 @@ struct Counted {
 /// shell whose counts are wrong, shell by shell in the order of the model's bodies; none where it is watertight.
 #[must_use]
 pub fn watertight(model: &Snapshot, mesh: &Mesh) -> Vec<Report> {
-    let blocks: BTreeMap<Id<Face>, usize> = mesh.blocks.iter().enumerate().map(|(k, block)| (block.face, k)).collect();
-    let shells = model.ids::<Body>().into_iter().filter_map(|body| model.view(body)).flat_map(View::<Body>::shells);
-    shells.flat_map(|shell| check_shell(model, mesh, &blocks, shell)).collect()
+    within(model, mesh, &|_| true)
 }
 
-/// What is wrong with the mesh of `shell`, whose faces' blocks are numbered in `blocks`.
-fn check_shell(model: &Snapshot, mesh: &Mesh, blocks: &BTreeMap<Id<Face>, usize>, shell: Id<Shell>) -> Vec<Report> {
+/// What is wrong with `mesh`, the mesh of the faces of `model` that `inside` keeps, as far as it reaches: as
+/// [`watertight`] finds it, except that a segment along an edge a face outside uses may be used once, a face outside is
+/// no hole, and only a shell whose faces are all inside has its Euler characteristic counted.
+pub(crate) fn within(model: &Snapshot, mesh: &Mesh, inside: &dyn Fn(Id<Face>) -> bool) -> Vec<Report> {
+    let blocks: BTreeMap<Id<Face>, usize> = mesh.blocks.iter().enumerate().map(|(k, block)| (block.face, k)).collect();
+    let shells = model.ids::<Body>().into_iter().filter_map(|body| model.view(body)).flat_map(View::<Body>::shells);
+    shells.flat_map(|shell| check_shell(model, mesh, &blocks, inside, shell)).collect()
+}
+
+/// What is wrong with the mesh of `shell`'s faces that `inside` keeps, whose blocks are numbered in `blocks`.
+fn check_shell(
+    model: &Snapshot,
+    mesh: &Mesh,
+    blocks: &BTreeMap<Id<Face>, usize>,
+    inside: &dyn Fn(Id<Face>) -> bool,
+    shell: Id<Shell>,
+) -> Vec<Report> {
     let faces = model.view(shell).map(View::<Shell>::faces).unwrap_or_default();
-    let held: Vec<usize> = faces.iter().filter_map(|face| blocks.get(face).copied()).collect();
-    let missing: Vec<Id<Face>> = faces.iter().copied().filter(|face| !blocks.contains_key(face)).collect();
+    let mine: Vec<Id<Face>> = faces.iter().copied().filter(|&face| inside(face)).collect();
+    let held: Vec<usize> = mine.iter().filter_map(|face| blocks.get(face).copied()).collect();
+    let missing: Vec<Id<Face>> = mine.iter().copied().filter(|face| !blocks.contains_key(face)).collect();
     let counted = count(mesh, &held);
     let along = along(mesh, &held);
-    let open = unmatched(model, &counted.uses, &along);
+    let open = unmatched(model, &counted.uses, &along, inside);
     let mut found = named(model, mesh, &missing, &open, &along);
-    if found.is_empty() {
+    if found.is_empty() && mine.len() == faces.len() {
         found.extend(characteristic(model, shell, &faces, &counted));
     }
     found
@@ -127,13 +145,14 @@ fn edge_of(along: &Along, u: &Use) -> Option<Id<Edge>> {
 }
 
 /// The uses in `uses`, sorted, that have no partner: each segment, matched by position, must be used once each way, or
-/// once along an edge only one face uses.
-fn unmatched(model: &Snapshot, uses: &[Use], along: &Along) -> Vec<Use> {
+/// once along an edge only one face uses or a face that `inside` leaves out uses.
+fn unmatched(model: &Snapshot, uses: &[Use], along: &Along, inside: &dyn Fn(Id<Face>) -> bool) -> Vec<Use> {
     let count = |from: u32, to: u32| {
         let start = uses.partition_point(|u| (u.from, u.to) < (from, to));
         uses.partition_point(|u| (u.from, u.to) <= (from, to)).saturating_sub(start)
     };
-    let free = |u: &Use| edge_of(along, u).and_then(|edge| model.view(edge)).is_some_and(|edge| edge.uses().len() == 1);
+    let rim = |edge: View<'_, Edge>| edge.uses().len() == 1 || edge.faces().into_iter().any(|face| !inside(face));
+    let free = |u: &Use| edge_of(along, u).and_then(|edge| model.view(edge)).is_some_and(rim);
     let matched = |u: &Use| {
         let backward = count(u.to, u.from);
         count(u.from, u.to) == 1 && (backward == 1 || (backward == 0 && free(u)))

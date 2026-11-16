@@ -21,11 +21,15 @@
 //!
 //! [`Buffers`] are a mesh as the renderer contract wants it: flat arrays, each face a vertex block of its own whose
 //! indices count from its start. After an edit, [`remesh`] meshes again only the faces the edit touched and those along
-//! an edge whose samples changed; the rest keep their blocks bit for bit.
+//! an edge whose samples changed; the rest keep their blocks bit for bit. [`mesh_part`] meshes some of a model's faces
+//! alone, as a mesh worker in the browser meshes a range of them: each block the whole mesh's bit for bit, and the part
+//! checked watertight as far as it reaches. [`again`] says what a page that drew one model must mesh again to draw
+//! the next, from the two models alone.
 //!
 //! The work runs in parallel only through [`occam_math::Exec`], one face or one edge a task, and every result comes back
 //! in id order, so the samples and the meshes are the same bits at any thread count.
 
+mod again;
 mod boundary;
 mod buffers;
 mod curvature;
@@ -34,6 +38,7 @@ mod edges;
 mod faces;
 mod limits;
 mod merge;
+mod part;
 mod predicates;
 #[cfg(any(test, feature = "determinism"))]
 #[doc(hidden)]
@@ -49,11 +54,13 @@ mod testing;
 mod triangulation;
 mod watertight;
 
+pub use again::{Again, again};
 pub use buffers::{Buffers, FaceRange};
 pub use deviation::deviation;
 pub use edges::{EdgeSamples, Edges, sample_edges};
 pub use faces::{FaceMesh, Faces, Side, mesh_face, mesh_faces};
 pub use limits::Limits;
 pub use merge::{Block, Mesh, merge, mesh};
+pub use part::mesh_part;
 pub use remesh::{Remeshed, remesh};
 pub use watertight::watertight;

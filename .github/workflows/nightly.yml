@@ -1,7 +1,7 @@
 # What should not wait for a PR. The full corpus and randomised boolean sequences join this workflow as they arrive
 # (docs/PLAN.md section 5). For now it notices a new advisory against a locked dependency, runs the OCCT oracle harness
-# against its pinned wheel, a large download that the PR gates do not need, and runs the hybrid intersection on P5's
-# 625-component surface, minutes in a debug build.
+# against its pinned wheel, a large download that the PR gates do not need, runs intersection's hits over the corpus,
+# and runs the hybrid intersection on P5's 625-component surface, each minutes in a debug build.
 name: nightly
 
 on:
@@ -29,6 +29,16 @@ jobs:
         with:
           tools: just cargo-deny
       - run: just advisories
+
+  corpus:
+    name: corpus
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          tools: just cargo-nextest
+      - run: just corpus-hits
 
   oracle:
     name: oracle

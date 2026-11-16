@@ -28,18 +28,25 @@
 //! rounds and fitted. A leaf where the surfaces lie within the band of each other is reported as an overlap, and a part
 //! halved as far as it goes and still too large as unresolved; neither is answered with curves.
 //!
-//! The crate works on surfaces only, through occam-geom's frozen seam, and knows nothing of faces or ids. Every decision
-//! a method makes goes through occam-math's predicates.
+//! Where a curve over a span meets a surface over a patch is [`Hits`], beside a section: crossings, contacts and
+//! overlaps, the failures and the tally. [`hits`] tests their boxes first, and [`scan`] does not, so the two can be
+//! compared (P8). [`hits_of_pairs`] runs many, as [`sections`] does.
+//!
+//! The crate works on surfaces and curves only, through occam-geom's frozen seam, and knows nothing of faces or ids.
+//! Every decision a method makes goes through occam-math's predicates.
 
+mod along;
 mod closed;
 mod correct;
 #[cfg(test)]
 mod correct_tests;
 mod decide;
+mod distance;
 mod edge;
 mod fit;
 #[cfg(test)]
 mod fit_tests;
+mod hits;
 mod hybrid;
 #[cfg(test)]
 mod hybrid_tests;
@@ -52,8 +59,13 @@ mod on;
 mod pieces;
 mod project;
 mod section;
+mod subdivide;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_hits;
+#[cfg(test)]
+mod tests_pinned;
 mod trace;
 #[cfg(test)]
 mod trace_tests;
@@ -62,6 +74,7 @@ mod tube;
 
 pub use closed::Closed;
 pub use fit::{Fitted, fit, fits};
+pub use hits::{Hit, HitPair, Hits, Overlap, Span, boxes_meet, hits, hits_of_pairs, scan};
 pub use hybrid::Hybrid;
 pub use methods::{Answer, Budget, Method, Methods, Spent, SurfacePair, Work, sections};
 pub use section::{Coincidence, Contact, Section, SectionCurve};

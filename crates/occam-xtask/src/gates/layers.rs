@@ -1,11 +1,16 @@
 //! `gates layers`: the crate graph matches the diagram in `docs/PLAN.md` section 4 (L18, L25). A crate depends only on
-//! crates above it, and everything below the composition crate binds that crate and nothing else.
+//! crates above it, and everything below the composition crate binds that crate and nothing else, but for the tooling
+//! crates' tests: `occam-verify` and `occam-xtask` may name any crate above them in `[dev-dependencies]`
+//! (`docs/decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md`).
 
 use super::no_args;
 use crate::manifest::{self, is_crate_manifest, is_internal};
 use crate::plan::{self, PLAN};
 use crate::repo::Repo;
 use crate::verdict::{Finding, Verdict, verdict};
+
+/// The crates, never published, whose tests may reach any crate above them.
+const TOOLING: [&str; 2] = ["occam-verify", "occam-xtask"];
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     no_args(args)?;
@@ -18,9 +23,11 @@ fn tier_of(tiers: &[Vec<String>], name: &str) -> Option<usize> {
     tiers.iter().position(|tier| tier.iter().any(|crate_name| crate_name == name))
 }
 
-/// What is wrong with `name` depending on `dep`, given their layers and the composition crate's.
-fn judge(path: &str, name: &str, dep: &str, own: usize, composition: usize, theirs: Option<usize>) -> Option<Finding> {
-    if own > composition && dep != "occam" {
+/// What is wrong with `name` depending on `dep`, given its layer, the composition crate's and theirs, and whether only its
+/// tests are built with it.
+fn judge(path: &str, name: &str, dep: &str, layers: (usize, usize, Option<usize>), tested: bool) -> Option<Finding> {
+    let (own, composition, theirs) = layers;
+    if own > composition && dep != "occam" && !tested {
         let message = format!("{name} binds {dep}, but below the composition crate only `occam` may be bound (L25)");
         return Some(Finding::new("layers.bypass", path, message, format!("reach {dep} through `occam`")));
     }
@@ -61,7 +68,8 @@ fn check(plan: &str, manifests: &[(String, String)]) -> Verdict {
         };
         for dep in manifest.deps.iter().filter(|dep| is_internal(dep)) {
             edges = edges.saturating_add(1);
-            findings.extend(judge(path, &manifest.name, dep, own, composition, tier_of(&tiers, dep)));
+            let tested = TOOLING.contains(&manifest.name.as_str()) && manifest.dev_only.contains(dep);
+            findings.extend(judge(path, &manifest.name, dep, (own, composition, tier_of(&tiers, dep)), tested));
         }
     }
     verdict(format!("{} crates, {edges} internal edges", manifests.len()), findings)
@@ -75,8 +83,12 @@ mod tests {
     const PLAN_TEXT: &str = "## 4. Layers\n\n```text\noccam-report      Report\noccam-math        Real\noccam             composition\noccam-wasm, occam-cli          facades\noccam-xtask                    gates\nweb/                           renderer\n```\n\n## 5. Gates\n";
 
     fn manifest(name: &str, deps: &[&str]) -> (String, String) {
+        in_section(name, "dependencies", deps)
+    }
+
+    fn in_section(name: &str, section: &str, deps: &[&str]) -> (String, String) {
         let deps = deps.iter().map(|d| format!("{d} = \"1\"\n")).collect::<Vec<_>>().concat();
-        (format!("crates/{name}/Cargo.toml"), format!("[package]\nname = \"{name}\"\n[dependencies]\n{deps}"))
+        (format!("crates/{name}/Cargo.toml"), format!("[package]\nname = \"{name}\"\n[{section}]\n{deps}"))
     }
 
     #[test]
@@ -113,6 +125,27 @@ mod tests {
     fn below_the_composition_crate_only_it_may_be_bound() {
         assert_eq!(codes(&check(PLAN_TEXT, &[manifest("occam-cli", &["occam-report"])])), ["layers.bypass"]);
         assert_eq!(codes(&check(PLAN_TEXT, &[manifest("occam-xtask", &["occam-cli"])])), ["layers.bypass"]);
+    }
+
+    #[test]
+    fn the_tooling_crates_may_test_against_any_crate_above_them() {
+        let verify = PLAN_TEXT.replace("occam-xtask                    gates", "occam-verify, occam-xtask      gates");
+        for name in ["occam-verify", "occam-xtask"] {
+            let tests = in_section(name, "dev-dependencies", &["occam-report", "occam-math", "occam-cli"]);
+            assert_eq!(check(&verify, &[tests]), Ok("1 crates, 3 internal edges".to_string()), "{name}");
+            assert_eq!(codes(&check(&verify, &[manifest(name, &["occam-math"])])), ["layers.bypass"], "{name}");
+            let both = format!("{}[dev-dependencies]\noccam-math = \"1\"\n", manifest(name, &["occam-math"]).1);
+            let both = (format!("crates/{name}/Cargo.toml"), both);
+            assert_eq!(codes(&check(&verify, &[both])), ["layers.bypass"], "{name}: built with it, not only tested");
+            let upward = in_section(name, "dev-dependencies", &[name]);
+            assert_eq!(codes(&check(&verify, &[upward])), ["layers.upward"], "{name}: only crates above it");
+        }
+    }
+
+    #[test]
+    fn no_other_crate_below_the_composition_crate_may_test_against_a_kernel_crate() {
+        let tests = in_section("occam-cli", "dev-dependencies", &["occam-report"]);
+        assert_eq!(codes(&check(PLAN_TEXT, &[tests])), ["layers.bypass"]);
     }
 
     #[test]

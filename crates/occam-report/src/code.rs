@@ -541,6 +541,14 @@ catalogue! {
         "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing.",
     }
 
+    /// The hits of a curve over a span on a surface stopped before they were complete, the budget spent. What was found
+    /// is kept beside the report (L5), and more may be missing.
+    HitsIncomplete = "intersect.hits-incomplete" {
+        Error, [],
+        "The hits of a curve on a surface stopped before they were complete; what was found is kept.",
+        "The hits stopped with {hits} points and {overlaps} overlaps found, and more may be missing.",
+    }
+
     /// A decision on a computed value could not be made at this resolution (O11): its certified enclosure reaches
     /// across an edge of the band. Nothing is guessed in its place.
     Undecided = "decide.undecided" {
@@ -618,13 +626,60 @@ catalogue! {
         "The GPU device was lost, so the page has stopped drawing: {reason}",
     }
 
-    /// The viewer's page was given a mesh without the renderer contract's layout, and draws the last good one. Its
-    /// fix, meshing again with the `occam` that serves the page, is in its wording: no test can follow it until the
-    /// page meshes through `occam` (`view.workers`, `view.live`).
+    /// The viewer's page was given a mesh without the renderer contract's layout, and draws the last good one. The
+    /// page's own workers mesh through the `occam` that serves it, and meshing again gives the same bits, so such a
+    /// mesh is a bug in occam, and no remedy can be followed.
     MeshMalformed = "view.mesh-malformed" {
         Error, [],
-        "The mesh the page was given does not have the renderer contract's layout.",
-        "The mesh the page was given does not have the renderer contract's layout: {reason}. Mesh the model again with the `occam` that serves this page.",
+        "The page was given a mesh that breaks the renderer contract, which is a bug in occam.",
+        "The page was given a mesh that breaks the renderer contract, which is a bug in occam: {reason}. It still draws the last good model.",
+    }
+
+    /// A call to one of the viewer's mesh workers threw instead of meshing its range of faces: its kernel would not
+    /// load, say, or it stopped. The page names those faces and draws every other face.
+    MeshFailed = "view.mesh-failed" {
+        Error, [ReloadPage],
+        "A mesh worker could not mesh some of the model's faces, so the page draws the model without them.",
+        "A mesh worker could not mesh {faces}, so the page draws the model without them: {reason}",
+    }
+
+    /// The model `occam view` watches is not there: no run has made it yet, or it was removed. The viewer keeps
+    /// watching, and its page draws the model once a run writes it.
+    ModelMissing = "view.model-missing" {
+        Error, [MakeModel],
+        "The model the viewer watches is not there.",
+        "There is no model at {given}: the viewer keeps watching, and its page draws the model once a run writes it.",
+    }
+
+    /// `occam view --port` named a port that something else on this machine already listens on.
+    PortTaken = "view.port-taken" {
+        Error, [UseAnyPort],
+        "The port the viewer was asked to listen on is taken.",
+        "Port {port} is taken on this machine, so the viewer could not listen there.",
+    }
+
+    /// The viewer's state file beside the model, which keeps one viewer to a model, could not be written, so no viewer
+    /// was started. The directory's permissions are the person's to change, so no remedy can be followed.
+    StateNotWritten = "view.state-not-written" {
+        Error, [],
+        "The viewer's state file could not be written, so no viewer was started.",
+        "The viewer's state file {given} could not be written, so no viewer was started for the model.",
+    }
+
+    /// The viewer's server did not say it was listening in time: it could not be run, or it stopped before it could
+    /// say why. Nothing an agent can change cures that, so no remedy can be followed.
+    NotStarted = "view.not-started" {
+        Error, [],
+        "The viewer's server did not start.",
+        "The viewer for {given} did not start: its server stopped, or did not listen within {seconds} seconds.",
+    }
+
+    /// The viewer's server said it would stop, and still answered when the wait for it was over. That is a bug in
+    /// occam, so no remedy can be followed.
+    NotStopped = "view.not-stopped" {
+        Error, [],
+        "The viewer's server did not stop when asked.",
+        "The viewer for {given}, process {pid}, still answered {seconds} seconds after it was asked to stop.",
     }
 }
 
@@ -1308,6 +1363,14 @@ mod tests {
                 "remedies": []
             },
             {
+                "name": "HitsIncomplete",
+                "code": "intersect.hits-incomplete",
+                "severity": "error",
+                "summary": "The hits of a curve on a surface stopped before they were complete; what was found is kept.",
+                "template": "The hits stopped with {hits} points and {overlaps} overlaps found, and more may be missing.",
+                "remedies": []
+            },
+            {
                 "name": "Undecided",
                 "code": "decide.undecided",
                 "severity": "error",
@@ -1401,8 +1464,61 @@ mod tests {
                 "name": "MeshMalformed",
                 "code": "view.mesh-malformed",
                 "severity": "error",
-                "summary": "The mesh the page was given does not have the renderer contract's layout.",
-                "template": "The mesh the page was given does not have the renderer contract's layout: {reason}. Mesh the model again with the `occam` that serves this page.",
+                "summary": "The page was given a mesh that breaks the renderer contract, which is a bug in occam.",
+                "template": "The page was given a mesh that breaks the renderer contract, which is a bug in occam: {reason}. It still draws the last good model.",
+                "remedies": []
+            },
+            {
+                "name": "MeshFailed",
+                "code": "view.mesh-failed",
+                "severity": "error",
+                "summary": "A mesh worker could not mesh some of the model's faces, so the page draws the model without them.",
+                "template": "A mesh worker could not mesh {faces}, so the page draws the model without them: {reason}",
+                "remedies": ["reload-page"]
+            }
+        ])
+    }
+
+    fn viewer_codes() -> Value {
+        json!([
+            {
+                "name": "ModelMissing",
+                "code": "view.model-missing",
+                "severity": "error",
+                "summary": "The model the viewer watches is not there.",
+                "template": "There is no model at {given}: the viewer keeps watching, and its page draws the model once a run writes it.",
+                "remedies": ["make-model"]
+            },
+            {
+                "name": "PortTaken",
+                "code": "view.port-taken",
+                "severity": "error",
+                "summary": "The port the viewer was asked to listen on is taken.",
+                "template": "Port {port} is taken on this machine, so the viewer could not listen there.",
+                "remedies": ["use-any-port"]
+            },
+            {
+                "name": "StateNotWritten",
+                "code": "view.state-not-written",
+                "severity": "error",
+                "summary": "The viewer's state file could not be written, so no viewer was started.",
+                "template": "The viewer's state file {given} could not be written, so no viewer was started for the model.",
+                "remedies": []
+            },
+            {
+                "name": "NotStarted",
+                "code": "view.not-started",
+                "severity": "error",
+                "summary": "The viewer's server did not start.",
+                "template": "The viewer for {given} did not start: its server stopped, or did not listen within {seconds} seconds.",
+                "remedies": []
+            },
+            {
+                "name": "NotStopped",
+                "code": "view.not-stopped",
+                "severity": "error",
+                "summary": "The viewer's server did not stop when asked.",
+                "template": "The viewer for {given}, process {pid}, still answered {seconds} seconds after it was asked to stop.",
                 "remedies": []
             }
         ])
@@ -1467,6 +1583,23 @@ mod tests {
         ])
     }
 
+    fn viewer_remedies() -> Value {
+        json!([
+            {
+                "name": "MakeModel",
+                "kind": "make-model",
+                "summary": "Make the model by running a request on it with `occam run --model`; the viewer draws it once it is written.",
+                "parameters": [],
+            },
+            {
+                "name": "UseAnyPort",
+                "kind": "use-any-port",
+                "summary": "Leave out --port, so that the viewer listens on a free port.",
+                "parameters": [],
+            },
+        ])
+    }
+
     #[test]
     fn the_catalogue_lists_every_code_and_remedy() {
         let value: Value = serde_json::from_str(&catalogue_json().unwrap()).unwrap();
@@ -1491,12 +1624,15 @@ mod tests {
             intersect_codes(),
             mesh_codes(),
             view_codes(),
+            viewer_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())
         .flatten()
         .collect();
-        assert_eq!(value, json!({"schema": 2, "codes": codes, "remedies": remedies()}));
+        let remedies: Vec<Value> =
+            [remedies(), viewer_remedies()].into_iter().filter_map(|rows| rows.as_array().cloned()).flatten().collect();
+        assert_eq!(value, json!({"schema": 2, "codes": codes, "remedies": remedies}));
     }
 
     #[test]

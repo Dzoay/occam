@@ -1,0 +1,4 @@
+# The page `just web-build` builds here, which the `occam` binary embeds when it is built. Only this file is committed;
+# where nothing else is here, the binary embeds the stub page that names the recipe.
+*
+!.gitignore

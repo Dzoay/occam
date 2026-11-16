@@ -1,7 +1,8 @@
 //! Source: original
 //! The session's meshes: one answer per face in the one JSON form and in words; after a run, only the faces it touched
 //! meshed again and the rest kept bit for bit; a face refused answered with its report and an edge refused reported;
-//! limits that are not positive refused by name.
+//! limits that are not positive refused by name; and ranges of faces meshed alone, which laid end to end are the whole
+//! mesh.
 
 use occam_math::Exec;
 use occam_report::Code;
@@ -120,4 +121,44 @@ fn a_mesh_whose_faces_all_meshed_is_not_ok_while_it_carries_a_report() {
     let refused = cube().mesh(&Exec::serial(), -1.0, 0.35).unwrap_err();
     meshed.reports.extend(refused);
     assert!(!meshed.ok(), "every face meshed, but a report stands");
+}
+
+#[test]
+fn a_session_meshes_ranges_of_its_faces_that_laid_end_to_end_are_its_whole_mesh() {
+    let mut session = cube();
+    let bolt = json!([{"op": "cylinder", "radius": 4, "height": 10, "frame": {"origin": [20, 0, 0]}}]);
+    assert!(session.run(&request(&bolt)).0.failed.is_none());
+    assert_eq!(session.face_count(), 10);
+    let parts: Vec<crate::Meshed> = [0..3, 3..7, 7..12, 12..15]
+        .into_iter()
+        .map(|range| session.mesh_part(&Exec::serial(), 0.1, 0.35, range).unwrap())
+        .collect();
+    let whole = session.mesh(&Exec::serial(), 0.1, 0.35).unwrap();
+    let ids = |meshed: &crate::Meshed| meshed.faces.iter().map(|(id, _)| id.text()).collect::<Vec<_>>();
+    assert_eq!(parts.iter().map(ids).collect::<Vec<_>>().concat(), ids(&whole), "each face once, in id order");
+    assert!(parts[3].faces.is_empty() && parts[3].buffers.vertices() == 0, "a range past the last face");
+    let joined = |numbers: fn(&crate::Buffers) -> &Vec<f64>| -> Vec<u64> {
+        parts.iter().flat_map(|part| numbers(&part.buffers).iter().map(|x| x.to_bits())).collect()
+    };
+    let bits = |numbers: &[f64]| numbers.iter().map(|x| x.to_bits()).collect::<Vec<u64>>();
+    assert_eq!(joined(|b| &b.positions), bits(&whole.buffers.positions));
+    assert_eq!(joined(|b| &b.normals), bits(&whole.buffers.normals));
+    assert_eq!(joined(|b| &b.uvs), bits(&whole.buffers.uvs));
+    let indices: Vec<u32> = parts.iter().flat_map(|part| part.buffers.indices.clone()).collect();
+    assert_eq!(indices, whole.buffers.indices, "each counted from its block, so unchanged");
+    let second = json_of(&parts[1].json(None));
+    assert_eq!(second["answers"][0]["entity"], "face:3/1");
+    let first = json!({"vertices": {"first": 0, "count": 4}, "triangles": {"first": 0, "count": 2}, "capped": false, "kept": false});
+    assert_eq!(second["answers"][0]["mesh"], first, "numbered from the part's own start");
+    assert!(parts.iter().all(crate::Meshed::ok), "each part watertight as far as it reaches");
+    let refused = session.mesh_part(&Exec::serial(), 0.1, 0.0, 0..10).unwrap_err();
+    assert_eq!(refused.iter().map(|r| r.code).collect::<Vec<_>>(), [Code::LimitNotPositive]);
+}
+
+#[test]
+fn a_session_with_no_model_has_no_faces_and_meshes_none_in_any_range() {
+    let session = Session::new(Encoding::Binary);
+    assert_eq!(session.face_count(), 0);
+    let part = session.mesh_part(&Exec::serial(), 0.1, 0.35, 0..64).unwrap();
+    assert!(part.ok() && part.faces.is_empty() && part.buffers.vertices() == 0);
 }

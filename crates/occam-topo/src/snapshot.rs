@@ -138,6 +138,23 @@ impl Visit for Listing<'_> {
     }
 }
 
+/// Lists the live entities of a kind whose records another model does not hold as they are.
+struct Written<'a> {
+    now: &'a Model,
+    before: &'a Model,
+}
+
+impl Visit for Written<'_> {
+    type Out = Vec<EntityRef>;
+
+    fn visit<K: Kind>(self) -> Vec<EntityRef> {
+        let before = K::table(self.before);
+        let records = K::table(self.now).records();
+        let written = records.filter(|&(slot, generation, record)| before.live(slot, generation) != Some(record));
+        written.map(|(slot, generation, _)| Id::<K>::new(slot, generation).entity()).collect()
+    }
+}
+
 /// Lists what an entity's record links to.
 struct Linked<'a> {
     model: &'a Model,
@@ -272,6 +289,17 @@ impl Snapshot {
             None => Err(stale(entity, table.live_generation(entity.slot))),
         }
     }
+
+    /// The live entities here whose records `before` does not hold as they are, kind by kind in the order
+    /// [`EntityKind::ALL`] lists them, each kind in slot order: those made since, in a slot `before` held free or with
+    /// another generation, and those given another record. It is what the edits from `before` to this created or
+    /// changed, read from the two models alone and by content, so an entity written again as it was is not among them:
+    /// what a page that drew `before` must take as touched when it is given this.
+    #[must_use]
+    pub fn written_since(&self, before: &Self) -> Vec<EntityRef> {
+        let written = |&kind| dispatch(kind, Written { now: &self.model, before: &before.model });
+        EntityKind::ALL.iter().filter_map(written).flatten().collect()
+    }
 }
 
 #[cfg(test)]
@@ -378,6 +406,28 @@ mod tests {
             snapshot.resolve_entity(section).map_err(|r| (r.code, live_value(&r))),
             Err((Code::StaleId, Some(0.0)))
         );
+    }
+
+    #[test]
+    fn what_was_written_since_is_each_entity_made_or_given_another_record_read_by_content() {
+        let mut before = Snapshot::empty(tolerance());
+        let ids: Vec<Id<Vertex>> = (0..4).map(|k| add(&mut before, f64::from(k))).collect();
+        let mut after = before.clone();
+        remove(&mut after, ids[1]);
+        let reused = add(&mut after, 1.0);
+        let made = add(&mut after, 7.0);
+        let table = Vertex::table_mut(&mut after.model);
+        *table.live_mut(ids[2].slot(), ids[2].generation()).unwrap() = vertex(5.0);
+        *table.live_mut(ids[3].slot(), ids[3].generation()).unwrap() = vertex(3.0);
+        let entities = |ids: &[Id<Vertex>]| ids.iter().map(|id| id.entity()).collect::<Vec<_>>();
+        assert_eq!(
+            after.written_since(&before),
+            entities(&[reused, ids[2], made]),
+            "a slot reused, even with the record it held, a record changed, and one made; not one written as it was"
+        );
+        assert_eq!(after.written_since(&after), [], "nothing since itself");
+        assert_eq!(before.written_since(&after), entities(&[ids[1], ids[2]]), "the other way round");
+        assert_eq!(after.written_since(&Snapshot::empty(tolerance())), after.entities(EntityKind::Vertex));
     }
 
     #[test]

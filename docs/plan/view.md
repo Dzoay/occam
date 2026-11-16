@@ -58,35 +58,6 @@ detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes af
 
 ## Steps
 
-### `view.workers`
-
-`occam`'s `Session` made real and wrapped by `occam-wasm`. One editing worker holds the model, runs requests and
-publishes the binary twin after each edit. A pool of mesh workers, kept alive between requests, each loads its own
-copy and meshes ranges of faces, about 64 calls a job, transferring flat arrays back. No wasm runs on the page's main
-thread, and the page needs no COOP or COEP headers.
-
-*Failing test first:* in headless Chromium, a request run in the editing worker is meshed by four workers to the
-native mesher's hash; a failing face is named and the rest arrive; the main thread never loads the module.
-
-### `view.live`
-
-`occam view --model part.occam`: [the live view's server](../architecture/live-view.md#the-server), in `occam-cli`, on axum
-and tokio. [The agent starts it](../decisions/2026-11-14-the-agent-starts-the-viewer.md): the command starts the
-server as a process of its own, prints the page's address and returns, and a state file beside the model keeps one
-server per model; `--status` and `--stop` answer for it, and it stops itself when no page has been open for an hour.
-It serves the page with its built files inside the binary, on `127.0.0.1` behind a token, sends the model as the
-binary twin, and polls the model file, sending the page an event with the new digest when a change reads whole. The
-page fetches the model again and meshes only the faces that changed. A file that is not a model, or vanishes, is a
-named report in the page and on the command line, and the server keeps watching. A recipe builds the page into the
-directory the binary embeds; a plain `cargo build` embeds a stub page that names the recipe.
-
-*Failing test first:* in headless Chromium against `occam view`, the page draws a model; an `occam run` that adds a
-cylinder reaches the page, which meshes only the cylinder's faces; a half-written file is not drawn; a request without
-the token is refused; a model file replaced by garbage gives the report and the last good model stays drawn. On the
-command line, `occam view` returns once the server listens; a second `occam view` on the same model prints the same
-address and starts nothing; `--stop` stops it and `--status` then says none runs; a state file left by a killed server
-is replaced; and a build without the recipe serves the stub page.
-
 ### `view.select`
 
 `occam-mesh` picks against the CPU mesh, never GPU output. A ray, built in `f64` from the page's origin and camera, is

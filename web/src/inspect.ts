@@ -4,6 +4,8 @@
 
 import type { Gpu } from "./gpu.ts";
 import type { Mesh, Vec3 } from "./mesh.ts";
+import type { Call, Failed, Meshing } from "./pool.ts";
+import type { KernelReport } from "./protocol.ts";
 import { type Code, REMEDIES, type RemedyKind, TEMPLATES } from "./report.ts";
 import type { Piece } from "./uploads.ts";
 import type { Viewer } from "./viewer.ts";
@@ -27,7 +29,40 @@ export interface ReportEntry {
   readonly remedyText: string | null;
 }
 
+/** What the page's kernel gives the inspector. */
+export interface KernelApi {
+  /** Runs a request in the editing worker and shows the model it made once the pool has meshed it. */
+  run(request: string): Promise<[string, Meshing | null]>;
+  /** The calls the last model was cut into, and which worker meshed each. */
+  calls(): readonly Call[];
+  readonly workers: number;
+  /** What the page following `occam view` has drawn, if it follows one. */
+  live(): Following | null;
+}
+
+/** What a page following `occam view` has drawn: the digest of the model drawn last, and how many it has drawn. */
+export interface Following {
+  readonly digest: string | null;
+  readonly models: number;
+}
+
+/** What a request gave, as the tests read it. */
+export interface Followed {
+  /** The run's one JSON form. */
+  readonly ran: string;
+  /** Whether a model it made was meshed and shown, what refused any of it, and why any call failed. */
+  readonly shown: boolean;
+  readonly reports: readonly KernelReport[];
+  readonly failed: readonly Failed[];
+}
+
 export interface InspectorApi {
+  /** Runs `request` in the editing worker and resolves once the model it made, if any, is meshed and shown. */
+  run(request: string): Promise<Followed>;
+  calls(): Call[];
+  workers(): number;
+  /** What the page following `occam view` has drawn, or null on a page no server follows. */
+  live(): Following | null;
   show(mesh: Mesh): void;
   select(ids: readonly string[]): void;
   mesh(): Mesh | null;
@@ -120,10 +155,17 @@ export class Inspector {
     this.pieces.push(piece);
   };
 
-  install(viewer: Viewer, gpu: Gpu): void {
+  install(viewer: Viewer, gpu: Gpu, kernel: KernelApi): void {
     const { device } = gpu;
     device.addEventListener("uncapturederror", (event) => this.uncaught.push(event.error.message));
     window.occamViewer = {
+      run: async (request) => {
+        const [ran, meshed] = await kernel.run(request);
+        return { ran, shown: meshed !== null, reports: meshed?.reports ?? [], failed: meshed?.failed ?? [] };
+      },
+      calls: () => kernel.calls().map((call) => ({ ...call })),
+      workers: () => kernel.workers,
+      live: () => kernel.live(),
       show: (mesh) => viewer.show(mesh),
       select: (ids) => viewer.select(ids),
       mesh: () => viewer.mesh,

@@ -74,10 +74,13 @@ fmt:
 web-deps:
     if [ ! web/node_modules/.package-lock.json -nt web/package-lock.json ]; then npm ci --prefix web --no-audit --no-fund; fi
 
-# Build the viewer with esbuild into web/dist, or the directory given: `just web-build <directory>`
+# Build the viewer with esbuild into crates/occam-cli/page, which `occam` embeds as `occam view`'s page when next built, or into the directory given; its workers' kernel is occam-wasm, built for the browser with simd128
+[env("CARGO_TARGET_DIR", target)]
 [group('build')]
 web-build *args: web-deps
-    node web/build.mjs "$@"
+    CARGO_TARGET_DIR="$CARGO_TARGET_DIR/simd" RUSTFLAGS="-Ctarget-feature=+simd128" cargo build --quiet -p occam-wasm --release --target wasm32-unknown-unknown
+    wasm-bindgen --target web --out-dir "$CARGO_TARGET_DIR/occam-web" "$CARGO_TARGET_DIR/simd/wasm32-unknown-unknown/release/occam_wasm.wasm"
+    OCCAM_WASM_JS="$CARGO_TARGET_DIR/occam-web" node web/build.mjs "$@"
 
 # Type-check docs/sketch, the compiled sketch of the seams in docs/ARCHITECTURE.md, which no workspace build includes
 [env("CARGO_TARGET_DIR", target)]
@@ -103,14 +106,15 @@ clippy:
 web-check: web-deps
     web/node_modules/.bin/tsc --noEmit -p web
 
-# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, and its reports against the catalogue
+# The viewer's tests in headless Chromium on its software adapter, asserting buffers, not pixels, its reports against the catalogue, its workers' meshes against the native `occam mesh`, and the page `occam view` serves, built in, following the model file
 [env("CARGO_TARGET_DIR", target)]
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
 [group('gates')]
 web-test: web-build
     mkdir -p "$CARGO_TARGET_DIR"
     cargo run --quiet -p occam-report --example catalogue > "$CARGO_TARGET_DIR/occam-catalogue.json"
-    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" node --test --test-timeout=300000 web/test/viewer.test.mjs
+    cargo build --quiet -p occam-cli
+    OCCAM_CATALOGUE="$CARGO_TARGET_DIR/occam-catalogue.json" OCCAM="$CARGO_TARGET_DIR/debug/occam" node --test --test-timeout=300000 web/test/viewer.test.mjs
 
 # What headless Chromium gives the viewer's tests: its WebGPU adapter, its GPU status, and whether a read-back works
 [env("OCCAM_WEBGPU_FLAGS", webgpu_flags)]
@@ -195,6 +199,13 @@ corpus-fetch *args:
 [group('corpus')]
 corpus-test *args:
     python3 -B -m unittest discover -s tools/corpus/tests -t tools/corpus "$@"
+
+# Intersection's hits on every corpus case's operands, the box test against the unculled scan by digest, printing the
+# totals. Minutes in a debug build, so nightly, not per PR (docs/PLAN.md section 5)
+[env("CARGO_TARGET_DIR", target)]
+[group('corpus')]
+corpus-hits *args:
+    cargo nextest run -p occam-verify --test corpus_hits --run-ignored only --no-capture "$@"
 
 # Regenerate tools/corpus/imported from a clone of arris at the locked commit, taking only what the per-case gate allows
 [group('corpus')]

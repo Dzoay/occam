@@ -45,6 +45,10 @@ and `occam-wasm` gives them as typed arrays.
 - **After an edit,** [`remesh`](../../crates/occam-mesh/src/remesh.rs) meshes only what the edit touched, read from
   what its `Changes` say it created or changed. Every other face keeps its block bit for bit, and the result is the
   mesh the model gives meshed whole.
+- **In parts,** as the [mesh workers](browser.md) mesh a model, [`mesh_part`](../../crates/occam-mesh/src/part.rs)
+  meshes some faces alone. Each edge they use takes the step every face along it asks, so their blocks are the whole
+  mesh's bit for bit. A part is checked watertight as far as it reaches: along an edge to a face outside it, a segment
+  may be used once.
 
 ```mermaid
 flowchart LR
