@@ -97,6 +97,14 @@ pub(crate) fn around(point: Point<World>) -> Bounds {
     Bounds::around(point, Length::from_millimetres(EVALUATED * size))
 }
 
+/// Whether `child`, the box of a half of what `parent` boxed, shrank: by a sixteenth of its size at least. A family's
+/// box halves with its piece, or close to it; one that keeps more, as a B-spline's keeps a knot span's whole height
+/// over a patch of no width across it, tells no more when its piece is halved again.
+pub(crate) fn shrank(parent: &Bounds, child: &Bounds) -> bool {
+    let size = |b: &Bounds| (b.high().to_vec3() - b.low().to_vec3()).norm();
+    size(child) <= size(parent) * (15.0 / 16.0)
+}
+
 /// `bounds` grown by what an evaluated point of it may be off by ([`around`]), for a curve that was moved, whose own
 /// box does not know the move's rounding.
 pub(crate) fn padded(bounds: &Bounds) -> Bounds {

@@ -398,3 +398,13 @@ fn a_span_halved_to_the_doubles_resolution_is_halved_no_further() {
     let codes: Vec<Code> = got.failures.iter().map(|r| r.code).collect();
     assert_eq!(codes, [Code::Undecided, Code::Undecided], "{got:?}");
 }
+
+#[test]
+fn a_crossing_of_a_patch_whose_box_barely_shrinks_is_found() {
+    // A patch of the saddle with no width in v: its box keeps the whole knot span's height in v, so halving it in u
+    // shrinks the box less and less, and never to a leaf's size.
+    let through = segment(&Placement::identity(), v(-10.0, 0.0, -0.1), v(1.0, 0.0, 0.01), 20.0);
+    let got = scan(through.as_ref(), span(0.0, 20.0), &saddle(), patch((0.0, 0.5), (1.0, 0.5)), tol(), BUDGET);
+    found(&got, (1, 0, 0));
+    hit_at(&got.crossings[0], 10.0 * (1.0 + 1e-4_f64).sqrt(), &saddle());
+}

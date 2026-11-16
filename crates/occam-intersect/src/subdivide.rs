@@ -2,8 +2,8 @@
 //! A curve against a surface that presents no analytic form: the span and the patch are subdivided together by their
 //! bounds, the families' own. A pair of pieces whose boxes do not come within the band of each other is dropped, and the
 //! larger of the two is halved until both are small, a sixty-fourth of the first pair's larger box. A side whose box
-//! comes back from halving the same as before, as a B-spline's does inside a knot span, is not halved again: smaller
-//! pieces would not be told apart. On each leaf, Gauss-Newton runs from
+//! comes back from halving all but a sixteenth as large as before is not halved again: smaller pieces would not be
+//! told apart. On each leaf, Gauss-Newton runs from
 //! its middle for the nearest pair of points of the curve and the surface, and a pair found inside its leaf, within
 //! the band of each other, is a hit: a crossing where the curve meets the surface at more than the angle tolerance, a
 //! contact where it is tangent. The ends of the span are tested by the surface's foot of their points, and an end on
@@ -20,7 +20,7 @@ use occam_math::{Interval, Side, Verdict, sin};
 use occam_report::Quantity;
 use occam_units::{Bounds, UvPoint, Vec3};
 
-use crate::distance::{Spread, judge};
+use crate::distance::{Spread, judge, shrank};
 use crate::hits::{Kind, Sink, Span};
 use crate::methods::{Spent, Work};
 
@@ -140,8 +140,8 @@ fn leaves(span: Span, work: &mut Work, sink: &mut Sink<'_>, found: &mut Vec<Foun
             continue;
         }
         let settled = match (cell.halved, cell.parents) {
-            (Halved::Span, Some((was, _))) => (cell.stuck.0 || was == pair.0, cell.stuck.1),
-            (Halved::Patch, Some((_, was))) => (cell.stuck.0, cell.stuck.1 || was == pair.1),
+            (Halved::Span, Some((was, _))) => (cell.stuck.0 || !shrank(&was, &pair.0), cell.stuck.1),
+            (Halved::Patch, Some((_, was))) => (cell.stuck.0, cell.stuck.1 || !shrank(&was, &pair.1)),
             _ => cell.stuck,
         };
         let cell = Cell { stuck: settled, ..cell };
