@@ -4,8 +4,8 @@
 //! P9's integer grid failed three of its 48 cases, the hole 1e-7 from an arc and the edges of 1e-8 and 1e-10, which the
 //! exact predicates mesh; its holes under a chord are cured by repair, cutting only the edges that collided. The
 //! forty-eighth case, P9's bicubic patch with a collapsed row, is a spline construction cannot make, so occam-mesh
-//! meshes it in its own tests; and the plate with 1,024 holes takes minutes in a debug build, most of them
-//! construction's, so it runs nightly (`just mesh-holes`).
+//! meshes it in its own tests; and the plate with 1,024 holes takes about a minute in a debug build, half of it the
+//! checker's and a third the mesher's, every hole alike, so it runs nightly (`just mesh-holes`).
 
 use core::f64::consts::{FRAC_1_SQRT_2, PI};
 
@@ -404,7 +404,7 @@ fn holes_under_a_chord_mesh_watertight_once_repair_cuts_the_edges_that_collided_
 }
 
 #[test]
-#[ignore = "minutes in a debug build, most of them construction's, so it runs nightly: `just mesh-holes`"]
+#[ignore = "about a minute in a debug build, so it runs nightly: `just mesh-holes`"]
 fn a_plate_with_1024_holes_meshes_watertight_within_its_deflection() {
     meshes([holes()]);
 }

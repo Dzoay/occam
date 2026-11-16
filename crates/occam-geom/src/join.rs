@@ -13,7 +13,7 @@ use occam_units::{Length, Tolerance, Vec3};
 
 use crate::curve::Curve;
 use crate::domain::ParamRange;
-use crate::nearest::nearest_by;
+use crate::nearest::{Grid, nearest_in};
 use crate::param_curve::ParamCurve;
 use crate::surface::Surface;
 
@@ -76,16 +76,18 @@ fn largest(
         let point = curve.point(s).to_vec3();
         Worst { gap: gap(on_face(t), point), at: s, point }
     });
+    // Each curve read once at the ends of a search's pieces, for all of its feet.
+    let (along_edge, along_face) = (Grid::of(&edge_jet, (edge.lo, edge.hi)), Grid::of(&face_jet, (face.lo, face.hi)));
     let to_edge = fractions().map(|f| {
         let q = on_face(lerp(face.lo, face.hi, f));
-        let s = nearest_by(edge_jet, q, (edge.lo, edge.hi));
+        let s = nearest_in(&along_edge, &edge_jet, q);
         let point = curve.point(s).to_vec3();
         Worst { gap: gap(q, point), at: s, point }
     });
     let to_face = fractions().map(|f| {
         let s = lerp(edge.lo, edge.hi, f);
         let point = curve.point(s).to_vec3();
-        let t = nearest_by(face_jet, point, (face.lo, face.hi));
+        let t = nearest_in(&along_face, &face_jet, point);
         Worst { gap: gap(on_face(t), point), at: s, point }
     });
     let first = Worst { gap: 0.0, at: edge.lo, point: curve.point(edge.lo).to_vec3() };

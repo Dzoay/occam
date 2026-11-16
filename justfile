@@ -215,7 +215,7 @@ corpus-test *args:
 corpus-hits *args:
     cargo nextest run -p occam-verify --test corpus_hits --run-ignored only --no-capture "$@"
 
-# The mesher's adversarial catalogue's slow case, P9's plate with 1,024 holes: minutes in a debug build, so nightly
+# The mesher's adversarial catalogue's slow case, P9's plate with 1,024 holes: about a minute in a debug build, so nightly
 [env("CARGO_TARGET_DIR", target)]
 [group('test')]
 mesh-holes *args:
