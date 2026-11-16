@@ -3,10 +3,11 @@
 // uneven faces balance and no call runs long. The parts come back as transferred flat arrays and are laid end to end in
 // id order, each numbered from its own start, so no index is rewritten. That assembly is display-only: each call's
 // output is deterministic, and the parts laid end to end are the buffers `occam mesh` gives the same model. A model
-// that follows another may mesh only some of its faces, the rest keeping the blocks the last one gave them.
+// that follows another may mesh only some of its faces, the rest keeping the blocks the last one gave them. A pick, or
+// the samples of edges to outline, is asked of one worker, which meshes the model whole once to answer.
 
 import type { FaceRange, Mesh } from "./mesh.ts";
-import type { FromMesher, KernelReport, Part, ToMesher } from "./protocol.ts";
+import type { Answer, Ask, FromMesher, KernelReport, Part, ToMesher } from "./protocol.ts";
 
 /** About how many calls a job is cut into (P10). */
 export const CALLS = 64;
@@ -148,9 +149,15 @@ class Job {
   }
 }
 
+/** An ask as the page makes it: everything but its number and the model it is of, which the pool gives. */
+type Asking = Ask extends infer A ? A extends Ask ? Omit<A, "ask" | "model"> : never : never;
+
 export class Pool {
   /** The calls the last job was cut into, and which worker meshed each, for the inspector. */
   last: readonly Call[] = [];
+  /** The asks not yet answered, by number, each with the worker asked. */
+  private readonly asked = new Map<number, { readonly worker: number; readonly resolve: (answer: Answer) => void }>();
+  private asks = 0;
   private readonly workers: Worker[];
   /** The model and call each worker is meshing, or null when it is free. */
   private readonly busy: (readonly [model: number, call: number] | null)[];
@@ -172,6 +179,11 @@ export class Pool {
 
   get size(): number {
     return this.workers.length;
+  }
+
+  /** The number of the model the workers were given last, which an ask is of: 0 before the first. */
+  get current(): number {
+    return this.model;
   }
 
   /**
@@ -200,6 +212,20 @@ export class Pool {
     });
   }
 
+  /**
+   * Asks the first worker that has not stopped about the model it was given last: what a ray hits, or the samples of
+   * some edges. Every worker holds that model, but asking one alone keeps one mesh of it for picking.
+   */
+  ask(asking: Asking): Promise<Answer> {
+    const k = this.stopped.findIndex((reason) => reason === null);
+    const ask = (this.asks += 1);
+    if (k < 0) return Promise.resolve({ kind: "unanswered", ask, reason: this.stopped[0] ?? "there are no mesh workers" });
+    return new Promise((resolve) => {
+      this.asked.set(ask, { worker: k, resolve });
+      this.post(this.workers[k], { ...asking, ask, model: this.model } as Ask);
+    });
+  }
+
   private post(worker: Worker, message: ToMesher, transfer: Transferable[] = []): void {
     worker.postMessage(message, transfer);
   }
@@ -223,6 +249,11 @@ export class Pool {
   }
 
   private answered(k: number, message: FromMesher): void {
+    if (message.kind === "picked" || message.kind === "sampled" || message.kind === "unanswered") {
+      this.asked.get(message.ask)?.resolve(message);
+      this.asked.delete(message.ask);
+      return;
+    }
     this.busy[k] = null;
     const job = this.job;
     if (job && message.model === job.model) {
@@ -239,6 +270,11 @@ export class Pool {
   /** Worker `k` stopped, for `reason`: the call it was meshing fails, and the rest go to the others. */
   private stop(k: number, reason: string): void {
     this.stopped[k] = reason;
+    for (const [ask, { worker, resolve }] of this.asked) {
+      if (worker !== k) continue;
+      this.asked.delete(ask);
+      resolve({ kind: "unanswered", ask, reason });
+    }
     const [job, busy] = [this.job, this.busy[k]];
     this.busy[k] = null;
     if (job && busy && busy[0] === job.model) this.fail(job, busy[1], reason);

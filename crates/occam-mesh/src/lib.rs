@@ -24,7 +24,8 @@
 //! an edge whose samples changed; the rest keep their blocks bit for bit. [`mesh_part`] meshes some of a model's faces
 //! alone, as a mesh worker in the browser meshes a range of them: each block the whole mesh's bit for bit, and the part
 //! checked watertight as far as it reaches. [`again`] says what a page that drew one model must mesh again to draw
-//! the next, from the two models alone.
+//! the next, from the two models alone. A [`Picker`] is built with a mesh to pick it: a [`Ray`] hits the nearest face
+//! or an edge within a tolerance, decided against the CPU mesh alone and the same on every target.
 //!
 //! The work runs in parallel only through [`occam_math::Exec`], one face or one edge a task, and every result comes back
 //! in id order, so the samples and the meshes are the same bits at any thread count.
@@ -39,6 +40,7 @@ mod faces;
 mod limits;
 mod merge;
 mod part;
+mod pick;
 mod predicates;
 #[cfg(any(test, feature = "determinism"))]
 #[doc(hidden)]
@@ -62,5 +64,6 @@ pub use faces::{FaceMesh, Faces, Side, mesh_face, mesh_faces};
 pub use limits::Limits;
 pub use merge::{Block, Mesh, merge, mesh};
 pub use part::mesh_part;
+pub use pick::{Hit, Picker, Ray};
 pub use remesh::{Remeshed, remesh};
 pub use watertight::watertight;

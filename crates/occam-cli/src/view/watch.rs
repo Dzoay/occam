@@ -8,9 +8,9 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use occam::{Code, Encoding, Fault, Input, Remedy, RemedyKind, Report, Session};
+use occam::{Code, Encoding, Fault, Input, Remedy, RemedyKind, Report, Selection, Session};
 
-use crate::commands::{exec, not_read};
+use crate::commands::{beside, exec, not_read};
 
 /// A model that read whole: its digest, and its bytes as the binary twin, which the page loads.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,6 +77,15 @@ impl Watcher {
             Err(_) => None,
         }
     }
+}
+
+/// The selection and the highlight beside `model`, each in its one JSON form, or that of none where its file is not
+/// there or holds no selection: what the page is sent.
+pub fn marks(model: &Path) -> [String; 2] {
+    [".selection", ".highlight"].map(|suffix| {
+        let read = std::fs::read_to_string(beside(model, suffix)).ok();
+        read.and_then(|text| Selection::from_json(&text)).map_or_else(Selection::none_json, |marked| marked.json())
+    })
 }
 
 /// What a look sees of `model`.

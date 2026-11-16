@@ -3,7 +3,7 @@
 
 import type { KernelReport } from "./protocol.ts";
 import type { Report } from "./report.ts";
-import { failure, notice, refusals, selection, status, watched } from "./state.ts";
+import { failure, highlight, notice, refusals, refusedSelection, selection, status, watched } from "./state.ts";
 
 export interface Actions {
   fit(): void;
@@ -85,6 +85,37 @@ function Watched({ reports }: { reports: readonly KernelReport[] }) {
   );
 }
 
+/** The ids `ids`, each to be copied whole, named `label` and marked as `kind`. */
+function Ids({ ids, label, kind }: { ids: readonly string[]; label: string; kind: string }) {
+  return (
+    <p class={kind} data-ids={ids.join(" ")}>
+      {label}
+      {ids.map((id) => <code key={id}>{id}</code>)}
+    </p>
+  );
+}
+
+/**
+ * What is selected, each id as the model names it so that a person can copy it, what the agent highlights, and why
+ * the server refused the last selection posted, if it did.
+ */
+function Marked() {
+  const [selected, shown, refused] = [selection.value, highlight.value, refusedSelection.value];
+  if (selected.length === 0 && shown.length === 0 && !refused) return null;
+  return (
+    <div class="marked" role="status" aria-label="Selection">
+      {selected.length > 0 && <Ids ids={selected} label="Selected" kind="selected" />}
+      {shown.length > 0 && <Ids ids={shown} label="Highlighted" kind="highlighted" />}
+      {refused && (
+        <section class="report selection" data-code={refused.code}>
+          <p class="code">{refused.code}</p>
+          <p class="message">{refused.message}</p>
+        </section>
+      )}
+    </div>
+  );
+}
+
 /** The controls over the drawing, or, when the page cannot draw, the report in its place. */
 export function App({ actions }: { actions: Actions | null }) {
   const failed = failure.value;
@@ -95,6 +126,7 @@ export function App({ actions }: { actions: Actions | null }) {
   return (
     <>
       {actions && <Controls actions={actions} />}
+      {actions && <Marked />}
       {unread.length > 0 && <Watched reports={unread} />}
       {shown && <Shown shown={shown} kind="notice" />}
       {refused.length > 0 && <Refusals reports={refused} />}

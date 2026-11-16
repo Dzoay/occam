@@ -9,11 +9,13 @@ use std::path::{Path, PathBuf};
 use clap::error::{ContextKind, ContextValue, Error, ErrorKind};
 use clap::{CommandFactory, Parser};
 use occam::{
-    Answered, Code, DisplayUnits, DistanceQuery, Encoding, Exec, Failed, Fault, Input, Ran, Report, Session,
-    distance_json, ran_json, ran_words,
+    Answered, Code, DisplayUnits, DistanceQuery, Encoding, Exec, Failed, Fault, Input, Pick, Ran, Report, Selection,
+    Session, distance_json, ran_json, ran_words,
 };
 
-use crate::args::{Cli, Command, DistanceArgs, IdsArgs, ListArgs, MeshArgs, ModelArgs, RunArgs, kind};
+use crate::args::{
+    Cli, Command, DistanceArgs, HighlightArgs, IdsArgs, ListArgs, MeshArgs, ModelArgs, PickArgs, RunArgs, kind,
+};
 #[cfg(not(target_family = "wasm"))]
 use crate::view::view;
 
@@ -64,7 +66,10 @@ fn command(command: Command, json: bool) -> Said {
         Command::Describe(args) => ids(&args, json, Session::describe, Answered::Described),
         Command::Check(args) => check(&args, json),
         Command::Mesh(args) => mesh(&args, json),
+        Command::Pick(args) => pick(&args, json),
         Command::Distance(args) => distance(&args, json),
+        Command::Selection(args) => selection(&args, json),
+        Command::Highlight(args) => highlight(&args, json),
         #[cfg(not(target_family = "wasm"))]
         Command::View(args) => view(&args, json),
     }
@@ -203,7 +208,7 @@ fn session(path: &Path, binary: bool) -> Result<Session, Vec<Report>> {
 }
 
 /// Writes `bytes` to `path`, given as `parameter`, whole or not at all, through a file beside it.
-fn write(parameter: &str, path: &Path, bytes: &[u8]) -> Result<(), Report> {
+pub fn write(parameter: &str, path: &Path, bytes: &[u8]) -> Result<(), Report> {
     let writing = beside(path, ".writing");
     let written = std::fs::write(&writing, bytes).and_then(|()| std::fs::rename(&writing, path));
     written.map_err(|_| {
@@ -218,9 +223,12 @@ fn run(args: &RunArgs, json: bool) -> Said {
     let read = std::fs::read_to_string(&args.request).map_err(|_| vec![not_read("REQUEST", &args.request)]);
     let ran = match read.and_then(|request| Ok((request, session(&args.model, args.binary)?))) {
         Ok((request, mut session)) => {
+            let before = session.digest();
             let (mut ran, saved) = session.run(&request);
-            if let Some(Err(report)) = saved.map(|bytes| write("--model", &args.model, &bytes)) {
-                ran.failed = Some(Failed { step: None, reports: vec![report] });
+            match saved.map(|bytes| write("--model", &args.model, &bytes)) {
+                Some(Err(report)) => ran.failed = Some(Failed { step: None, reports: vec![report] }),
+                Some(Ok(())) => follow(&args.model, (before, session.digest()), &mut ran),
+                None => {}
             }
             ran
         }
@@ -228,6 +236,83 @@ fn run(args: &RunArgs, json: bool) -> Said {
     };
     let ok = ran.failed.is_none();
     if json { Said::json(ran_json(&ran), ok) } else { Said::words(ran_words(&ran), ok) }
+}
+
+/// The selection beside `model`, if there is one.
+fn selected(model: &Path) -> Option<Selection> {
+    Selection::from_json(&std::fs::read_to_string(beside(model, ".selection")).ok()?)
+}
+
+/// After a run saved `model`, changing its digest from `before` to `after`: the selection beside it carried over
+/// through the run's changes, if it was made on the model before the run, so that a stale one never looks fresh, and
+/// the highlight cleared, since it named what the run was to change. `ran` says what became of each.
+fn follow(model: &Path, (before, after): (Option<u64>, Option<u64>), ran: &mut Ran) {
+    if let (Some(selection), Some(after)) = (selected(model), after)
+        && before == Some(selection.digest)
+    {
+        let (carried, said) = selection.carried(ran, after);
+        if write("--model", &beside(model, ".selection"), carried.json().as_bytes()).is_ok() {
+            ran.selection = Some(said);
+        }
+    }
+    ran.highlight_cleared = std::fs::remove_file(beside(model, ".highlight")).is_ok();
+}
+
+/// `occam pick`: the model opened and meshed as the viewer's page meshes it, and what the ray hits first.
+fn pick(args: &PickArgs, json: bool) -> Said {
+    let [x, y, z] = args.from;
+    let way = args.towards.map(|[a, b, c]| [a - x, b - y, c - z]);
+    let asked =
+        Pick { from: args.from, direction: args.direction.or(way).unwrap_or_default(), tolerance: args.tolerance };
+    let exec = exec();
+    let opened = open(&args.model.model, &exec);
+    match opened.and_then(|mut session| session.pick(&exec, args.deflection, args.angle, asked)) {
+        Ok(picked) if json => Said::json(picked.json(), picked.ok()),
+        Ok(picked) => Said::words(picked.words(), picked.ok()),
+        Err(reports) => answer(&Answered::Refused(reports), json),
+    }
+}
+
+/// `occam selection`: what the person selected in the viewer's page, described against the model, or refused as
+/// stale if it was made on another model.
+fn selection(args: &ModelArgs, json: bool) -> Said {
+    let session = match open(&args.model, &exec()) {
+        Ok(session) => session,
+        Err(reports) => return answer(&Answered::Refused(reports), json),
+    };
+    let Some(selection) = selected(&args.model) else {
+        return nothing(json, "Nothing is selected in the viewer's page.");
+    };
+    if session.digest() != Some(selection.digest) {
+        return answer(&Answered::Refused(vec![Selection::stale(&args.model.display().to_string())]), json);
+    }
+    answer(&Answered::Described(session.describe(&selection.ids)), json)
+}
+
+/// An answer of no ids, said as `line` in words.
+fn nothing(json: bool, line: &str) -> Said {
+    if json { Said::json(Answered::Described(Vec::new()).json(), true) } else { Said::one(true, line.to_string(), 0) }
+}
+
+/// `occam highlight`: the ids that name something live, written beside the model for the viewer's page, each
+/// described; or, with `--clear`, the highlight removed.
+fn highlight(args: &HighlightArgs, json: bool) -> Said {
+    let file = beside(&args.model.model, ".highlight");
+    if args.clear {
+        let _ = std::fs::remove_file(&file);
+        return nothing(json, "The highlight is cleared.");
+    }
+    let session = match open(&args.model.model, &exec()) {
+        Ok(session) => session,
+        Err(reports) => return answer(&Answered::Refused(reports), json),
+    };
+    let described = session.describe(&args.ids);
+    let live = described.iter().filter(|(_, answer)| answer.is_ok()).map(|(id, _)| *id).collect();
+    let shown = Selection::new(session.digest().unwrap_or_default(), live);
+    if let Err(report) = write("--model", &file, shown.json().as_bytes()) {
+        return answer(&Answered::Refused(vec![report]), json);
+    }
+    answer(&Answered::Described(described), json)
 }
 
 /// `occam mesh`: the model opened and meshed, its buffers written beside it or to `--out`, and how each face meshed.

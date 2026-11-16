@@ -771,3 +771,186 @@ test("a model file replaced by garbage gives the named report, and the last good
     await view.done();
   }
 });
+
+// Picking, the selection and the highlight (docs/architecture/live-view.md#the-page): a click picks in a mesh worker,
+// against the CPU mesh, never anything the GPU drew, and the page draws what is selected and what the agent
+// highlights in a colour each.
+
+/** `construction`'s exit model: the bracket test's plate, and the cylinder its bolt hole is to be cut with, in it. */
+const PLATE = request([
+  { op: "wire", label: "profile", points: [[0, 0, 0], [60, 0, 0], [60, 0, 10], [0, 0, 10]], closed: true },
+  { op: "face", label: "section", outer: "profile" },
+  { op: "extrude", label: "plate", face: "section", vector: [0, 40, 0] },
+  { op: "cylinder", label: "bolt", radius: 4, height: 10, frame: { origin: [30, 20, 0] } },
+]);
+
+/** Where in the window the model's point `point` is drawn, through the camera the page drew with. */
+async function pixelOf(page, point) {
+  await page.evaluate(() => window.occamViewer.settled());
+  const origin = await page.evaluate(() => window.occamViewer.origin());
+  const matrix = await page.evaluate(() => window.occamViewer.readCamera());
+  const [x, y, , w] = project(matrix, point.map((p, axis) => p - origin[axis]));
+  const box = await page.locator("#view").boundingBox();
+  return [box.x + ((x / w + 1) / 2) * box.width, box.y + ((1 - y / w) / 2) * box.height];
+}
+
+/** Counts on `window.mapped` every GPU buffer the page maps from now on. */
+const spyOnMaps = (page) =>
+  page.evaluate(() => {
+    window.mapped = 0;
+    const real = GPUBuffer.prototype.mapAsync;
+    GPUBuffer.prototype.mapAsync = function (...args) {
+      window.mapped += 1;
+      return real.apply(this, args);
+    };
+  });
+
+/** What `check` gives once it gives something, within ten seconds. */
+async function eventually(check) {
+  for (let tries = 0; tries < 200; tries += 1) {
+    const found = await check();
+    if (found) return found;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`never: ${check}`);
+}
+
+/** The value named `name` of a description. */
+const valueOf = (description, name) => description.values.find((value) => value.name === name)?.value;
+
+test("a click on the cylinder's side picks the id occam pick gives for the same ray, maps no GPU buffer, and occam selection describes it", async () => {
+  const view = await viewed(PLATE);
+  try {
+    const page = await following(view);
+    // The cylinder stands inside the plate, so the eye is inside the plate too, 15 mm off the cylinder's axis.
+    await page.evaluate(() => window.occamViewer.look({ target: [30, 20, 5], distance: 15, yaw: Math.PI / 2, pitch: 0 }));
+    const [x, y] = await pixelOf(page, [30, 24, 5]);
+    await spyOnMaps(page);
+    await page.mouse.click(x, y);
+    await page.waitForFunction(() => window.occamViewer.selection().length === 1);
+    assert.equal(await page.evaluate(() => window.mapped), 0, "the pick maps no GPU buffer");
+    const picked = await page.evaluate(() => window.occamViewer.picked());
+    const said = JSON.parse(picked.json);
+    const ray = picked.ray.map(String);
+    const native = await occamJson(["pick", "--model", view.file, "--from", ray.slice(0, 3).join(","),
+      "--direction", ray.slice(3).join(","), "--tolerance", String(said.tolerance)]);
+    assert.equal(native.entity, said.entity, "natively, the id the browser's wasm gave for the same ray");
+    assert.deepEqual([native.point, native.distance], [said.point, said.distance], "the same point, bit for bit");
+    assert.equal(said.digest, view.started.digest, "picked on the model drawn");
+    assert.deepEqual(await page.evaluate(() => window.occamViewer.selection()), [said.entity]);
+    const described = await eventually(async () => {
+      const selected = await occamJson(["selection", "--model", view.file]);
+      return selected.answers?.[0]?.entity === said.entity && selected.answers[0].description;
+    });
+    assert.equal(described.form, "cylinder");
+    assert.equal(valueOf(described, "radius"), 4);
+    await page.evaluate(() => window.occamViewer.settled());
+    const marks = await page.evaluate(() => window.occamViewer.readMarks());
+    assert.equal(marks[said.entity], 1, "drawn as selected");
+    assert.equal(Object.values(marks).filter((mark) => mark !== 0).length, 1, "and nothing else");
+    assert.equal(await page.locator(".marked .selected").getAttribute("data-ids"), said.entity, "its id shown, to copy");
+    await clean(page);
+  } finally {
+    await view.done();
+  }
+});
+
+/** The face of `mesh` whose vertices all have the coordinate along `axis` that is the highest or, with `low`, lowest. */
+function faceOn(mesh, axis, low = false) {
+  const along = (id) => [...block(mesh, id).positions.filter((_, i) => i % 3 === axis)];
+  const all = mesh.faces.flatMap((face) => along(face.id));
+  const side = low ? Math.min(...all) : Math.max(...all);
+  return mesh.faces.find((face) => along(face.id).every((x) => x === side)).id;
+}
+
+/** The middle of face `id` of `mesh`. */
+function middleOf(mesh, id) {
+  const positions = block(mesh, id).positions;
+  return [0, 1, 2].map((axis) => {
+    const values = positions.filter((_, i) => i % 3 === axis);
+    return (Math.min(...values) + Math.max(...values)) / 2;
+  });
+}
+
+test("a click selects the face under it, shift-click adds or removes one, and a click on nothing clears the selection", async () => {
+  const page = await open();
+  const { mesh } = await snapshot(page);
+  const [top, side] = [faceOn(mesh, 2), faceOn(mesh, 0)];
+  const at = { [top]: await pixelOf(page, middleOf(mesh, top)), [side]: await pixelOf(page, middleOf(mesh, side)) };
+  const selected = () => page.evaluate(() => window.occamViewer.selection());
+  const click = async (id, shift = false) => {
+    const before = await page.evaluate(() => window.occamViewer.picked()?.json);
+    const [x, y] = id ? at[id] : [5, 5];
+    if (shift) await page.keyboard.down("Shift");
+    await page.mouse.click(x, y);
+    if (shift) await page.keyboard.up("Shift");
+    await page.waitForFunction((b) => window.occamViewer.picked()?.json !== b, before);
+  };
+  await spyOnMaps(page);
+  await click(top);
+  assert.deepEqual(await selected(), [top], "the face under the click: the camera starts above the cube");
+  await click(side, true);
+  assert.deepEqual(await selected(), [top, side], "shift-click adds");
+  await click(top, true);
+  assert.deepEqual(await selected(), [side], "and removes");
+  assert.equal(await page.evaluate(() => window.mapped), 0, "no pick maps a GPU buffer");
+  await page.evaluate(() => window.occamViewer.settled());
+  const marks = await page.evaluate(() => window.occamViewer.readMarks());
+  assert.deepEqual([marks[top], marks[side]], [0, 1]);
+  await click(null);
+  assert.deepEqual(await selected(), [], "a click on nothing selects nothing");
+  assert.equal(JSON.parse((await page.evaluate(() => window.occamViewer.picked())).json).reports[0].code, "mesh.ray-missed");
+  await clean(page);
+});
+
+test("an occam highlight shows in the page in its own colour, apart from the selection, and a run clears it", async () => {
+  const view = await viewed(CUBE);
+  try {
+    const page = await following(view);
+    await page.evaluate(() => window.occamViewer.select(["face:1/1"]));
+    const shown = await occamJson(["highlight", "--model", view.file, "face:2/1", "edge:0/1"]);
+    assert.equal(shown.ok, true, JSON.stringify(shown));
+    await page.waitForFunction(() => window.occamViewer.highlight().length === 2);
+    await page.waitForFunction(() => window.occamViewer.readLines().then((lines) => lines.edges.length === 1));
+    await page.evaluate(() => window.occamViewer.settled());
+    const marks = await page.evaluate(() => window.occamViewer.readMarks());
+    const want = Object.fromEntries(CUBE_FACES.map((id) => [id, { "face:1/1": 1, "face:2/1": 2 }[id] ?? 0]));
+    assert.deepEqual(marks, want, "the highlight in its colour, the selection in its own");
+    const lines = await page.evaluate(() => window.occamViewer.readLines());
+    assert.deepEqual(lines.edges, ["edge:0/1"], "the edge outlined");
+    assert.ok(lines.vertices.length >= 8 && lines.vertices.every((x, k) => k % 4 !== 3 || x === 2), "in the highlight's colour");
+    assert.equal(await page.locator(".marked .highlighted").getAttribute("data-ids"), "face:2/1 edge:0/1");
+    await runOn(view.file, CYLINDER);
+    await drawn(page, await nextDigest(view.file, view.started.digest));
+    await page.waitForFunction(() => window.occamViewer.highlight().length === 0);
+    await page.evaluate(() => window.occamViewer.settled());
+    const after = await page.evaluate(() => window.occamViewer.readMarks());
+    assert.deepEqual([after["face:1/1"], after["face:2/1"]], [1, 0], "the run cleared the highlight, and the selection stays");
+    assert.deepEqual((await page.evaluate(() => window.occamViewer.readLines())).edges, []);
+    await clean(page);
+  } finally {
+    await view.done();
+  }
+});
+
+test("a selection the page posts for an older model is refused, and the page says so and drops it", async () => {
+  const view = await viewed(CUBE);
+  try {
+    const page = await following(view);
+    await page.evaluate(() => window.occamViewer.select(["face:0/1"]));
+    await page.evaluate(() => window.occamViewer.post("0123456789abcdef", ["face:0/1"]));
+    const shown = page.locator(".marked .report.selection");
+    await shown.waitFor();
+    assert.equal(await shown.getAttribute("data-code"), "view.selection-stale");
+    assert.deepEqual(await page.evaluate(() => window.occamViewer.selection()), [], "dropped, to select again");
+    await page.evaluate((digest) => window.occamViewer.post(digest, ["face:3/1"]), view.started.digest);
+    await shown.waitFor({ state: "detached" });
+    const selected = await occamJson(["selection", "--model", view.file]);
+    assert.deepEqual(selected.answers.map((answer) => answer.entity), ["face:3/1"]);
+    // The browser logs the refusal's status as it logs any it is answered: that one alone is expected.
+    page.errorsSeen = page.errorsSeen.filter((seen) => !/status of 409 \(Conflict\)/.test(seen));
+    await clean(page);
+  } finally {
+    await view.done();
+  }
+});

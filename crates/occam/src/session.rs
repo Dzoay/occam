@@ -21,6 +21,7 @@ pub(crate) use wire::{answer, line};
 
 use crate::describe::{self, Source};
 use crate::mesh::{Again, Meshed, limits};
+use crate::pick::{Pick, Picked, Picking};
 use crate::run::{Failed, Ran};
 
 /// Which of the native format's two encodings a model is saved in.
@@ -68,13 +69,15 @@ pub struct Session {
     encoding: Encoding,
     /// The model's last mesh, and what every run kept since it changed: what the next mesh starts from.
     meshed: Option<(Mesh, Vec<Changes>)>,
+    /// The model's mesh at the limits last picked at, made ready to pick, until the model changes.
+    picking: Option<Box<Picking>>,
 }
 
 impl Session {
     /// A session with no model yet, whose first request makes one, saved in `encoding`.
     #[must_use]
     pub const fn new(encoding: Encoding) -> Self {
-        Self { model: None, encoding, meshed: None }
+        Self { model: None, encoding, meshed: None, picking: None }
     }
 
     /// The model `bytes` hold in either encoding, which it keeps, measured and checked whole on `exec` as `commit`
@@ -87,7 +90,7 @@ impl Session {
     pub fn open(bytes: &[u8], exec: &Exec) -> Result<Self, Vec<Report>> {
         let encoding = if bytes.starts_with(occam_io::MAGIC) { Encoding::Binary } else { Encoding::Json };
         let model = occam_io::load(bytes, exec)?;
-        Ok(Self { model: Some(model), encoding, meshed: None })
+        Ok(Self { model: Some(model), encoding, meshed: None, picking: None })
     }
 
     /// How the model is saved.
@@ -120,6 +123,7 @@ impl Session {
         match self.encode(next) {
             Ok(bytes) => {
                 self.model = Some(next.clone());
+                self.picking = None;
                 if let Some((_, since)) = &mut self.meshed {
                     since.extend(ran.done.iter().map(|done| done.changes.clone()));
                 }
@@ -235,6 +239,52 @@ impl Session {
         let (was, now) = (before.answering(), self.answering());
         let (was, now) = (was.map_err(|report| vec![report])?, now.map_err(|report| vec![report])?);
         Ok(Again::new(exec, &was, &now, limits))
+    }
+
+    /// What the ray `asked` hits first in the model's mesh, made on `exec` to a chordal `deflection` in millimetres
+    /// and an `angle` in radians: the id of the face it crosses first, or of an edge within its tolerance that wins
+    /// over that face, the point hit and how far along the ray; or `mesh.ray-missed`, with a point to aim at. The mesh
+    /// is the one [`Session::mesh`] gives, the same bits at any thread count, and the session keeps it, with its box
+    /// trees, for the next pick at the same limits until the model changes. A session with no model yet picks an
+    /// empty one.
+    ///
+    /// # Errors
+    ///
+    /// `mesh.limit-not-positive` for a deflection or an angle that is not a finite number greater than zero;
+    /// `units.not-finite` for a start or a tolerance that is not finite, `input.no-direction` for a direction that is
+    /// zero or not finite, and `input.negative` for a tolerance below zero.
+    pub fn pick(&mut self, exec: &Exec, deflection: f64, angle: f64, asked: Pick) -> Result<Picked, Vec<Report>> {
+        let (model, picking) = self.picking(exec, deflection, angle)?;
+        picking.pick(&model, asked).map_err(|report| vec![report])
+    }
+
+    /// The samples of `edge` in the model's mesh made on `exec` to a chordal `deflection` in millimetres and an
+    /// `angle` in radians, kept as [`Session::pick`] keeps it: what the page draws a selected or highlighted edge
+    /// through. `None` for an id that is not an edge a face uses, or whose samples were refused.
+    ///
+    /// # Errors
+    ///
+    /// `mesh.limit-not-positive` for a deflection or an angle that is not a finite number greater than zero.
+    pub fn samples(
+        &mut self,
+        exec: &Exec,
+        deflection: f64,
+        angle: f64,
+        edge: EntityRef,
+    ) -> Result<Option<Vec<[f64; 3]>>, Vec<Report>> {
+        let (_, picking) = self.picking(exec, deflection, angle)?;
+        Ok(picking.samples(edge))
+    }
+
+    /// The model, and its mesh at the limits made ready to pick: the one kept if it was made to them.
+    fn picking(&mut self, exec: &Exec, deflection: f64, angle: f64) -> Result<(Snapshot, &Picking), Vec<Report>> {
+        let limits = limits(deflection, angle).map_err(|report| vec![report])?;
+        let model = self.answering().map_err(|report| vec![report])?.into_owned();
+        let kept = self.picking.take().filter(|picking| picking.limits == limits);
+        let digest = self.digest();
+        let made = || Box::new(Picking::new(limits, digest, occam_mesh::mesh(exec, &model, limits)));
+        let picking = self.picking.insert(kept.unwrap_or_else(made));
+        Ok((model, picking))
     }
 
     /// The live ids of each of `kinds`, in the order asked; none of a kind no model holds.

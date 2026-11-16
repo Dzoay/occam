@@ -58,28 +58,6 @@ detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes af
 
 ## Steps
 
-### `view.select`
-
-`occam-mesh` picks against the CPU mesh, never GPU output. A ray, built in `f64` from the page's origin and camera, is
-tested against each face's triangles through a box tree built with the mesh, and against each edge's samples within a
-tolerance the caller gives; the page gives a few pixels at the hit's depth. The nearest hit gives its id, an edge
-winning over its faces within the tolerance, and ties go to the smaller id. `occam pick --json` and `occam-wasm` expose
-it. A ray that hits nothing answers no id, with the reason.
-
-In the page, a click picks in a mesh worker and selects what it hit; shift-click adds or removes. The page posts the
-selection to `occam view`, which writes [the selection file](../architecture/live-view.md#the-selection-file).
-`occam selection` describes it, or calls it stale with a remedy. `occam highlight` writes the highlight file, and the
-page draws those ids in a second colour. `occam run` carries the selection over through its changes and clears the
-highlight.
-
-*Failing test first:* a ray through the centre of each face of a cube picks that face; a ray within the tolerance of an
-edge picks the edge, and one just beyond it the face; the same rays give the same ids at 1 and N threads and on wasm32;
-from JSON alone, an agent test builds `construction`'s exit model, picks the cylinder's side with `occam pick`, and
-`occam describe` of the answer says a cylinder of radius 4. In headless Chromium a click at that face's projected
-centre selects the same id, the pick path maps no GPU buffer, and `occam selection` describes it. A run that copies
-the selected body leaves the selection on the original; a run that deletes it drops it and says so; a selection posted
-for an older model is refused; a highlight shows and a run clears it.
-
 ### `view.agent`
 
 The demo, made a test. A first occam skill, `skills/occam/SKILL.md`, tells an agent what the command's guide does not:

@@ -33,7 +33,12 @@ fn a_port_asked_for_and_in_use_is_taken_and_any_other_bind_error_did_not_start_t
 
 /// What the viewer shows: the model of `digest`, if one read whole, and the reports `refused`.
 fn shown(digest: Option<u64>, refused: &[Report]) -> Shown {
-    Shown { good: digest.map(|digest| (digest, Bytes::new())), refused: refused.to_vec(), stopping: false }
+    Shown {
+        good: digest.map(|digest| (digest, Bytes::new())),
+        refused: refused.to_vec(),
+        stopping: false,
+        marks: Default::default(),
+    }
 }
 
 #[test]
@@ -85,4 +90,16 @@ fn the_watch_ends_at_its_first_look_once_the_viewer_is_stopping() {
     let looking = watch(&app, Watcher::new(app.model.clone()));
     let ended = runtime.block_on(async { tokio::time::timeout(Duration::from_secs(2), looking).await });
     assert!(ended.is_ok(), "it ended, an hour of idle time from stopping by itself");
+}
+
+#[test]
+fn a_page_is_sent_the_selection_then_the_highlight_each_once_until_it_changes() {
+    let mut sent = Sent::default();
+    let mut now = Shown { marks: ["s1".into(), "h1".into()], ..Shown::default() };
+    assert_eq!(sent.marked(&now), Some(("selection", "s1".to_owned())));
+    assert_eq!(sent.marked(&now), Some(("highlight", "h1".to_owned())));
+    assert_eq!(sent.marked(&now), None, "each sent once");
+    now.marks[1] = "h2".into();
+    assert_eq!(sent.marked(&now), Some(("highlight", "h2".to_owned())), "only what changed");
+    assert_eq!(sent.marked(&now), None);
 }

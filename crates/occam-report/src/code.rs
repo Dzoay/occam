@@ -681,6 +681,23 @@ catalogue! {
         "The viewer's server did not stop when asked.",
         "The viewer for {given}, process {pid}, still answered {seconds} seconds after it was asked to stop.",
     }
+
+    /// A ray picked against a model's mesh hits no face that meshed and passes no edge within the tolerance asked.
+    /// Its remedy aims at the centre of a triangle of the mesh, which a ray from the same start then hits.
+    RayMissed = "mesh.ray-missed" {
+        Error, [AimAt],
+        "A ray hits no face of the mesh and passes no edge within the tolerance.",
+        "The ray from {from} hits no face of the model's mesh and passes no edge within {tolerance} of it.",
+    }
+
+    /// The selection beside a model was made on another model than the file holds now: a run changed the model
+    /// after the selection had gone stale, or the page posted it for a model it no longer holds. It names nothing
+    /// until the person selects again.
+    SelectionStale = "view.selection-stale" {
+        Error, [SelectAgain],
+        "The selection was made on another model than the file holds now.",
+        "The selection was made on another model than {given} holds now, so it names nothing: select again.",
+    }
 }
 
 #[cfg(test)]
@@ -1600,6 +1617,44 @@ mod tests {
         ])
     }
 
+    fn selection_codes() -> Value {
+        json!([
+            {
+                "name": "RayMissed",
+                "code": "mesh.ray-missed",
+                "severity": "error",
+                "summary": "A ray hits no face of the mesh and passes no edge within the tolerance.",
+                "template": "The ray from {from} hits no face of the model's mesh and passes no edge within {tolerance} of it.",
+                "remedies": ["aim-at"]
+            },
+            {
+                "name": "SelectionStale",
+                "code": "view.selection-stale",
+                "severity": "error",
+                "summary": "The selection was made on another model than the file holds now.",
+                "template": "The selection was made on another model than {given} holds now, so it names nothing: select again.",
+                "remedies": ["select-again"]
+            }
+        ])
+    }
+
+    fn selection_remedies() -> Value {
+        json!([
+            {
+                "name": "AimAt",
+                "kind": "aim-at",
+                "summary": "Pick again from the same point with --towards at the point given, the centre of a triangle of the mesh.",
+                "parameters": ["point"],
+            },
+            {
+                "name": "SelectAgain",
+                "kind": "select-again",
+                "summary": "Select again in the viewer's page, which draws the model as the file holds it now; ask the person to, if the selection is theirs.",
+                "parameters": [],
+            },
+        ])
+    }
+
     #[test]
     fn the_catalogue_lists_every_code_and_remedy() {
         let value: Value = serde_json::from_str(&catalogue_json().unwrap()).unwrap();
@@ -1625,13 +1680,17 @@ mod tests {
             mesh_codes(),
             view_codes(),
             viewer_codes(),
+            selection_codes(),
         ]
         .into_iter()
         .filter_map(|rows| rows.as_array().cloned())
         .flatten()
         .collect();
-        let remedies: Vec<Value> =
-            [remedies(), viewer_remedies()].into_iter().filter_map(|rows| rows.as_array().cloned()).flatten().collect();
+        let remedies: Vec<Value> = [remedies(), viewer_remedies(), selection_remedies()]
+            .into_iter()
+            .filter_map(|rows| rows.as_array().cloned())
+            .flatten()
+            .collect();
         assert_eq!(value, json!({"schema": 2, "codes": codes, "remedies": remedies}));
     }
 

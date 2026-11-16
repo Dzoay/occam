@@ -75,10 +75,38 @@ The `f64` arrays start on a multiple of eight bytes, so each can be read in plac
 **GPU results are display-only:** never in digests, caches, meshes, picking, measurement, export or the watertight
 check ([the GPU drawing decision](../decisions/2026-11-09-gpu-drawing.md)).
 
-**Picking** tests a ray against the CPU mesh and answers with the model's own id
-([decision](../decisions/2026-11-13-picking-in-the-first-release.md)). **During a continuous edit**, once the editing
-tools arrive after the first release, the GPU writes the touched faces' blocks at each vertex's `(u, v)` on its face,
-until the CPU mesh replaces them ([decision](../decisions/2026-11-14-write-through-after-the-first-release.md)).
+**During a continuous edit**, once the editing tools arrive after the first release, the GPU writes the touched faces'
+blocks at each vertex's `(u, v)` on its face, until the CPU mesh replaces them
+([decision](../decisions/2026-11-14-write-through-after-the-first-release.md)).
+
+## Picking
+
+A pick tests a ray against the CPU mesh and answers with the model's own id
+([decision](../decisions/2026-11-13-picking-in-the-first-release.md)). A
+[`Picker`](../../crates/occam-mesh/src/pick.rs) is built with a mesh: a box tree over every face's triangles, and one
+over every edge's samples as segments, both built on one thread, ties broken by number, so the same ray gives the same
+answer at any thread count and on every target.
+
+- **A face is hit** where the line through the ray's start and the point a millimetre along it crosses one of its
+  triangles, decided exactly by the sign of the volume each side makes with that line, so a ray through a side two
+  triangles share hits both, never neither. The nearest face hit wins, then the smaller id.
+- **An edge is hit** where its samples come within the tolerance of the ray, at or after its start. It wins over the
+  nearest face if it lies no further along the ray than that face plus the tolerance, or if it is one of that face's
+  own edges within the tolerance of where the ray crosses it; so the seam at the back of a cylinder does not win over
+  its front. Of the edges that win, the one nearest the ray wins, then the one nearest along it, then the smaller id.
+- **A ray that hits nothing** is `mesh.ray-missed`, whose `aim-at` remedy is the centre of the triangle that lies
+  nearest the ray's way, seen from its start, of those whose plane the start is clear of: a ray from the same start
+  towards it hits.
+
+```mermaid
+flowchart LR
+  ray(["Ray, in f64"]) --> faces["Triangle tree:<br/>nearest face crossed"]
+  ray --> edges["Segment tree:<br/>edges within the tolerance"]
+  faces & edges --> wins{"An edge in front,<br/>or one of that face's<br/>near the hit?"}
+  wins -->|"an edge wins"| edge(["The edge's id"])
+  wins -->|"a face, no edge"| face(["The face's id"])
+  wins -->|"neither"| missed(["mesh.ray-missed,<br/>aim-at a centre"])
+```
 
 <details>
 <summary>Evidence</summary>

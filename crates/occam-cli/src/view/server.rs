@@ -2,7 +2,8 @@
 //! The viewer's server, which `occam view` starts as a process of its own (docs/architecture/live-view.md#the-server):
 //! axum on one tokio thread, listening on 127.0.0.1 alone, every address it serves beginning with its token. It
 //! serves the page built into the binary, the model as the binary twin, what it watches, a stream of server-sent
-//! events and a stop. Several times a second it looks at the model file on a blocking thread, where a model is
+//! events, a stop, and the page's selection, which it writes beside the model. It sends the selection and the
+//! highlight beside the model as events too, as their files change. Several times a second it looks at the model file on a blocking thread, where a model is
 //! opened, never on the async thread, and tells every open page when the file reads whole as another model, or does
 //! not read. It stops when asked, when the state file names another viewer, or when no page has been open for its
 //! idle time.
@@ -22,24 +23,25 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use futures_util::stream::{self, Stream};
-use occam::{DisplayUnits, Report, Viewer, Watching};
+use occam::{DisplayUnits, Report, Selection, Viewer, Watching};
 use tokio::sync::watch;
 
-use super::watch::{Looked, Watcher};
+use super::watch::{Looked, Watcher, marks};
 use super::{page, port_taken, state, state_not_written};
-use crate::commands::Said;
+use crate::commands::{Said, beside, write};
 
 /// How often the model file is looked at.
 const LOOK: Duration = Duration::from_millis(200);
 /// How long the server waits for its connections to close once it is stopping.
 const SHUTDOWN: Duration = Duration::from_secs(2);
 
-/// What the pages are shown: the last model that read whole, as its digest and binary twin, and why the file does not
-/// read now, if it does not.
+/// What the pages are shown: the last model that read whole, as its digest and binary twin, why the file does not
+/// read now, if it does not, and the selection and the highlight beside it, each in its one JSON form.
 #[derive(Clone, Default)]
 struct Shown {
     good: Option<(u64, Bytes)>,
     refused: Vec<Report>,
+    marks: [String; 2],
     stopping: bool,
 }
 
@@ -53,6 +55,13 @@ impl Shown {
             }
             Looked::Refused(reports) => self.refused = reports,
         }
+    }
+
+    /// The selection and the highlight taken in, each in its one JSON form: whether either changed.
+    fn mark(&mut self, marks: [String; 2]) -> bool {
+        let changed = self.marks != marks;
+        self.marks = marks;
+        changed
     }
 }
 
@@ -103,7 +112,7 @@ pub fn serve(model: &Path, port: Option<u16>, idle: Duration) -> Said {
         token: state::token(),
     };
     let mut watcher = Watcher::new(model.to_path_buf());
-    let mut shown = Shown::default();
+    let mut shown = Shown { marks: marks(model), ..Shown::default() };
     shown.take(watcher.first());
     let file = state::path(model);
     let runtime = tokio::runtime::Builder::new_current_thread().enable_io().enable_time().build();
@@ -169,16 +178,17 @@ async fn watch(app: &Arc<App>, mut watcher: Watcher) {
         if app.stopping() {
             return;
         }
-        let (file, token) = (app.file.clone(), app.viewer.token.clone());
+        let (file, token, model) = (app.file.clone(), app.viewer.token.clone(), app.model.clone());
         let looked = tokio::task::spawn_blocking(move || {
             let looked = watcher.look();
-            (watcher, looked, state::taken(&file, &token))
+            (watcher, looked, state::taken(&file, &token), marks(&model))
         });
-        let Ok((back, looked, replaced)) = looked.await else { return app.stop() };
+        let Ok((back, looked, replaced, marked)) = looked.await else { return app.stop() };
         watcher = back;
         if let Some(looked) = looked {
             app.shown.send_modify(|shown| shown.take(looked));
         }
+        app.shown.send_if_modified(|shown| shown.mark(marked));
         idle_since = quiet_since(idle_since, app.pages.load(Ordering::Relaxed), Instant::now());
         if replaced || idle_since.elapsed() >= app.idle {
             return app.stop();
@@ -202,7 +212,8 @@ fn router(app: &Arc<App>) -> Router {
         .route(&format!("/{token}/model"), get(model))
         .route(&format!("/{token}/events"), get(events))
         .route(&format!("/{token}/status"), get(status))
-        .route(&format!("/{token}/stop"), post(stop));
+        .route(&format!("/{token}/stop"), post(stop))
+        .route(&format!("/{token}/selection"), post(select));
     for (name, bytes) in page::files(page::FILES) {
         router = router.route(
             &format!("/{token}/{name}"),
@@ -249,6 +260,37 @@ async fn stop(State(app): State<Arc<App>>) -> Response {
     reply(StatusCode::OK, "application/json", app.watching().json())
 }
 
+/// The page's selection, written beside the model for `occam selection`, if it was made on the model the viewer shows;
+/// a selection for another model is refused with `view.selection-stale`, so the page fetches the new model and the
+/// person selects again.
+async fn select(State(app): State<Arc<App>>, body: String) -> Response {
+    let Some(selection) = Selection::from_json(&body) else {
+        return reply(StatusCode::BAD_REQUEST, "text/plain; charset=utf-8", "That is not a selection.");
+    };
+    let shown = app.shown.borrow().good.as_ref().map(|(digest, _)| *digest);
+    let refused = |status, report: Report| reply(status, "application/json", report_json(&report));
+    if shown != Some(selection.digest) {
+        return refused(StatusCode::CONFLICT, Selection::stale(&app.model.display().to_string()));
+    }
+    let (file, text) = (beside(&app.model, ".selection"), selection.json());
+    let bytes = text.clone();
+    let written = tokio::task::spawn_blocking(move || write("--model", &file, bytes.as_bytes())).await;
+    match written {
+        Ok(Ok(())) => {
+            let marked = [text.clone(), app.shown.borrow().marks[1].clone()];
+            app.shown.send_if_modified(|shown| shown.mark(marked));
+            reply(StatusCode::OK, "application/json", text)
+        }
+        Ok(Err(report)) => refused(StatusCode::INTERNAL_SERVER_ERROR, report),
+        Err(_) => refused(StatusCode::INTERNAL_SERVER_ERROR, super::not_started(&app.model)),
+    }
+}
+
+/// `report`'s JSON.
+fn report_json(report: &Report) -> String {
+    report.to_json(DisplayUnits::default()).unwrap_or_default()
+}
+
 /// Anything else: the page's address without its last slash is sent to it, an address with the token that names
 /// nothing is not found, and one without the token is refused.
 async fn elsewhere(State(app): State<Arc<App>>, uri: Uri) -> Response {
@@ -284,6 +326,7 @@ impl Drop for Page {
 struct Sent {
     digest: Option<u64>,
     refused: Vec<Report>,
+    marks: [Option<String>; 2],
 }
 
 impl Sent {
@@ -302,6 +345,19 @@ impl Sent {
         (self.digest, self.refused) = (digest, shown.refused.clone());
         name
     }
+
+    /// The first of the selection and the highlight that changed since this page was sent it, as its event's name
+    /// and what it carries now, marked as sent.
+    fn marked(&mut self, shown: &Shown) -> Option<(&'static str, String)> {
+        let pairs = ["selection", "highlight"].into_iter().zip(&shown.marks).zip(&mut self.marks);
+        for ((name, marked), sent) in pairs {
+            if sent.as_ref() != Some(marked) {
+                *sent = Some(marked.clone());
+                return Some((name, marked.clone()));
+            }
+        }
+        None
+    }
 }
 
 /// The stream of events a page follows the model by: what the viewer shows when it opens, then each change, until
@@ -317,6 +373,9 @@ async fn events(State(app): State<Arc<App>>) -> Sse<impl Stream<Item = Result<Ev
             if let Some(name) = sent.since(&now) {
                 let event = Event::default().event(name).data(page.0.watching().json());
                 return Some((Ok(event), (shown, sent, page)));
+            }
+            if let Some((name, marked)) = sent.marked(&now) {
+                return Some((Ok(Event::default().event(name).data(marked)), (shown, sent, page)));
             }
             shown.changed().await.ok()?;
         }

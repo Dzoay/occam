@@ -51,6 +51,29 @@ const ORIENT_BOUND: f64 = (3.0 + 16.0 * EPSILON) * EPSILON;
 /// Shewchuk's first error bound for the circle, `(10 + 96e)e`, against the permanent.
 const INCIRCLE_BOUND: f64 = (10.0 + 96.0 * EPSILON) * EPSILON;
 
+/// Shewchuk's first error bound for orientation in space, `(7 + 56e)e`, against the permanent.
+const ORIENT3D_BOUND: f64 = (7.0 + 56.0 * EPSILON) * EPSILON;
+
+/// A point in space, for picking.
+pub(crate) type P3 = [f64; 3];
+
+/// Six times the signed volume of `a`, `b`, `c`, `d` from their twelve coordinates: the determinant of `a - d`,
+/// `b - d` and `c - d`.
+struct Volume;
+
+impl Predicate<12> for Volume {
+    const DEGREE: u32 = 3;
+
+    fn value<T: Ring>(&self, [ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz]: &[T; 12]) -> T {
+        let (adx, ady, adz) = (ax.sub(dx), ay.sub(dy), az.sub(dz));
+        let (bdx, bdy, bdz) = (bx.sub(dx), by.sub(dy), bz.sub(dz));
+        let (cdx, cdy, cdz) = (cx.sub(dx), cy.sub(dy), cz.sub(dz));
+        let first = adx.mul(&bdy.mul(&cdz).sub(&bdz.mul(&cdy)));
+        let second = bdx.mul(&cdy.mul(&adz).sub(&cdz.mul(&ady)));
+        first.add(&second).add(&cdx.mul(&ady.mul(&bdz).sub(&adz.mul(&bdy))))
+    }
+}
+
 /// How far from the ends of the exponent range what a bound is taken of must be for it to hold: a rounding below the
 /// smallest normal number, or an overflow, is not one it allows for.
 const SIZES: core::ops::RangeInclusive<f64> = 1e-270..=1e270;
@@ -80,6 +103,25 @@ pub(crate) fn orient(a: P2, b: P2, c: P2) -> Option<Side> {
     let size = left.abs() + right.abs();
     beyond(left - right, ORIENT_BOUND * size, size)
         .or_else(|| decided(&Orientation, [a[0], a[1], b[0], b[1], c[0], c[1]]))
+}
+
+/// Which side of the plane through `a`, `b`, `c` the point `d` lies on, exactly: the sign of six times the volume of
+/// the four, [`Side::Within`] where they lie in one plane, and `None` where a coordinate is not finite or beyond the
+/// range the exact stage is exact for. Decided from plain arithmetic beyond Shewchuk's first bound, and otherwise by
+/// `occam-math`'s filter and exact stage.
+#[expect(clippy::similar_names, reason = "the differences and products as Shewchuk names them")]
+pub(crate) fn orient3d(a: P3, b: P3, c: P3, d: P3) -> Option<Side> {
+    let (adx, ady, adz) = (a[0] - d[0], a[1] - d[1], a[2] - d[2]);
+    let (bdx, bdy, bdz) = (b[0] - d[0], b[1] - d[1], b[2] - d[2]);
+    let (cdx, cdy, cdz) = (c[0] - d[0], c[1] - d[1], c[2] - d[2]);
+    let (bdxcdy, cdxbdy, cdxady, adxcdy, adxbdy, bdxady) =
+        (bdx * cdy, cdx * bdy, cdx * ady, adx * cdy, adx * bdy, bdx * ady);
+    let det = adz * (bdxcdy - cdxbdy) + bdz * (cdxady - adxcdy) + cdz * (adxbdy - bdxady);
+    let permanent = (bdxcdy.abs() + cdxbdy.abs()) * adz.abs()
+        + (cdxady.abs() + adxcdy.abs()) * bdz.abs()
+        + (adxbdy.abs() + bdxady.abs()) * cdz.abs();
+    beyond(det, ORIENT3D_BOUND * permanent, permanent)
+        .or_else(|| decided(&Volume, [a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2], d[0], d[1], d[2]]))
 }
 
 /// Where `d` lies against the circle through `a`, `b`, `c`, which run anticlockwise: [`Side::Above`] certainly inside
@@ -191,6 +233,30 @@ mod tests {
         // A circle of radius 2^-10 about its centre: the permanent is that small too, and the bound with it.
         let r = 1.0 / 1024.0;
         assert_eq!(incircle([r, 0.0], [0.0, r], [-r, 0.0], [0.0, 0.0]), Some(Side::Above));
+    }
+
+    #[test]
+    fn a_point_above_a_plane_has_the_sign_the_exact_stage_gives_and_one_in_it_is_within() {
+        let (a, b, c) = ([0.1, 0.2, 0.3], [0.7, 0.9, 0.3], [0.4, 0.1, 0.3]);
+        assert_eq!(orient3d(a, b, c, [0.3, 0.3, 0.3]), Some(Side::Within), "in the plane z = 0.3");
+        for k in -40..=40 {
+            let t = f64::from(k) * f64::EPSILON;
+            for d in [[0.3, 0.3, 0.3 + t], [0.3 + t, 0.3, 1e6 * t], [0.1 + 0.2, 0.4, 0.3 + t]] {
+                let exact = decided(&Volume, [a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2], d[0], d[1], d[2]]);
+                assert_eq!(orient3d(a, b, c, d), exact, "{k}: {d:?}");
+            }
+        }
+        let below = orient3d(a, b, c, [0.3, 0.3, 0.0]);
+        assert_eq!(orient3d(b, a, c, [0.3, 0.3, 0.0]), below.map(flip), "swapping two corners turns it over");
+        assert_eq!(orient3d(a, b, c, [f64::NAN, 0.0, 0.0]), None);
+    }
+
+    fn flip(side: Side) -> Side {
+        match side {
+            Side::Above => Side::Below,
+            Side::Below => Side::Above,
+            Side::Within => Side::Within,
+        }
     }
 
     #[test]
