@@ -8,8 +8,9 @@ throwaway. In the page the pool gains nothing from more workers on these models,
 measuring every edge against its B-spline faces: 28 s or more against about 2 s of meshing on the 1,002-face model. The
 editing worker's longest call on construction's requests is 1.76 s; a run's save reaches the page in 364 ms (median) on
 the live demo's plate, and in two minutes on P9's 1,002-face model. The mesher has no lane kernel, so its two new `gates
-perf` classes are scalar. No pick was timed on a GPU: the script is built, refuses a software adapter, and waits for the
-user's word to open browser windows.
+perf` classes are scalar. A pick on the GTX 1080 Ti takes 248 ms in Chromium and 428 ms in Firefox (medians), against
+the 16.7 ms goal, most of it the page's pick computing the model's digest twice; on the laptop the page ran out of
+memory before its first pick.
 
 ## Question
 
@@ -48,8 +49,8 @@ halves, so **P9's 1,002 faces are 1,163 here, and its 10,001 are 12,151**. Two t
   surfaces, in a family the native format writes.
 - **A panel's hole** is a circle in its top's parameters, as P9's was. The kernel has no curve that is a surface's image
   of another, so the hole's edge is a cubic B-spline through the top at 512 angles round the circle, as an imported
-  model's would be, recording how far it strays from the top between them. As the commit measured them, no edge of the
-  1,163-face model strays more than 7.1e-12 mm from its faces.
+  model's would be. The commit measures how far each edge strays from its faces: no edge of the 1,163-face model strays
+  more than 7.1e-12 mm.
 
 **Commands.** `just view-timing build|quality|scale|save|open` natively (`crates/occam/examples/view_timing.rs`), and
 `just view-timing-browser pool|editing|redraw` in the browser (`web/test/timing.mjs`), each printing one JSON line a
@@ -195,8 +196,8 @@ and one panel, takes 0.37 s to open on the laptop and 0.04 s to mesh.
 The build host was shared with another worker's jobs and then with a person's game while these ran, so the page's
 timings are the laptop's: headless Chromium 156 on the Intel Core i7-1165G7, four cores and eight threads, through the
 laptop's job queue with nothing else queued, as [P10](2026-11-09-p10.md) timed Chromium. The laptop was not quiet: its
-load average was 5.6 when the pool's runs began. The model is P9's 1,002-face model, 1,163 faces here, at the page's
-0.1 mm: 245,778 triangles in 62 calls.
+load average was 5.6 when the pool's runs began. The model is P9's 1,002-face model, 1,163 faces here, at the page's 0.1
+mm: 245,778 triangles in 62 calls.
 
 | Workers | Cold: navigation to drawn | Warm: the pool's job, least / median | Warm: the editing worker's open first | Warm: each worker's first call, its open in it | Warm: the other calls, summed / median call |
 |---|---|---|---|---|---|
@@ -250,12 +251,45 @@ opening it and meshing the new box's faces, and the upload. On the plate that is
 P9's model it is three opens one after another, the server's natively and the editing worker's and the six mesh workers'
 in the page, each measuring every edge: two minutes for a box whose six faces mesh in milliseconds.
 
+### A pick on a real GPU
+
+`just view-pick-gpu <model> chromium|firefox --headed --workers 2`, run once each on P9's 10,001-face model (12,151
+faces here) as the page `occam view` serves it, at its 0.1 mm: a click on each of 50 faces, from the pointer's release
+to the answer, and to the end of the first frame that shows the face selected, finished on the GPU. The first pick,
+which meshes the model whole in a worker, is timed apart. Headed, on each machine's own screen; two mesh workers, to
+shorten the minutes each takes to open the model. The 16.7 ms is a
+[goal](../decisions/2026-11-13-gpu-figures-are-goals.md), not a gate.
+
+| Machine's GPU | Browser | Adapter it reported | First pick | Answered, median / p95 / most | Shown, median / p95 / most | Within 16.7 ms |
+|---|---|---|---|---|---|---|
+| NVIDIA GeForce GTX 1080 Ti, driver 580.196.07 | Chromium 156.0.8078.4, headed | `nvidia`, `pascal`, not a fallback | 26.3 s | 194 / 202 / 211 ms | **248** / 262 / 264 ms | no |
+| NVIDIA GeForce GTX 1080 Ti, driver 580.196.07 | Firefox 157.0 (Playwright's build), headed | names hidden; not a fallback, and on the GTX 1080 Ti by `nvidia-smi` | 27.4 s | 382 / 415 / 695 ms | **428** / 536 / 788 ms | no |
+| Intel Iris Xe (laptop, beside an Iris Xe MAX) | Chromium 156.0.8078.4, headed | did not finish | | | | |
+
+**Every pick misses the goal, by 15 times in Chromium and 26 in Firefox, and most of it is not the pick.** A pick
+against the CPU mesh is about 66,000 instructions natively (`mesh_pick`) and 7 µs in the browser. But each click asks
+the worker twice, once to find the depth and once with the edges' tolerance, and `Session::picking` computes the model's
+digest every time it is asked, before it finds it can keep the mesh it made for picking: two digests of the whole
+12,151-face model a click. One takes 86.6 ms natively on the laptop (`just view-timing digest`), so two are about 173 of
+the 194 ms before the answer. The 54 ms after it in Chromium, 46 in Firefox, to a frame finished on the GPU, is the page
+selecting the face, uploading its mark and drawing the next frames. Neither part depends on the GPU much.
+
+**The laptop could not draw the model.** Chromium's page with two mesh workers grew to 9.99 GB resident, past the 10G
+memory cap of the laptop's job queue (the laptop has 15 GB), and the kernel's OOM killer stopped it before the first
+pick; Firefox was not run there, by the rule to stop at the first OOM rather than retry. The build host's runs, in a 16G
+cap on a 31 GB machine, were not stopped by it.
+
+**`occam view` cannot serve this model.** Its server opens and checks the model before it says it listens, and `occam
+view` waits 30 s for that; P9's 10,001-face model takes longer to open, so `occam view` gives up and stops the server.
+The script starts the server as `occam view` does but waits for it, which is how these ran.
+
+The build host's screen was locked through its runs. Other workers' jobs held its load average near 80 while Chromium's
+page opened the model, falling to 2.5 before its picks; Firefox ran on a quiet machine.
+
 ## What this does not show
 
-- **No pick has been timed on a GPU.** The script exists (`web/test/pick-timing.mjs`, `just view-pick-gpu`) and refuses
-  a software adapter, which a test holds; it has not been run, since on both machines it must run headed, opening a
-  browser window, and Firefox needs Playwright's own build, which is not installed. So the 16.7 ms goal is neither met
-  nor missed here.
+- **The pick on the laptop's integrated GPU,** which ran out of memory, nor Firefox there. Each browser ran once a
+  machine, on one model.
 - **The models are P9's synthetic ones,** rebuilt: their trims are exact lines and circles but for the panels' holes,
   and none comes from a real file.
 - **The quality figures are sampled,** at 45 points a triangle for the deviation and 7 for the turn: lower bounds on the
@@ -354,6 +388,3 @@ The per-family quality rows are in the tables above.
    and the editing worker do, measuring every edge and checking the whole model, though the editing worker has just done
    so. On P9's 1,002-face model that open is most of a cold draw and of every redraw in the page. Recommended: open the
    published twin without measuring or checking it again in the mesh workers, a decision about trust that is the user's.
-2. **Run the GPU pick timing headed,** on the measuring machine's GTX 1080 Ti and the laptop's Iris Xe, in Chromium and
-   Firefox: it opens browser windows, and Firefox needs `npx --prefix web playwright install firefox`, a download of
-   Playwright's own Firefox build.

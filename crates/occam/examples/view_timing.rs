@@ -9,6 +9,7 @@
 //!   three: the edges sampled, the faces meshed, the merge and the watertight check;
 //! - `save <target> <file>`: the model in the native format's binary encoding, for `occam view`;
 //! - `open <file>`: a saved model read, measured and checked, as a page's workers each open it, on one thread and six;
+//! - `digest <file>`: a saved model's digest, as a pick in the page computes it, timed five times;
 //! - `requests`: construction's requests that `gates perf` times, and its polygon of 1,000 edges, by name, for the
 //!   editing worker's timing in the browser.
 #![allow(clippy::print_stdout, clippy::print_stderr, reason = "a command-line tool prints")]
@@ -27,7 +28,7 @@ use occam_topo::Snapshot;
 use occam_units::{Angle, Length};
 
 const USAGE: &str = "usage: view_timing build <target> | quality <target> <deflection> | \
-                     scale <target> <deflection> <repeats> <threads>... | phases <target> <deflection> <threads>... | save <target> <file> | open <file> | requests";
+                     scale <target> <deflection> <repeats> <threads>... | phases <target> <deflection> <threads>... | save <target> <file> | open <file> | digest <file> | requests";
 
 /// P9's angular limit.
 const ANGLE: f64 = 0.35;
@@ -184,6 +185,23 @@ fn save(target: usize, file: &str) -> Result<String, String> {
     ))
 }
 
+fn digest(file: &str) -> Result<String, String> {
+    let bytes = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
+    let model = occam_io::load(&bytes, &exec(6)?).map_err(|reports| said(&reports))?;
+    let mut times = Vec::new();
+    let mut digest = 0;
+    for _ in 0..5 {
+        let start = Instant::now();
+        digest = model.digest();
+        times.push(start.elapsed().as_secs_f64() * 1e3);
+    }
+    let (least, median) = least_and_median(times);
+    Ok(format!(
+        r#"{{"mode":"digest","faces":{},"least_ms":{least:.2},"median_ms":{median:.2},"digest":"{digest:016x}"}}"#,
+        face_count(&model)
+    ))
+}
+
 fn requests() -> String {
     use occam::operation_workloads::{MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded};
     let polygon = polygon_extruded(POLYGON_CORNERS);
@@ -230,6 +248,7 @@ fn run(args: &[String]) -> Result<String, String> {
         ["save", target, file] => save(number(target)?, file),
         ["open", file] => open(file),
         ["requests"] => Ok(requests()),
+        ["digest", file] => digest(file),
         _ => Err(USAGE.to_string()),
     }
 }

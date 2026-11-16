@@ -266,7 +266,7 @@ view-timing-browser *args: web-build
     cargo build --quiet --release -p occam-cli
     OCCAM="$CARGO_TARGET_DIR/release/occam" node web/test/timing.mjs "$@"
 
-# A pick timed on this machine's real GPU, `<model> [chromium|firefox]`, on a model from `just view-timing save`: headed, opening a browser window, where headless reaches only a software adapter, and refused on a software adapter. A goal, not a gate
+# A pick timed on this machine's real GPU, `<model> [chromium|firefox] [--headed] [--workers N]`, on a model from `just view-timing save`: headed, opening a browser window, with `--headed` or where headless reaches only a software adapter, and refused on a software adapter. A goal, not a gate
 [env("CARGO_TARGET_DIR", target)]
 [group('tools')]
 view-pick-gpu *args: web-build

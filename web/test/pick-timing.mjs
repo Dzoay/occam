@@ -4,24 +4,26 @@
 // to is a goal no measurement grounds (docs/decisions/2026-11-13-gpu-figures-are-goals.md), never a gate.
 //
 // It runs headless first; if the browser reaches only a software adapter there, as headless Chromium does, it runs
-// headed, which opens a browser window. It refuses a run on a software adapter, exiting 3 with the adapter it found,
-// since a software renderer's frame says nothing of a GPU's.
+// headed, which opens a browser window. `--headed` runs headed from the start, as a person would see it. It refuses a
+// run on a software adapter, exiting 3 with the adapter it found, since a software renderer's frame says nothing of a
+// GPU's.
 //
-//   node web/test/pick-timing.mjs <model file> [chromium|firefox] [--picks N] [--workers N] [--headless-only]
+//   node web/test/pick-timing.mjs <model file> [chromium|firefox] [--picks N] [--workers N] [--headless-only|--headed]
 //
 // Run by `just view-pick-gpu`, which builds the page and a release `occam`. `OCCAM_WEBGPU_FLAGS`, if set, replaces
 // Chromium's flags: the test of the refusal gives it `just web-test`'s, which ask for SwiftShader.
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
+import { createInterface } from "node:readline";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { promisify } from "node:util";
 import { chromium, firefox } from "playwright";
 
 import { pixelOf } from "./demo/harness.mjs";
 
-const exec = promisify(execFile);
+/** How long to wait for anything: P9's 10,001-face model takes minutes to open, in the server and in each worker. */
+const PATIENCE = 60 * 60_000;
 /** What the page is held to: one frame at 60 Hz. A goal, not a gate. */
 const GOAL_MS = 16.7;
 /** Chromium's flags for WebGPU on a real GPU on Linux, where it is not on by default. */
@@ -33,17 +35,18 @@ const SOFTWARE = /swiftshader|llvmpipe|lavapipe|softpipe|software|basic render/i
 
 /** The arguments: the model, the browser, and the options. */
 function read(args) {
-  const options = { browser: "chromium", picks: 50, workers: null, headlessOnly: false, model: null };
+  const options = { browser: "chromium", picks: 50, workers: null, headlessOnly: false, headed: false, model: null };
   for (let k = 0; k < args.length; k += 1) {
     const arg = args[k];
     if (arg === "--picks") options.picks = Number(args[(k += 1)]);
     else if (arg === "--workers") options.workers = Number(args[(k += 1)]);
     else if (arg === "--headless-only") options.headlessOnly = true;
+    else if (arg === "--headed") options.headed = true;
     else if (arg === "chromium" || arg === "firefox") options.browser = arg;
     else if (!options.model) options.model = arg;
     else return null;
   }
-  return options.model && options.picks > 0 ? options : null;
+  return options.model && options.picks > 0 && !(options.headed && options.headlessOnly) ? options : null;
 }
 
 /** `kind` launched headless or headed, with WebGPU on. */
@@ -74,9 +77,9 @@ async function adapterOf(browser) {
   }
 }
 
-/** The browser, headless if that reaches a real adapter, else headed unless `headlessOnly`; and its adapter. */
-async function reach(kind, headlessOnly) {
-  for (const headless of headlessOnly ? [true] : [true, false]) {
+/** The browser, headless if that reaches a real adapter, else headed unless `headlessOnly`, or headed if `headed`. */
+async function reach(kind, headlessOnly, headed) {
+  for (const headless of headed ? [false] : headlessOnly ? [true] : [true, false]) {
     const browser = await launch(kind, headless);
     const adapter = await adapterOf(browser);
     if (!adapter.software) return { browser, headless, adapter };
@@ -129,6 +132,23 @@ async function targets(page, picks) {
   return pixels.filter(inside);
 }
 
+/**
+ * The viewer's server for `file`, started as `occam view` starts it but waited for as long as the model takes to open:
+ * `occam view` gives a server 30 s to say it listens, and on P9's larger model its first look takes longer. Resolves
+ * with the page's address and a way to stop it.
+ */
+async function serving(occam, file) {
+  const server = spawn(occam, ["view", "--serve", "--idle", "3600", "--model", file], { stdio: ["ignore", "pipe", "inherit"] });
+  const lines = createInterface({ input: server.stdout });
+  const first = await new Promise((resolve, reject) => {
+    lines.once("line", resolve);
+    server.once("exit", (code) => reject(new Error(`occam view --serve ended, ${code}, before it listened`)));
+  });
+  const said = JSON.parse(first);
+  if (!said.port || !said.token) throw new Error(`occam view --serve did not start: ${first}`);
+  return { url: `http://127.0.0.1:${said.port}/${said.token}/`, stop: () => server.kill("SIGTERM") };
+}
+
 const quantile = (xs, q) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(q * xs.length))];
 const summary = (xs) => ({ median: quantile(xs, 0.5), p95: quantile(xs, 0.95), max: Math.max(...xs) });
 
@@ -136,12 +156,12 @@ async function measure(options, reached) {
   const occam = process.env.OCCAM ?? "occam";
   const dir = await mkdtemp(join(tmpdir(), "occam-pick-"));
   const file = join(dir, basename(options.model));
-  await copyFile(options.model, file);
-  const json = async (args) => JSON.parse((await exec(occam, [...args, "--json"]).catch((r) => r)).stdout);
-  const started = await json(["view", "--model", file, "--no-open", "--idle", "3600"]);
+  let started = null;
   try {
+    await copyFile(options.model, file);
+    started = await serving(occam, file);
     const page = await reached.browser.newPage({ viewport: { width: 1280, height: 800 } });
-    page.setDefaultTimeout(30 * 60_000);
+    page.setDefaultTimeout(PATIENCE);
     const workers = options.workers ? `&workers=${options.workers}` : "";
     await page.goto(`${started.url}?inspect${workers}`);
     await page.waitForFunction(() => (window.occamViewer?.live()?.models ?? 0) >= 1, null, { polling: 100 });
@@ -169,17 +189,17 @@ async function measure(options, reached) {
       within_goal: summary(shown).median <= GOAL_MS,
     };
   } finally {
-    await json(["view", "--model", file, "--stop"]);
+    started?.stop();
     await rm(dir, { recursive: true, force: true });
   }
 }
 
 const options = read(process.argv.slice(2));
 if (!options) {
-  console.error("usage: pick-timing.mjs <model file> [chromium|firefox] [--picks N] [--workers N] [--headless-only]");
+  console.error("usage: pick-timing.mjs <model file> [chromium|firefox] [--picks N] [--workers N] [--headless-only|--headed]");
   process.exit(2);
 }
-const reached = await reach(options.browser, options.headlessOnly);
+const reached = await reach(options.browser, options.headlessOnly, options.headed);
 if (!reached?.browser) {
   console.log(JSON.stringify({
     mode: "pick-gpu",
