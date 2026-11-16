@@ -29,7 +29,7 @@ x86-64 and on wasm32 baseline and simd128. In headless Chromium, against `occam 
   describes what was clicked; and an `occam highlight` shows in the page;
 - the agent test passes when its recipe runs on `view.agent`'s PR, its log kept as evidence: an agent on the cheapest
   model the blind runs used starts `occam view`, builds a part from a prompt, the page following each run, and acts on a face
-  selected as a person would.
+  selected as a person would ([the live run](../evidence/2026-11-16-view-agent-live-run.md)).
 
 **Exit (goal):** [P9's](../evidence/2026-11-09-p9.md) quality and scaling tables on the real mesher; the mesh pool timed
 in the browser beside [P10's](../evidence/2026-11-09-p10.md); the time from a run's save to the page's redraw; and a

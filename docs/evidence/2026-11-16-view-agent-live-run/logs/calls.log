@@ -1,0 +1,182 @@
+=== call 1 prompt 1 2026-11-16T07:44:34.256Z
+cwd: $KIT/case
+argv: run --help
+--- stdout
+Run a request on a model, and write the model back if the whole request went through.
+
+--help shows how to write a request.
+
+Usage: occam run [OPTIONS] --model <FILE> <REQUEST>
+
+Arguments:
+  <REQUEST>
+          The request: a JSON file of steps
+
+Options:
+      --json
+          Give the result, or the reports refusing it, in one JSON form on standard output
+
+      --model <FILE>
+          The model: read if it exists and made new if not, and written back only if the whole request goes through
+
+      --binary
+          Write the model as the binary twin. Otherwise a model keeps its encoding, and a new one is readable JSON
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+A request is a JSON file of steps, run in order on the model:
+
+  {"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+    {"op": "box", "label": "block", "size": [40, 20, 10]},
+    {"op": "measure", "target": "block", "what": ["volume"]}
+  ]}
+
+  schema     1
+  units      length: mm, cm, m or in; angle: rad or deg. Every number the request gives is in these.
+  tolerance  {"length": number, "angle": number}, optional: what a new model is built to (1e-7 mm and 1e-9 rad if left out).
+  steps      each with "op", an optional "label", and its operation's fields, below. A field that names an entity takes
+             an earlier step's label, for what that step made, or an id such as body:0/1.
+
+A point or a vector is [x, y, z]; a direction is [x, y, z] of any length. A frame is {"origin": point, "z": direction,
+"x": direction}, each optional, and the world's if left out.
+
+A face's outer wire and its holes may be written in place, as a wire step's fields, instead of naming wire steps. Here a
+plate with a round hole is extruded, and a profile drawn in the xz plane is revolved whole about an axis in it:
+
+  {"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+    {"op": "face", "label": "plate",
+     "outer": {"points": [[0, 0, 0], [60, 0, 0], [60, 40, 0], [0, 40, 0]], "closed": true},
+     "holes": [{"edges": [{"circle": {"centre": [30, 20, 0], "radius": 5, "normal": [0, 0, 1]}}]}]},
+    {"op": "extrude", "face": "plate", "vector": [0, 0, 6]},
+    {"op": "face", "label": "profile",
+     "outer": {"points": [[100, 0, 0], [120, 0, 0], [120, 0, 30], [100, 0, 30]], "closed": true}},
+    {"op": "revolve", "profile": "profile", "origin": [100, 0, 0], "axis": [0, 0, 1], "angle": 360}
+  ]}
+
+Operations:
+  box        size [x, y, z]; frame
+  cylinder   radius; height, along the frame's z; frame
+  sphere     radius; frame
+  cone       radius1 at the base and radius2 at the top, either but not both 0; height; frame
+  torus      major, the radius its tube's centre runs round; minor, the tube's, less than major; frame
+  wedge      size [x, y, z]; top {"start": where it begins along x, "width": along x}; frame
+  wire       points [point, ...], with straight edges between, or edges [{"line": [from, to]} or {"arc": [from, through, to]} or {"circle": {"centre": point, "radius": length, "normal": direction}}, ...]; and closed: true to join the last to the first by a straight edge, if they do not meet
+  face       outer, a closed planar wire, and holes [wire, ...] inside it, if any; a wire is a label, an id or a wire written in place
+  extrude    face, a planar face; vector [x, y, z], the way and length it is swept
+  revolve    profile, a face or a wire; origin, a point on the axis; axis, a direction; angle
+  transform  target, a body; scale, a number or three along about's axes, if any; about, a frame; frame, where the world's frame goes, after the scale. The body keeps its ids
+  copy       target, scale, about and frame, as for transform; the copy has new ids
+  measure    target, an entity; what [measurement, ...], or all the target has if left out
+
+Measurements: volume, area, centre-of-mass, bounds.
+Refused by this build, by name: boolean, fillet, chamfer.
+
+Bad input is refused before any step runs, each with its code and its place, such as steps[2].size[0]. A step that
+fails stops the request, and the model is written back only if every step went through. The result says what each
+step made, created, changed and deleted, by id, and describes what it created. A description says which step made
+an entity as this numbers a request's steps, from 0, with the step's operation, even in a later command; a copy's
+also names the body it copied.
+
+--- stderr
+
+--- exit 0
+=== call 2 prompt 1 2026-11-16T07:44:40.336Z
+cwd: $KIT/case
+argv: view --model part.occam
+--- stdout
+The viewer for part.occam is at http://127.0.0.1:46247/e48c1d44ea314911da16aa63b9195e07/, open in a browser.
+
+--- stderr
+There is no model at $KIT/case/part.occam: the viewer keeps watching, and its page draws the model once a run writes it.
+
+--- exit 1
+=== call 3 prompt 1 2026-11-16T07:44:58.152Z
+cwd: $KIT/case
+argv: run --model part.occam plate.json
+--- file plate.json
+{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+  {"op": "face", "label": "plate",
+   "outer": {"points": [[0, 0, 0], [80, 0, 0], [80, 60, 0], [0, 60, 0]], "closed": true},
+   "holes": [{"edges": [{"circle": {"centre": [20, 30, 0], "radius": 6, "normal": [0, 0, 1]}}]}]},
+  {"op": "extrude", "label": "plate_body", "face": "plate", "vector": [0, 0, 10]}
+]}
+
+--- stdout
+step 0 face "plate": made face:0/1; created 31, changed 0, deleted 0
+step 1 extrude "plate_body": made body:0/2; created 148, changed 0, deleted 31
+
+--- stderr
+
+--- exit 0
+=== call 4 prompt 1 2026-11-16T07:45:08.214Z
+cwd: $KIT/case
+argv: run --model part.occam check.json
+--- stdout
+
+--- stderr
+The file check.json, given as REQUEST, could not be read.
+
+--- exit 1
+=== call 5 prompt 1 2026-11-16T07:45:22.749Z
+cwd: $KIT/case
+argv: run --model part.occam check.json
+--- file check.json
+{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+  {"op": "measure", "target": "body:0/2", "what": ["volume", "bounds"]}
+]}
+
+--- stdout
+step 0 measure: body:0/2: volume 46869.02664470765 mm^3, bounds-low (-8.88178419700126e-15, -6.661338147750947e-15, -2.2026824808563108e-13) mm, bounds-high (80.00000000000003, 60.00000000000003, 10.000000000000258) mm
+
+--- stderr
+
+--- exit 0
+=== call 6 prompt 2 2026-11-16T07:46:56.300Z
+cwd: $KIT/case
+argv: selection --model part.occam
+--- stdout
+face:7/1 plane: origin (0, 0, 10) mm, normal (0, 0, 1), x-axis (1, 0, 0), loops 2, low (-8.88178419700126e-15, -6.661338147750947e-15, 9.999999999999742) mm, high (80.00000000000003, 60.00000000000003, 10.000000000000258) mm; made by step 1, extrude; adjacent shell:0/2 surface:7/1 loop:8/1 loop:9/1 edge:7/1 edge:9/1 edge:11/1 edge:13/1 edge:15/1 edge:17/1 face:0/2 face:1/1 face:2/1 face:3/1 face:4/1 face:5/1
+
+--- stderr
+
+--- exit 0
+=== call 7 prompt 2 2026-11-16T07:47:07.723Z
+cwd: $KIT/case
+argv: highlight --model part.occam face:7/1
+--- stdout
+face:7/1 plane: origin (0, 0, 10) mm, normal (0, 0, 1), x-axis (1, 0, 0), loops 2, low (-8.88178419700126e-15, -6.661338147750947e-15, 9.999999999999742) mm, high (80.00000000000003, 60.00000000000003, 10.000000000000258) mm; made by step 1, extrude; adjacent shell:0/2 surface:7/1 loop:8/1 loop:9/1 edge:7/1 edge:9/1 edge:11/1 edge:13/1 edge:15/1 edge:17/1 face:0/2 face:1/1 face:2/1 face:3/1 face:4/1 face:5/1
+
+--- stderr
+
+--- exit 0
+=== call 8 prompt 2 2026-11-16T07:47:16.701Z
+cwd: $KIT/case
+argv: run --model part.occam cylinder.json
+--- file cylinder.json
+{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+  {"op": "cylinder", "label": "post", "radius": 5, "height": 20, "frame": {"origin": [40, 30, 10], "z": [0, 0, 1]}}
+]}
+
+--- stdout
+step 0 cylinder "post": made body:1/1; created 54, changed 0, deleted 0
+face:7/1 stays selected.
+The highlight is cleared.
+
+--- stderr
+
+--- exit 0
+=== call 9 prompt 2 2026-11-16T07:47:38.308Z
+cwd: $KIT/case
+argv: run --model part.occam check_post.json
+--- file check_post.json
+{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
+  {"op": "measure", "target": "body:1/1", "what": ["volume", "bounds"]}
+]}
+
+--- stdout
+step 0 measure: body:1/1: volume 1570.7963267948962 mm^3, bounds-low (34.9999999999996, 24.999999999999606, 9.999999999999678) mm, bounds-high (45.0000000000004, 35.0000000000004, 30.000000000000394) mm
+
+--- stderr
+
+--- exit 0

@@ -1,0 +1,292 @@
+{
+  "dry": false,
+  "started": "2026-11-16T07-43-51-424Z",
+  "model": "claude-haiku-5-5",
+  "prompts": [
+    {
+      "text": "Using occam, make a plate 80 mm long, 60 mm wide and 10 mm thick, lying flat on the xy plane, with a round hole 12 mm across through it, its centre 20 mm from one short end and midway across. Keep it in part.occam.",
+      "code": 0,
+      "signal": null,
+      "session": "759f0b1d-03de-4ef1-a739-bb9b43ff51be",
+      "model": "claude-haiku-5-5",
+      "ended": {
+        "subtype": "success",
+        "is_error": false,
+        "num_turns": 10,
+        "total_cost_usd": 0.004304180000000001,
+        "result": "The plate is in `part.occam` and matches the spec. It is 80 × 60 × 10 mm, lying flat on the xy plane with its bottom at z = 0, and has a 12 mm hole centred at (20, 30).\n\nThe measured volume is 46,869.03 mm³. That is 48,000 mm³ for the solid block less π × 6² × 10 ≈ 1,131 mm³ for the hole, so the hole is through the full thickness. The bounds run from (0, 0, 0) to (80, 60, 10).\n\nI built the hole into the face's outline, so the model has no boolean step. The model is one body, `body:0/2`.\n\nThe viewer is still running at http://127.0.0.1:46247/e48c1d44ea314911da16aa63b9195e07/ in case you want to look. I can stop it with `occam view --model part.occam --stop` when you're done."
+      },
+      "calls": 5
+    },
+    {
+      "text": "stand a cylinder of radius 5 and height 20 on the centre of the selected face",
+      "code": 0,
+      "signal": null,
+      "session": "759f0b1d-03de-4ef1-a739-bb9b43ff51be",
+      "model": "claude-haiku-5-5",
+      "ended": {
+        "subtype": "success",
+        "is_error": false,
+        "num_turns": 7,
+        "total_cost_usd": 0.006582440000000001,
+        "result": "I added the cylinder to the selected top face, centred on it at (40, 30, 10). It has radius 5 mm and height 20 mm, and it stands on the face pointing up. The new body is `body:1/1`.\n\nThe measurements match: the volume is 1,570.80 mm³ (π × 5² × 20), and the bounds run from (35, 25, 10) to (45, 35, 30).\n\nThe cylinder is a separate body, not joined to the plate, because this build has no boolean operations. The plate's top face stays selected in the viewer. The viewer is still running."
+      },
+      "calls": 4
+    }
+  ],
+  "opened": "browser",
+  "scored": {
+    "pass": true,
+    "checks": [
+      {
+        "name": "the plate is one body",
+        "pass": true,
+        "required": true,
+        "detail": [
+          "body:0/2"
+        ]
+      },
+      {
+        "name": "of the volume asked",
+        "pass": true,
+        "required": true,
+        "detail": 46869.02664470765
+      },
+      {
+        "name": "and the size",
+        "pass": true,
+        "required": true,
+        "detail": [
+          80.00000000000004,
+          60.000000000000036,
+          10.000000000000478
+        ]
+      },
+      {
+        "name": "the face selected is its top, with the hole through it",
+        "pass": true,
+        "required": true,
+        "detail": "face:7/1"
+      },
+      {
+        "name": "one body more",
+        "pass": true,
+        "required": true,
+        "detail": [
+          "body:1/1"
+        ]
+      },
+      {
+        "name": "a cylinder of the volume asked",
+        "pass": true,
+        "required": true,
+        "detail": 1570.7963267948962
+      },
+      {
+        "name": "of the radius asked",
+        "pass": true,
+        "required": true,
+        "detail": [
+          5,
+          5
+        ]
+      },
+      {
+        "name": "and the height",
+        "pass": true,
+        "required": true,
+        "detail": [
+          20,
+          0
+        ]
+      },
+      {
+        "name": "its base lies in the selected face's plane",
+        "pass": true,
+        "required": true,
+        "detail": "face:11/1"
+      },
+      {
+        "name": "centred on the face, within the band",
+        "pass": true,
+        "required": true,
+        "detail": 1.2809491335957509e-14
+      },
+      {
+        "name": "within the face, clear of its hole",
+        "pass": true,
+        "required": true,
+        "detail": {
+          "inside": true,
+          "clear": true
+        }
+      },
+      {
+        "name": "standing out of the plate",
+        "pass": true,
+        "required": true,
+        "detail": [
+          40,
+          30,
+          20
+        ]
+      },
+      {
+        "name": "the page drew each model, the plate and then the cylinder beside it",
+        "pass": true,
+        "required": true,
+        "detail": [
+          "e158e545cd685c90",
+          "45313d7f152803b9"
+        ]
+      },
+      {
+        "name": "the page shows the cylinder",
+        "pass": true,
+        "required": true,
+        "detail": [
+          "face:8/1",
+          "face:9/1",
+          "face:10/1",
+          "face:11/1"
+        ],
+        "carried": true
+      },
+      {
+        "name": "the agent started the viewer before its first run",
+        "pass": true,
+        "required": true,
+        "detail": {
+          "viewed": 0,
+          "ran": 1
+        }
+      },
+      {
+        "name": "it read the selection, highlighted it, then ran",
+        "pass": true,
+        "required": true,
+        "detail": {
+          "read": 0,
+          "lit": 1,
+          "made": 2
+        }
+      },
+      {
+        "name": "it measured what it made",
+        "pass": true,
+        "required": false,
+        "detail": {
+          "measured": 3
+        }
+      },
+      {
+        "name": "no call was refused for the cap",
+        "pass": true,
+        "required": false,
+        "detail": 0
+      }
+    ]
+  },
+  "error": null,
+  "rescored": [
+    {
+      "at": "2026-11-16T07:52:25.986Z",
+      "why": "The scorer took the agent's first call, `occam run --help`, for its first run, so it failed \"the agent started the viewer before its first run\"; a call for help is no step now, and is skipped in the order checks.",
+      "was": {
+        "pass": false,
+        "failed": [
+          "the agent started the viewer before its first run"
+        ]
+      }
+    }
+  ],
+  "selected": {
+    "id": "face:7/1",
+    "description": {
+      "adjacent": [
+        "shell:0/2",
+        "surface:7/1",
+        "loop:8/1",
+        "loop:9/1",
+        "edge:7/1",
+        "edge:9/1",
+        "edge:11/1",
+        "edge:13/1",
+        "edge:15/1",
+        "edge:17/1",
+        "face:0/2",
+        "face:1/1",
+        "face:2/1",
+        "face:3/1",
+        "face:4/1",
+        "face:5/1"
+      ],
+      "entity": "face:7/1",
+      "form": "plane",
+      "origin": {
+        "operation": "extrude",
+        "request-step": 1,
+        "role": "profile",
+        "step": 2
+      },
+      "values": [
+        {
+          "name": "origin",
+          "quantity": "length",
+          "shown": "(0, 0, 10) mm",
+          "value": [
+            0,
+            0,
+            10
+          ]
+        },
+        {
+          "name": "normal",
+          "quantity": "ratio",
+          "shown": "(0, 0, 1)",
+          "value": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "name": "x-axis",
+          "quantity": "ratio",
+          "shown": "(1, 0, 0)",
+          "value": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "loops",
+          "quantity": "count",
+          "shown": "2",
+          "value": 2
+        },
+        {
+          "name": "low",
+          "quantity": "length",
+          "shown": "(-8.88178419700126e-15, -6.661338147750947e-15, 9.999999999999742) mm",
+          "value": [
+            -8.88178419700126e-15,
+            -6.661338147750947e-15,
+            9.999999999999742
+          ]
+        },
+        {
+          "name": "high",
+          "quantity": "length",
+          "shown": "(80.00000000000003, 60.00000000000003, 10.000000000000258) mm",
+          "value": [
+            80.00000000000003,
+            60.00000000000003,
+            10.000000000000258
+          ]
+        }
+      ]
+    }
+  }
+}
