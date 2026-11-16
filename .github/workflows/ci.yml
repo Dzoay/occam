@@ -106,6 +106,28 @@ jobs:
         shell: bash
         run: just perf | tee -a "$GITHUB_STEP_SUMMARY"
 
+  # The viewer: its types, checked strict, and its tests in headless Chromium on the software adapter, which assert
+  # buffers, not pixels (docs/plan/view.md).
+  web:
+    name: web
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: The viewer's packages and Playwright's Chromium
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: What headless Chromium gives the tests, for the log
+        run: just web-gpu
+      - run: just web-check
+      - run: just web-test
+      - name: On failure, the runner's Vulkan and what Chromium gives the tests
+        if: failure()
+        run: |
+          ldconfig -p | grep -i vulkan || echo "no Vulkan library known to ldconfig"
+          ls -l /usr/share/vulkan/icd.d /etc/vulkan/icd.d 2>&1 || true
+          just web-gpu
+
   # Sixteen slices, so each fits in a job's six hours with room: at four, the geometry milestone's took 3h50 to over 6h,
   # and at eight 4h30 to 6h.
   mutants-shard:
@@ -144,7 +166,7 @@ jobs:
   # A goal, not a gate (L46): it is reported and never fails the run.
   ci-time:
     name: ci time
-    needs: [fmt, clippy, test, wasm, gates, perf, mutants]
+    needs: [fmt, clippy, test, wasm, gates, perf, web, mutants]
     if: always()
     runs-on: ubuntu-24.04
     permissions:

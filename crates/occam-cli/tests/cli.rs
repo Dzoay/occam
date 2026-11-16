@@ -2,6 +2,7 @@
 //! The tool as an agent meets it: a process, its standard output and its exit status. A wasm test run cannot start a process.
 #![cfg(not(target_family = "wasm"))]
 #![allow(clippy::unwrap_used, reason = "a failed step should fail the test")]
+#![allow(clippy::arithmetic_side_effects, reason = "offsets into a small file in tests")]
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -309,7 +310,7 @@ fn a_bad_command_line_names_the_argument_in_json() {
 fn help_lists_every_command() {
     let help = occam(&["--help"]);
     assert_eq!(help.status.code(), Some(0));
-    for command in ["run", "list", "adjacent", "describe", "check", "distance"] {
+    for command in ["run", "list", "adjacent", "describe", "check", "mesh", "distance"] {
         assert!(stdout(&help).contains(&format!("  {command} ")), "{command} in {}", stdout(&help));
     }
 }
@@ -330,4 +331,62 @@ fn a_kind_given_to_list_without_its_flag_is_answered_with_the_flag_to_use() {
         (Code::BadArgument, "KIND", Some("body,face"))
     );
     assert_eq!(input.expected.as_deref(), Some("--kind body,face"));
+}
+
+/// The counts a buffers file `bytes` begins with, and its table of faces, six numbers a face, checking its length.
+fn buffers(bytes: &[u8]) -> ([u64; 3], Vec<[u32; 6]>) {
+    let count = |k: usize| u64::from_le_bytes(bytes.get(8 * k..8 * k + 8).unwrap().try_into().unwrap());
+    let [vertices, triangles, faces] = [0, 1, 2].map(count).map(|n| usize::try_from(n).unwrap());
+    let table = 24 + 8 * 8 * vertices + 4 * 3 * triangles;
+    assert_eq!(bytes.len(), table + 4 * 6 * faces, "8 numbers of 8 bytes a vertex, 3 of 4 a triangle, 6 of 4 a face");
+    let word = |at: usize| u32::from_le_bytes(bytes.get(at..at + 4).unwrap().try_into().unwrap());
+    let rows = (0..faces).map(|k| std::array::from_fn(|i| word(table + 4 * (6 * k + i)))).collect();
+    ([0, 1, 2].map(count), rows)
+}
+
+#[test]
+fn mesh_writes_the_buffers_beside_the_model_and_gives_one_result_per_face() {
+    let dir = scratch("mesh");
+    let model = boxed(&dir);
+    let meshed = occam(&["mesh", "--model", text(&model), "--deflection", "0.1", "--json"]);
+    assert_eq!(meshed.status.code(), Some(0), "{}", stdout(&meshed));
+    let value = json_out(&meshed);
+    let file = dir.join("box.occam.mesh");
+    assert_eq!((&value["ok"], &value["file"]), (&json!(true), &json!(text(&file))));
+    let answers = value["answers"].as_array().unwrap();
+    let ids: Vec<&str> = answers.iter().map(|a| a["entity"].as_str().unwrap()).collect();
+    assert_eq!(ids, (0..6).map(|k| format!("face:{k}/1")).collect::<Vec<_>>(), "one result per face");
+    let (counts, faces) = buffers(&std::fs::read(&file).unwrap());
+    assert_eq!(counts, [24, 12, 6]);
+    assert_eq!((&value["vertices"], &value["triangles"]), (&json!(24), &json!(12)));
+    for (row, answer) in faces.iter().zip(answers) {
+        assert_eq!(answer["entity"], format!("face:{}/{}", row[0], row[1]));
+        let range = |name: &str| [&answer["mesh"][name]["first"], &answer["mesh"][name]["count"]].map(Value::as_u64);
+        let want = |k: usize| [Some(u64::from(row[k])), Some(u64::from(row[k + 1]))];
+        assert_eq!((range("vertices"), range("triangles")), (want(2), want(4)), "{answer}");
+    }
+    let elsewhere = dir.join("elsewhere.bin");
+    let again = occam(&["mesh", "--model", text(&model), "--deflection", "0.1", "--out", text(&elsewhere)]);
+    assert_eq!(again.status.code(), Some(0));
+    assert_eq!(std::fs::read(&elsewhere).unwrap(), std::fs::read(&file).unwrap(), "the same buffers");
+    let said = "Meshed 6 of 6 faces to a deflection of 0.1 mm and an angle of 0.35 rad: 24 vertices and 12 triangles.";
+    assert_eq!(stdout(&again), format!("{said}\nThe buffers are in {}.\n", text(&elsewhere)));
+}
+
+#[test]
+fn mesh_refuses_limits_that_are_not_positive_and_writes_nothing() {
+    let dir = scratch("mesh-limits");
+    let model = boxed(&dir);
+    let refused = occam(&["mesh", "--model", text(&model), "--deflection", "0", "--json"]);
+    assert_eq!(refused.status.code(), Some(1));
+    let report = &json_out(&refused)["reports"][0];
+    assert_eq!(
+        (&report["code"], &report["input"]["parameter"]),
+        (&json!("mesh.limit-not-positive"), &json!("deflection"))
+    );
+    assert!(!dir.join("box.occam.mesh").exists(), "nothing is written");
+    let unwritable = occam(&["mesh", "--model", text(&model), "--deflection", "0.1", "--out", text(&dir), "--json"]);
+    assert_eq!(unwritable.status.code(), Some(1));
+    let report = &json_out(&unwritable)["reports"][0];
+    assert_eq!((&report["code"], &report["input"]["parameter"]), (&json!("cli.file-not-written"), &json!("--out")));
 }

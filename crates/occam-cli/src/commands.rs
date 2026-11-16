@@ -4,7 +4,7 @@
 
 use std::error::Error as _;
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use clap::error::{ContextKind, ContextValue, Error, ErrorKind};
 use clap::{CommandFactory, Parser};
@@ -13,7 +13,7 @@ use occam::{
     distance_json, ran_json, ran_words,
 };
 
-use crate::args::{Cli, Command, DistanceArgs, IdsArgs, ListArgs, ModelArgs, RunArgs, kind};
+use crate::args::{Cli, Command, DistanceArgs, IdsArgs, ListArgs, MeshArgs, ModelArgs, RunArgs, kind};
 
 /// What to say, a line each with whether it goes to standard output, and the exit status: 0 when everything asked was
 /// answered, 1 when anything was refused, and 2 when the command line is wrong.
@@ -61,6 +61,7 @@ fn command(command: Command, json: bool) -> Said {
         Command::Adjacent(args) => ids(&args, json, Session::adjacent, Answered::Adjacent),
         Command::Describe(args) => ids(&args, json, Session::describe, Answered::Described),
         Command::Check(args) => check(&args, json),
+        Command::Mesh(args) => mesh(&args, json),
         Command::Distance(args) => distance(&args, json),
     }
 }
@@ -197,15 +198,14 @@ fn session(path: &Path, binary: bool) -> Result<Session, Vec<Report>> {
     Ok(session)
 }
 
-/// Writes `bytes` to `path` whole or not at all, through a file beside it.
-fn write(path: &Path, bytes: &[u8]) -> Result<(), Report> {
-    let mut beside = path.as_os_str().to_owned();
-    beside.push(".writing");
-    let written = std::fs::write(&beside, bytes).and_then(|()| std::fs::rename(&beside, path));
+/// Writes `bytes` to `path`, given as `parameter`, whole or not at all, through a file beside it.
+fn write(parameter: &str, path: &Path, bytes: &[u8]) -> Result<(), Report> {
+    let writing = beside(path, ".writing");
+    let written = std::fs::write(&writing, bytes).and_then(|()| std::fs::rename(&writing, path));
     written.map_err(|_| {
-        let _ = std::fs::remove_file(&beside);
+        let _ = std::fs::remove_file(&writing);
         Report::new(Code::FileNotWritten, Fault::InvalidInput)
-            .with_input(Input::at("--model").given(&path.display().to_string()))
+            .with_input(Input::at(parameter).given(&path.display().to_string()))
     })
 }
 
@@ -215,7 +215,7 @@ fn run(args: &RunArgs, json: bool) -> Said {
     let ran = match read.and_then(|request| Ok((request, session(&args.model, args.binary)?))) {
         Ok((request, mut session)) => {
             let (mut ran, saved) = session.run(&request);
-            if let Some(Err(report)) = saved.map(|bytes| write(&args.model, &bytes)) {
+            if let Some(Err(report)) = saved.map(|bytes| write("--model", &args.model, &bytes)) {
                 ran.failed = Some(Failed { step: None, reports: vec![report] });
             }
             ran
@@ -224,6 +224,34 @@ fn run(args: &RunArgs, json: bool) -> Said {
     };
     let ok = ran.failed.is_none();
     if json { Said::json(ran_json(&ran), ok) } else { Said::words(ran_words(&ran), ok) }
+}
+
+/// `occam mesh`: the model opened and meshed, its buffers written beside it or to `--out`, and how each face meshed.
+fn mesh(args: &MeshArgs, json: bool) -> Said {
+    let exec = exec();
+    let meshed = open(&args.model.model, &exec).and_then(|mut opened| opened.mesh(&exec, args.deflection, args.angle));
+    let meshed = match meshed {
+        Ok(meshed) => meshed,
+        Err(reports) => return answer(&Answered::Refused(reports), json),
+    };
+    let out = args.out.clone().unwrap_or_else(|| beside(&args.model.model, ".mesh"));
+    if let Err(report) = write("--out", &out, &meshed.buffers.to_bytes()) {
+        return answer(&Answered::Refused(vec![report]), json);
+    }
+    let file = out.display().to_string();
+    if json {
+        return Said::json(meshed.json(Some(&file)), meshed.ok());
+    }
+    let mut lines = meshed.words();
+    lines.insert(1, (true, format!("The buffers are in {file}.")));
+    Said::words(lines, meshed.ok())
+}
+
+/// The path of `model` with `suffix` added, for a file beside it.
+fn beside(model: &Path, suffix: &str) -> PathBuf {
+    let mut name = model.as_os_str().to_owned();
+    name.push(suffix);
+    PathBuf::from(name)
 }
 
 /// `occam distance`.

@@ -19,10 +19,15 @@
 //! position: every segment used once each way, a face that did not mesh named as a hole, and each shell's mesh with its
 //! faces' Euler characteristic. [`Mesh::digest`] is what `gates determinism` holds to its record.
 //!
+//! [`Buffers`] are a mesh as the renderer contract wants it: flat arrays, each face a vertex block of its own whose
+//! indices count from its start. After an edit, [`remesh`] meshes again only the faces the edit touched and those along
+//! an edge whose samples changed; the rest keep their blocks bit for bit.
+//!
 //! The work runs in parallel only through [`occam_math::Exec`], one face or one edge a task, and every result comes back
 //! in id order, so the samples and the meshes are the same bits at any thread count.
 
 mod boundary;
+mod buffers;
 mod curvature;
 mod deviation;
 mod edges;
@@ -34,6 +39,7 @@ mod predicates;
 #[doc(hidden)]
 pub mod probe;
 mod refine;
+mod remesh;
 #[cfg(test)]
 mod testing;
 /// The tests' models, built outside the tests only for the determinism probe, which nothing that ships turns on.
@@ -43,9 +49,11 @@ mod testing;
 mod triangulation;
 mod watertight;
 
+pub use buffers::{Buffers, FaceRange};
 pub use deviation::deviation;
 pub use edges::{EdgeSamples, Edges, sample_edges};
 pub use faces::{FaceMesh, Faces, Side, mesh_face, mesh_faces};
 pub use limits::Limits;
 pub use merge::{Block, Mesh, merge, mesh};
+pub use remesh::{Remeshed, remesh};
 pub use watertight::watertight;
