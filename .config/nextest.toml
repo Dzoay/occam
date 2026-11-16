@@ -20,6 +20,12 @@ priority = -10
 filter = "(package(occam-mesh) & test(/^faces::tests::/)) | (package(occam-ops) & test(/^meshed::/))"
 priority = -5
 
+# occam-intersect's sweep of P5's near-tangent pairs, 48 sections, runs after the unit tests too, so that a mutant of the
+# hybrid fails a quick test first.
+[[profile.default.overrides]]
+filter = "package(occam-intersect) & test(/^resolution_tests::p5s_near_tangent/)"
+priority = -5
+
 # The gates and CI: run everything and report every failure.
 [profile.ci]
 fail-fast = false

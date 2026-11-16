@@ -107,7 +107,7 @@ flowchart LR
   one is cut there: the pencil method's nodal quartic at its node and its split conics where they cross. A line through
   a cone's apex has no ends to cut, and is kept whole beside the apex's contact. The hybrid finds one where the sine
   between the normals is least along a trace and the model there is a saddle whose gap is within the band.
-- **The hybrid near a tangency:** a leaf where Newton's method finds no start is given to alternating projections; a
+- **The hybrid near a tangency:** a leaf where Newton's method settles nowhere is given to alternating projections; a
   start where the surfaces cross at a small angle has a second start mirrored through where the gap is least, traced
   after the leaves' own, one a round, for the second of two close curves. A trace closes where the corrector lands
   within the band over the sine between the surfaces of its start, the curve's own resolution there. Touches within
