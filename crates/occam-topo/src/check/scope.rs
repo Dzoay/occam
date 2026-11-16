@@ -34,7 +34,7 @@ impl Added {
     /// Adds each item of the list `holder` holds of kind `K`, walked by `walk`, unless it is added already.
     fn list<K: Kind>(&mut self, out: &mut BTreeSet<EntityRef>, holder: EntityRef, walk: impl FnOnce() -> Walk<Id<K>>) {
         if self.lists.insert((holder, K::ENTITY)) {
-            add(out, &walk());
+            add(out, walk());
         }
     }
 
@@ -44,10 +44,10 @@ impl Added {
             return;
         }
         let places = star(model, start);
-        out.extend(places.items().into_iter().map(|p| p.edge.entity()));
-        if let Walk::Ring(ring) = places {
-            self.places.extend(ring);
+        if let Walk::Ring(ring) = &places {
+            self.places.extend(ring.iter().copied());
         }
+        out.extend(places.items().into_iter().map(|p| p.edge.entity()));
     }
 }
 
@@ -80,7 +80,7 @@ pub(crate) fn scope(edit: &Edit) -> BTreeSet<EntityRef> {
 }
 
 /// Adds each item of `walk`.
-fn add<K: Kind>(out: &mut BTreeSet<EntityRef>, walk: &Walk<Id<K>>) {
+fn add<K: Kind>(out: &mut BTreeSet<EntityRef>, walk: Walk<Id<K>>) {
     out.extend(walk.items().into_iter().map(Id::entity));
 }
 
