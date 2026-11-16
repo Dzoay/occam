@@ -291,6 +291,24 @@ mod tests {
     }
 
     #[test]
+    fn a_crossing_is_kept_only_by_the_piece_that_holds_both_its_stations() {
+        let t = trace(along(&[0.0, 1.0, 2.0, 2.0, 3.0]), vec![seam(2)], [End::Edge; 2]);
+        let at = |k: usize| cut(&t, &[k]).iter().map(|p| p.crossings.len()).collect::<Vec<_>>();
+        assert_eq!((at(2), at(3), at(1)), (vec![0, 1], vec![1, 0], vec![0, 1]));
+    }
+
+    #[test]
+    fn a_surface_with_no_normal_there_has_no_sine() {
+        let cone = occam_geom::Cone::placed(&moved([0.0; 3]), mm(0.0), occam_units::Angle::from_radians(0.5)).unwrap();
+        let apex = Station {
+            at: Point::from_vec3(Vec3::new(0.0, 0.0, 0.0)),
+            on_a: UvPoint::new(0.0, 0.0),
+            on_b: UvPoint::new(0.3, 0.0),
+        };
+        assert_eq!((normal(&cone, apex.on_b), sine((&level(0.0), &cone), &apex)), (None, None));
+    }
+
+    #[test]
     fn a_closed_trace_turned_starts_and_ends_at_the_station_given() {
         let t = trace(along(&[0.0, 1.0, 2.0]), vec![seam(2)], [End::Closed; 2]);
         let turned = turn(&t, 1);

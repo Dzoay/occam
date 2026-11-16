@@ -267,3 +267,63 @@ fn image(piece: &Piece, chart: &Chart, which: usize) -> Option<Arc<dyn ParamCurv
         Piece::Ellipse(c) => closed(*c, chart, false),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use occam_geom::Chart;
+
+    use super::*;
+    use crate::closed::tests::{O, sphere, tol};
+
+    /// The unit sphere's chart, rigidly placed, and its two poles.
+    fn chart() -> (Chart, [Vec3; 2]) {
+        let ball = sphere(O, 1.0);
+        let chart = Chart::of(ball.as_ref(), ball.analytic(tol()).unwrap()).unwrap();
+        let poles = chart.poles();
+        let (Some(north), Some(south)) = (poles.first(), poles.last()) else { panic!("{poles:?}") };
+        (chart, [north.to_vec3(), south.to_vec3()])
+    }
+
+    #[test]
+    fn a_ring_cut_at_a_pole_both_charts_share_and_a_point_there_is_cut_there_once() {
+        // A great circle through both poles of the sphere both charts are: each pole once, as the first chart's.
+        let (chart, [north, south]) = chart();
+        let centre = (north + south) * 0.5;
+        let axis = unit(north - south);
+        let normal = unit(axis.cross(square_to(axis)));
+        let plan = Plan::Circle { centre, normal, radius: 1.0 };
+        let ring = ring_of(plan).unwrap();
+        let mut decide = Decisions::new(tol());
+        let got = cuts(&ring, [&chart, &chart], &[north], &mut decide).unwrap();
+        assert_eq!(got.iter().map(|(_, which, _)| *which).collect::<Vec<_>>(), [Some(0), Some(0)]);
+        let made = pieces(plan, [&chart, &chart], &[north], &mut decide).unwrap().unwrap();
+        assert_eq!(made.len(), 2, "two arcs, from pole to pole");
+        // A point off the ring cuts nothing, and a point on it alone cuts it once, into one arc round from it.
+        let off = cuts(&ring, [&chart, &chart], &[centre], &mut decide).unwrap();
+        assert_eq!(off.len(), 2);
+        let small = Plan::Circle { centre: centre + axis * 0.6, normal: axis, radius: 0.8 };
+        let ring = ring_of(small).unwrap();
+        let on = ring.at(0.7);
+        let once = cuts(&ring, [&chart, &chart], &[on], &mut decide).unwrap();
+        assert_eq!(once.iter().map(|(at, which, _)| (*at, *which)).collect::<Vec<_>>(), [(ring.angle(on), None)]);
+        assert_eq!(pieces(small, [&chart, &chart], &[on], &mut decide).unwrap().unwrap().len(), 1);
+        assert_eq!(pieces(small, [&chart, &chart], &[], &mut decide).unwrap().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_ellipses_angle_is_its_parameter_and_a_line_has_no_ring() {
+        let ring = ring_of(Plan::Ellipse {
+            centre: Vec3::new(1.0, 2.0, 3.0),
+            x: Vec3::new(1.0, 0.0, 0.0),
+            y: Vec3::new(0.0, 1.0, 0.0),
+            radii: (2.0, 0.5),
+        })
+        .unwrap();
+        for t in [-2.5, -0.3, 0.0, 1.2, 3.0] {
+            assert!((ring.angle(ring.at(t)) - t).abs() <= 1e-12, "{t}");
+        }
+        assert!((ring.at(0.0) - Vec3::new(3.0, 2.0, 3.0)).norm() <= 1e-15);
+        let line = Plan::Line { at: O, along: Vec3::new(1.0, 0.0, 0.0) };
+        assert!(ring_of(line).is_none());
+    }
+}

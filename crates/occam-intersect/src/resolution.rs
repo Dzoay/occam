@@ -89,10 +89,10 @@ impl Near {
         if size(first) < size(second) { (size(first), size(second)) } else { (size(second), size(first)) }
     }
 
-    /// Whether an eigenvalue of the relative curvature is nought to its precision, or all are.
+    /// Whether an eigenvalue of the relative curvature is nought to its precision, as both are where it is nought.
     pub(crate) fn flat(&self) -> bool {
         let (least, most) = self.sizes();
-        least <= self.null * most || most == 0.0
+        least <= self.null * most
     }
 
     /// Where the gap is least or most, `c − p` in the plane's basis: `−K⁻¹ slope`, leaving out any eigenvalue that is
@@ -102,7 +102,7 @@ impl Near {
         let most = if size(first) > size(second) { size(first) } else { size(second) };
         let mut out = [0.0; 2];
         for (lambda, way) in [(first, [x, y]), (second, [-y, x])] {
-            if size(lambda) <= self.null * most || lambda == 0.0 {
+            if size(lambda) <= self.null * most {
                 continue;
             }
             let along = -dot2(self.slope, way) / lambda;
@@ -134,12 +134,13 @@ impl Near {
     }
 
     /// The gap between `b` at `on_b` and `a` at `on_a`, from their derivatives through the seam, or `None` where
-    /// either's derivatives span no plane there, as at a pole. The second's curvature is read along its own tangent
+    /// either's derivatives span no plane there, as at a cone's apex, where its numbers are not finite. The second's
+    /// curvature is read along its own tangent
     /// plane, which leans from the first's by the angle between their normals, so the relative curvature is known
     /// only to a part of the greatest about four times that angle's sine, besides its rounding: an eigenvalue no
     /// larger is nought to its precision.
     pub(crate) fn between(a: &dyn Surface, on_a: UvPoint, b: &dyn Surface, on_b: UvPoint) -> Option<Self> {
-        let (first, second) = (Form::at(a, on_a)?, Form::at(b, on_b)?);
+        let (first, second) = (Form::at(a, on_a), Form::at(b, on_b));
         let n = first.normal;
         let e1 = unit(first.du);
         let (e2, m) = (n.cross(e1), if second.normal.dot(n) < 0.0 { -second.normal } else { second.normal });
@@ -172,22 +173,20 @@ struct Form {
 }
 
 impl Form {
-    /// The form of `surface` at `uv`, or `None` where its derivatives span no plane.
-    fn at(surface: &dyn Surface, uv: UvPoint) -> Option<Self> {
+    /// The form of `surface` at `uv`: where its derivatives span no plane, its normal and inverse are not finite.
+    fn at(surface: &dyn Surface, uv: UvPoint) -> Self {
         let jet = surface.second(uv);
         let (du, dv) = (jet.first.du.rate(), jet.first.dv.rate());
-        let cross = du.cross(dv);
         let (e, f, g) = (du.dot(du), du.dot(dv), dv.dot(dv));
         let det = e * g - f * f;
-        let spans = cross.norm() > 1e-12 * du.norm() * dv.norm() && det > 0.0;
-        spans.then(|| Self {
+        Self {
             point: jet.first.point.to_vec3(),
             du,
             dv,
             second: [jet.duu.rate(), jet.duv.rate(), jet.dvv.rate()],
-            normal: unit(cross),
+            normal: unit(du.cross(dv)),
             inverse: [g / det, -f / det, e / det],
-        })
+        }
     }
 
     /// The second fundamental form, along `normal`, of the tangent vectors nearest `s` and `t`.
@@ -291,7 +290,7 @@ mod tests {
         let saddle = near(0.0, [0.0; 2], [[-1.0, 0.0], [0.0, 4.0]]);
         assert!(close(saddle.bound(2e-8), MARGIN * 2e-4), "the least size sets it: {}", saddle.bound(2e-8));
         assert_eq!(near(0.0, [0.0; 2], [[1.0, 0.0], [0.0, 0.0]]).bound(1e-8), f64::INFINITY);
-        assert_eq!((hidden(2.0, 1.0), hidden(1.0, 0.0)), (2.0, f64::INFINITY));
+        assert_eq!((hidden(2.0, 1.0), hidden(1.0, 0.0), hidden(0.0, 0.0)), (2.0, f64::INFINITY, f64::INFINITY));
     }
 
     #[test]
