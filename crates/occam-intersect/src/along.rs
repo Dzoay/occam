@@ -12,8 +12,8 @@
 //!   and is a contact when it lies within the band, two crossings when it lies beyond it, and nothing when it falls
 //!   short;
 //! - at an end of the span that lies within the band, the curve ends on the surface: a contact;
-//! - a run of pieces within the band, whose slope and bend at its middle, carried across the whole span, keep the
-//!   curve within the band, lies in the surface: an overlap.
+//! - a run of pieces within the band that is the whole span lies in the surface: an overlap. Only a whole span is
+//!   taken so: a run between decided pieces holds pieces that reach across an edge of the band, left open.
 //!
 //! The curve is moved rigidly into the form's own frame first, where the form's axis or normal is Z, so that the boxes
 //! of its pieces, which follow the world's axes, follow the surface: a circle in a tilted plane then has a flat box.
@@ -190,14 +190,11 @@ impl Along<'_, '_> {
         )
     }
 
-    /// One run, between `run.before` and `after`.
+    /// One run, between `run.before` and `after`. A run of pieces within the band that is the whole span lies in the
+    /// surface: an overlap.
     fn run(&mut self, run: Run, after: Option<Side>) {
-        if run.on {
-            match self.flat(run) {
-                Some(true) => return self.sink.overlap(run.lo, run.hi),
-                Some(false) => {}
-                None => return,
-            }
+        if run.on && run.before.is_none() && after.is_none() {
+            return self.sink.overlap(run.lo, run.hi);
         }
         let (start, end) = (self.side(run.lo, run.before), self.side(run.hi, after));
         match (start, end) {
@@ -221,31 +218,6 @@ impl Along<'_, '_> {
     fn undecided(&mut self, t: f64) {
         let (value, band) = (self.at(t), self.band());
         self.sink.undecided(t, value, Quantity::Length, band);
-    }
-
-    /// Whether a run within the band lies in the surface: the distance's slope and bend at its middle, from its middle
-    /// and quarters, carried to the ends of the whole span, each keep the curve within the band. `None` where either
-    /// cannot be decided, which is reported.
-    fn flat(&mut self, run: Run) -> Option<bool> {
-        let step = (run.hi - run.lo) * 0.25;
-        let mid = middle(run.lo, run.hi);
-        let (before, here, after) = (self.at(mid - step), self.at(mid), self.at(mid + step));
-        let reach = Interval::exact((self.span.hi - self.span.lo) / step);
-        let half = Interval::exact(0.5);
-        let slope = (after - before) * half * reach * half;
-        let bend = (after + before - here - here) * reach * reach * Interval::exact(0.125);
-        let mut flat = true;
-        for value in [slope, bend] {
-            match self.decide(value) {
-                Verdict::Decided(Side::Within) => {}
-                Verdict::Decided(_) => flat = false,
-                Verdict::Undecided => {
-                    self.sink.undecided(mid, value, Quantity::Length, self.band());
-                    return None;
-                }
-            }
-        }
-        Some(flat)
     }
 
     /// A crossing from `lo`, on `start`, to `hi`, on the other side: its root by bisection, kept where it is decided

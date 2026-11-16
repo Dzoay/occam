@@ -19,38 +19,38 @@ use occam_units::{
 
 use crate::{Budget, Hit, HitPair, Hits, Overlap, Span, boxes_meet, hits, hits_of_pairs, scan};
 
-fn tol() -> Tolerance {
+pub(crate) fn tol() -> Tolerance {
     Tolerance::new(Length::from_millimetres(1e-7), Angle::from_radians(1e-9)).unwrap()
 }
 
-const BUDGET: Budget = Budget { steps: 100_000 };
+pub(crate) const BUDGET: Budget = Budget { steps: 100_000 };
 
-fn v(x: f64, y: f64, z: f64) -> Vec3 {
+pub(crate) fn v(x: f64, y: f64, z: f64) -> Vec3 {
     Vec3::new(x, y, z)
 }
 
-fn mm(x: f64) -> Length {
+pub(crate) fn mm(x: f64) -> Length {
     Length::from_millimetres(x)
 }
 
 /// Turned by `turn` about `axis`, then moved by `shift`, within one frame.
-fn motion<F: Frame>(axis: Vec3, turn: f64, shift: Vec3) -> Placement<F, F> {
+pub(crate) fn motion<F: Frame>(axis: Vec3, turn: f64, shift: Vec3) -> Placement<F, F> {
     let spin = Placement::rotation(Direction::normalised(axis), Angle::from_radians(turn));
     spin.then(&Placement::translation(Vector::from_vec3(shift)))
 }
 
 /// A frame in the world: [`motion`] of the world's.
-fn frame(axis: Vec3, turn: f64, shift: Vec3) -> Placement<Local, World> {
+pub(crate) fn frame(axis: Vec3, turn: f64, shift: Vec3) -> Placement<Local, World> {
     Placement::identity().then(&motion(axis, turn, shift))
 }
 
 /// A frame within `p`: [`motion`] of its own, then `p`.
-fn within(p: &Placement<Local, World>, axis: Vec3, turn: f64, shift: Vec3) -> Placement<Local, World> {
+pub(crate) fn within(p: &Placement<Local, World>, axis: Vec3, turn: f64, shift: Vec3) -> Placement<Local, World> {
     motion::<Local>(axis, turn, shift).then(p)
 }
 
 /// The placements every case is tried under: none, and two rigid motions.
-fn placements() -> [Placement<Local, World>; 3] {
+pub(crate) fn placements() -> [Placement<Local, World>; 3] {
     [
         Placement::identity(),
         frame(v(1.0, 2.0, 3.0), 0.7, v(10.0, -4.0, 2.5)),
@@ -59,32 +59,32 @@ fn placements() -> [Placement<Local, World>; 3] {
 }
 
 /// The segment from local `from` along local `along`, over `0..=length`.
-fn segment(p: &Placement<Local, World>, from: Vec3, along: Vec3, length: f64) -> Arc<dyn Curve> {
+pub(crate) fn segment(p: &Placement<Local, World>, from: Vec3, along: Vec3, length: f64) -> Arc<dyn Curve> {
     let start = p.point(Point::from_vec3(from));
     Arc::new(Line::new(start, p.direction(Direction::normalised(along))).trimmed(0.0, length).unwrap())
 }
 
-fn span(lo: f64, hi: f64) -> Span {
+pub(crate) fn span(lo: f64, hi: f64) -> Span {
     Span { lo, hi }
 }
 
-fn patch(lo: (f64, f64), hi: (f64, f64)) -> UvBox {
+pub(crate) fn patch(lo: (f64, f64), hi: (f64, f64)) -> UvBox {
     UvBox::new(UvPoint::new(lo.0, lo.1), UvPoint::new(hi.0, hi.1))
 }
 
 /// The distance between two points.
-fn apart(a: Point<World>, b: Point<World>) -> f64 {
+pub(crate) fn apart(a: Point<World>, b: Point<World>) -> f64 {
     (a.to_vec3() - b.to_vec3()).norm()
 }
 
 /// That `found` is a hit at the curve's parameter `t`, its point on `surface` at its parameters.
-fn hit_at(found: &Hit, t: f64, surface: &dyn Surface) {
+pub(crate) fn hit_at(found: &Hit, t: f64, surface: &dyn Surface) {
     assert!((found.t - t).abs() < 1e-9, "{} against {t}", found.t);
     assert!(apart(found.at, surface.point(found.uv)) < 1e-9, "{found:?}");
 }
 
 /// That a scan met no failure, and found `counts` crossings, contacts and overlaps.
-fn found(hits: &Hits, counts: (usize, usize, usize)) {
+pub(crate) fn found(hits: &Hits, counts: (usize, usize, usize)) {
     assert!(hits.failures.is_empty(), "{:?}", hits.failures);
     assert_eq!((hits.crossings.len(), hits.contacts.len(), hits.overlaps.len()), counts, "{hits:?}");
 }
@@ -150,6 +150,28 @@ fn a_circle_lying_in_a_plane_is_an_overlap() {
 }
 
 #[test]
+fn a_curve_wholly_within_the_band_lies_in_the_surface_however_it_bends_or_tilts() {
+    // Half a band inside a cylinder of radius 1, and so long that it bends 1.4 bands across its length.
+    let band = tol().band().millimetres();
+    let length = (8.0 * 1.4 * band).sqrt();
+    let line =
+        Line::new(Point::from_vec3(v(-0.5 * length, 1.0 - 0.5 * band, 0.0)), Direction::normalised(v(1.0, 0.0, 0.0)));
+    let cylinder = Cylinder::placed(&Placement::identity(), mm(1.0)).unwrap();
+    let side = patch((0.0, -1.0), (TAU, 1.0));
+    let short = hits(&line.trimmed(0.0, length).unwrap(), span(0.0, length), &cylinder, side, tol(), BUDGET);
+    found(&short, (0, 0, 1));
+    assert_eq!(short.overlaps, [Overlap { lo: 0.0, hi: length }]);
+    // A circle of radius 5 tilted from a plane so little, its sine the angle itself, that it is never more than 0.6
+    // bands from it.
+    let tilt = 0.6 * band / 5.0;
+    let circle = Circle::placed(&frame(v(1.0, 0.0, 0.0), tilt, v(1.0, -2.0, 0.0)), mm(5.0)).unwrap();
+    let plane = Plane::placed(&Placement::identity());
+    let tilted = hits(&circle, span(0.0, TAU), &plane, patch((-10.0, -10.0), (10.0, 10.0)), tol(), BUDGET);
+    found(&tilted, (0, 0, 1));
+    assert_eq!(tilted.overlaps, [Overlap { lo: 0.0, hi: TAU }]);
+}
+
+#[test]
 fn a_segment_ending_on_a_sphere_gives_a_contact_at_its_end_and_a_patch_keeps_only_its_own() {
     let (ball, origin) = (Sphere::placed(&Placement::identity(), mm(2.0)).unwrap(), Placement::identity());
     let whole = patch((0.0, -FRAC_PI_2), (TAU, FRAC_PI_2));
@@ -168,7 +190,7 @@ fn a_segment_ending_on_a_sphere_gives_a_contact_at_its_end_and_a_patch_keeps_onl
 }
 
 /// The hyperbolic paraboloid `z = x y` over `[-1, 1]²`, as a bilinear B-spline: it presents no analytic form.
-fn saddle() -> SplineSurface {
+pub(crate) fn saddle() -> SplineSurface {
     let corners = [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)];
     let poles = corners.map(|(x, y)| Point::from_vec3(v(x, y, x * y))).to_vec();
     let knots = vec![0.0, 0.0, 1.0, 1.0];
