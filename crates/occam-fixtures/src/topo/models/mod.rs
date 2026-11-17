@@ -24,7 +24,7 @@ mod geometric;
 mod split;
 
 pub use geometric::{
-    cylinder_from, cylinder_pcurves, disc, holed_sheet, sheet_holed_by_its_reversal, straight_pcurves,
+    cylinder_from, cylinder_pcurves, disc, holed_sheet, sheet_holed_by_its_reversal, straight_pcurves, uv_line,
 };
 pub use split::{split, top_square};
 

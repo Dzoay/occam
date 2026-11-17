@@ -23,7 +23,7 @@ mod kind;
 /// does.
 #[cfg(test)]
 #[path = "../../occam-fixtures/src/topo/models/mod.rs"]
-#[allow(dead_code, reason = "not every test model is used by this crate's own tests")]
+#[allow(dead_code, unused_imports, reason = "not every test model is used by this crate's own tests")]
 mod models;
 #[cfg(test)]
 mod probe;

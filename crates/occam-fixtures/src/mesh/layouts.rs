@@ -1,5 +1,5 @@
 //! Source: original
-//! The tests' models, written through `Edit` as any caller would: sheets of faces, each loop running anticlockwise in
+//! The tests' models, written through `Edit` by the topology's builder for tests, as any caller would: sheets of faces, each loop running anticlockwise in
 //! its face's parameters, each edge's uses round its ring in the order the faces give them, and each vertex's star in
 //! the order the edges give their ends. A flat disc, with its circle drawn in its parameters or not; P9's bicubic patch
 //! with a collapsed row; half a sphere, whose loop crosses each pole; a unit square; and that square meeting a quarter
@@ -11,15 +11,13 @@ use core::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI};
 use std::sync::Arc;
 
 use occam_fixtures::tol;
+use occam_fixtures::topo::models::{EdgeSpec, FaceSpec, Spec, build};
 use occam_geom::{
     Circle, Curve, Cylinder, Line, ParamCurve, Plane, Sphere, SplineCurve, SplineSurface, Surface, UvCurve,
 };
 use occam_math::Exec;
-use occam_report::StepRole;
 use occam_topo::{
-    Around, Body, BodyKind, BodyRecord, CurveRecord, Edge, EdgeRecord, EdgeRole, EdgeUse, EdgeUseRecord, Edit, End,
-    Face, FaceRecord, Id, Loop, LoopRecord, ParamCurveRecord, Sheet, Shell, ShellRecord, Snapshot, SurfaceRecord,
-    UseOwner, Vertex, VertexRecord,
+    BodyKind, CurveRecord, Edge, EdgeRole, EdgeUseRecord, Edit, Id, ParamCurveRecord, Snapshot, SurfaceRecord,
 };
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, UvPoint, Vec3, Vector, World};
 
@@ -62,79 +60,41 @@ pub fn model(layouts: &[Layout]) -> (Snapshot, Vec<Vec<Id<Edge>>>) {
     (edit.commit(&Exec::serial()).unwrap().0, edges)
 }
 
-/// The item after `item` in `ring`, round to the first after the last.
-fn after<T: Copy + PartialEq>(ring: &[T], item: T) -> T {
-    let at = ring.iter().position(|&x| x == item).unwrap();
-    ring[(at + 1) % ring.len()]
+/// `layout` as the topology's builder takes it: a sheet body, a surface a face, and each face's one loop its sides.
+fn spec(layout: &Layout) -> Spec {
+    let edge = |piece: &Piece| EdgeSpec {
+        curve: CurveRecord(Arc::clone(&piece.curve)),
+        range: piece.range,
+        ends: piece.ends,
+        role: EdgeRole::Ordinary,
+    };
+    let face = |(surface, patch): (usize, &Patch)| {
+        let sides = patch.sides.iter().map(|side| (side.edge, side.reversed)).collect();
+        FaceSpec { surface, reversed: false, loops: vec![(sides, UvPoint::new(patch.witness.0, patch.witness.1))] }
+    };
+    Spec {
+        kind: BodyKind::Sheet,
+        points: layout.points.iter().map(|&p| Point::from_vec3(p)).collect(),
+        edges: layout.edges.iter().map(edge).collect(),
+        surfaces: layout.faces.iter().map(|patch| SurfaceRecord(Arc::clone(&patch.surface))).collect(),
+        faces: layout.faces.iter().enumerate().map(face).collect(),
+        wires: Vec::new(),
+    }
 }
 
-/// Writes the faces of `layout`, their loops and their uses, and gives each edge's uses in the order they come.
-fn write_faces(
-    edit: &mut Edit,
-    layout: &Layout,
-    shell: Id<Shell>,
-    edges: &[Id<Edge>],
-) -> (Id<Face>, Vec<Vec<Id<EdgeUse>>>) {
-    let born = edit.provenance(StepRole::Made);
-    let faces: Vec<Id<Face>> = layout.faces.iter().map(|_| edit.reserve()).collect();
-    let loops: Vec<Id<Loop>> = layout.faces.iter().map(|_| edit.reserve()).collect();
-    let uses: Vec<Vec<Id<EdgeUse>>> =
-        layout.faces.iter().map(|f| f.sides.iter().map(|_| edit.reserve()).collect()).collect();
-    let mut rings: Vec<Vec<Id<EdgeUse>>> = vec![Vec::new(); edges.len()];
-    for (patch, ids) in layout.faces.iter().zip(&uses) {
-        patch.sides.iter().zip(ids).for_each(|(side, &u)| rings[side.edge].push(u));
-    }
-    for (k, patch) in layout.faces.iter().enumerate() {
-        let surface = edit.add(SurfaceRecord(Arc::clone(&patch.surface)));
-        let outer = loops[k];
-        let face = FaceRecord { shell, surface, sheet: Sheet::default(), reversed: false, outer, born };
-        edit.set(faces[k], face).unwrap();
-        let witness = UvPoint::new(patch.witness.0, patch.witness.1);
-        edit.set(outer, LoopRecord { face: faces[k], first: uses[k][0], next: None, witness }).unwrap();
-        for (side, &u) in patch.sides.iter().zip(&uses[k]) {
-            let pcurve = side.pcurve.as_ref().map(|p| edit.add(ParamCurveRecord(Arc::clone(p))));
-            let (next, radial) = (Some(after(&uses[k], u)), after(&rings[side.edge], u));
-            let owner = UseOwner::Loop(outer);
-            let record = EdgeUseRecord { edge: edges[side.edge], owner, next, radial, reversed: side.reversed, pcurve };
-            edit.set(u, record).unwrap();
+/// Writes `layout` as a sheet body of one shell, through the topology's builder, then gives each use that has one its
+/// curve in its face's parameters; and gives its edges.
+fn write(edit: &mut Edit, layout: &Layout) -> Vec<Id<Edge>> {
+    let built = build(edit, &spec(layout));
+    let sides = layout.faces.iter().flat_map(|patch| &patch.sides);
+    for (side, &used) in sides.zip(&built.uses) {
+        if let Some(drawn) = &side.pcurve {
+            let pcurve = Some(edit.add(ParamCurveRecord(Arc::clone(drawn))));
+            let record = edit.record(used).unwrap();
+            edit.set(used, EdgeUseRecord { pcurve, ..record }).unwrap();
         }
     }
-    (faces[0], rings)
-}
-
-/// Writes `layout` as a sheet body of one shell, and gives its edges.
-fn write(edit: &mut Edit, layout: &Layout) -> Vec<Id<Edge>> {
-    let born = edit.provenance(StepRole::Made);
-    let (body, shell): (Id<Body>, Id<Shell>) = (edit.reserve(), edit.reserve());
-    let vertices: Vec<Id<Vertex>> = layout.points.iter().map(|_| edit.reserve()).collect();
-    let edges: Vec<Id<Edge>> = layout.edges.iter().map(|_| edit.reserve()).collect();
-    let (first_face, rings) = write_faces(edit, layout, shell, &edges);
-    let mut stars: Vec<Vec<Around>> = vec![Vec::new(); vertices.len()];
-    for (piece, &edge) in layout.edges.iter().zip(&edges) {
-        stars[piece.ends.0].push(Around { edge, end: End::Start });
-        stars[piece.ends.1].push(Around { edge, end: End::Finish });
-    }
-    for ((piece, &edge), ring) in layout.edges.iter().zip(&edges).zip(&rings) {
-        let curve = edit.add(CurveRecord(Arc::clone(&piece.curve)));
-        let (a, b) = piece.ends;
-        let around =
-            (after(&stars[a], Around { edge, end: End::Start }), after(&stars[b], Around { edge, end: End::Finish }));
-        let ends = (vertices[a], vertices[b]);
-        let (first_use, role, deviation) = (ring.first().copied(), EdgeRole::Ordinary, Length::from_millimetres(0.0));
-        let record = EdgeRecord { curve, range: piece.range, ends, around, first_use, role, deviation, born };
-        edit.set(edge, record).unwrap();
-    }
-    for ((&point, &vertex), star) in layout.points.iter().zip(&vertices).zip(&stars) {
-        let record = VertexRecord {
-            point: Point::from_vec3(point),
-            radius: Length::from_millimetres(0.0),
-            star: star.first().copied(),
-        };
-        edit.set(vertex, record).unwrap();
-    }
-    edit.set(shell, ShellRecord { body, face: first_face, next: None }).unwrap();
-    edit.set(body, BodyRecord { kind: BodyKind::Sheet, first_shell: Some(shell), first_wire: None, born }).unwrap();
-    edges
+    built.edges
 }
 
 /// The straight edge from `points[a]` to `points[b]`, its parameter the distance from `points[a]`.
@@ -144,10 +104,9 @@ fn straight(points: &[Vec3], (a, b): (usize, usize)) -> Piece {
     Piece { curve: Arc::new(line), range: (0.0, along.norm()), ends: (a, b) }
 }
 
-/// The line in a face's parameters from `(u, v)` along `(du, dv)`, its parameter the distance along it.
-pub fn uv_line((u, v): (f64, f64), (du, dv): (f64, f64)) -> Arc<dyn ParamCurve> {
-    let line = Line::new(Point::from_vec3(Vec3::new(u, v, 0.0)), Direction::normalised(Vec3::new(du, dv, 0.0)));
-    Arc::new(UvCurve::new(line).unwrap())
+/// The line in a face's parameters from `from` along `along`, its parameter the distance along it.
+pub fn uv_line(from: (f64, f64), along: (f64, f64)) -> Arc<dyn ParamCurve> {
+    occam_fixtures::topo::models::uv_line(from, along).0
 }
 
 /// A use of `edge`, against it if `reversed`, with its curve in the face's parameters.

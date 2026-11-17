@@ -153,3 +153,36 @@ fn the_hash_changes_with_one_ulp_one_corner_one_flag_or_one_report_and_not_with_
     };
     assert_eq!(nan(0x7ff8_0000_0000_0001), nan(0xfff8_0000_0000_0000), "a NaN is hashed as one pattern");
 }
+
+/// The mesh of `spec`, built by the topology's builder for tests with every use drawn in its face's parameters, and
+/// the model it is of.
+fn meshed(spec: &occam_fixtures::topo::models::Spec) -> (Snapshot, Mesh) {
+    let mut edit = Snapshot::empty(occam_fixtures::tol()).edit();
+    let built = occam_fixtures::topo::models::build(&mut edit, spec);
+    occam_fixtures::topo::models::straight_pcurves(&mut edit, &built);
+    let snapshot = edit.commit(&Exec::serial()).unwrap().0;
+    let merged = mesh(&Exec::serial(), &snapshot, limits(0.01));
+    (snapshot, merged)
+}
+
+#[test]
+fn a_face_with_a_hole_and_the_faces_of_a_solid_mesh_watertight_from_the_topologys_own_models() {
+    use occam_fixtures::topo::models::{cube, frame, holed_sheet};
+    // The sheet 3 by 3 less its hole 1 by 1; the cube's six unit squares; the block of genus 1, 3 by 3 by 1 less its
+    // hole, twice 8 above and below and 12 and 4 round its sides.
+    for (name, spec, faces, area) in
+        [("holed sheet", holed_sheet(), 1, 8.0), ("cube", cube(), 6, 6.0), ("frame", frame(), 16, 32.0)]
+    {
+        let (snapshot, merged) = meshed(&spec);
+        assert_eq!((&merged.refused, &merged.open), (&vec![], &vec![]), "{name}");
+        assert_eq!(merged.blocks.len(), faces, "{name}");
+        assert_eq!(crate::watertight(&snapshot, &merged), [], "{name}");
+        let corner = |k: u32| merged.points[usize::try_from(k).unwrap()].to_vec3();
+        let twice: f64 = merged
+            .triangles
+            .iter()
+            .map(|t| (corner(t[1]) - corner(t[0])).cross(corner(t[2]) - corner(t[0])).norm())
+            .sum();
+        assert!((twice / 2.0 - area).abs() < 1e-9, "{name}: an area of {}", twice / 2.0);
+    }
+}
