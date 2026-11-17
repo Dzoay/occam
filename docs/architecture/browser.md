@@ -66,6 +66,8 @@ flowchart LR
 
 - [P10](../evidence/2026-11-09-p10.md): the worker pool. About 64 calls a job balanced uneven work and avoided
   Firefox's long-call penalty of 1.4 to 2.3×.
+- [The view on large models](../evidence/2026-11-17-view-large-models.md): with the mesh workers trusting the editing
+  worker's check, the pool's job on P9's 1,002-face model fell from 35 s to 0.5 s on six workers, and scales.
 - Assembly as display-only: B:12. Shared-memory threads instead would need nightly and an adapter dependency
   ([O18](open-decisions.md#assumed-answers-no-question)).
 
