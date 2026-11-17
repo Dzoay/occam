@@ -22,7 +22,8 @@ flowchart TB
   facades -.->|"data only"| web(["web/ renderer"])
 ```
 
-`occam-verify` and `occam-xtask` hold the oracles, corpus and gates. They are never published.
+`occam-fixtures`, `occam-verify` and `occam-xtask` hold the test fixtures, oracles, corpus and gates. They are never
+published.
 
 ## What moved since the provisional list
 

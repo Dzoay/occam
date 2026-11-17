@@ -93,13 +93,11 @@ sketch:
 fmt-check:
     cargo fmt --all --check
 
-# Clippy on every crate and target, warnings denied, and on occam-topo's and occam-mesh's determinism probes, which only a feature builds
+# Clippy on every crate and target, warnings denied
 [env("CARGO_TARGET_DIR", target)]
 [group('gates')]
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings
-    cargo clippy -p occam-topo --all-targets --features determinism -- -D warnings
-    cargo clippy -p occam-mesh --all-targets --features determinism -- -D warnings
 
 # The viewer's types, strict and declaration files included, against @types/web's, with `tsc --noEmit`; esbuild builds it without checking them
 [group('gates')]
@@ -288,14 +286,14 @@ determinism-record *args:
 [env("CARGO_TARGET_DIR", target)]
 [group('tools')]
 determinism-topology:
-    cargo run --quiet --release -p occam-topo --features determinism --example determinism -- --record > ci/determinism-topology.txt.new
+    cargo test --quiet --release -p occam-topo --lib -- --exact probe::tests::the_record_as_this_build_gives_it_on_one_thread --ignored --nocapture | sed -n 's/^record: //p' > ci/determinism-topology.txt.new
     mv ci/determinism-topology.txt.new ci/determinism-topology.txt
 
 # The mesher's determinism record, as the x86-64 build prints it on one thread: it has no separate implementation
 [env("CARGO_TARGET_DIR", target)]
 [group('tools')]
 determinism-mesh:
-    cargo run --quiet --release -p occam-mesh --features determinism --example determinism -- --record > ci/determinism-mesh.txt.new
+    cargo run --quiet --release -p occam-mesh --example determinism -- --record > ci/determinism-mesh.txt.new
     mv ci/determinism-mesh.txt.new ci/determinism-mesh.txt
 
 # Regenerate the owned trigonometry's fitted coefficients and constants; `--check` says whether the committed file is current

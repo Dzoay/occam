@@ -19,9 +19,9 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use occam_fixtures::topo::workloads::Plate;
 use occam_math::Exec;
 use occam_topo::Face;
-use occam_topo::workloads::Plate;
 
 /// The median of `times`.
 fn median(mut times: Vec<Duration>) -> Duration {

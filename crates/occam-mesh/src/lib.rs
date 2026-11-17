@@ -44,20 +44,16 @@ mod merge;
 mod part;
 mod pick;
 mod predicates;
-#[cfg(any(test, feature = "determinism"))]
-#[doc(hidden)]
-pub mod probe;
 mod refine;
 mod remesh;
 mod repair;
-#[cfg(test)]
-mod testing;
-/// The tests' models, built outside the tests only for the determinism probe, which nothing that ships turns on.
-#[cfg(all(feature = "determinism", not(test)))]
-#[allow(dead_code, clippy::indexing_slicing, clippy::unwrap_used, reason = "the tests' models, as they are written")]
-mod testing;
 mod triangulation;
 mod watertight;
+
+/// The tests' models: sheets of faces written through `Edit`, typed by the crates above this one, so the tests take them
+/// from occam-fixtures as any crate does.
+#[cfg(test)]
+use occam_fixtures::mesh::layouts as testing;
 
 pub use again::{Again, again};
 pub use buffers::{Buffers, FaceRange};

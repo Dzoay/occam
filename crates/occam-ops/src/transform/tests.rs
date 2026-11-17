@@ -341,7 +341,7 @@ fn skew() -> Placement<Local, World> {
 #[test]
 fn an_offset_has_no_exact_form_under_a_stretch_and_is_not_approximated() {
     let patch = UvBox::new(UvPoint::new(0.0, 0.0), UvPoint::new(1.0, 1.0));
-    let base = SplineSurface::new(&occam_geom::workloads::spline()).unwrap();
+    let base = SplineSurface::new(&occam_fixtures::spline_workloads::spline()).unwrap();
     let offset: Arc<dyn Surface> = Arc::new(OffsetSurface::new(base, Length::from_millimetres(0.5)).unwrap());
     let stretch = Affine::stretch(&skew(), [2.0, 1.0, 0.5]).unwrap();
     let alike = Affine::stretch(&skew(), [2.0, 2.0, 2.0]).unwrap();

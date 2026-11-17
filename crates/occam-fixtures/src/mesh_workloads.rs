@@ -39,7 +39,7 @@ fn flush(model: Snapshot, steps: &mut Vec<serde_json::Value>) -> Result<Snapshot
     if steps.is_empty() {
         return Ok(model);
     }
-    let ran = crate::run(Some(&model), &request::request(steps));
+    let ran = occam::run(Some(&model), &request::request(steps));
     steps.clear();
     if let Some(failed) = ran.failed {
         return Err(failed.reports);

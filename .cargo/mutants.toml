@@ -27,14 +27,14 @@ exclude_globs = [
     # Measured by `gates perf`, whose record catches a change in what they compute. No test can.
     "crates/occam/benches/*.rs",
     "crates/occam-wasm/examples/*.rs",
-    # The topology's test models and helpers, which the tests build from: a mutant changes what a test builds, not the
-    # kernel. They are compiled outside the tests only for the hidden probe and bench features, which nothing ships.
-    "crates/occam-topo/src/models.rs",
-    "crates/occam-topo/src/models/*.rs",
-    "crates/occam-topo/src/testing.rs",
-    # What `gates determinism` hashes and `gates perf` times: their records catch a change in what these compute.
-    "crates/occam-topo/src/probe.rs",
-    "crates/occam-topo/src/workloads.rs",
+    # The tests' models and helpers, which the tests build from: a mutant changes what a test builds, not the kernel.
+    # Nothing that ships is built with them (docs/decisions/2026-11-17-occam-fixtures.md). occam-fixtures' workloads
+    # are not listed: their own tests hold what they compute.
+    "crates/occam-fixtures/src/units.rs",
+    "crates/occam-fixtures/src/topo/**/*.rs",
+    "crates/occam-fixtures/src/mesh/layouts.rs",
+    # What `gates determinism` hashes and `examples/scale.rs` times: the records catch a change in what these compute.
+    "crates/occam-fixtures/src/mesh/probe.rs",
     "crates/occam-topo/examples/*.rs",
 ]
 

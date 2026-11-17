@@ -1,8 +1,7 @@
 //! Source: original
 //! What `gates determinism` hashes of the mesher (docs/DETERMINISM.md): the [`Mesh::digest`] of the tests' models
 //! meshed whole, edges, faces, merge and watertight check, one with a face that will not mesh, and the check's reports on
-//! a mesh cracked by one ulp. Built only for the tests and under the `determinism` feature, which `examples/determinism.rs`
-//! needs; nothing that ships turns it on.
+//! a mesh cracked by one ulp. occam-mesh's `examples/determinism.rs` prints them.
 //!
 //! The record is `ci/determinism-mesh.txt`. There is no second mesher to take it from, as the maths record is taken from
 //! `tools/determinism/stream.py`, so it is what the x86-64 build prints on one thread: every other build and thread
@@ -10,14 +9,12 @@
 //! mesher has no lane kernel yet, so each build runs it once, as scalar.
 
 use occam_math::{Digest, Exec};
+use occam_mesh::{Limits, Mesh, mesh, watertight};
 use occam_report::DisplayUnits;
 use occam_topo::Snapshot;
 use occam_units::{Angle, Length, Point, Vec3};
 
-use crate::limits::Limits;
-use crate::merge::{Mesh, mesh};
-use crate::testing::{Layout, collapsed_patch, disc_drawn, model, plane_and_cylinder, sphere_half, undrawn};
-use crate::watertight::watertight;
+use super::layouts::{Layout, collapsed_patch, disc_drawn, model, plane_and_cylinder, sphere_half, undrawn};
 
 /// How many operations the probe hashes.
 pub const OPERATION_COUNT: usize = 7;
@@ -96,7 +93,7 @@ mod tests {
     use super::*;
 
     /// What the probe must give. The file is the one home of these numbers, and `gates determinism` reads it too.
-    const RECORDED: &str = include_str!("../../../ci/determinism-mesh.txt");
+    const RECORDED: &str = include_str!("../../../../ci/determinism-mesh.txt");
 
     fn want() -> Vec<u64> {
         let mut lines = RECORDED.lines().filter(|line| !line.starts_with('#'));

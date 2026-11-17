@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn a_meshed_box_is_all_planes_within_its_deflection_its_area_its_six_sides() {
-        let ran = crate::run(
+        let ran = occam::run(
             None,
             r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [{"op": "box", "size": [1, 2, 3]}]}"#,
         );

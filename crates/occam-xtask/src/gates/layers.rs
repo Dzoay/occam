@@ -1,7 +1,8 @@
 //! `gates layers`: the crate graph matches the diagram in `docs/PLAN.md` section 4 (L18, L25). A crate depends only on
 //! crates above it, and everything below the composition crate binds that crate and nothing else, but for the tooling
 //! crates' tests: `occam-verify` and `occam-xtask` may name any crate above them in `[dev-dependencies]`
-//! (`docs/decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md`).
+//! (`docs/decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md`), and `occam-fixtures` binds any crate above
+//! it and is named by any crate, in `[dev-dependencies]` only (`docs/decisions/2026-11-17-occam-fixtures.md`).
 
 use super::no_args;
 use crate::manifest::{self, is_crate_manifest, is_internal};
@@ -11,6 +12,16 @@ use crate::verdict::{Finding, Verdict, verdict};
 
 /// The crates, never published, whose tests may reach any crate above them.
 const TOOLING: [&str; 2] = ["occam-verify", "occam-xtask"];
+
+/// The crate, never published, that tests, benchmarks and probes build with: it binds any crate above it, and any crate
+/// may name it, in `[dev-dependencies]` only (`docs/decisions/2026-11-17-occam-fixtures.md`).
+const FIXTURES: &str = "occam-fixtures";
+
+/// What is wrong with `name` naming the fixtures crate, given whether only its tests are built with it.
+fn fixtures(path: &str, name: &str, tested: bool) -> Option<Finding> {
+    let message = format!("{name} is built with {FIXTURES}, which only tests, benchmarks and examples may use");
+    (!tested).then(|| Finding::new("layers.fixtures-shipped", path, message, "name it in `[dev-dependencies]` only"))
+}
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     no_args(args)?;
@@ -68,7 +79,12 @@ fn check(plan: &str, manifests: &[(String, String)]) -> Verdict {
         };
         for dep in manifest.deps.iter().filter(|dep| is_internal(dep)) {
             edges = edges.saturating_add(1);
+            if dep == FIXTURES && manifest.name != FIXTURES && tier_of(&tiers, FIXTURES).is_some() {
+                findings.extend(fixtures(path, &manifest.name, manifest.dev_only.contains(dep)));
+                continue;
+            }
             let tested = TOOLING.contains(&manifest.name.as_str()) && manifest.dev_only.contains(dep);
+            let tested = tested || manifest.name == FIXTURES;
             findings.extend(judge(path, &manifest.name, dep, (own, composition, tier_of(&tiers, dep)), tested));
         }
     }
@@ -146,6 +162,45 @@ mod tests {
     fn no_other_crate_below_the_composition_crate_may_test_against_a_kernel_crate() {
         let tests = in_section("occam-cli", "dev-dependencies", &["occam-report"]);
         assert_eq!(codes(&check(PLAN_TEXT, &[tests])), ["layers.bypass"]);
+    }
+
+    const WITH_FIXTURES: &str = "occam-fixtures, occam-xtask    fixtures, gates";
+
+    fn plan_with_fixtures() -> String {
+        PLAN_TEXT.replace("occam-xtask                    gates", WITH_FIXTURES)
+    }
+
+    #[test]
+    fn any_crate_may_test_with_the_fixtures_crate_and_none_may_be_built_with_it() {
+        let plan = plan_with_fixtures();
+        for name in ["occam-report", "occam-math", "occam", "occam-cli", "occam-xtask"] {
+            let tests = in_section(name, "dev-dependencies", &["occam-fixtures"]);
+            assert_eq!(check(&plan, &[tests]), Ok("1 crates, 1 internal edges".to_string()), "{name}");
+            for section in ["dependencies", "build-dependencies"] {
+                let built = in_section(name, section, &["occam-fixtures"]);
+                assert_eq!(codes(&check(&plan, &[built])), ["layers.fixtures-shipped"], "{name} in {section}");
+            }
+            let both = format!("{}[dev-dependencies]\noccam-fixtures = \"1\"\n", manifest(name, &["occam-fixtures"]).1);
+            let both = (format!("crates/{name}/Cargo.toml"), both);
+            assert_eq!(codes(&check(&plan, &[both])), ["layers.fixtures-shipped"], "{name}: built with it too");
+        }
+        let found = check(&plan, &[manifest("occam-math", &["occam-fixtures"])]).unwrap_err();
+        assert_eq!(found[0].file, "crates/occam-math/Cargo.toml");
+        assert!(found[0].message.contains("occam-math") && found[0].remedy.contains("[dev-dependencies]"), "{found:?}");
+    }
+
+    #[test]
+    fn the_fixtures_crate_binds_any_crate_above_it_and_no_other() {
+        let plan = plan_with_fixtures();
+        let kernel = manifest("occam-fixtures", &["occam-report", "occam-math", "occam"]);
+        assert_eq!(check(&plan, &[kernel]), Ok("1 crates, 3 internal edges".to_string()));
+        for dep in ["occam-xtask", "occam-fixtures", "occam-new"] {
+            let upward = manifest("occam-fixtures", &[dep]);
+            assert_eq!(codes(&check(&plan, &[upward])), ["layers.upward"], "{dep}");
+        }
+        assert_eq!(codes(&check(PLAN_TEXT, &[manifest("occam-fixtures", &[])])), ["layers.unlisted"]);
+        let unlisted = in_section("occam-math", "dev-dependencies", &["occam-fixtures"]);
+        assert_eq!(codes(&check(PLAN_TEXT, &[unlisted])), ["layers.upward"], "a plan that does not list it");
     }
 
     #[test]

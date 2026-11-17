@@ -11,12 +11,12 @@ use occam_report::StepRole;
 use occam_units::{Direction, Length, UvPoint};
 
 use super::{Built, join_star};
-use crate::edit::Edit;
-use crate::kind::{Edge, EdgeUse, Face, Id, Loop};
-use crate::records::{Around, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, UseOwner};
+use occam_topo::Edit;
+use occam_topo::{Around, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, UseOwner};
+use occam_topo::{Edge, EdgeUse, Face, Id, Loop};
 
 /// The top square `(i, j)` of a plate `k` squares across, as [`super::plate`] numbers its faces.
-pub(crate) fn top_square(built: &Built, k: usize, (i, j): (usize, usize)) -> Id<Face> {
+pub fn top_square(built: &Built, k: usize, (i, j): (usize, usize)) -> Id<Face> {
     built.faces[k * k + j * k + i]
 }
 
@@ -38,7 +38,7 @@ fn change(edit: &mut Edit, id: Id<EdgeUse>, how: impl FnOnce(&mut EdgeUseRecord)
 }
 
 /// The vertices a use runs from and to, in `edit`.
-fn ends(edit: &Edit, x: Id<EdgeUse>) -> (Id<crate::kind::Vertex>, Id<crate::kind::Vertex>) {
+fn ends(edit: &Edit, x: Id<EdgeUse>) -> (Id<occam_topo::Vertex>, Id<occam_topo::Vertex>) {
     let side = edit.record(x).unwrap();
     let edge = edit.record(side.edge).unwrap();
     if side.reversed { (edge.ends.1, edge.ends.0) } else { edge.ends }
@@ -47,7 +47,7 @@ fn ends(edit: &Edit, x: Id<EdgeUse>) -> (Id<crate::kind::Vertex>, Id<crate::kind
 /// Splits the unit square `face` of a plate, in `edit`, by the diagonal from the start of its first side to the end of
 /// its second: the square keeps those two sides, and a new triangle, on the same surface and in the same shell, takes
 /// the other two. Each keeps a witness at its centroid.
-pub(crate) fn split(edit: &mut Edit, face: Id<Face>) {
+pub fn split(edit: &mut Edit, face: Id<Face>) {
     let (square, sides) = (edit.record(face).unwrap(), outer_uses(edit, face));
     let (from, to) = (ends(edit, sides[0]).0, ends(edit, sides[1]).1);
     let at = edit.record(from).unwrap().point;

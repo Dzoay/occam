@@ -1,8 +1,9 @@
 //! Source: original
 //! What `gates determinism` hashes of the topology (docs/DETERMINISM.md): the digests of models built through
 //! [`Edit`](crate::Edit), and the reports [`Snapshot::check_all`] gives on models corrupted as no edit could, each report
-//! hashed as its JSON. Built only for the tests and under the `determinism` feature, which `examples/determinism.rs`
-//! needs; nothing that ships turns it on.
+//! hashed as its JSON. Corrupting a model takes this crate's own tables, so the probe is built only into its tests:
+//! `gates determinism` runs one of them as every build and reads the hashes it prints, and `just determinism-topology`
+//! another, which prints the record.
 //!
 //! The record is `ci/determinism-topology.txt`. There is no second topology to take it from, as the maths record is
 //! taken from `tools/determinism/stream.py`, so it is what the x86-64 build prints on one thread: every other build and
@@ -19,10 +20,10 @@ use crate::models::{Built, Spec, build, cube, cylinder, frame, sheet, wire};
 use crate::snapshot::Snapshot;
 
 /// How many operations the probe hashes.
-pub const OPERATION_COUNT: usize = 8;
+const OPERATION_COUNT: usize = 8;
 
 /// The operations, in the order [`hashes`] gives them and the record lists them.
-pub const OPERATIONS: [&str; OPERATION_COUNT] = [
+const OPERATIONS: [&str; OPERATION_COUNT] = [
     "topo-cube",
     "topo-frame",
     "topo-cylinder",
@@ -123,8 +124,7 @@ fn many(snapshot: &mut Snapshot, ids: &[Built]) {
 }
 
 /// Every operation's hash on `exec`, in the order of [`OPERATIONS`].
-#[must_use]
-pub fn hashes(exec: &Exec) -> [u64; OPERATION_COUNT] {
+fn hashes(exec: &Exec) -> [u64; OPERATION_COUNT] {
     let cubes: Vec<Spec> = (0..CUBES).map(|_| cube()).collect();
     [
         hash(&[&[cube()]], clean, exec),
@@ -159,6 +159,60 @@ mod tests {
         assert_eq!(hashes(&Exec::serial()), want());
         #[cfg(not(target_family = "wasm"))]
         assert_eq!(hashes(&Exec::threads(core::num::NonZeroUsize::new(4).unwrap()).unwrap()), want());
+    }
+
+    /// What goes before each line `gates determinism` reads, among the lines the test harness prints.
+    const MARK: &str = "determinism: ";
+
+    /// The build line, then every hash on `exec`, as the gate reads them, each printed after the mark.
+    fn print(exec: &Exec) -> usize {
+        let simd128 = cfg!(target_feature = "simd128");
+        let build = format!("build {} simd128={simd128} threads={}", std::env::consts::ARCH, exec.thread_count());
+        let rows =
+            OPERATIONS.iter().zip(hashes(exec)).map(|(operation, hash)| format!("{operation} scalar {hash:016x}"));
+        let lines: Vec<String> = std::iter::once(build).chain(rows).collect();
+        // A line of its own for the first, whatever the harness has printed on this one.
+        println!();
+        for line in &lines {
+            println!("{MARK}{line}");
+        }
+        lines.len()
+    }
+
+    /// As many threads as `gates determinism` asks of the builds that have them: the machine's, and two at least.
+    #[cfg(not(target_family = "wasm"))]
+    fn every_thread() -> Exec {
+        let threads = std::thread::available_parallelism().map_or(2, |count| count.get().max(2));
+        Exec::threads(core::num::NonZeroUsize::new(threads).unwrap()).unwrap()
+    }
+
+    #[test]
+    #[ignore = "what `gates determinism` runs as every build, to compare what each prints; the test above holds this one"]
+    fn the_gate_reads_every_hash_on_one_thread_and_on_every_thread() {
+        assert_eq!(print(&Exec::serial()), OPERATION_COUNT + 1);
+        #[cfg(not(target_family = "wasm"))]
+        assert_eq!(print(&every_thread()), OPERATION_COUNT + 1);
+    }
+
+    /// The record's header. The record is what this build prints on one thread: see the probe's documentation.
+    const HEADER: &str = "\
+# `gates determinism` and occam-topo's probe test: what the topology's probe must hash to, `<operation> <hash>`, in the
+# order of `OPERATIONS` in crates/occam-topo/src/probe.rs. Unlike ci/determinism-hashes.txt, these do not come from a
+# separate implementation, as there is no second topology: they are what the x86-64 build printed on one thread
+# (`just determinism-topology`). Every other build and thread count is held to them. See docs/DETERMINISM.md before
+# changing one.";
+
+    #[test]
+    #[ignore = "what `just determinism-topology` runs, to print the record as this build gives it"]
+    fn the_record_as_this_build_gives_it_on_one_thread() {
+        let rows =
+            OPERATIONS.iter().zip(hashes(&Exec::serial())).map(|(operation, hash)| format!("{operation} {hash:016x}"));
+        let lines: Vec<String> = HEADER.lines().map(str::to_string).chain(rows).collect();
+        println!();
+        for line in &lines {
+            println!("record: {line}");
+        }
+        assert_eq!(lines.len(), RECORDED.lines().count(), "as many lines as the record has");
     }
 
     #[test]

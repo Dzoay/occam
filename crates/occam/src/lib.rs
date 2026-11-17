@@ -5,9 +5,7 @@
 mod describe;
 mod distance;
 mod mesh;
-pub mod mesh_workloads;
 mod model;
-pub mod operation_workloads;
 mod pick;
 mod run;
 mod selection;
@@ -19,9 +17,8 @@ pub use describe::describe;
 pub use distance::{Answer, DistanceQuery, distance, distance_json};
 pub use mesh::{Again, Buffers, FaceRange, Limits, Meshed, Placed};
 pub use model::Model;
-pub use occam_geom::workloads as spline_workloads;
 pub use occam_geom::{Jets, SplineSurface};
-pub use occam_math::{Exec, Lanes, Real, width, workloads};
+pub use occam_math::{Exec, Lanes, Real, width};
 pub use occam_ops::{Operation, guide, listing};
 pub use occam_report::{
     Code, Description, DisplayUnits, EntityKind, EntityRef, Fault, Input, NamedValue, Origin, Outcome, Remedy,

@@ -10,6 +10,7 @@
 use core::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI};
 use std::sync::Arc;
 
+use occam_fixtures::tol;
 use occam_geom::{
     Circle, Curve, Cylinder, Line, ParamCurve, Plane, Sphere, SplineCurve, SplineSurface, Surface, UvCurve,
 };
@@ -20,44 +21,43 @@ use occam_topo::{
     Face, FaceRecord, Id, Loop, LoopRecord, ParamCurveRecord, Sheet, Shell, ShellRecord, Snapshot, SurfaceRecord,
     UseOwner, Vertex, VertexRecord,
 };
-use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tolerance, UvPoint, Vec3, Vector, World};
+use occam_units::{Angle, Direction, Length, Local, Placement, Point, UvPoint, Vec3, Vector, World};
 
 /// An edge: a piece of `curve` over `range`, from point `ends.0` to point `ends.1`.
-pub(crate) struct Piece {
+#[allow(missing_docs, reason = "the sentence above names each field")]
+pub struct Piece {
     pub curve: Arc<dyn Curve>,
     pub range: (f64, f64),
     pub ends: (usize, usize),
 }
 
 /// A use of edge `edge` in a face's loop, against the edge if `reversed`, with its curve in the face's parameters.
-pub(crate) struct Side {
+#[allow(missing_docs, reason = "the sentence above names each field")]
+pub struct Side {
     pub edge: usize,
     pub reversed: bool,
     pub pcurve: Option<Arc<dyn ParamCurve>>,
 }
 
 /// A face on `surface` bounded by one loop of `sides`, with `witness` strictly inside it.
-pub(crate) struct Patch {
+#[allow(missing_docs, reason = "the sentence above names each field")]
+pub struct Patch {
     pub surface: Arc<dyn Surface>,
     pub sides: Vec<Side>,
     pub witness: (f64, f64),
 }
 
 /// A sheet body: its points, its edges and its faces, all joined into one shell.
-pub(crate) struct Layout {
+#[allow(missing_docs, reason = "the sentence above names each field")]
+pub struct Layout {
     pub points: Vec<Vec3>,
     pub edges: Vec<Piece>,
     pub faces: Vec<Patch>,
 }
 
-/// The tolerance every test model is built to.
-pub(crate) fn tolerance() -> Tolerance {
-    Tolerance::new(Length::from_millimetres(1e-7), Angle::from_radians(1e-9)).unwrap()
-}
-
 /// The model of `layouts`, each a sheet body of its own, committed; with each one's edges, in its order.
-pub(crate) fn model(layouts: &[Layout]) -> (Snapshot, Vec<Vec<Id<Edge>>>) {
-    let mut edit = Snapshot::empty(tolerance()).edit();
+pub fn model(layouts: &[Layout]) -> (Snapshot, Vec<Vec<Id<Edge>>>) {
+    let mut edit = Snapshot::empty(tol()).edit();
     let edges = layouts.iter().map(|layout| write(&mut edit, layout)).collect();
     (edit.commit(&Exec::serial()).unwrap().0, edges)
 }
@@ -145,7 +145,7 @@ fn straight(points: &[Vec3], (a, b): (usize, usize)) -> Piece {
 }
 
 /// The line in a face's parameters from `(u, v)` along `(du, dv)`, its parameter the distance along it.
-pub(crate) fn uv_line((u, v): (f64, f64), (du, dv): (f64, f64)) -> Arc<dyn ParamCurve> {
+pub fn uv_line((u, v): (f64, f64), (du, dv): (f64, f64)) -> Arc<dyn ParamCurve> {
     let line = Line::new(Point::from_vec3(Vec3::new(u, v, 0.0)), Direction::normalised(Vec3::new(du, dv, 0.0)));
     Arc::new(UvCurve::new(line).unwrap())
 }
@@ -157,7 +157,7 @@ fn side(edge: usize, reversed: bool, pcurve: Arc<dyn ParamCurve>) -> Side {
 
 /// A flat disc of `radius` about the origin, facing +Z: one face bounded by one closed circle, both of whose ends are
 /// its one vertex, with no curve in the face's parameters.
-pub(crate) fn disc(radius: f64) -> Layout {
+pub fn disc(radius: f64) -> Layout {
     let circle = Circle::placed(&Placement::identity(), Length::from_millimetres(radius)).unwrap();
     let edges = vec![Piece { curve: Arc::new(circle), range: (0.0, 2.0 * PI), ends: (0, 0) }];
     let sides = vec![Side { edge: 0, reversed: false, pcurve: None }];
@@ -166,7 +166,7 @@ pub(crate) fn disc(radius: f64) -> Layout {
 }
 
 /// A flat triangle in `z = 0`, facing +Z: three straight edges, each drawn in the plane's parameters.
-pub(crate) fn triangle() -> Layout {
+pub fn triangle() -> Layout {
     let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
     let edges = vec![straight(&points, (0, 1)), straight(&points, (1, 2)), straight(&points, (2, 0))];
     let sides = vec![
@@ -179,7 +179,7 @@ pub(crate) fn triangle() -> Layout {
 }
 
 /// [`disc`], with its circle drawn in the plane's parameters, where the plane's `(u, v)` is `(x, y)`.
-pub(crate) fn disc_drawn(radius: f64) -> Layout {
+pub fn disc_drawn(radius: f64) -> Layout {
     let mut layout = disc(radius);
     let circle = Circle::placed(&Placement::identity(), Length::from_millimetres(radius)).unwrap();
     let drawn: Arc<dyn ParamCurve> = Arc::new(UvCurve::new(circle).unwrap());
@@ -188,14 +188,14 @@ pub(crate) fn disc_drawn(radius: f64) -> Layout {
 }
 
 /// `layout` with the curves of face `face`'s edges in its parameters taken away.
-pub(crate) fn undrawn(mut layout: Layout, face: usize) -> Layout {
+pub fn undrawn(mut layout: Layout, face: usize) -> Layout {
     layout.faces[face].sides.iter_mut().for_each(|side| side.pcurve = None);
     layout
 }
 
 /// The poles of P9's bicubic patch, a row of constant `v` at a time: a bump over the unit square whose row at `v = 0`
 /// is collapsed to one point.
-pub(crate) fn collapsed_poles() -> Vec<Point<World>> {
+pub fn collapsed_poles() -> Vec<Point<World>> {
     let height = |i: u32, j: u32| if (1..3).contains(&i) && j > 0 { 0.4 } else { 0.1 * f64::from(i * j) / 9.0 };
     let pole = |i: u32, j: u32| {
         if j == 0 { Vec3::new(0.5, 0.0, 0.0) } else { Vec3::new(f64::from(i) / 3.0, f64::from(j) / 3.0, height(i, j)) }
@@ -205,7 +205,7 @@ pub(crate) fn collapsed_poles() -> Vec<Point<World>> {
 
 /// P9's bicubic patch with a collapsed row: one face bounded by three edges, its sides at `u = 0` and `u = 1` meeting
 /// at the point the row at `v = 0` collapses to, where its loop crosses from one side to the other.
-pub(crate) fn collapsed_patch() -> Layout {
+pub fn collapsed_patch() -> Layout {
     let poles = collapsed_poles();
     let surface = SplineSurface::bezier((4, 4), poles.clone(), None).unwrap();
     let iso = |at: &[usize]| -> Arc<dyn Curve> {
@@ -229,7 +229,7 @@ pub(crate) fn collapsed_patch() -> Layout {
 
 /// Half a sphere of `radius` about the origin, as construction lays it out: one face from the meridian at `u = pi` up
 /// to the north pole, where its loop crosses to the meridian at `u = 0`, down that to the south pole, and across back.
-pub(crate) fn sphere_half(radius: f64) -> Layout {
+pub fn sphere_half(radius: f64) -> Layout {
     let turn = |axis: Vec3, angle: f64| {
         Placement::<World, World>::rotation(Direction::normalised(axis), Angle::from_radians(angle))
     };
@@ -257,7 +257,7 @@ fn cylinder_frame(radius: f64, height: f64) -> Placement<Local, World> {
 }
 
 /// The unit square in the plane `z = 0`, facing +Z: one face bounded by four straight edges.
-pub(crate) fn square() -> Layout {
+pub fn square() -> Layout {
     let points =
         vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
     let edges = [(0, 1), (1, 2), (2, 3), (0, 3)].map(|ends| straight(&points, ends)).into();
@@ -273,7 +273,7 @@ pub(crate) fn square() -> Layout {
 
 /// [`square`], and a quarter of a cylinder of `radius` that leaves it along its edge at `x = 0`, tangent to it there,
 /// and bends down: a sheet of two faces whose shared edge is straight.
-pub(crate) fn plane_and_cylinder(radius: f64) -> Layout {
+pub fn plane_and_cylinder(radius: f64) -> Layout {
     let mut layout = square();
     layout.points.extend([Vec3::new(-radius, 0.0, -radius), Vec3::new(-radius, 1.0, -radius)]);
     let arc = |height: f64, ends| {
@@ -306,7 +306,7 @@ fn arc(height: f64, ends: (usize, usize)) -> Piece {
 /// ends down to `y = 0`, and from there up to a notch at `x`, `gap` below the arc. At a coarse deflection the arc is
 /// one chord, which cuts across the notch. A quarter of a cylinder stands on the arc, down to `z = -1`, so that the arc
 /// is an edge of two faces.
-pub(crate) fn notched(x: f64, gap: f64) -> Layout {
+pub fn notched(x: f64, gap: f64) -> Layout {
     let (s, top) = (FRAC_1_SQRT_2, (1.0 - x * x).sqrt() - gap);
     let points = vec![
         Vec3::new(-s, 0.0, 0.0),
@@ -353,7 +353,7 @@ pub(crate) fn notched(x: f64, gap: f64) -> Layout {
 /// A flat lens facing +Z between quarter turns of two circles of radius 1, centred `sqrt(1/2)` below and above the
 /// origin: the arc of the upper circle runs along its bottom, and that of the lower along its top. At a deflection of 1
 /// each arc is one piece, so its loop joins up to two points.
-pub(crate) fn lens() -> Layout {
+pub fn lens() -> Layout {
     let s = FRAC_1_SQRT_2;
     let circle = |y: f64| {
         let shift = Placement::<World, World>::translation(Vector::from_vec3(Vec3::new(0.0, y, 0.0)));

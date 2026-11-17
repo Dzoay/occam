@@ -9,12 +9,12 @@ mod hostile;
 
 use std::sync::Arc;
 
+use occam_fixtures::topo::workloads::models;
 use occam_geom::{
     Circle, Cone, Cylinder, Ellipse, Hyperbola, Line, OffsetSurface, Parabola, Plane, Sphere, SplineCurve,
     SplineSurface, Torus, UvCurve,
 };
 use occam_report::{Code, Reason};
-use occam_topo::workloads::models;
 use occam_topo::{CurveRecord, ParamCurveRecord, SurfaceRecord};
 use occam_units::{Angle, Direction, Local, Placement, Point, Vec3, Vector, World};
 use serde_json::Value;

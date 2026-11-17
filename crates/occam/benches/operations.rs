@@ -9,17 +9,20 @@
 use std::hint::black_box;
 
 use gungraun::{library_benchmark, library_benchmark_group, main};
-use occam::mesh_workloads::{P9_SEED, PERF_TARGET, perf_mesh, pick_rays};
-use occam::operation_workloads::{MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded};
-use occam::spline_workloads as splines;
 use occam::{
     Angle, Encoding, EntityKind, EntityRef, Jets, Lanes, Length, Model, Point, Real, Session, SplineSurface, Tolerance,
     UvPoint, World, distance,
 };
+use occam_fixtures::lane_workloads as workloads;
+use occam_fixtures::mesh_workloads::{P9_SEED, PERF_TARGET, perf_mesh, pick_rays};
+use occam_fixtures::operation_workloads::{
+    MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded,
+};
+use occam_fixtures::spline_workloads as splines;
+use occam_fixtures::topo::workloads::Plate;
 use occam_geom::{OffsetCurve, OffsetSurface, SplineCurve};
-use occam_math::{Exec, Level, stream, width, workloads};
+use occam_math::{Exec, Level, stream, width};
 use occam_topo::Edit;
-use occam_topo::workloads::Plate;
 use occam_units::{Direction, Vec3};
 
 fn mm(value: f64) -> Length {
@@ -389,7 +392,7 @@ library_benchmark_group!(
 );
 /// P9's first parts, two plates and a panel: setup, which the counts leave out.
 fn p9_parts() -> occam_topo::Snapshot {
-    occam::mesh_workloads::synthetic(&Exec::serial(), PERF_TARGET, P9_SEED).unwrap()
+    occam_fixtures::mesh_workloads::synthetic(&Exec::serial(), PERF_TARGET, P9_SEED).unwrap()
 }
 
 // P9's first parts meshed whole on one thread: their edges sampled, each face meshed against them, merged and checked

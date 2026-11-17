@@ -13,24 +13,10 @@ occam-report = { path = "../occam-report" }
 occam-units = { path = "../occam-units" }
 
 [features]
-# The determinism probe and the models it builds, for `gates determinism` (examples/determinism.rs). Nothing that ships
-# turns it on.
-determinism = []
-# The plates and edits `gates perf` counts and examples/scale.rs times, built from the tests' models. Nothing that ships
-# turns it on.
-workloads = []
-# A model read back without being measured or checked (`Restore::trusted`), for the browser's mesh workers, which trust
-# the editing worker's check (docs/decisions/2026-11-16-mesh-workers-trust-the-editing-worker.md). Only occam-wasm turns
-# it on, through occam's, so the `occam` command has no way to open a model unchecked.
 trusted = []
 
-[[example]]
-name = "determinism"
-required-features = ["determinism"]
-
-[[example]]
-name = "scale"
-required-features = ["workloads"]
+[dev-dependencies]
+occam-fixtures = { path = "../occam-fixtures" }
 
 [lints]
 workspace = true

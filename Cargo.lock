@@ -427,6 +427,7 @@ name = "occam"
 version = "0.0.0"
 dependencies = [
  "gungraun",
+ "occam-fixtures",
  "occam-geom",
  "occam-io",
  "occam-math",
@@ -452,6 +453,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "occam-fixtures"
+version = "0.0.0"
+dependencies = [
+ "occam",
+ "occam-geom",
+ "occam-math",
+ "occam-mesh",
+ "occam-report",
+ "occam-topo",
+ "occam-units",
+ "serde_json",
+]
+
+[[package]]
 name = "occam-geom"
 version = "0.0.0"
 dependencies = [
@@ -474,6 +489,7 @@ dependencies = [
 name = "occam-io"
 version = "0.0.0"
 dependencies = [
+ "occam-fixtures",
  "occam-geom",
  "occam-math",
  "occam-report",
@@ -497,6 +513,7 @@ dependencies = [
 name = "occam-mesh"
 version = "0.0.0"
 dependencies = [
+ "occam-fixtures",
  "occam-geom",
  "occam-math",
  "occam-report",
@@ -508,6 +525,7 @@ dependencies = [
 name = "occam-ops"
 version = "0.0.0"
 dependencies = [
+ "occam-fixtures",
  "occam-geom",
  "occam-math",
  "occam-mesh",
@@ -529,6 +547,7 @@ dependencies = [
 name = "occam-topo"
 version = "0.0.0"
 dependencies = [
+ "occam-fixtures",
  "occam-geom",
  "occam-math",
  "occam-report",
@@ -562,6 +581,7 @@ name = "occam-wasm"
 version = "0.0.0"
 dependencies = [
  "occam",
+ "occam-fixtures",
  "serde_json",
  "wasm-bindgen",
 ]

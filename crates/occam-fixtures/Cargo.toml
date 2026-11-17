@@ -1,0 +1,20 @@
+[package]
+name = "occam-fixtures"
+description = "What the tests, benchmarks and determinism probes build with: models, workloads and helpers (never shipped)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+occam = { path = "../occam" }
+occam-geom = { path = "../occam-geom" }
+occam-math = { path = "../occam-math" }
+occam-mesh = { path = "../occam-mesh" }
+occam-report = { path = "../occam-report" }
+occam-topo = { path = "../occam-topo" }
+occam-units = { path = "../occam-units" }
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+
+[lints]
+workspace = true

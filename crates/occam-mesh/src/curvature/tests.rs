@@ -6,7 +6,8 @@ use occam_geom::{Cylinder, Jet1, Plane, Sphere, SplineSurface};
 use occam_units::{Length, Placement, Tangent, Vec3};
 
 use super::*;
-use crate::testing::{collapsed_poles, disc, model, plane_and_cylinder, tolerance};
+use crate::testing::{collapsed_poles, disc, model, plane_and_cylinder};
+use occam_fixtures::tol as tolerance;
 
 fn patch(lo: (f64, f64), hi: (f64, f64)) -> UvBox {
     UvBox::new(UvPoint::new(lo.0, lo.1), UvPoint::new(hi.0, hi.1))
