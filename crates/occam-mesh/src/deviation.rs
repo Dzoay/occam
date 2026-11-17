@@ -81,7 +81,7 @@ fn sliver(p: Vec3, [a, b, c]: [Vec3; 3]) -> f64 {
 }
 
 /// How far `p` is from the segment from `a` to `b`: from `a` itself where they are one point.
-fn to_segment(p: Vec3, a: Vec3, b: Vec3) -> f64 {
+pub(crate) fn to_segment(p: Vec3, a: Vec3, b: Vec3) -> f64 {
     let along = b - a;
     let at = larger(0.0, smaller(1.0, (p - a).dot(along) / along.dot(along)));
     (p - (a + along * at)).norm()

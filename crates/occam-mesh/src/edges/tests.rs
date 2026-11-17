@@ -32,7 +32,7 @@ fn strays(curve: &dyn Curve, samples: &EdgeSamples) -> Vec<f64> {
     let pieces = samples.params.windows(2).zip(samples.points.windows(2));
     let piece = |(t, p): (&[f64], &[Point<World>])| {
         let along = |k: u32| curve.point(t[0] + (t[1] - t[0]) * f64::from(k) / 16.0).to_vec3();
-        (1..16).map(|k| off_chord(along(k), p[0].to_vec3(), p[1].to_vec3())).fold(0.0, larger)
+        (1..16).map(|k| to_segment(along(k), p[0].to_vec3(), p[1].to_vec3())).fold(0.0, larger)
     };
     pieces.map(piece).collect()
 }
