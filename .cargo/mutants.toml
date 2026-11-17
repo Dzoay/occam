@@ -500,8 +500,26 @@ exclude_re = [
     # The hybrid, by line. A trace of one station gives one piece of one station, which the fit returns from at once
     # with nothing, so fitting it or not is the same. A box's reach either side of its middle: where the two are equal,
     # keeping either is the same number.
-    "occam-intersect/src/hybrid\\.rs:357:57: replace > with >= in finish$",
+    "occam-intersect/src/hybrid\\.rs:376:57: replace > with >= in finish$",
     "occam-intersect/src/traverse\\.rs:127:31: replace > with >= in clear$",
+    # Where the curves cross a leaf's edges, by line. Ties that give the same number or the same crossings either way:
+    # the larger of two equal reaches or parameter lengths, and a box's side exactly at the domain's end; a box exactly
+    # as far across as the gap is from nought, over which the gap can at most touch nought, which the band cannot tell
+    # from not; a turn exactly a quarter or three quarters of the way, probed there or halfway, either taking a quarter
+    # off what is left; two ends as near nought, or an end at nought, from which Newton's method or halving finds the
+    # same crossing to within an eighth of the band; a step exactly half the way, which is halfway either way. `inward`
+    # is 1 or -1, its own reciprocal.
+    "occam-intersect/src/crossings\\.rs:132:40: replace > with >= in within$",
+    "occam-intersect/src/crossings\\.rs:159:18: replace < with <= in around$",
+    "occam-intersect/src/crossings\\.rs:159:63: replace > with >= in around$",
+    "occam-intersect/src/crossings\\.rs:172:28: replace > with >= in clear$",
+    "occam-intersect/src/crossings\\.rs:173:72: replace < with <= in clear$",
+    "occam-intersect/src/crossings\\.rs:182:13: replace > with >= in turn$",
+    "occam-intersect/src/crossings\\.rs:182:28: replace < with <= in turn$",
+    "occam-intersect/src/crossings\\.rs:222:54: replace < with <= in crossing$",
+    "occam-intersect/src/crossings\\.rs:(223:50|224:62): replace \\* with / in crossing$",
+    "occam-intersect/src/crossings\\.rs:224:28: replace > with >= in crossing$",
+    "occam-intersect/src/crossings\\.rs:224:42: replace < with <= in crossing$",
     # What the tolerance cannot tell apart (intersection.resolution), by line. Ties that give the same number or the same
     # answer either way: the larger of a leaf's two sizes, of a station's two half steps, of two bounds merged, and of an
     # eigenvalue's two sizes, where the two are equal; a node exactly half a step from a station; a second curve's start
@@ -509,7 +527,7 @@ exclude_re = [
     # one is turned. The pencil's relative curvature negated has eigenvalues of the same sizes, which are all a bound
     # reads.
     "occam-intersect/src/branch\\.rs:49:(15|26): replace > with >= in crosses$",
-    "occam-intersect/src/hybrid\\.rs:218:27: replace > with >= in against_parts$",
+    "occam-intersect/src/hybrid\\.rs:236:27: replace > with >= in against_parts$",
     "occam-intersect/src/resolution\\.rs:89:24: replace < with <= in Near::sizes$",
     "occam-intersect/src/resolution\\.rs:151:61: replace < with <= in Near::between$",
     "occam-intersect/src/tangency\\.rs:71:22: replace > with >= in twin$",

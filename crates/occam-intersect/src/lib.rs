@@ -24,9 +24,10 @@
 //! a task.
 //!
 //! [`Hybrid`] is the general method, a [`Method`] for any pair whose subdivided surfaces have finite domains: a
-//! breadth-first subdivision by boxes, and against an analytic side by its implicit form's sign, gives at most one
-//! start point a leaf; start points already on a found curve, inside the tube about it and confirmed there within the
-//! band, are not traced, the rest are traced in rounds and fitted. A leaf where the surfaces lie within the band of each other is reported as an overlap, and a part
+//! breadth-first subdivision by boxes, and against an analytic side by its implicit form's sign, gives a start point a
+//! leaf, and one at each crossing of its edges where more than one curve crosses them; start points already on a found
+//! curve, inside the tube about it and confirmed there within the band, are not traced, the rest are traced in rounds
+//! and fitted. A leaf where the surfaces lie within the band of each other is reported as an overlap, and a part
 //! halved as far as it goes and still too large as unresolved; neither is answered with curves. Near a tangency a leaf
 //! takes its start from alternating projections where Newton's method loses rank, a shallow crossing gives a second
 //! start for a second close curve, and a trace is cut at a branch point it passes.
@@ -49,6 +50,7 @@ mod closed;
 mod correct;
 #[cfg(test)]
 mod correct_tests;
+mod crossings;
 mod decide;
 mod distance;
 mod edge;

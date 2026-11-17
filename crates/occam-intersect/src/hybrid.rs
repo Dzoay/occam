@@ -3,19 +3,21 @@
 //! pair whose subdivided surfaces have finite domains, after the closed forms and the pencil method, and needs no
 //! B-spline form, so offsets and mesh-backed surfaces reach it.
 //!
-//! Each leaf of the subdivision ([`traverse`](crate::traverse)) gives at most one start point: where Newton's method
-//! from its middle settles onto both surfaces inside it, a hair past its edges included, so that a point on an edge is
-//! found from both sides, or where Newton's method loses rank, as near a tangency, where alternating projections come
-//! to rest inside it ([`tangency`](crate::tangency)). A start where the surfaces cross at a small angle gives another,
-//! where a second curve through the same leaf would be. Before that, the gap between the surfaces at its middle and
-//! corners is decided against the band, and a leaf where every gap is within it is an overlap the method cannot resolve
-//! into curves, as where a rational surface lies on its analytic twin: it gives no start point, and is reported. The
-//! leaves are worked through the pair's runner, so their points are made once and in parallel, and they are traced in
-//! rounds of [`ROUND`], spread across the leaves so that a round's points are far apart, then the second starts one a
-//! round. A point inside the tube about the traces found so far, and confirmed there on a found curve within the band
-//! ([`tube`](crate::tube)), is not traced; a trace whose first, middle and last stations are each so confirmed on the
-//! ones before it found one of them again and is dropped. A trace is cut at each
-//! branch point it passes ([`branch`](crate::branch)); each touch it ends in, and each branch point, is a contact by
+//! Each leaf of the subdivision ([`traverse`](crate::traverse)) gives a start point from its middle: where Newton's
+//! method settles onto both surfaces inside it, a hair past its edges included, so that a point on an edge is found
+//! from both sides, or where Newton's method loses rank, as near a tangency, where alternating projections come to
+//! rest inside it ([`tangency`](crate::tangency)). A start where the surfaces cross at a small angle gives another,
+//! where a second curve through the same leaf would be. A leaf whose edges more than one curve crosses gives a start at
+//! each crossing besides ([`crossings`](crate::crossings)), so that no curve through it is lost to another; a
+//! crossing that settles nowhere inside it leaves the leaf unresolved, and reported. Before that, the gap between the
+//! surfaces at its middle and corners is decided against the band, and a leaf where every gap is within it is an
+//! overlap the method cannot resolve into curves, as where a rational surface lies on its analytic twin: it gives no
+//! start point, and is reported. The leaves are worked through the pair's runner, so their points are made once and in parallel, and they
+//! are traced in rounds of [`ROUND`], spread across the leaves so that a round's points are far apart, then the second
+//! starts one a round. A point inside the tube about the traces found so far, and confirmed there on a found curve
+//! within the band ([`tube`](crate::tube)), is not traced; a trace whose first, middle and last stations are each so
+//! confirmed on the ones before it found one of them again and is dropped. A trace is cut at each branch point it
+//! passes ([`branch`](crate::branch)); each touch it ends in, and each branch point, is a contact by
 //! [`resolution`](crate::resolution)'s rule; one that stalled is reported, and the rest are fitted.
 //!
 //! Every decision goes through occam-math's band decisions and is counted in the section's tally: the subdivision's
@@ -32,6 +34,7 @@ use occam_units::{Length, Point, Tolerance, UvPoint, Vec3};
 
 use crate::branch::branched;
 use crate::correct::{Here, Other, Pair, foot};
+use crate::crossings::{Gap, crossings};
 use crate::decide::{Decide, distance, uncertain, undecided};
 use crate::fit::fit;
 use crate::methods::{Answer, Method, Spent, SurfacePair, Work, incomplete};
@@ -89,16 +92,19 @@ impl Method for Hybrid {
 }
 
 /// What a leaf gives: the gaps between the surfaces at its middle and corners, where they could be measured, where its
-/// middle is, its start point, if any, and what it gave beside.
+/// middle is, its start point, if any, what it gave beside, the starts of the curves crossing its edges where more than
+/// one does, and where one of those crossings settled nowhere inside it, if one did.
 struct Found {
     gaps: Option<[Interval; 5]>,
     at: Vec3,
     seed: Option<Seed>,
     beside: Beside,
+    crossed: Vec<Seed>,
+    lost: Option<Vec3>,
 }
 
-/// What the leaves gave: the start points, in leaf order, the starts of second curves beside them, and where each
-/// overlap is.
+/// What the leaves gave: the start points, in leaf order, the starts of second curves beside them and of the curves
+/// crossing the leaves more than one crosses, and where each overlap is.
 #[derive(Default)]
 struct Leaves {
     seeds: Vec<Seed>,
@@ -154,12 +160,6 @@ fn where_is(on: On<'_>, cell: &Cell) -> Option<Vec3> {
     }
 }
 
-/// The middle and the corners of `patch`.
-fn samples(patch: UvBox) -> [UvPoint; 5] {
-    let [c0, c1, c2, c3] = patch.corners();
-    [middle(patch), c0, c1, c2, c3]
-}
-
 /// Where `pair` settles from `seed`: `Ok` with the point where it is inside `p`'s part and, if given, `q`'s, `Ok(None)`
 /// where it settles outside them, onto a curve of another leaf, and `Err` where it settles nowhere.
 fn settled(pair: &Pair<'_>, seed: &Here, p: UvBox, q: Option<UvBox>) -> Result<Option<Here>, ()> {
@@ -185,6 +185,23 @@ fn begun(
     }
 }
 
+/// The starts of the curves crossing the edges of the leaf of `p`'s part and, if given, `q`'s, on `pair`, where more
+/// than one does, from the gaps at `p`'s `corners`: each crossing whose foot is inside `q`'s part, settled inside the
+/// leaf; and where one settles nowhere inside it, where it is.
+fn crossed(pair: &Pair<'_>, (p, q): (UvBox, Option<UvBox>), corners: &[Gap; 4]) -> (Vec<Seed>, Option<Vec3>) {
+    let (mut starts, mut lost) = (Vec::new(), None);
+    for here in crossings(pair, corners) {
+        if q.is_some_and(|q| !inside(q, here.q, pair.q.domain(), EDGE)) {
+            continue;
+        }
+        match settled(pair, &here, p, q) {
+            Ok(Some(found)) => starts.push(seed_of(pair, &found)),
+            Ok(None) | Err(()) => lost = lost.or(Some(here.at)),
+        }
+    }
+    (starts, lost)
+}
+
 /// What the leaf `piece` of `s` gives against `other`, held by `form`.
 fn against_form(
     s: &dyn Surface,
@@ -193,32 +210,34 @@ fn against_form(
     piece: &Piece,
     tol: Tolerance,
 ) -> Found {
-    let gaps = samples(piece.patch).map(|uv| form.enclosed(s.point(uv).to_vec3()));
     let pair = Pair { p: s, q: other, other: Other::Implicit(form), swapped: side == Which::B, tol };
-    let mid = middle(piece.patch);
+    let (mid, none) = (middle(piece.patch), UvPoint::new(0.0, 0.0));
+    let corners = piece.patch.corners().map(|uv| Gap::at(&pair, uv, none));
     let at = s.point(mid).to_vec3();
-    let (seed, beside) =
-        begun(&pair, &Here { at, p: mid, q: UvPoint::new(0.0, 0.0) }, (piece.patch, None), (piece.size, true));
-    Found { gaps: Some(gaps), at, seed, beside }
+    let [c0, c1, c2, c3] = corners.map(|corner| form.enclosed(corner.here.at));
+    let (seed, beside) = begun(&pair, &Here { at, p: mid, q: none }, (piece.patch, None), (piece.size, true));
+    let (crossed, lost) = crossed(&pair, (piece.patch, None), &corners);
+    Found { gaps: Some([form.enclosed(at), c0, c1, c2, c3]), at, seed, beside, crossed, lost }
 }
 
 /// What the leaf of parts `p` of `a` and `q` of `b` gives: each gap from `a`'s point to its foot on `b`, found by
 /// Gauss-Newton from the middle of `q`, where the foot is in `b`'s domain.
 fn against_parts(a: &dyn Surface, b: &dyn Surface, (p, q): (&Piece, &Piece), tol: Tolerance) -> Found {
     let (mid_p, mid_q) = (middle(p.patch), middle(q.patch));
-    let gap = |uv: UvPoint| {
-        let here = a.point(uv).to_vec3();
-        let near = foot(b, here, mid_q);
-        b.domain().contains(near).then(|| distance(here, b.point(near).to_vec3()))
-    };
-    let gaps: Option<Vec<Interval>> = samples(p.patch).into_iter().map(gap).collect();
-    let gaps = gaps.and_then(|gaps| <[Interval; 5]>::try_from(gaps).ok());
     let pair = Pair { p: a, q: b, other: Other::Parametric, swapped: false, tol };
+    let corners = p.patch.corners().map(|uv| Gap::at(&pair, uv, mid_q));
     let at = a.point(mid_p).to_vec3();
+    let under = foot(b, at, mid_q);
+    let gap = |(here, near, on): (Vec3, UvPoint, Vec3)| b.domain().contains(near).then(|| distance(here, on));
+    let corner = |read: &Gap| (read.here.at, read.here.q, read.on_q);
+    let samples = [(at, under, b.point(under).to_vec3())].into_iter().chain(corners.iter().map(corner));
+    let gaps: Option<Vec<Interval>> = samples.map(gap).collect();
+    let gaps = gaps.and_then(|gaps| <[Interval; 5]>::try_from(gaps).ok());
     let reach = if p.size > q.size { p.size } else { q.size };
-    let near = inside(q.patch, foot(b, at, mid_q), b.domain(), NEAR);
+    let near = inside(q.patch, under, b.domain(), NEAR);
     let (seed, beside) = begun(&pair, &Here { at, p: mid_p, q: mid_q }, (p.patch, Some(q.patch)), (reach, near));
-    Found { gaps, at, seed, beside }
+    let (crossed, lost) = crossed(&pair, (p.patch, Some(q.patch)), &corners);
+    Found { gaps, at, seed, beside, crossed, lost }
 }
 
 /// What `leaf` gives, held as `held`.
@@ -233,7 +252,8 @@ fn leaf(a: &dyn Surface, b: &dyn Surface, leaf: &Cell, held: Held, tol: Toleranc
 
 /// The start points of `cells`, each a leaf, worked through `on`, and the overlaps among them: a leaf whose every gap
 /// is within the band. A leaf whose gaps the band cannot all place, where the rest are within it, keeps its point and
-/// gives back the decision. The decisions made in finding start points by projections are counted in leaf order.
+/// gives back the decision. The decisions made in finding start points by projections are counted in leaf order. A
+/// leaf where a curve crossing its edges settled nowhere inside it is unresolved, in `notes`.
 fn leaves(on: On<'_>, held: Held, tol: Tolerance, cells: Vec<Cell>, decide: &mut Decide, notes: &mut Notes) -> Leaves {
     let found = on.map(Arc::from(cells), Grain::Each, move |a, b, cell| leaf(a, b, cell, held, tol));
     let found: Vec<Found> = found.into_iter().flatten().collect();
@@ -243,22 +263,21 @@ fn leaves(on: On<'_>, held: Held, tol: Tolerance, cells: Vec<Cell>, decide: &mut
     for leaf in found {
         decide.tally = decide.tally.merged(leaf.beside.tally);
         notes.uncertain.extend(leaf.beside.uncertain);
-        let Some(gaps) = leaf.gaps else {
-            out.seeds.extend(leaf.seed);
-            out.twins.extend(leaf.beside.twin);
-            continue;
-        };
-        let mine: Vec<Option<Side>> = sides.by_ref().take(gaps.len()).collect();
-        if mine.iter().all(|side| *side == Some(Side::Within)) {
-            out.overlaps.push(leaf.at);
-            continue;
-        }
-        if mine.iter().all(|side| matches!(side, Some(Side::Within) | None)) {
-            let open = gaps.iter().zip(&mine).find(|(_, side)| side.is_none());
-            notes.uncertain.extend(open.map(|(gap, _)| uncertain(*gap, leaf.at)));
+        if let Some(gaps) = leaf.gaps {
+            let mine: Vec<Option<Side>> = sides.by_ref().take(gaps.len()).collect();
+            if mine.iter().all(|side| *side == Some(Side::Within)) {
+                out.overlaps.push(leaf.at);
+                continue;
+            }
+            if mine.iter().all(|side| matches!(side, Some(Side::Within) | None)) {
+                let open = gaps.iter().zip(&mine).find(|(_, side)| side.is_none());
+                notes.uncertain.extend(open.map(|(gap, _)| uncertain(*gap, leaf.at)));
+            }
         }
         out.seeds.extend(leaf.seed);
         out.twins.extend(leaf.beside.twin);
+        out.twins.extend(leaf.crossed);
+        notes.unresolved.extend(leaf.lost);
     }
     out
 }
@@ -514,6 +533,33 @@ mod tests {
         assert!((seed.at - twin.at).norm() > 0.027 && (seed.at - twin.at).norm() < 0.029, "{seed:?} {twin:?}");
         let other = against_parts(&bowl, &flat, (&large, &small), tol());
         assert!(other.beside.twin.is_some(), "either way round");
+    }
+
+    #[test]
+    fn a_leaf_more_than_one_curve_crosses_starts_on_each_and_one_whose_crossing_settles_outside_it_is_lost() {
+        // The ridge with its crest at x = 0.3, cut 1e-3 apart. The leaf about the crest gives a start on each line, two
+        // each, and none is lost; against a second part none of whose feet it holds, none at all.
+        let ridge = crate::crossings::tests::profile(&[(-1.0, -13.0), (0.3, 0.0), (1.0, -7.0)]);
+        let plane = level(-5e-3);
+        let pair = Pair::new(&ridge, &plane, tol());
+        let read = |leaf: UvBox| leaf.corners().map(|uv| Gap::at(&pair, uv, UvPoint::new(0.0, 0.0)));
+        let about = patch((0.296_875, 0.312_5), (-1.0, -0.875));
+        let (starts, lost) = crossed(&pair, (about, None), &read(about));
+        let mut xs: Vec<f64> = starts.iter().map(|seed| seed.at.x - 0.3).collect();
+        xs.sort_by(f64::total_cmp);
+        assert!(xs.len() == 4 && lost.is_none(), "{xs:?} {lost:?}");
+        assert!(xs.iter().zip([-5e-4, -5e-4, 5e-4, 5e-4]).all(|(x, w)| (x - w).abs() < 1e-7), "{xs:?}");
+        let elsewhere = patch((5.0, 6.0), (5.0, 6.0));
+        assert_eq!(crossed(&pair, (about, Some(elsewhere)), &read(about)).0.len(), 0, "no foot in that part");
+        // Far down a side, two opposite corners said to be above the plane: the edges change sign four times, but the
+        // gap never reaches nought between them, and each crossing settles onto the line, outside the leaf.
+        let down = patch((0.1, 0.15), (-1.0, -0.875));
+        let [c0, c1, c2, c3] = read(down);
+        let said = [c0.said(1.0), c1, c2, c3.said(1.0)];
+        let (starts, lost) = crossed(&pair, (down, None), &said);
+        assert!(starts.is_empty(), "{starts:?}");
+        let at = lost.unwrap();
+        assert!(at == c0.here.at || at == c3.here.at || at.x > 0.1 && at.x < 0.15, "{at:?}");
     }
 
     #[test]
