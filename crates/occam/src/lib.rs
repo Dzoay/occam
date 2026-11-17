@@ -5,6 +5,7 @@
 mod describe;
 mod distance;
 mod mesh;
+pub mod mesh_workloads;
 mod model;
 pub mod operation_workloads;
 mod pick;

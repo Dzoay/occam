@@ -96,6 +96,17 @@ async function start(): Promise<void> {
     live: () => live && { digest: live.drawn?.digest ?? null, models: live.models },
     picked: () => picking.last,
     post: async (digest, ids) => live?.post(digest, ids),
+    remesh: async () => {
+      const twin = await (await fetch("model", { cache: "no-store" })).arrayBuffer();
+      const opened = await kernel.open(twin, limits);
+      const open = kernel.edited;
+      const start = performance.now();
+      const meshed = await kernel.pool.mesh(opened.twins, opened.faces, limits);
+      const mesh = performance.now() - start;
+      const triangles = meshed ? meshed.mesh.indices.length / 3 : 0;
+      return { open, mesh, faces: opened.faces.length / 2, triangles, calls: kernel.pool.last };
+    },
+    edited: () => kernel.edited,
   });
 }
 

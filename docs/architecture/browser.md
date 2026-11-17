@@ -36,7 +36,9 @@ flowchart LR
 - **A face that will not mesh is named** in the page by the kernel's report, and the rest of the model is drawn. A
   call that throws instead, as when a worker's kernel will not load, is `view.mesh-failed`, naming the faces it held;
   every other face is drawn, and a reload meshes them again.
-- **An edit is one long call** on its worker. Splitting a boolean across calls waits for the `view` milestone's timing.
+- **An edit is one long call** on its worker. The longest of `construction`'s requests there is timed in
+  [the `view` milestone's timing](../evidence/2026-11-16-view-timing.md), which splitting a boolean across calls is
+  weighed against.
 
 | Message | From, to | What it carries |
 |---|---|---|

@@ -18,11 +18,15 @@ export interface Limits {
   readonly angle: number;
 }
 
-/** A range of faces, counted in id order, and the worker that meshed it. */
+/**
+ * A range of faces, counted in id order, the worker that meshed it, and how long it took, in milliseconds, from being
+ * dealt to being answered: a worker's first call of a model waits for it to open its copy.
+ */
 export interface Call {
   readonly first: number;
   readonly end: number;
   worker: number | null;
+  took: number | null;
 }
 
 /** A call that threw instead of meshing its range: the faces it held, by id, and what it said. */
@@ -48,6 +52,7 @@ export function cut(faces: number, calls = CALLS): Call[] {
     first: k * size,
     end: Math.min(faces, (k + 1) * size),
     worker: null,
+    took: null,
   }));
 }
 
@@ -60,7 +65,7 @@ export function cutSome(faces: readonly number[], calls = CALLS): Call[] {
     if (last && last.end === face && last.end - last.first < size) last.end = face + 1;
     else runs.push({ first: face, end: face + 1 });
   }
-  return runs.map(({ first, end }) => ({ first, end, worker: null }));
+  return runs.map(({ first, end }) => ({ first, end, worker: null, took: null }));
 }
 
 /** A face's block cut from `mesh` as a part of its own, for a face that keeps it, its slot and generation `ids`. */
@@ -120,6 +125,8 @@ class Job {
   readonly parts: (Part | null)[];
   /** Why each call threw, if it did. */
   readonly failures: (string | null)[];
+  /** When each call was dealt, by the page's clock. */
+  readonly dealt: number[];
   next = 0;
   left: number;
 
@@ -135,6 +142,7 @@ class Job {
   ) {
     this.parts = calls.map(() => null);
     this.failures = calls.map(() => null);
+    this.dealt = calls.map(() => 0);
     this.left = calls.length;
   }
 
@@ -243,6 +251,7 @@ export class Pool {
     job.next += 1;
     const { first, end } = job.calls[call];
     job.calls[call].worker = k;
+    job.dealt[call] = performance.now();
     this.busy[k] = [job.model, call];
     const { deflection, angle } = job.limits;
     this.post(this.workers[k], { kind: "mesh", call, model: job.model, deflection, angle, first, end });
@@ -257,6 +266,7 @@ export class Pool {
     this.busy[k] = null;
     const job = this.job;
     if (job && message.model === job.model) {
+      job.calls[message.call].took = performance.now() - job.dealt[message.call];
       if (message.kind === "meshed") {
         job.parts[message.call] = message.part;
         this.arrived(job);

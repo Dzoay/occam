@@ -58,22 +58,7 @@ detail](../decisions/2026-11-11-view-dependent-detail-after-release.md) comes af
 
 ## Steps
 
-### `view.timing`
-
-The exit's measurements: the mesher's classes in `gates perf`, scalar and lanes, with browser timing; P9's quality
-table on the real mesher (deviation over deflection, triangles over the angular limit, smallest angles) for its 1,002
-and 10,001-face models; the native speed-up at 1 to 6 threads; and the pool in the browser at 1 to 6 workers, cold and
-warm. The editing worker's longest call on `construction`'s requests is recorded too, which
-[the browser topic](../architecture/browser.md) waits on before splitting a boolean across calls, and so is the time
-from a run's save to the page's redraw.
-
-A pick is timed on real GPUs, the measuring machine's discrete one and the laptop's integrated one, in Chromium and
-Firefox, on P9's 10,001-face model. Chromium runs headed if headless reaches only a software adapter. The figure is a
-[goal](../decisions/2026-11-13-gpu-figures-are-goals.md), recorded in the PR; its 16.7 ms is a target no measurement
-grounds.
-
-*Failing test first:* each new class is `perf.unrecorded` until the record takes it; the mesher's lane kernel fails
-the vectorisation check until it beats width 1; the GPU timing script refuses a run on a software adapter.
+Every step is done; the exit gate above is checked on the milestone's PR.
 
 ## Open questions for the user
 

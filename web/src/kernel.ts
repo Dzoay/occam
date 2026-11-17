@@ -14,6 +14,8 @@ export interface Ran {
 
 export class Kernel {
   readonly pool: Pool;
+  /** How long the editing worker's last answer took, in milliseconds, from asking to answer. */
+  edited: number | null = null;
   private readonly editing: Worker;
   private next = 0;
   private readonly waiting = new Map<number, (answer: FromEditing) => void>();
@@ -31,8 +33,12 @@ export class Kernel {
   /** What the editing worker answers the message `make` makes with the next id, `transfer` moved to it. */
   private ask(make: (id: number) => Run | Open, transfer: Transferable[] = []): Promise<FromEditing> {
     const id = (this.next += 1);
+    const asked = performance.now();
     return new Promise<FromEditing>((resolve) => {
-      this.waiting.set(id, resolve);
+      this.waiting.set(id, (answer) => {
+        this.edited = performance.now() - asked;
+        resolve(answer);
+      });
       this.editing.postMessage(make(id), transfer);
     });
   }

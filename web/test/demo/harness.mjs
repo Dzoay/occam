@@ -135,7 +135,7 @@ function project(m, [x, y, z]) {
 }
 
 /** Where in the window the model's point `point` is drawn, through the camera the page drew with. */
-async function pixelOf(page, point) {
+export async function pixelOf(page, point) {
   const origin = await page.evaluate(() => window.occamViewer.origin());
   const matrix = await page.evaluate(() => window.occamViewer.readCamera());
   const [x, y, , w] = project(matrix, point.map((p, axis) => p - origin[axis]));

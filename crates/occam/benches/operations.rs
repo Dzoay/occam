@@ -3,11 +3,13 @@
 //! They run as a static musl build, so that no machine's libc or CPU features change the counts. Each lane kernel runs at
 //! width 1, `<kernel>_w1`, and at its width, `<kernel>_w<width>`, which `gates perf` holds to a clear gain (L29). An
 //! operation measured on models of several sizes, `<operation>_n<faces>`, is held to about the same count on each (P1).
+//! The mesher has no lane kernel: it evaluates its surfaces a point at a time, so it is counted as one class, scalar.
 #![allow(clippy::unwrap_used, missing_docs, reason = "a benchmark, where a failed setup should stop the run")]
 
 use std::hint::black_box;
 
 use gungraun::{library_benchmark, library_benchmark_group, main};
+use occam::mesh_workloads::{P9_SEED, PERF_TARGET, perf_mesh, pick_rays};
 use occam::operation_workloads::{MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded};
 use occam::spline_workloads as splines;
 use occam::{
@@ -385,4 +387,39 @@ library_benchmark_group!(
         commands_describe
     ]
 );
-main!(library_benchmark_groups = operations, kernels, topology, construction);
+/// P9's first parts, two plates and a panel: setup, which the counts leave out.
+fn p9_parts() -> occam_topo::Snapshot {
+    occam::mesh_workloads::synthetic(&Exec::serial(), PERF_TARGET, P9_SEED).unwrap()
+}
+
+// P9's first parts meshed whole on one thread: their edges sampled, each face meshed against them, merged and checked
+// watertight. What it made is leaked, as above.
+#[library_benchmark]
+#[bench::parts(p9_parts())]
+fn mesh_p9_parts(model: occam_topo::Snapshot) -> bool {
+    let meshed = perf_mesh(&Exec::serial(), black_box(&model)).unwrap();
+    let whole = meshed.refused.is_empty() && meshed.open.is_empty();
+    core::mem::forget((meshed, model));
+    whole
+}
+
+/// A picker made from P9's first parts' mesh, and a ray down onto every sixteenth triangle: setup.
+fn picking() -> (occam_mesh::Picker, Vec<occam_mesh::Ray>) {
+    let meshed = perf_mesh(&Exec::serial(), &p9_parts()).unwrap();
+    let rays = pick_rays(&meshed);
+    (occam_mesh::Picker::new(&meshed), rays)
+}
+
+// Each of those rays picked, as a click in the page is: the nearest face, or an edge within a hundredth of a
+// millimetre.
+#[library_benchmark]
+#[bench::picks(picking())]
+fn mesh_pick((picker, rays): (occam_mesh::Picker, Vec<occam_mesh::Ray>)) -> usize {
+    let tolerance = mm(0.01);
+    let hits = rays.iter().filter(|ray| picker.pick(black_box(ray), tolerance).is_ok()).count();
+    core::mem::forget((picker, rays));
+    hits
+}
+
+library_benchmark_group!(name = meshing, benchmarks = [mesh_p9_parts, mesh_pick]);
+main!(library_benchmark_groups = operations, kernels, topology, construction, meshing);

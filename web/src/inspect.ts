@@ -51,6 +51,21 @@ export interface KernelApi {
   picked(): Picked | null;
   /** Posts a selection to `occam view` as a click does, on a page that follows one. */
   post(digest: string, ids: readonly string[]): Promise<void>;
+  /** On a page that follows `occam view`, its model opened again and meshed whole by the pool, timed. */
+  remesh(): Promise<Remeshed>;
+  /** How long the editing worker's last answer took, in milliseconds. */
+  edited(): number | null;
+}
+
+/** A model opened and meshed whole again, for the timings: how long each took, in milliseconds, and what it made. */
+export interface Remeshed {
+  /** The editing worker's open: the model read, measured and checked. */
+  readonly open: number | null;
+  /** The pool's job: each worker opening its copy, then the calls, until the last is answered. */
+  readonly mesh: number;
+  readonly faces: number;
+  readonly triangles: number;
+  readonly calls: readonly Call[];
 }
 
 /** What a page following `occam view` has drawn: the digest of the model drawn last, and how many it has drawn. */
@@ -84,6 +99,10 @@ export interface InspectorApi {
   picked(): Picked | null;
   /** Posts a selection to `occam view` as a click does, on a page that follows one. */
   post(digest: string, ids: readonly string[]): Promise<void>;
+  /** On a page that follows `occam view`, its model opened again and meshed whole by the pool, timed. */
+  remesh(): Promise<Remeshed>;
+  /** How long the editing worker's last answer took, in milliseconds. */
+  edited(): number | null;
   /** Puts the camera where `view` says. */
   look(view: { target: Vec3; distance: number; yaw: number; pitch: number }): void;
   /** Each face's mark as the GPU holds it, read back: 1 selected, 2 highlighted, 3 both. */
@@ -202,6 +221,8 @@ export class Inspector {
       highlight: () => highlight.peek(),
       picked: () => kernel.picked(),
       post: (digest, ids) => kernel.post(digest, ids),
+      remesh: () => kernel.remesh(),
+      edited: () => kernel.edited(),
       look: (view) => {
         Object.assign(viewer.camera, view);
         viewer.loop.wake();

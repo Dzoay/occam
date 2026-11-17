@@ -43,6 +43,8 @@ exclude_globs = [
 # `gates determinism`'s `levels` and `runs_of`, which run the probes and hand their output to `parsed_levels` and
 # `check`; `check` refuses a probe no build ran.
 exclude_re = [
+    # The smaller of a plate's two pitches between its holes: where they are equal, either is the same number.
+    "mesh_workloads/parts\\.rs:\\d+:\\d+: replace < with <= in holes$",
     # Where the order is the degree, `order` and `p` are the same number, so `<=` picks the same one.
     "replace < with <= in rows_len$",
     # The lower or higher of numbers that are equal is either: a tie gives the same number. A triangle's span, the
