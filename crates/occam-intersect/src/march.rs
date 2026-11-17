@@ -9,7 +9,7 @@
 //! ([`Decide`]); one the band cannot make ends the march there, undecided.
 
 use occam_geom::Scratch;
-use occam_math::atan2;
+use occam_math::{Interval, atan2};
 use occam_units::Vec3;
 
 use occam_math::Side as Band;
@@ -182,7 +182,12 @@ impl<'p, 's> Run<'p, 's> {
     }
 
     /// Whether the march, at `here` with the step `h` ahead, closes on `start`: when the start is ahead within the
-    /// step, whether the corrector onto the start's own plane lands within the band of the start.
+    /// step, whether the corrector onto the start's own plane lands where the start is, to the curve's own
+    /// resolution. In that plane the curve is placed only to within the band over the sine of the angle between the
+    /// surfaces, where both are within the band of each other, so what is decided is the gap the landing's distance
+    /// from the start makes between them at that angle: within the band, it is the start. Where the surfaces cross
+    /// square, that is the distance itself; across a loop a gap of `eps` wide, at an angle of about `√eps`, it lets
+    /// the trace close on the start it can place no better (P5).
     fn closes(&mut self, here: &Frame, start: &Frame, h: f64) -> Result<bool, Uncertain> {
         let to = start.here.at - here.here.at;
         if self.stations.len() < 3 || to.norm() > 1.5 * h || to.dot(here.along) <= 0.0 {
@@ -190,7 +195,8 @@ impl<'p, 's> Run<'p, 's> {
         }
         self.count(1);
         let Some(landed) = self.pair.correct(&here.here, start.here.at, start.along) else { return Ok(false) };
-        Ok(self.decide.side(distance(landed.at, start.here.at), landed.at)? == Band::Within)
+        let sine = Interval::exact(start.normals.0.cross(start.normals.1).norm());
+        Ok(self.decide.side(distance(landed.at, start.here.at) * sine, landed.at)? == Band::Within)
     }
 
     /// Marches from `from`, its station already added, until the curve closes on `start`, where one is given, or

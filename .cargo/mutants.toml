@@ -1,5 +1,7 @@
 # cargo-mutants, run by `gates mutants` (L13, L14). A mutant of changed code that no test catches fails the gate unless
-# it is excluded here, and every exclusion says why no test can catch it.
+# it is excluded here, and every exclusion says why no test can catch it. The gate, and `just preflight`, also refuse an
+# `exclude_re` entry that excludes no mutant of the workspace, as one by line does once an edit moves its mutant: re-point
+# it to the mutant's line, after reading that the code there is still equivalent, or drop it if the code is gone.
 
 gitignore = true
 # A mutant must be caught by any workspace test. `gates mutants` tests occam-xtask's own mutants on its own tests alone.
@@ -105,29 +107,18 @@ exclude_re = [
     # Where the least `ρ` of a round meridian is exactly 0, either box holds it. On a cone's axis, its two lines through
     # the axis are as near, and every point of the circle at that `v` is a foot.
     "meridian\\.rs:\\d+:\\d+: replace < with <= in along_circle$",
-    # By line. Only a sphere's meridian crosses the axis, and its centre is 0, so its reach there is its radius of
-    # either sign, and the box is the same from either corner.
-    "meridian\\.rs:206:34: replace \\+ with - in along_circle$",
     "cone\\.rs:\\d+:\\d+: replace < with <= in <impl Parametric for Cone>::invert$",
     # Axes read back. By line. The larger of two leans from square as large as each other is either. And unit axes
     # square to within 64 machine epsilons, as these must be before their handedness is asked, have a triple product
     # within a few dozen machine epsilons of 1 or -1, never nought, so `> 0` and `>= 0` tell right from left alike.
     "axes\\.rs:147:89: replace > with >= in Axes::restore$",
     "axes\\.rs:148:62: replace > with >= in Axes::restore$",
-    # By line. An arc holds `φ + π` where it holds `φ − π`, and a cone's mirrored line is at `u + π` as at `u − π`: a
-    # whole turn apart, which `above` takes off.
-    "turn\\.rs:80:30: replace \\+ with - in swing$",
-    "cone\\.rs:104:34: replace \\+ with - in <impl Parametric for Cone>::invert$",
-    # By line. Each changes only how much a search refines, and so only its speed: refining a piece where the slope does
-    # not turn from falling to rising ends at one of its ends, which is no nearer than the nearest found.
-    "nearest\\.rs:81:21: replace < with <= in nearest$",
-    "nearest\\.rs:81:27: replace && with \\|\\| in nearest$",
+    # The gates' glue, as the comment above `exclude_re` says.
     "replace run -> Verdict",
     "in run$",
     "replace (measure|browser|built|counts|summaries|levels|runs_of) ",
     "in (measure|browser|built|counts|summaries|levels|runs_of)$",
     "replace (main|usage) -> ExitCode",
-    "in (main|usage)$",
     # The swept step's (geometry.swept). Ties, which give the same value either way: the window that holds an anchor, the
     # part two windows share, the doubling that first passes a bound, and the box of a turned curve's part.
     "curve\\.rs:\\d+:\\d+: replace < with <= in holding$",
@@ -138,13 +129,13 @@ exclude_re = [
     "replace > with >= in <impl Parametric for Revolution<C>>::bounds$",
     "replace < with <= in <impl Parametric for Revolution<C>>::bounds$",
     # `|a x + b y|` is `|a x - b y|`, for the perpendicular unit axes `x` and `y`.
-    "hyperbola\\.rs:115:39: replace \\+ with - in <impl ParametricCurve for Hyperbola>::within$",
+    "hyperbola\\.rs:132:39: replace \\+ with - in <impl ParametricCurve for Hyperbola>::within$",
     # Exactly no bend, or no slope across it: that branch's bounds are NaN, which narrowing a window ignores.
-    "parabola\\.rs:127:19: replace > with >= in <impl ParametricCurve for Parabola>::within$",
-    "parabola\\.rs:134:18: replace > with >= in <impl ParametricCurve for Parabola>::within$",
+    "parabola\\.rs:147:19: replace > with >= in <impl ParametricCurve for Parabola>::within$",
+    "parabola\\.rs:154:18: replace > with >= in <impl ParametricCurve for Parabola>::within$",
     # No window or range has exactly one end finite: ranges are whole, trimmed at both ends, or without end both ways,
     # and a parabola's window narrows from both ends at once.
-    "parabola\\.rs:139:25: replace && with \\|\\| in <impl ParametricCurve for Parabola>::within$",
+    "parabola\\.rs:159:25: replace && with \\|\\| in <impl ParametricCurve for Parabola>::within$",
     "swept\\.rs:\\d+:\\d+: replace && with \\|\\| in window$",
     # `side` is -1 or 1, never 0.
     "revolution\\.rs:\\d+:\\d+: replace < with <= in collapse$",
@@ -208,7 +199,7 @@ exclude_re = [
     "shell\\.rs:\\d+:\\d+: replace < with <= in reach$",
     # By line. Reading the edges of a shell that is new, whose faces the edit touched and so already reached, or of one
     # whose body is unchanged, which is all a check of an edge reads of its shell: more reads, the same failures.
-    "scope\\.rs:208:37: replace && with \\|\\| in further$",
+    "scope\\.rs:209:37: replace && with \\|\\| in further$",
     # The geometric step's (topology.geometric). Ties, which give the same value either way: the farther of a
     # parameter's distances below and above its chart, the least of two clearances, and the largest deviation found so
     # far.
@@ -218,11 +209,11 @@ exclude_re = [
     # By line. A step whose arc comes exactly to the band at the far end of its bound is within it for certain; halved
     # again, the half holding the arc's nearest point still bounds it from below by no more than the band, so the least
     # clearance stays within it and a point there stays unsettled either way.
-    "trace\\.rs:392:54: replace < with <= in Trace<'_>::refine$",
+    "trace\\.rs:405:54: replace < with <= in Trace<'_>::refine$",
     # By line. One halving more than 24, which changes only how much a search refines: a step 2^-24 of the first strays
     # from its chord by about 2^-48 of what the first does, below a double's resolution of the distance to it, so it is
     # still unsure there only where the band and that distance agree to the last bit. Not a tie; no test can reach it.
-    "trace\\.rs:393:55: replace < with <= in Trace<'_>::refine$",
+    "trace\\.rs:406:55: replace < with <= in Trace<'_>::refine$",
     # The scale step's (topology.scale). A tie: an operation measured at one size alone is its own smallest and largest,
     # so it never grows.
     "perf\\.rs:\\d+:\\d+: replace < with <= in check_growth$",
@@ -236,10 +227,6 @@ exclude_re = [
     "revolve\\.rs:98:21: replace > with >= in axes$",
     # A tie: where an arc turns at its high end, that end is the point, which is taken anyway.
     "revolve\\.rs:\\d+:\\d+: replace < with <= in furthest_on$",
-    # A spot exactly the band from the axis, or a piece that comes exactly the band from it: on the axis or not, as for
-    # `axes`, both are within the tolerance.
-    "revolve\\.rs:\\d+:\\d+: replace <= with < in pinch$",
-    "revolve\\.rs:\\d+:\\d+: replace >= with > in pinch$",
     # The primitives step's (construction.primitives). By line. A torus's corners and circles are at angles of 0 and a
     # half turn alone, whose cosines are exactly 1 and -1, so dividing by the cosine is multiplying by it.
     "primitive/round\\.rs:206:27: replace \\* with / in torus$",
@@ -318,8 +305,8 @@ exclude_re = [
     # dividing by it is multiplying by it; and a cone's two rulings through its apex in a plane less steep than its
     # side are each other's mirror, both made, so taking the part across away instead of adding it swaps them.
     "closed/conic\\.rs:111:28: replace \\* with / in plane_cone$",
-    "closed/conic\\.rs:131:94: replace \\* with / in through_apex$",
-    "closed/conic\\.rs:131:79: replace \\+ with - in through_apex$",
+    "closed/conic\\.rs:132:94: replace \\* with / in through_apex$",
+    "closed/conic\\.rs:132:79: replace \\+ with - in through_apex$",
     # Ties, which give the same value either way: a cosine or a difference of radii of exactly nought, which is its own
     # magnitude; two world axes as little along a normal, either square to it; a parabola's `d` times its slant exactly
     # nought, which only a plane through the apex has, decided before; and circles of one radius, which touch inside
@@ -328,10 +315,10 @@ exclude_re = [
     "closed/conic\\.rs:111:36: replace > with >= in plane_cone$",
     "closed/meet\\.rs:116:16: replace < with <= in magnitude$",
     "closed/meet\\.rs:137:38: replace < with <= in circles$",
-    "closed/piece\\.rs:60:17: replace < with <= in square_to$",
+    "closed/piece\\.rs:75:17: replace < with <= in square_to$",
     # By line. A point two meridians of a coaxial pair meet in twice on the axis is a cone's apex, and a pair with a
     # cone measures its heights from the apex: nought and twice nought are one height.
-    "closed/coaxial\\.rs:118:33: replace - with \\+ in seen$",
+    "closed/coaxial\\.rs:144:33: replace - with \\+ in seen$",
     # By line. A sine or a cosine is at most 1, so four machine epsilons over it is at least four of it: a wider
     # enclosure, still certified, which only a value within a few ulps of a band's edge could tell, and none is.
     "closed/(conic|coaxial)\\.rs:(77|33):41: replace \\* with / in computed$",
@@ -402,34 +389,34 @@ exclude_re = [
     "occam-intersect/src/march\\.rs:161:22: replace > with >= in Run<'p, 's>::scaled$",
     "occam-intersect/src/march\\.rs:162:14: replace < with <= in Run<'p, 's>::scaled$",
     "occam-intersect/src/project\\.rs:72:61: replace > with >= in search$",
-    "occam-intersect/src/march\\.rs:359:34: replace < with <= in Run<'p, 's>::again$",
-    "occam-intersect/src/march\\.rs:360:20: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/march\\.rs:365:34: replace < with <= in Run<'p, 's>::again$",
+    "occam-intersect/src/march\\.rs:366:20: replace < with <= in Run<'p, 's>::again$",
     # The trace. By line. A computed sag or turn exactly at its limit, and a loop's start exactly a step and a half
     # ahead: no test can place a computed value on the boundary, and either side of it is as good. A step at the limit
     # is within it, and a closure put off at the boundary is tried at the next station, nearer.
-    "occam-intersect/src/march\\.rs:227:17: replace > with >= in Run<'p, 's>::next$",
-    "occam-intersect/src/march\\.rs:227:49: replace > with >= in Run<'p, 's>::next$",
-    "occam-intersect/src/march\\.rs:188:49: replace > with >= in Run<'p, 's>::closes$",
+    "occam-intersect/src/march\\.rs:233:17: replace > with >= in Run<'p, 's>::next$",
+    "occam-intersect/src/march\\.rs:233:49: replace > with >= in Run<'p, 's>::next$",
+    "occam-intersect/src/march\\.rs:193:49: replace > with >= in Run<'p, 's>::closes$",
     # The trace's closure, by line: a march tries to close only with three stations. A loop has at least 2 pi / 0.3, 21,
     # as no step turns by more than 0.3, before its start can be ahead within a step and a half; with one station the
     # start is under the march, with two behind it. So the guard decides nothing at fewer than three or at three.
-    "occam-intersect/src/march\\.rs:188:32: replace < with (==|<=) in Run<'p, 's>::closes$",
+    "occam-intersect/src/march\\.rs:193:32: replace < with (==|<=) in Run<'p, 's>::closes$",
     # The trace's normal where a surface's derivatives lose a direction, by line. The declared line it lies on is asked
     # for only there, which is only on such a line, at its own parameter, put there exactly by the march: the parameter
     # is the line's to the bit, and any tolerance at or above nought finds the same line.
-    "occam-intersect/src/correct\\.rs:158:40: replace \\* with (\\+|/) in Pair<'s>::normal_of$",
-    "occam-intersect/src/correct\\.rs:158:47: replace \\+ with \\* in Pair<'s>::normal_of$",
+    "occam-intersect/src/correct\\.rs:164:40: replace \\* with (\\+|/) in Pair<'s>::normal_of$",
+    "occam-intersect/src/correct\\.rs:164:47: replace \\+ with \\* in Pair<'s>::normal_of$",
     # The trace's foot, by line. Its damping, 1e-12 of the rates' size, keeps the normal equations solvable where a rate
     # vanishes, as at a pole, where the right-hand side's entry vanishes with it, so that parameter's step is nought
     # whatever the damping's sign; elsewhere it moves a step by 1e-12 of itself, which the next step takes back.
-    "occam-intersect/src/correct\\.rs:307:43: replace \\+ with - in foot$",
-    "occam-intersect/src/correct\\.rs:308:(35|83): replace \\+ with - in foot$",
+    "occam-intersect/src/correct\\.rs:313:43: replace \\+ with - in foot$",
+    "occam-intersect/src/correct\\.rs:314:(35|83): replace \\+ with - in foot$",
     # Its stop, by line, which only spares Gauss-Newton steps once one moves the point by less than rounding: stopping
     # at another such step, or after all sixteen, gives the same foot to rounding. For the analytic families the two
     # rates are square to each other, so the step's two parts make the same length added or taken away.
-    "occam-intersect/src/correct\\.rs:311:21: replace \\+ with - in foot$",
-    "occam-intersect/src/correct\\.rs:311:48: replace \\* with / in foot$",
-    "occam-intersect/src/correct\\.rs:311:55: replace \\+ with (-|\\*) in foot$",
+    "occam-intersect/src/correct\\.rs:317:21: replace \\+ with - in foot$",
+    "occam-intersect/src/correct\\.rs:317:48: replace \\* with / in foot$",
+    "occam-intersect/src/correct\\.rs:317:55: replace \\+ with (-|\\*) in foot$",
     # The trace's edges, by line. A range is finite at both its ends or at neither (no family has one with one end
     # finite: domain.rs), so one end's being infinite is both's. A range's ends are never equal, so which is above the
     # other is never a tie. A range that comes round or has no end gives no breach in `against`, so taking it for one
@@ -438,7 +425,7 @@ exclude_re = [
     "occam-intersect/src/edge\\.rs:125:70: replace > with >= in beside$",
     "occam-intersect/src/edge\\.rs:99:66: replace && with \\|\\| in edges$",
     # A cone's implicit form, by line: the side of its apex is 1 or -1, so dividing by it is multiplying by it.
-    "occam-intersect/src/implicit\\.rs:75:36: replace \\* with / in Implicit::at$",
+    "occam-intersect/src/implicit\\.rs:92:36: replace \\* with / in Implicit::at$",
     # The trace's projections, by line. A move of no length, or none that is finite, gives a point that is not a number;
     # its foot stays at the seed, whose gap is the base's, so the search gives the base, as returning it at once does.
     "occam-intersect/src/project\\.rs:69:28: replace \\|\\| with && in search$",
@@ -472,48 +459,64 @@ exclude_re = [
     # The hits' bisections, by line. Halving stops where the middle of the two ends rounds to one of them. Going on, as
     # these do, takes that end again, whose side or slope is its own to begin with, so neither end moves: the root and
     # the nearest point come out the same, the rounds left over spent on nothing.
-    "occam-intersect/src/along\\.rs:241:(21|34): replace < with <= in Along<'_, '_>::root$",
-    "occam-intersect/src/along\\.rs:241:27: replace && with \\|\\| in Along<'_, '_>::root$",
-    "occam-intersect/src/along\\.rs:283:(21|34): replace < with <= in Along<'_, '_>::closest$",
-    "occam-intersect/src/along\\.rs:283:27: replace && with \\|\\| in Along<'_, '_>::closest$",
+    "occam-intersect/src/along\\.rs:240:(21|34): replace < with <= in Along<'_, '_>::root$",
+    "occam-intersect/src/along\\.rs:240:27: replace && with \\|\\| in Along<'_, '_>::root$",
+    "occam-intersect/src/along\\.rs:282:(21|34): replace < with <= in Along<'_, '_>::closest$",
+    "occam-intersect/src/along\\.rs:282:27: replace && with \\|\\| in Along<'_, '_>::closest$",
     # The hits' boxes and sizes, by line: of two radii, coordinates or sizes that are equal, either is the larger.
     "occam-intersect/src/distance\\.rs:30:33: replace < with <= in between$",
     "occam-intersect/src/distance\\.rs:96:77: replace > with >= in around$",
     "occam-intersect/src/subdivide\\.rs:150:53: replace > with >= in leaves$",
     # A unit axis with nothing of it across Z lies along Z one way or the other, so `along` is 1 or -1 there, never 0.
-    "occam-intersect/src/distance\\.rs:122:21: replace > with >= in canonical$",
+    "occam-intersect/src/distance\\.rs:130:21: replace > with >= in canonical$",
     # The fit's ties, by line. Where two numbers are equal, keeping either gives the same number: the largest
     # coordinate a fit's floor is taken from, a fit at its floor, and an image's largest step to a foot. Where the
     # largest gap is found twice, or an image's gap equals the curve's fit, the fit reached is the same, and the place
     # named is as far as the other.
-    "occam-intersect/src/fit\\.rs:253:57: replace > with >= in Worst::note$",
-    "occam-intersect/src/fit\\.rs:405:65: replace > with >= in floored$",
-    "occam-intersect/src/fit\\.rs:406:28: replace > with >= in floored$",
-    "occam-intersect/src/fit\\.rs:431:48: replace > with >= in image_fit$",
-    "occam-intersect/src/fit\\.rs:521:42: replace > with >= in fit_piece$",
+    "occam-intersect/src/fit\\.rs:251:57: replace > with >= in Worst::note$",
+    "occam-intersect/src/fit\\.rs:403:65: replace > with >= in floored$",
+    "occam-intersect/src/fit\\.rs:404:28: replace > with >= in floored$",
+    "occam-intersect/src/fit\\.rs:429:48: replace > with >= in image_fit$",
+    "occam-intersect/src/fit\\.rs:519:42: replace > with >= in fit_piece$",
     # The hybrid's ties, by line. Where two numbers are equal, keeping either gives the same number: the furthest a
     # corner of a part is from its middle, and the largest gap between two boxes, whose radius is the rounding of its
     # middle alone (occam-math's interval subtraction of exact numbers), so two gaps with one middle are one interval.
     "occam-intersect/src/pieces\\.rs:50:16: replace > with >= in spread$",
     "occam-intersect/src/traverse\\.rs:112:61: replace > with >= in apart$",
-    # A chord's foot, by line. A chord of no length gives 0 / 0, not a number, which the clamp below takes to the
-    # start, as the other branch does. At either end of the clamp both branches give the same parameter, 1, or a zero
-    # of either sign, which moves the foot at most by the sign of a zero, and no distance sees that.
-    "occam-intersect/src/tube\\.rs:35:27: replace > with >= in Chord::foot$",
-    "occam-intersect/src/tube\\.rs:(36:22|38:21): replace > with >= in Chord::foot$",
+    # How far along a chord its foot is, by line. A chord of no length gives 0 / 0, not a number, which the clamp below
+    # takes to the start, as the other branch does. At either end of the clamp both branches give the same parameter,
+    # 1, or a zero of either sign, which moves the foot at most by the sign of a zero, and no distance sees that, nor
+    # the cubic through the chord's stations, whose terms are the same at either.
+    "occam-intersect/src/tube\\.rs:53:27: replace > with >= in Chord::along$",
+    "occam-intersect/src/tube\\.rs:(54:14|56:21): replace > with >= in Chord::along$",
     # The tube, by line. A chord's two ends at one coordinate give the same cubes in either order. Where the bends
     # either side of a chord are equal, or its sag is the tracer's, keeping either gives the same number. A closed
     # trace of one station has one chord from it to itself at the tracer's sag either way, which is the chord its lone
-    # station is given otherwise; an open trace's extra span has no station after it, and is dropped.
-    "occam-intersect/src/tube\\.rs:95:18: replace < with <= in Tube::file$",
-    "occam-intersect/src/tube\\.rs:(142:47|143:16): replace > with >= in Tube::radius$",
-    "occam-intersect/src/tube\\.rs:153:31: replace && with \\|\\| in Tube::add$",
-    "occam-intersect/src/tube\\.rs:153:47: replace > with >= in Tube::add$",
+    # station is given otherwise; an open trace's extra span has no station after it, and is dropped. The half cosine
+    # of the turn between a chord's stations is below nought only by rounding, and at nought either branch gives nought.
+    "occam-intersect/src/tube\\.rs:117:18: replace < with <= in Tube::file$",
+    "occam-intersect/src/tube\\.rs:259:55: replace > with >= in between$",
+    "occam-intersect/src/tube\\.rs:(164:47|165:16): replace > with >= in Tube::radius$",
+    "occam-intersect/src/tube\\.rs:175:31: replace && with \\|\\| in Tube::add$",
+    "occam-intersect/src/tube\\.rs:175:47: replace > with >= in Tube::add$",
     # The hybrid, by line. A trace of one station gives one piece of one station, which the fit returns from at once
     # with nothing, so fitting it or not is the same. A box's reach either side of its middle: where the two are equal,
     # keeping either is the same number.
-    "occam-intersect/src/hybrid\\.rs:321:57: replace > with >= in finish$",
+    "occam-intersect/src/hybrid\\.rs:357:57: replace > with >= in finish$",
     "occam-intersect/src/traverse\\.rs:127:31: replace > with >= in clear$",
+    # What the tolerance cannot tell apart (intersection.resolution), by line. Ties that give the same number or the same
+    # answer either way: the larger of a leaf's two sizes, of a station's two half steps, of two bounds merged, and of an
+    # eigenvalue's two sizes, where the two are equal; a node exactly half a step from a station; a second curve's start
+    # exactly the band from the first. Normals square to each other give no finite slope, so no model, whichever way
+    # one is turned. The pencil's relative curvature negated has eigenvalues of the same sizes, which are all a bound
+    # reads.
+    "occam-intersect/src/branch\\.rs:49:(15|26): replace > with >= in crosses$",
+    "occam-intersect/src/hybrid\\.rs:218:27: replace > with >= in against_parts$",
+    "occam-intersect/src/resolution\\.rs:89:24: replace < with <= in Near::sizes$",
+    "occam-intersect/src/resolution\\.rs:151:61: replace < with <= in Near::between$",
+    "occam-intersect/src/tangency\\.rs:71:22: replace > with >= in twin$",
+    "occam-intersect/src/tangency\\.rs:166:44: replace > with >= in contacts$",
+    "occam-intersect/src/pencil/emit\\.rs:154:49: delete - in touch$",
     # Picking's ties, by line. A triangle as near as the nearest face crossed, of the same face, is that face at that
     # distance: taking it or keeping the one held gives the same. Where an edge's segment comes as near the ray as the
     # one held, as far along it, of the same edge and from the same sample, it is the same segment, whose nearest point

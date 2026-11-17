@@ -62,22 +62,23 @@ fn crossing() -> Vec<Case> {
         .collect();
     let oblique = v(1.0, 0.0, 2.0) * (1.0 / 5.0_f64.sqrt());
     vec![
-        case("cc_steinmetz", (O, X, 1.0), curves(2, steinmetz, vec![v(0.0, 1.0, 0.0), v(0.0, -1.0, 0.0)])),
+        case("cc_steinmetz", (O, X, 1.0), curves(4, steinmetz, vec![v(0.0, 1.0, 0.0), v(0.0, -1.0, 0.0)]).below(1.0)),
         case("cc_perp_unequal", (O, X, 0.6), curves(2, on_rulings(0.0, 0.6, X, 12), vec![])),
         case("cc_skew_two_loops", (v(0.0, 0.2, 0.0), X, 0.6), curves(2, on_rulings(0.2, 0.6, X, 12), vec![])),
         case("cc_skew_one_loop", (v(0.0, 0.6, 0.0), X, 0.6), curves(1, on_rulings(0.6, 0.6, X, 12), vec![])),
         case(
             "cc_figure_eight",
             (v(0.0, 0.4, 0.0), X, 0.6),
-            curves(1, on_rulings(0.4, 0.6, X, 12), vec![v(0.0, 1.0, 0.0)]),
+            curves(2, on_rulings(0.4, 0.6, X, 12), vec![v(0.0, 1.0, 0.0)]).below(1.0),
         ),
         case("cc_oblique", (v(0.0, 0.1, 0.0), oblique, 0.5), curves(2, on_rulings(0.1, 0.5, oblique, 12), vec![])),
     ]
 }
 
 /// Viviani's pair: the cylinder of radius 1 inside the sphere of radius 2, tangent to it at `(2, 0, 0)`, where the
-/// curve has its node. The sphere's own axis is Z, so the curve passes through both its poles, where its image on the
-/// sphere is cut: it comes as three pieces.
+/// curve has its node, a branch point, where it is cut. The sphere's own axis is Z, so the curve passes through both its
+/// poles, where its image on the sphere is cut too: it comes as four pieces. The relative curvature at the node is
+/// `±1/2`, so the node is below the resolution.
 fn viviani() -> Case {
     let on = (0..9)
         .map(|i| {
@@ -86,7 +87,7 @@ fn viviani() -> Case {
             v(1.0 + cos, sin, 2.0 * sin_cos(0.5 * t).0)
         })
         .collect();
-    let want = curves(3, on, vec![v(2.0, 0.0, 0.0)]);
+    let want = curves(4, on, vec![v(2.0, 0.0, 0.0)]).below(0.5);
     Case { name: "sc_viviani".to_string(), a: cylinder(X, Z, 1.0), b: sphere(O, 2.0), want, place: rigid(), unnamed: 0 }
 }
 

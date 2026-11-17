@@ -17,10 +17,11 @@ use occam_math::Side;
 use occam_units::{Point, Vec3};
 
 use super::fan::{Ball, Fan};
-use super::quadric::{Kind, Natural, Ruling};
+use super::quadric::{Kind, Natural, Quadric, Ruling};
 use super::{Class, Pair, nodal, smooth, split};
-use crate::closed::{Found, Plan, emit, exact3, minus, norm3};
+use crate::closed::{Found, Plan, Touch, decided, emit, exact3, minus, norm3, square_to, unit};
 use crate::decide::{Decisions, Undecided};
+use crate::resolution::{NULL, Near};
 use crate::section::{Contact, Section, SectionCurve};
 
 /// The points of the world at which a chart's parameters are undefined: the charts' poles and the cones' apexes.
@@ -31,6 +32,16 @@ fn undefined(pair: &Pair, charts: [&Chart; 2]) -> Vec<Vec3> {
         _ => None,
     });
     poles.chain(apexes).collect()
+}
+
+/// Whether `at` is one of `points`, within the band, as a node at a cone's apex is.
+fn held(points: &[Vec3], at: Vec3, decide: &mut Decisions) -> Result<bool, Undecided> {
+    for p in points {
+        if decide.length(norm3(minus(exact3(*p), exact3(at))))? == Side::Within {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// The samples a curve's range is searched in for where it passes a point.
@@ -122,10 +133,45 @@ fn pieces<C: ParametricCurve + Clone, T: ParametricCurve + Clone>(
     Ok(split.into_iter().map(|(lo, hi)| imaged(trim(lo, hi)?, charts)).collect())
 }
 
-/// A contact at `at`, with its parameters on both surfaces.
-fn contact(at: Vec3, charts: [&Chart; 2]) -> Contact {
-    let p = Point::from_vec3(at);
-    Contact::Point { at: p, on_a: charts[0].parameters(p), on_b: charts[1].parameters(p) }
+/// The contact at `at`, a point on both of `pair`'s surfaces, with the bound of what the band hides there (O24): nought
+/// at a cone's apex, which is no tangency, and else twice `√(2 band / κ)`, `κ` the least size of the relative
+/// curvature of the two quadrics there, as [`resolution`](crate::resolution) derives. A quadric `Q` with half its
+/// gradient `h` at the contact is, over the common tangent plane, the graph whose second derivative along `e` and `f`
+/// is `−eᵀ M f / (h · n)`, `M` its 3×3 part and `n` the first's unit normal.
+pub(super) fn touch(pair: &Pair, at: Vec3, decide: &mut Decisions) -> Result<Touch, Undecided> {
+    for surface in &pair.surfaces {
+        if let Natural::Cone { apex, .. } = *surface
+            && decide.length(norm3(minus(exact3(apex), exact3(at))))? == Side::Within
+        {
+            return Ok(Touch::point(at));
+        }
+    }
+    let x = at - pair.origin;
+    let (first, second) = (pair.quadric(0), pair.quadric(1));
+    let n = unit(first.half_gradient(x));
+    let e1 = square_to(n);
+    let e2 = n.cross(e1);
+    let graph = |q: &Quadric, s: Vec3, t: Vec3| -q.form(s, t) / q.half_gradient(x).dot(n);
+    let relative = |s: Vec3, t: Vec3| graph(&second, s, t) - graph(&first, s, t);
+    let across = relative(e1, e2);
+    let bend = [[relative(e1, e1), across], [across, relative(e2, e2)]];
+    let gap = Near { gap: 0.0, slope: [0.0; 2], bend, basis: [e1, e2], null: NULL };
+    Ok(Touch { at, bound: gap.bound(decide.band()) })
+}
+
+/// The contacts at `points`, each decided by the rule, with its parameters through both charts.
+fn contacts(
+    pair: &Pair,
+    points: &[Vec3],
+    charts: [&Chart; 2],
+    decide: &mut Decisions,
+) -> Result<Vec<Contact>, Undecided> {
+    let mut out = Vec::with_capacity(points.len());
+    for at in points {
+        let found = touch(pair, *at, decide)?;
+        out.push(decided(found, charts, decide));
+    }
+    Ok(out)
 }
 
 /// Lines and conics, made and imaged by the closed forms.
@@ -197,17 +243,21 @@ fn nodal(
     section: &mut Section,
 ) -> Made {
     let nodal = nodal::node(pair, at, phi, decide)?;
+    let mut through = charts.0.to_vec();
+    if !held(charts.0, nodal.at, decide)? {
+        through.push(nodal.at);
+    }
     let made = match &nodal.fan {
         None => Vec::new(),
         Some(fan) => {
             let stretches = if nodal.reaching { fan.within(ball) } else { vec![(nodal.start, nodal.start + TAU)] };
-            match fanned(pair, fan, stretches, charts, decide)? {
+            match fanned(pair, fan, stretches, (&through, charts.1), decide)? {
                 Ok(made) => made,
                 Err(why) => return Ok(Err(why)),
             }
         }
     };
-    section.contacts.push(contact(nodal.at, charts.1));
+    section.contacts.extend(contacts(pair, &[nodal.at], charts.1, decide)?);
     Ok(Ok(made))
 }
 
@@ -247,7 +297,11 @@ fn ruling_and_cubic(
         Ok(cubic) => cubic,
         Err(why) => return Ok(Err(why)),
     };
-    let line = Found { curves: vec![Plan::Ruling { apex, along: ruling.z }], contacts: vec![apex], ..Found::default() };
+    let line = Found {
+        curves: vec![Plan::Ruling { apex, along: ruling.z }],
+        contacts: vec![Touch::point(apex)],
+        ..Found::default()
+    };
     Ok(conics(Ok(line), charts.1, decide, section)?.map(|()| cubic))
 }
 
@@ -276,7 +330,7 @@ pub(super) fn built(
                 Some(planes) => split::touches(pair, planes, decide)?,
                 None => Vec::new(),
             };
-            section.contacts.extend(points.into_iter().map(|at| contact(at, charts)));
+            section.contacts.extend(contacts(pair, &points, charts, decide)?);
             Ok(Vec::new())
         }
         Class::Other(why) => Err(why),

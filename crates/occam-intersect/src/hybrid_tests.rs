@@ -22,7 +22,9 @@ use crate::decide::Decide;
 use crate::on::On;
 use crate::trace_tests::{BAND, ball, gap, level, mm, moved, nurbs_cylinder, point, tol, tracer, upright};
 use crate::traverse::{DEPTH, FRONTIER, Traversal, held, traverse};
-use crate::{Answer, Budget, Contact, Hybrid, Method, Methods, Section, SurfacePair, Tracer, Work, sections};
+use crate::{
+    Answer, Budget, Contact, Hybrid, Method, Methods, Section, SectionCurve, SurfacePair, Tracer, Work, sections,
+};
 
 /// A turn and a shift that align nothing with an axis, as P5 placed every case.
 fn rigid() -> Placement<World, World> {
@@ -32,7 +34,7 @@ fn rigid() -> Placement<World, World> {
 }
 
 /// The point `(x, y, z)` placed rigidly.
-fn placed(x: f64, y: f64, z: f64) -> Point<World> {
+pub(crate) fn placed(x: f64, y: f64, z: f64) -> Point<World> {
     rigid().point(Point::from_vec3(Vec3::new(x, y, z)))
 }
 
@@ -185,7 +187,7 @@ fn p5s_625_component_surface_against_a_plane_gives_all_577_curves() {
 
 /// The biquadratic graph over `[-1, 1]^2` of `ax x^2 + bx x + ay y^2 + by y`, placed rigidly: its parameters are `x`
 /// and `y`, as the poles' Greville abscissae are.
-fn graph((ax, bx): (f64, f64), (ay, by): (f64, f64)) -> SplineSurface {
+pub(crate) fn graph((ax, bx): (f64, f64), (ay, by): (f64, f64)) -> SplineSurface {
     let side = |a: f64, b: f64| [a - b, -a, a + b];
     let (fx, fy) = (side(ax, bx), side(ay, by));
     let at = [-1.0, 0.0, 1.0];
@@ -276,12 +278,69 @@ fn a_torus_is_subdivided_against_a_planes_implicit_form_where_the_plane_has_no_e
 }
 
 #[test]
-fn a_sphere_touching_a_plane_is_one_contact() {
+fn a_sphere_touching_a_plane_is_one_contact_below_the_resolution() {
+    // The relative curvature is the sphere's, a half: the band hides a loop of radius `√(2 band / ½)` there, and the
+    // touch is where the surfaces are within the band of each other, so the bound is at least twice that.
     let (plane, sphere) = (upright(0.0), ball(2.0, [2.0, 0.0, 0.0]));
     let found = alone(hybrid(1e-4, 0.05, 0.25)).section(&plane, &sphere, tol(), within(2_000));
     assert!(found.curves.is_empty() && found.failures.is_empty(), "{} {:?}", found.curves.len(), found.failures);
-    let [Contact::Point { at, .. }] = found.contacts.as_slice() else { panic!("{:?}", found.contacts) };
+    let [Contact::BelowResolution { at, bound }] = found.contacts.as_slice() else { panic!("{:?}", found.contacts) };
     assert!(at.to_vec3().norm() < 1e-6, "where they touch: {at:?}");
+    let d = (2.0 * BAND / 0.5).sqrt();
+    assert!(2.0 * d <= bound.millimetres() && bound.millimetres() <= 4.0 * d, "{bound:?} against {d}");
+}
+
+/// How steeply the ridge's sides fall, so that its crest stands well above the band over the plane that cuts it even
+/// where the plane's two lines are only just apart to the band.
+const STEEP: f64 = 10.0;
+
+/// A ridge, and a plane that cuts it just below its crest in two parallel lines `apart` apart, both placed rigidly: the
+/// bilinear B-spline over `[-1, 1]^2` of `z = -STEEP |x|`, whose parameters are `x` and `y`, and the plane
+/// `z = -STEEP apart / 2`, which meets it along `x = ±apart / 2`. They cross square to within a tenth of a radian, so
+/// the band tells apart two lines more than itself apart. The crest is where the domain is first halved, so that each
+/// line has leaves of its own.
+fn ridge(apart: f64) -> (Plane, SplineSurface) {
+    let corner = |(x, y): (f64, f64)| placed(x, y, -STEEP * x.abs());
+    let poles = [(-1.0, -1.0), (0.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (0.0, 1.0), (1.0, 1.0)].map(corner);
+    let form = BsplineSurface {
+        degree: (1, 1),
+        count: (3, 2),
+        knots_u: vec![-1.0, -1.0, 0.0, 1.0, 1.0],
+        knots_v: vec![-1.0, -1.0, 1.0, 1.0],
+        poles: poles.into(),
+        weights: None,
+    };
+    (Plane::placed(&moved([0.0, 0.0, -STEEP * apart / 2.0]).then(&rigid())), SplineSurface::new(&form).unwrap())
+}
+
+/// Which of the ridge's two lines `apart` apart `curve` runs along from edge to edge, `-1` or `1`: every point of it is
+/// within a quarter of `apart` of that line.
+fn line_of(curve: &SectionCurve, apart: f64) -> f64 {
+    let (back, range) = (rigid().inverse(), curve.curve.range());
+    let at = |k: u32| back.point(curve.curve.point(range.lo + (range.hi - range.lo) * f64::from(k) / 32.0)).to_vec3();
+    let side = if at(16).x < 0.0 { -1.0 } else { 1.0 };
+    for p in (0..=32).map(at) {
+        assert!((p.x - side * apart / 2.0).abs() <= apart / 4.0, "{apart}: off its line at {p:?}");
+    }
+    let ends = [at(0).y.abs(), at(32).y.abs()];
+    assert!(ends.iter().all(|y| (y - 1.0).abs() <= BAND), "{apart}: from edge to edge, to the band: {ends:?}");
+    side
+}
+
+#[test]
+fn two_lines_closer_than_the_tracers_sag_but_apart_to_the_band_are_both_found() {
+    // The tube about a curve found was never narrower than the tracer's sag, 1e-4, and a start on the second line inside
+    // it, or a trace of it, was taken for the first: from just over the band up to the sag, and past it. Each gives
+    // its lines and how many failures and contacts.
+    let separations = [1.5e-7, 1e-6, 1e-5, 9e-5, 1.5e-4];
+    let got = separations.map(|apart| {
+        let (plane, ridge) = ridge(apart);
+        let found = alone(hybrid(1e-4, 0.05, 0.25)).section(&plane, &ridge, tol(), within(20_000));
+        let mut lines: Vec<f64> = found.curves.iter().map(|curve| line_of(curve, apart)).collect();
+        lines.sort_by(f64::total_cmp);
+        (apart, lines, found.failures.len(), found.contacts.len())
+    });
+    assert_eq!(got, separations.map(|apart| (apart, vec![-1.0, 1.0], 0, 0)));
 }
 
 #[test]

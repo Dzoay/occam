@@ -165,9 +165,9 @@ tools-test: corpus-test
     python3 -B -m unittest discover -s tools/determinism/tests -t tools/determinism
     python3 -B -m unittest discover -s tools/coefficients/tests -t tools/coefficients
 
-# What takes seconds and builds only occam-xtask: formatting and the gates that read the repository, which a worker runs before committing
+# What takes seconds and builds only occam-xtask: formatting, the gates that read the repository, and the mutants gate's check that every exclusion still excludes a mutant; a worker runs it before committing
 [group('gates')]
-preflight: fmt-check (gate "all" "--except" "deps,errors,determinism,counts,mutants,perf")
+preflight: fmt-check (gate "all" "--except" "deps,errors,determinism,counts,mutants,perf") (gate "mutants" "--exclusions")
 
 # Everything except mutants and perf, the quick checks first: `preflight` and the viewer's types, then clippy, the tests, wasm, the viewer's tests and the gates that build or run something
 [group('gates')]

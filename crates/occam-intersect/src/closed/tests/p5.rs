@@ -12,8 +12,8 @@ use occam_math::{atan2, sin_cos};
 use occam_units::Vec3;
 
 use super::{
-    Case, Coincidence, O, X, Z, case, check, circle, coincident, cone, contact, curves, cylinder, declines, nothing,
-    plane, sphere, v,
+    Case, Coincidence, O, Want, X, Z, case, check, circle, coincident, cone, contact, curves, cylinder, declines,
+    nothing, plane, sphere, v,
 };
 
 /// The tangent, from the owned `sin_cos`.
@@ -38,7 +38,7 @@ fn planes_and_spheres() -> Vec<Case> {
         case("pp_parallel", flat.clone(), plane(v(0.0, 0.0, 0.7), Z), nothing()),
         case("pp_coincident", flat, plane(v(0.3, 0.1, 0.0), -Z), coincident(Coincidence::Coplanar)),
         case("ps_circle", plane(v(0.0, 0.0, 0.3), Z), s.clone(), curves(1, circle(v(0.0, 0.0, 0.3), Z, r, 5))),
-        case("ps_tangent", plane(Z, Z), s.clone(), contact(Z)),
+        case("ps_tangent", plane(Z, Z), s.clone(), contact(Z).below(1.0)),
         case("ps_disjoint", plane(v(0.0, 0.0, 1.5), Z), s, nothing()),
     ]
 }
@@ -79,7 +79,7 @@ fn planes_and_cones() -> Vec<Case> {
             c.clone(),
             curves(2, sample(side, 0.4, &[0.3, PI + 0.3])),
         ),
-        case("pcone_lines_apex", plane(O, X), c.clone(), curves(2, apex_lines)),
+        case("pcone_lines_apex", plane(O, X), c.clone(), Want { contacts: vec![O], ..curves(2, apex_lines) }),
         case("pcone_apex_point", plane(O, Z), c, contact(O)),
     ]
 }
@@ -90,8 +90,8 @@ fn spheres() -> Vec<Case> {
     let h = (1.0 - a0 * a0).sqrt();
     vec![
         case("ss_circle", s.clone(), sphere(v(1.1, 0.0, 0.0), 1.2), curves(1, circle(v(a0, 0.0, 0.0), X, h, 5))),
-        case("ss_tangent_ext", s.clone(), sphere(v(2.2, 0.0, 0.0), 1.2), contact(X)),
-        case("ss_tangent_int", s.clone(), sphere(v(0.3, 0.0, 0.0), 0.7), contact(X)),
+        case("ss_tangent_ext", s.clone(), sphere(v(2.2, 0.0, 0.0), 1.2), contact(X).below(1.0 + 1.0 / 1.2)),
+        case("ss_tangent_int", s.clone(), sphere(v(0.3, 0.0, 0.0), 0.7), contact(X).below(1.0 / 0.7 - 1.0)),
         case("ss_disjoint", s.clone(), sphere(v(3.0, 0.0, 0.0), 1.2), nothing()),
         case("ss_contained", s.clone(), sphere(v(0.1, 0.0, 0.0), 0.5), nothing()),
         case("ss_coincident", s.clone(), sphere(O, 1.0), coincident(Coincidence::Coaxial)),

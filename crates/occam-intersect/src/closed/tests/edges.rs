@@ -44,7 +44,8 @@ fn a_plane_through_a_cones_apex_meets_it_in_the_apex_one_ruling_or_two() {
     let gx = -0.3 * cos;
     let gy = (1.0 - cos * cos - gx * gx).sqrt();
     let rulings = vec![v(gx, gy, cos), v(gx, -gy, cos), v(-gx, gy, -cos) * 2.0, v(-gx, -gy, -cos) * 2.0];
-    check("apex_two", plane(O, v(1.0, 0.0, 0.3)).as_ref(), c.as_ref(), &curves(2, rulings));
+    let crossing = super::Want { contacts: vec![O], ..curves(2, rulings) };
+    check("apex_two, crossing at the apex", plane(O, v(1.0, 0.0, 0.3)).as_ref(), c.as_ref(), &crossing);
 }
 
 #[test]

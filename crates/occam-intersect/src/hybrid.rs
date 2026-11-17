@@ -5,14 +5,18 @@
 //!
 //! Each leaf of the subdivision ([`traverse`](crate::traverse)) gives at most one start point: where Newton's method
 //! from its middle settles onto both surfaces inside it, a hair past its edges included, so that a point on an edge is
-//! found from both sides. Before that, the gap between the surfaces at its middle and corners is decided against the
-//! band, and a leaf where every gap is within it is an overlap the method cannot resolve into curves, as where a
-//! rational surface lies on its analytic twin: it gives no start point, and is reported. The leaves are worked through
-//! the pair's runner, so their points are made once and in parallel, and they are traced in rounds of [`ROUND`], spread
-//! across the leaves so that a round's points are far apart. A point inside the tube about the traces found so far is
-//! on a found curve and is not traced; a trace whose stations all lie in the tube of the ones before it found one of
-//! them again and is dropped. A trace that is a touch alone is a contact, one that stalled is reported, and the rest are
-//! fitted.
+//! found from both sides, or where Newton's method loses rank, as near a tangency, where alternating projections come
+//! to rest inside it ([`tangency`](crate::tangency)). A start where the surfaces cross at a small angle gives another,
+//! where a second curve through the same leaf would be. Before that, the gap between the surfaces at its middle and
+//! corners is decided against the band, and a leaf where every gap is within it is an overlap the method cannot resolve
+//! into curves, as where a rational surface lies on its analytic twin: it gives no start point, and is reported. The
+//! leaves are worked through the pair's runner, so their points are made once and in parallel, and they are traced in
+//! rounds of [`ROUND`], spread across the leaves so that a round's points are far apart, then the second starts one a
+//! round. A point inside the tube about the traces found so far, and confirmed there on a found curve within the band
+//! ([`tube`](crate::tube)), is not traced; a trace whose first, middle and last stations are each so confirmed on the
+//! ones before it found one of them again and is dropped. A trace is cut at each
+//! branch point it passes ([`branch`](crate::branch)); each touch it ends in, and each branch point, is a contact by
+//! [`resolution`](crate::resolution)'s rule; one that stalled is reported, and the rest are fitted.
 //!
 //! Every decision goes through occam-math's band decisions and is counted in the section's tally: the subdivision's
 //! tests, the leaves' gaps, the tube, and the trace's and fit's own. One the band cannot make, where the answer depends
@@ -21,24 +25,31 @@
 
 use std::sync::Arc;
 
-use occam_geom::{Domain, Surface, UvBox};
+use occam_geom::{Surface, UvBox};
 use occam_math::{Exec, Grain, Interval, Side};
 use occam_report::{Fault, NamedValue, Reason, Report};
-use occam_units::{Length, Tolerance, UvPoint, Vec3};
+use occam_units::{Length, Point, Tolerance, UvPoint, Vec3};
 
+use crate::branch::branched;
 use crate::correct::{Here, Other, Pair, foot};
 use crate::decide::{Decide, distance, uncertain, undecided};
 use crate::fit::fit;
 use crate::methods::{Answer, Method, Spent, SurfacePair, Work, incomplete};
 use crate::on::On;
 use crate::pieces::{Piece, middle};
-use crate::section::{Contact, Section};
-use crate::trace::{End, ROUND, Start, Trace, Tracer, Uncertain, Which};
+use crate::section::Section;
+use crate::tangency::{Beside, Seed, contacts, inside, projected, seed_of, twin};
+use crate::trace::{End, ROUND, Start, Station, Trace, Tracer, Uncertain, Which};
 use crate::traverse::{Cell, DEPTH, FRONTIER, Held, Traversal, held, traverse};
-use crate::tube::Tube;
+use crate::tube::{Tube, same};
 
 /// How far past a leaf's edges, as a part of each side, a point found from it is still its own.
 const EDGE: f64 = 1.0 / 1024.0;
+
+/// How far past the edges of the second part of a leaf of two, as a part of each side, the foot of the first's middle
+/// may be for alternating projections to look for a start in it: where it is further, the leaf's parts are not where
+/// the surfaces come nearest.
+const NEAR: f64 = 0.5;
 
 /// The general method: subdivision for start points, then the trace, then the fit.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -77,25 +88,21 @@ impl Method for Hybrid {
     }
 }
 
-/// A start point and where it is.
-#[derive(Clone, Copy, Debug)]
-struct Seed {
-    start: Start,
-    at: Vec3,
-}
-
 /// What a leaf gives: the gaps between the surfaces at its middle and corners, where they could be measured, where its
-/// middle is, and its start point, if any.
+/// middle is, its start point, if any, and what it gave beside.
 struct Found {
     gaps: Option<[Interval; 5]>,
     at: Vec3,
     seed: Option<Seed>,
+    beside: Beside,
 }
 
-/// What the leaves gave: the start points, in leaf order, and where each overlap is.
+/// What the leaves gave: the start points, in leaf order, the starts of second curves beside them, and where each
+/// overlap is.
 #[derive(Default)]
 struct Leaves {
     seeds: Vec<Seed>,
+    twins: Vec<Seed>,
     overlaps: Vec<Vec3>,
 }
 
@@ -125,9 +132,12 @@ impl Hybrid {
         let leaves = leaves(on, held, tol, traversal.leaves, &mut decide, &mut notes);
         notes.overlaps = leaves.overlaps;
         let mut found = Vec::new();
-        let paid = traced(on, &tracer, &leaves.seeds, work, &mut found, &mut decide, &mut notes);
-        let distinct = distinct(found, &tracer, &mut decide, &mut notes, section);
-        finish(on, &tracer, &distinct, section);
+        let paid = traced(on, &tracer, (&leaves.seeds, &leaves.twins), work, &mut found, &mut decide, &mut notes);
+        let distinct = distinct(&Pair::new(a, b, tol), found, &tracer, &mut decide, &mut notes, section);
+        let branched = branched(on.surfaces(), distinct, &mut decide, &mut notes.uncertain);
+        let (kept, band) = ((branched.traces.as_slice(), branched.contacts.as_slice()), tol.band().millimetres());
+        section.contacts.extend(contacts(on.surfaces(), kept, &mut decide, &mut notes.uncertain, band));
+        finish(on, &tracer, &branched.traces, section);
         section.failures.extend(reports(&notes, tol, section));
         section.tally = section.tally.merged(decide.tally);
         paid.map(|()| Answer::Answered)
@@ -150,21 +160,29 @@ fn samples(patch: UvBox) -> [UvPoint; 5] {
     [middle(patch), c0, c1, c2, c3]
 }
 
-/// Whether `uv` is inside `patch`, a hair past its edges included, and inside `domain`.
-fn inside(patch: UvBox, uv: UvPoint, domain: Domain) -> bool {
-    let near = |x: f64, lo: f64, hi: f64| {
-        let hair = (hi - lo) * EDGE;
-        lo - hair <= x && x <= hi + hair
-    };
-    near(uv.u(), patch.lo.u(), patch.hi.u()) && near(uv.v(), patch.lo.v(), patch.hi.v()) && domain.contains(uv)
+/// Where `pair` settles from `seed`: `Ok` with the point where it is inside `p`'s part and, if given, `q`'s, `Ok(None)`
+/// where it settles outside them, onto a curve of another leaf, and `Err` where it settles nowhere.
+fn settled(pair: &Pair<'_>, seed: &Here, p: UvBox, q: Option<UvBox>) -> Result<Option<Here>, ()> {
+    let here = pair.settle(seed).ok_or(())?;
+    let ours = inside(p, here.p, pair.p.domain(), EDGE) && q.is_none_or(|q| inside(q, here.q, pair.q.domain(), EDGE));
+    Ok(ours.then_some(here))
 }
 
-/// The start point `pair` settles onto from `seed`, where it is inside `p`'s part and, if given, `q`'s.
-fn settled(pair: &Pair<'_>, seed: &Here, p: UvBox, q: Option<UvBox>) -> Option<Seed> {
-    let here = pair.settle(seed)?;
-    let ours = inside(p, here.p, pair.p.domain()) && q.is_none_or(|q| inside(q, here.q, pair.q.domain()));
-    let station = pair.station(&here);
-    ours.then_some(Seed { start: Start { on_a: station.on_a, on_b: station.on_b }, at: here.at })
+/// What the leaf of `p`'s part and, if given, `q`'s, `reach` across, gives on `pair` from its middle `seed`: the start
+/// Newton's method settles onto inside it and the start of a second curve beside it, or where Newton's method settles
+/// nowhere and the leaf is `near`, as where it loses rank near a tangency, the start alternating projections come to
+/// rest on inside it.
+fn begun(
+    pair: &Pair<'_>,
+    seed: &Here,
+    (p, q): (UvBox, Option<UvBox>),
+    (reach, near): (f64, bool),
+) -> (Option<Seed>, Beside) {
+    match settled(pair, seed, p, q) {
+        Ok(Some(here)) => (Some(seed_of(pair, &here)), Beside { twin: twin(pair, &here, reach), ..Beside::default() }),
+        Err(()) if near => projected(pair, seed, (p, q), EDGE),
+        Ok(None) | Err(()) => (None, Beside::default()),
+    }
 }
 
 /// What the leaf `piece` of `s` gives against `other`, held by `form`.
@@ -179,8 +197,9 @@ fn against_form(
     let pair = Pair { p: s, q: other, other: Other::Implicit(form), swapped: side == Which::B, tol };
     let mid = middle(piece.patch);
     let at = s.point(mid).to_vec3();
-    let seed = settled(&pair, &Here { at, p: mid, q: UvPoint::new(0.0, 0.0) }, piece.patch, None);
-    Found { gaps: Some(gaps), at, seed }
+    let (seed, beside) =
+        begun(&pair, &Here { at, p: mid, q: UvPoint::new(0.0, 0.0) }, (piece.patch, None), (piece.size, true));
+    Found { gaps: Some(gaps), at, seed, beside }
 }
 
 /// What the leaf of parts `p` of `a` and `q` of `b` gives: each gap from `a`'s point to its foot on `b`, found by
@@ -196,8 +215,10 @@ fn against_parts(a: &dyn Surface, b: &dyn Surface, (p, q): (&Piece, &Piece), tol
     let gaps = gaps.and_then(|gaps| <[Interval; 5]>::try_from(gaps).ok());
     let pair = Pair { p: a, q: b, other: Other::Parametric, swapped: false, tol };
     let at = a.point(mid_p).to_vec3();
-    let seed = settled(&pair, &Here { at, p: mid_p, q: mid_q }, p.patch, Some(q.patch));
-    Found { gaps, at, seed }
+    let reach = if p.size > q.size { p.size } else { q.size };
+    let near = inside(q.patch, foot(b, at, mid_q), b.domain(), NEAR);
+    let (seed, beside) = begun(&pair, &Here { at, p: mid_p, q: mid_q }, (p.patch, Some(q.patch)), (reach, near));
+    Found { gaps, at, seed, beside }
 }
 
 /// What `leaf` gives, held as `held`.
@@ -212,7 +233,7 @@ fn leaf(a: &dyn Surface, b: &dyn Surface, leaf: &Cell, held: Held, tol: Toleranc
 
 /// The start points of `cells`, each a leaf, worked through `on`, and the overlaps among them: a leaf whose every gap
 /// is within the band. A leaf whose gaps the band cannot all place, where the rest are within it, keeps its point and
-/// gives back the decision.
+/// gives back the decision. The decisions made in finding start points by projections are counted in leaf order.
 fn leaves(on: On<'_>, held: Held, tol: Tolerance, cells: Vec<Cell>, decide: &mut Decide, notes: &mut Notes) -> Leaves {
     let found = on.map(Arc::from(cells), Grain::Each, move |a, b, cell| leaf(a, b, cell, held, tol));
     let found: Vec<Found> = found.into_iter().flatten().collect();
@@ -220,8 +241,11 @@ fn leaves(on: On<'_>, held: Held, tol: Tolerance, cells: Vec<Cell>, decide: &mut
     let mut sides = decide.sides(&gaps).into_iter();
     let mut out = Leaves::default();
     for leaf in found {
+        decide.tally = decide.tally.merged(leaf.beside.tally);
+        notes.uncertain.extend(leaf.beside.uncertain);
         let Some(gaps) = leaf.gaps else {
             out.seeds.extend(leaf.seed);
+            out.twins.extend(leaf.beside.twin);
             continue;
         };
         let mine: Vec<Option<Side>> = sides.by_ref().take(gaps.len()).collect();
@@ -234,6 +258,7 @@ fn leaves(on: On<'_>, held: Held, tol: Tolerance, cells: Vec<Cell>, decide: &mut
             notes.uncertain.extend(open.map(|(gap, _)| uncertain(*gap, leaf.at)));
         }
         out.seeds.extend(leaf.seed);
+        out.twins.extend(leaf.beside.twin);
     }
     out
 }
@@ -246,8 +271,9 @@ fn spread(count: usize) -> Vec<usize> {
     (0..rounds).flat_map(round).filter(|&index| index < count).collect()
 }
 
-/// The traces from `seeds`, in rounds through `on`, appended to `found`: a seed inside the tube of the traces before
-/// its round is not traced.
+/// The traces from `seeds`, in rounds through `on`, then from the starts of second curves beside them, one a round,
+/// appended to `found`: a seed on a curve the tube of the traces before its round holds is not traced. The starts of
+/// second curves come one a round as most of them lie on a curve traced by then, a second curve's often one by one.
 ///
 /// # Errors
 ///
@@ -255,34 +281,55 @@ fn spread(count: usize) -> Vec<usize> {
 fn traced(
     on: On<'_>,
     tracer: &Tracer,
-    seeds: &[Seed],
+    (seeds, twins): (&[Seed], &[Seed]),
     work: &mut Work,
     found: &mut Vec<Trace>,
     decide: &mut Decide,
     notes: &mut Notes,
 ) -> Result<(), Spent> {
     let ordered: Vec<Seed> = spread(seeds.len()).into_iter().filter_map(|index| seeds.get(index).copied()).collect();
-    let starts: Vec<Start> = ordered.iter().map(|seed| seed.start).collect();
-    let (mut tube, mut next) = (Tube::new(tracer), 0_usize);
-    tracer.rounds(on, &starts, work, found, |_, found| {
+    let (a, b) = on.surfaces();
+    let (pair, mut tube) = (Pair::new(a, b, tracer.tol), Tube::new(tracer));
+    let mut held = |seed: &Seed, found: &[Trace]| {
         for trace in found.get(tube.held..).unwrap_or_default() {
             tube.add(trace);
         }
+        let station = Station { at: Point::from_vec3(seed.at), on_a: seed.start.on_a, on_b: seed.start.on_b };
+        holds(&tube, &pair, &station, decide, notes)
+    };
+    let starts: Vec<Start> = ordered.iter().map(|seed| seed.start).collect();
+    let mut next = 0_usize;
+    tracer.rounds(on, &starts, work, found, |_, found| {
         let seed = ordered.get(next);
         next = next.saturating_add(1);
-        seed.is_some_and(|seed| match tube.holds(seed.at, decide) {
-            Ok(inside) => inside,
-            Err(open) => {
-                notes.uncertain.push(open);
-                false
-            }
-        })
-    })
+        seed.is_some_and(|seed| held(seed, found))
+    })?;
+    for twin in twins {
+        tracer.rounds(on, &[twin.start], work, found, |_, found| held(twin, found))?;
+    }
+    Ok(())
+}
+
+/// Whether the curve through `station` is one `tube` holds, on `pair`. One the band cannot decide is noted, and is not
+/// held, so that it is traced or kept.
+fn holds(tube: &Tube, pair: &Pair<'_>, station: &Station, decide: &mut Decide, notes: &mut Notes) -> bool {
+    let here = pair.here(station);
+    let mut same = |ends: &[Station; 2], along: f64, decide: &mut Decide| {
+        same(pair, &here, ends.map(|end| pair.here(&end)), along, decide)
+    };
+    match tube.holds(here.at, decide, &mut same) {
+        Ok(inside) => inside,
+        Err(open) => {
+            notes.uncertain.push(open);
+            false
+        }
+    }
 }
 
 /// `found` without the traces that found a curve again: one with no station, or whose first, middle and last stations
-/// all lie in the tube of the traces kept before it. Every trace's tally joins the section's.
+/// are all on curves the tube of the traces kept before it holds, on `pair`. Every trace's tally joins the section's.
 fn distinct(
+    pair: &Pair<'_>,
     found: Vec<Trace>,
     tracer: &Tracer,
     decide: &mut Decide,
@@ -293,13 +340,7 @@ fn distinct(
     for trace in found {
         section.tally = section.tally.merged(trace.tally);
         let probes = [trace.stations.first(), trace.stations.get(trace.stations.len() / 2), trace.stations.last()];
-        let again = probes.into_iter().flatten().all(|station| match tube.holds(station.at.to_vec3(), decide) {
-            Ok(inside) => inside,
-            Err(open) => {
-                notes.uncertain.push(open);
-                false
-            }
-        });
+        let again = probes.into_iter().flatten().all(|station| holds(&tube, pair, station, decide, notes));
         if trace.stations.is_empty() || again {
             continue;
         }
@@ -309,14 +350,9 @@ fn distinct(
     kept
 }
 
-/// The section of the traces `kept`: a touch alone is a contact, the rest that did not stall are fitted through `on`, and each
-/// trace's failures follow.
+/// The curves of the traces `kept`: those that did not stall, and are more than a touch, are fitted through `on`, and
+/// each trace's failures follow.
 fn finish(on: On<'_>, tracer: &Tracer, kept: &[Trace], section: &mut Section) {
-    for trace in kept {
-        if let ([station], [End::Touch, End::Touch]) = (trace.stations.as_slice(), trace.ends) {
-            section.contacts.push(Contact::Point { at: station.at, on_a: station.on_a, on_b: station.on_b });
-        }
-    }
     let curves: Arc<[Trace]> =
         kept.iter().filter(|trace| trace.stations.len() > 1 && !trace.ends.contains(&End::Stalled)).cloned().collect();
     let tol = tracer.tol;
@@ -369,15 +405,18 @@ pub(crate) fn starts(on: On<'_>, held: Held, tol: Tolerance, cells: Vec<Cell>, d
 
 #[cfg(test)]
 mod tests {
-    use occam_geom::{ParamRange, Wrap};
+    use std::f64::consts::FRAC_PI_2;
+
+    use occam_geom::{Domain, ParamRange, Plane, Wrap};
     use occam_math::Tally;
     use occam_report::Code;
     use occam_units::{ParamKind, Point};
 
     use super::*;
-    use crate::hybrid_tests::crossing_at_a_corner;
+    use crate::hybrid_tests::{crossing_at_a_corner, graph};
+    use crate::section::Contact;
     use crate::trace::Station;
-    use crate::trace_tests::{BAND, level, tol, tracer, upright};
+    use crate::trace_tests::{BAND, level, nurbs, placed, tol, tracer, upright};
 
     fn patch(u: (f64, f64), v: (f64, f64)) -> UvBox {
         UvBox::new(UvPoint::new(u.0, v.0), UvPoint::new(u.1, v.1))
@@ -427,10 +466,10 @@ mod tests {
             (3.5, 8.0, false),
             (8.0, 8.0, false),
         ] {
-            assert_eq!(inside(part, UvPoint::new(u, v), whole), want, "{u} {v}");
+            assert_eq!(inside(part, UvPoint::new(u, v), whole, EDGE), want, "{u} {v}");
         }
         let at_the_end = patch((9.0, 10.0), (1.0, 2.0));
-        assert!(!inside(at_the_end, UvPoint::new(10.0 + 0.5 * hair, 1.5), whole), "a hair past the domain");
+        assert!(!inside(at_the_end, UvPoint::new(10.0 + 0.5 * hair, 1.5), whole, EDGE), "a hair past the domain");
     }
 
     #[test]
@@ -444,8 +483,37 @@ mod tests {
             p: UvPoint::new(0.0, 0.0),
             q: UvPoint::new(0.95, 0.95),
         };
-        assert!(settled(&pair, &seed, whole, Some(whole)).is_some());
-        assert!(settled(&pair, &seed, whole, Some(corner)).is_none());
+        assert!(matches!(settled(&pair, &seed, whole, Some(whole)), Ok(Some(_))));
+        assert_eq!(settled(&pair, &seed, whole, Some(corner)), Ok(None));
+    }
+
+    #[test]
+    fn a_leaf_of_two_parts_tries_projections_only_where_the_seconds_part_is_under_the_firsts_middle() {
+        // Two parallel planes a unit apart, as B-splines: Newton's method settles nowhere, and projections, tried where
+        // the second's part holds the foot of the first's middle, come to rest apart; elsewhere they are not tried.
+        let (low, high) = (nurbs(&level(0.0), (-1.0, -1.0), (1.0, 1.0)), nurbs(&level(1.0), (-1.0, -1.0), (1.0, 1.0)));
+        let part = |s: &dyn Surface, lo: (f64, f64), hi: (f64, f64)| crate::pieces::Piece::whole(s, patch(lo, hi));
+        let first = part(&low, (-1.0, 0.0), (-1.0, 0.0));
+        let (under, aside) = (part(&high, (-1.0, 0.0), (-1.0, 0.0)), part(&high, (0.5, 1.0), (0.5, 1.0)));
+        let near = against_parts(&low, &high, (&first, &under), tol());
+        let far = against_parts(&low, &high, (&first, &aside), tol());
+        assert!(near.seed.is_none() && far.seed.is_none());
+        assert!(near.beside.tally.decided > 0 && far.beside.tally == Tally::default(), "{:?}", near.beside.tally);
+    }
+
+    #[test]
+    fn a_small_part_against_a_large_one_reaches_as_far_as_the_large_for_a_second_curve() {
+        // The graph of x² - 0.028 x against the flat one: the lines x = 0 and x = 0.028, crossing at a slope of 0.028.
+        // From a small part about the first, the second is beyond the small part but within the large one.
+        let (flat, bowl) = (graph((0.0, 0.0), (0.0, 0.0)), graph((1.0, -0.028), (0.0, 0.0)));
+        let part = |s: &dyn Surface, lo: (f64, f64), hi: (f64, f64)| crate::pieces::Piece::whole(s, patch(lo, hi));
+        let small = part(&flat, (-0.005, 0.005), (-0.005, 0.005));
+        let large = part(&bowl, (-1.0, 1.0), (-1.0, 1.0));
+        let found = against_parts(&flat, &bowl, (&small, &large), tol());
+        let (seed, twin) = (found.seed.unwrap(), found.beside.twin.unwrap());
+        assert!((seed.at - twin.at).norm() > 0.027 && (seed.at - twin.at).norm() < 0.029, "{seed:?} {twin:?}");
+        let other = against_parts(&bowl, &flat, (&large, &small), tol());
+        assert!(other.beside.twin.is_some(), "either way round");
     }
 
     #[test]
@@ -460,24 +528,30 @@ mod tests {
 
     #[test]
     fn a_trace_found_again_is_dropped_by_its_first_middle_and_last_stations() {
-        // A bump from 0.3 to 0.7 along the line, 0.3 high: a curve of its own, though it runs on the line either side,
-        // its second station included, and leaves it only in the middle.
+        // The planes z = 0 and y = 0, whose parameters are x and y, and x and z, meet along the X axis. A bump from 0.3 to
+        // 0.7 along it, 0.3 high, is a curve of its own, though it runs on the line either side, its second station
+        // included, and leaves it only in the middle. The line traced again at other stations is found again; a trace
+        // 1e-5 beside it, inside the tube but farther than the band, is not.
+        let (a, b) = (level(0.0), Plane::placed(&placed([1.0, 0.0, 0.0], FRAC_PI_2, [0.0; 3])));
         let line = trace(&run((0.0, 0.0), (1.0, 0.0), 21), [End::Edge; 2]);
         let mut bump = run((0.0, 0.0), (0.3, 0.0), 7);
         for (from, to, count) in [((0.3, 0.0), (0.5, 0.3), 6), ((0.5, 0.3), (0.7, 0.0), 6), ((0.7, 0.0), (1.0, 0.0), 7)]
         {
             bump.extend(run(from, to, count).into_iter().skip(1));
         }
-        let again = trace(&run((0.0, 1e-5), (1.0, 1e-5), 21), [End::Edge; 2]);
+        let again = trace(&run((0.0, 0.0), (1.0, 0.0), 17), [End::Edge; 2]);
+        let beside = trace(&run((0.0, 1e-5), (1.0, 1e-5), 21), [End::Edge; 2]);
         let (mut decide, mut notes, mut section) = (Decide::new(BAND), Notes::default(), Section::default());
-        let found = vec![line.clone(), trace(&bump, [End::Edge; 2]), again];
-        let kept = distinct(found, &tracer(1e-4, 0.1, 100), &mut decide, &mut notes, &mut section);
-        assert_eq!(kept.iter().map(|t| t.stations.len()).collect::<Vec<_>>(), [21, 23]);
-        assert_eq!(kept[0], line);
+        let found = vec![line.clone(), trace(&bump, [End::Edge; 2]), again, beside];
+        let pair = Pair::new(&a, &b, tol());
+        let kept = distinct(&pair, found, &tracer(1e-4, 0.1, 100), &mut decide, &mut notes, &mut section);
+        assert_eq!(kept.iter().map(|t| t.stations.len()).collect::<Vec<_>>(), [21, 23, 21]);
+        assert_eq!((&kept[0], kept[2].stations[0].at.to_vec3().y), (&line, 1e-5));
+        assert!(notes.uncertain.is_empty() && decide.tally.undecided == 0, "{:?}", notes.uncertain);
     }
 
     #[test]
-    fn a_stalled_trace_is_reported_not_fitted_and_a_touch_alone_is_a_contact() {
+    fn a_stalled_trace_is_reported_not_fitted_and_a_touch_alone_is_not_fitted_but_a_contact() {
         // The planes z = 0 and x = 0 meet along the y axis.
         let (a, b) = (level(0.0), upright(0.0));
         let mut scratch = occam_geom::Scratch::default();
@@ -490,8 +564,13 @@ mod tests {
         let stalled = Trace { stations, ends: [End::Stalled, End::Edge], ..trace(&[], [End::Edge; 2]) };
         let touch = Trace { stations: vec![on_y(2.0)], ends: [End::Touch; 2], ..trace(&[], [End::Edge; 2]) };
         let mut section = Section::default();
-        finish(On::Here(&a, &b), &tracer(1e-4, 0.1, 100), &[stalled, touch], &mut section);
-        assert_eq!((section.curves.len(), section.contacts.len()), (0, 1));
+        let kept = [stalled, touch];
+        finish(On::Here(&a, &b), &tracer(1e-4, 0.1, 100), &kept, &mut section);
+        assert_eq!((section.curves.len(), section.contacts.len()), (0, 0));
         assert_eq!(section.failures.iter().map(|r| r.code).collect::<Vec<_>>(), [Code::Incomplete]);
+        let (mut decide, mut open) = (Decide::new(BAND), Vec::new());
+        let contacts = contacts((&a, &b), (&kept, &[]), &mut decide, &mut open, BAND);
+        let [Contact::BelowResolution { at, bound }] = contacts.as_slice() else { panic!("{contacts:?}") };
+        assert_eq!((at.to_vec3(), bound.millimetres(), open.len()), (Vec3::new(0.0, 2.0, 0.0), f64::INFINITY, 0));
     }
 }
