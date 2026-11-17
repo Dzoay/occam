@@ -12,7 +12,7 @@
 
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
 
-use occam_math::{Predicate, Ring, Side, Verdict, atan2, decide_stored, sin_cos};
+use occam_math::{Orientation, Side, Verdict, atan2, decide_stored, sin_cos, smaller};
 use occam_units::UvPoint;
 
 use super::boxes::{Bounds, EMPTY, with};
@@ -50,11 +50,6 @@ pub(super) fn dot(a: P2, b: P2) -> f64 {
 
 fn cross(a: P2, b: P2) -> f64 {
     a[0] * b[1] - a[1] * b[0]
-}
-
-/// The smaller of `a` and `b`, the first if they are equal, and never `f64::min`'s choice between zeros.
-pub(crate) fn least(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
 }
 
 /// The length of `a`.
@@ -170,7 +165,7 @@ impl Flat {
                 if self.spans(atan2(w[1], w[0])) {
                     (norm(w) - r).abs()
                 } else {
-                    least(apart(q, self.start()), apart(q, self.end()))
+                    smaller(apart(q, self.start()), apart(q, self.end()))
                 }
             }
         }
@@ -193,25 +188,10 @@ impl Flat {
     }
 }
 
-/// Twice the signed area of `q`, `a`, `b`, from `[qu, qv, au, av, bu, bv]`: above zero when `b` is anticlockwise of `a`
-/// seen from `q`.
-struct Turn;
-
-impl Predicate<6> for Turn {
-    const DEGREE: u32 = 2;
-
-    fn value<T: Ring>(&self, inputs: &[T; 6]) -> T {
-        let [qu, qv, au, av, bu, bv] = inputs;
-        let (du, dv) = (au.sub(qu), av.sub(qv));
-        let (eu, ev) = (bu.sub(qu), bv.sub(qv));
-        du.mul(&ev).sub(&dv.mul(&eu))
-    }
-}
-
 /// Which side of the line through `q` and `a` the point `b` is on, decided exactly on these numbers.
 fn side(q: P2, a: P2, b: P2) -> Option<Side> {
     let mut out = Vec::new();
-    decide_stored(&Turn, &[[q[0], q[1], a[0], a[1], b[0], b[1]]], 0.0, &mut out);
+    decide_stored(&Orientation, &[[q[0], q[1], a[0], a[1], b[0], b[1]]], 0.0, &mut out);
     match out.first() {
         Some(Verdict::Decided(side)) => Some(*side),
         Some(Verdict::Undecided) | None => None,
@@ -418,6 +398,8 @@ pub(crate) fn area(pieces: &[Flat], sag: f64) -> f64 {
 pub(super) mod tests {
     use core::f64::consts::{FRAC_PI_2, PI};
 
+    use occam_math::larger;
+
     use super::*;
     use crate::construct::boxes::meet;
 
@@ -493,10 +475,7 @@ pub(super) mod tests {
         for sag in [1.0, 1e-2, 1e-4] {
             let points = arc.samples(sag);
             assert!(near(points[0], arc.start()) && near(*points.last().unwrap(), arc.end()));
-            let worst = points
-                .windows(2)
-                .map(|w| arc.distance(scale(add(w[0], w[1]), 0.5)))
-                .fold(0.0, |so_far, d| if d > so_far { d } else { so_far });
+            let worst = points.windows(2).map(|w| arc.distance(scale(add(w[0], w[1]), 0.5))).fold(0.0, larger);
             assert!(worst <= sag, "{sag}: {worst}");
         }
         assert_eq!(arc.samples(1e3).len(), 9, "never fewer than eight steps");
