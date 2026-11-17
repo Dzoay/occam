@@ -46,32 +46,59 @@ fn refine(jet: &impl Fn(f64) -> [Vec3; 3], q: Vec3, (mut low, mut high): (f64, f
     (at, STEPS)
 }
 
-/// The parameter from `lo` to `hi`, both finite, of the point nearest `q` of the curve whose point and first two
-/// derivatives at each parameter `jet` gives. Of two exactly as near, the first found from `lo`.
-pub(crate) fn nearest_by(jet: impl Fn(f64) -> [Vec3; 3], q: Vec3, (lo, hi): (f64, f64)) -> f64 {
-    let distance = |t: f64| {
-        let [point, ..] = jet(t);
-        (point - q).norm()
-    };
-    let mut best = (lo, distance(lo));
-    let mut consider = |t: f64| {
-        let d = distance(t);
+/// The ends of the pieces a search cuts a range of a curve into, each with the curve's point and first two derivatives
+/// there. Read once, they serve every point the curve is searched for the foot of, as joining an edge to its face
+/// searches each curve for the feet of the other's samples.
+pub(crate) struct Grid {
+    at: Vec<(f64, [Vec3; 3])>,
+}
+
+impl Grid {
+    /// The ends of the [`PIECES`] pieces from `lo` to `hi`, both finite, `lo` and `hi` themselves at the ends, each with
+    /// the curve's point and first two derivatives there as `jet` gives them.
+    pub(crate) fn of(jet: &impl Fn(f64) -> [Vec3; 3], (lo, hi): (f64, f64)) -> Self {
+        let step = (hi - lo) / f64::from(PIECES);
+        let mut at = vec![(lo, jet(lo))];
+        at.extend((1..=PIECES).map(|piece| {
+            let t = if piece == PIECES { hi } else { lo + step * f64::from(piece) };
+            (t, jet(t))
+        }));
+        Self { at }
+    }
+}
+
+/// The parameter, in the range `grid` was read over, of the point nearest `q` of the curve whose point and first two
+/// derivatives at each parameter `jet` gives, as `grid` holds them at the ends of its pieces. Of two exactly as near,
+/// the first found from the range's low end.
+pub(crate) fn nearest_in(grid: &Grid, jet: &impl Fn(f64) -> [Vec3; 3], q: Vec3) -> f64 {
+    let distance = |point: Vec3| (point - q).norm();
+    let rate = |&(_, [point, first, _]): &(f64, [Vec3; 3])| (point - q).dot(first);
+    let Some(&(lo, [low, ..])) = grid.at.first() else { return f64::NAN };
+    let mut best = (lo, distance(low));
+    let mut consider = |t: f64, d: f64| {
         if d < best.1 {
             best = (t, d);
         }
     };
-    consider(hi);
-    let step = (hi - lo) / f64::from(PIECES);
-    let mut before = (lo, slope(&jet, q, lo).0);
-    for piece in 1..=PIECES {
-        let t = if piece == PIECES { hi } else { lo + step * f64::from(piece) };
-        let g = slope(&jet, q, t).0;
-        if before.1 < 0.0 && g >= 0.0 {
-            consider(refine(&jet, q, (before.0, t)).0);
+    if let Some(&(hi, [high, ..])) = grid.at.last() {
+        consider(hi, distance(high));
+    }
+    for pair in grid.at.windows(2) {
+        if let [before, after] = pair
+            && rate(before) < 0.0
+            && rate(after) >= 0.0
+        {
+            let t = refine(jet, q, (before.0, after.0)).0;
+            consider(t, distance(jet(t)[0]));
         }
-        before = (t, g);
     }
     best.0
+}
+
+/// The parameter from `lo` to `hi`, both finite, of the point nearest `q` of the curve whose point and first two
+/// derivatives at each parameter `jet` gives. Of two exactly as near, the first found from `lo`.
+pub(crate) fn nearest_by(jet: impl Fn(f64) -> [Vec3; 3], q: Vec3, range: (f64, f64)) -> f64 {
+    nearest_in(&Grid::of(&jet, range), &jet, q)
 }
 
 /// The parameter from `lo` to `hi`, both finite, of the point of `curve` nearest `p`, from its second rung.
@@ -115,6 +142,56 @@ mod tests {
         let foot = atan2(4.0, 13.0);
         let (t, _) = refine(&circle(), Vec3::new(13.0, 4.0, 2.0), (foot - 0.05, foot + 3.0));
         assert!((t - foot).abs() < 1e-15, "{t}");
+    }
+
+    #[test]
+    fn a_grid_read_once_serves_every_search_of_its_curve_and_each_finds_the_foot_a_search_alone_finds() {
+        // A circle of radius 10 read at the ends of its pieces once: each foot reads it again only to refine, is where
+        // the point's direction from the centre meets the circle, or the range's nearer end, and is the one a search of
+        // its own finds, to the bit.
+        let reads = core::cell::Cell::new(0_u32);
+        let round = circle();
+        let counted = |t: f64| {
+            reads.set(reads.get().saturating_add(1));
+            round(t)
+        };
+        let grid = Grid::of(&counted, (0.5, 6.0));
+        assert_eq!(reads.replace(0), PIECES.saturating_add(1), "each end of each piece once");
+        let towards = |angle: f64, out: f64, up: f64| {
+            let (sin, cos) = occam_math::sin_cos(angle);
+            Vec3::new(out * cos, out * sin, up)
+        };
+        let feet = [
+            (towards(1.0, 13.0, 2.0), 1.0),
+            (towards(2.5, 4.0, -1.0), 2.5),
+            (towards(4.0, 30.0, 0.0), 4.0),
+            (towards(5.9, 9.0, 3.0), 5.9),
+            (towards(0.3, 12.0, 0.0), 0.5),
+            (towards(6.2, 12.0, 0.0), 6.0),
+        ];
+        for (q, foot) in feet {
+            let found = nearest_in(&grid, &counted, q);
+            assert!(reads.replace(0) < PIECES, "{q:?}: only refining reads it again");
+            assert!((found - foot).abs() < 1e-12, "{q:?}: {found}, not {foot}");
+            assert_eq!(found.to_bits(), nearest_by(circle(), q, (0.5, 6.0)).to_bits(), "{q:?}");
+        }
+    }
+
+    #[test]
+    fn a_grid_is_read_at_its_range_s_ends_and_at_even_steps_between() {
+        let grid = Grid::of(&circle(), (0.5, 6.0));
+        let at: Vec<f64> = grid.at.iter().map(|&(t, _)| t).collect();
+        let step = 5.5 / f64::from(PIECES);
+        let expected: Vec<f64> = (0..=PIECES)
+            .map(|piece| match piece {
+                0 => 0.5,
+                PIECES => 6.0,
+                _ => 0.5 + step * f64::from(piece),
+            })
+            .collect();
+        assert_eq!(at, expected);
+        let jets = grid.at.iter().all(|&(t, jet)| jet == circle()(t));
+        assert!(jets, "each with the curve's point and derivatives there");
     }
 
     #[test]

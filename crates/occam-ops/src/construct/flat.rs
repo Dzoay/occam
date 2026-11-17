@@ -44,7 +44,7 @@ pub(super) fn scale(a: P2, k: f64) -> P2 {
     [a[0] * k, a[1] * k]
 }
 
-fn dot(a: P2, b: P2) -> f64 {
+pub(super) fn dot(a: P2, b: P2) -> f64 {
     a[0] * b[0] + a[1] * b[1]
 }
 
@@ -274,7 +274,7 @@ fn reaches(arc: Flat, p: P2) -> bool {
 }
 
 /// Where the pieces `x` and `y` cross or meet, each place on both.
-fn crossings(x: Flat, y: Flat) -> Vec<P2> {
+pub(super) fn crossings(x: Flat, y: Flat) -> Vec<P2> {
     let found = match (x, y) {
         (Flat::Seg { a, b }, Flat::Seg { a: c, b: d }) => segments_cross(a, b, c, d).into_iter().collect(),
         (Flat::Seg { a, b }, Flat::Arc { c, r, .. }) | (Flat::Arc { c, r, .. }, Flat::Seg { a, b }) => {
@@ -331,15 +331,49 @@ pub(crate) fn closest(x: Flat, y: Flat) -> (f64, P2) {
     best
 }
 
+/// Whether `p`, on the line or the circle of `piece`, lies within it.
+fn within(piece: Flat, p: P2) -> bool {
+    match piece {
+        Flat::Seg { a, b } => (0.0..=dot(sub(b, a), sub(b, a))).contains(&dot(sub(p, a), sub(b, a))),
+        Flat::Arc { .. } => reaches(piece, p),
+    }
+}
+
+/// Where `x` and `y`, at least one an arc, both through `s`, meet again, if that is within both. A segment's line meets
+/// an arc's circle once more at `s` moved along it by twice how far along it the circle's centre lies; two circles meet
+/// once more at the reflection of `s` in the line through their centres, and two arcs of one circle, which have no such
+/// line, nowhere else. Found from `s`, a place where they meet at a slant is known as well as their numbers, where
+/// solving for both places at once loses half the digits as the curves come to touch: of the arcs of radius 1 and 100
+/// that meet at a needle's tip 1e-7 radians wide, it found a crossing 1.8e-6 from the tip, where they are 1.8e-12 apart.
+fn again(x: Flat, y: Flat, s: P2) -> Option<P2> {
+    let met = match (x, y) {
+        (Flat::Seg { a, b }, Flat::Arc { c, .. }) | (Flat::Arc { c, .. }, Flat::Seg { a, b }) => {
+            let d = scale(sub(b, a), 1.0 / apart(a, b));
+            add(s, scale(d, 2.0 * dot(sub(c, s), d)))
+        }
+        (Flat::Arc { c: c1, .. }, Flat::Arc { c: c2, .. }) => {
+            let (along, off) = (scale(sub(c2, c1), 1.0 / apart(c1, c2)), sub(s, c1));
+            add(c1, sub(scale(along, 2.0 * dot(off, along)), off))
+        }
+        (Flat::Seg { .. }, Flat::Seg { .. }) => return None,
+    };
+    (within(x, met) && within(y, met)).then_some(met)
+}
+
 /// Where `x` and `y`, which meet end to end at each point of `shared`, also meet or touch elsewhere: a place where they
 /// cross away from every shared point, or an end or the middle of one, not a shared point, within `band` of the other.
-/// Pieces can run along each other from where they meet without crossing or having an end there: an arc tangent to a
-/// segment where it ends can turn back along it, and the two of a closed run of two can run along each other all the
-/// way between their ends. There the middle of one, within `band` of the other, is such a place. Nearer where they meet,
-/// as at a sharp corner, they are part of that meeting.
+/// Two segments cross where their numbers say they do; a segment and an arc, or two arcs, where their curves through the
+/// first shared point meet again ([`again`]). Pieces can run along each other from where they meet without crossing or
+/// having an end there: an arc tangent to a segment where it ends can turn back along it, and the two of a closed run of
+/// two can run along each other all the way between their ends. There the middle of one, within `band` of the other, is
+/// such a place. Nearer where they meet, as at a sharp corner, they are part of that meeting.
 pub(crate) fn meet_elsewhere(x: Flat, y: Flat, shared: &[P2], band: f64) -> Option<P2> {
     let away = |p: P2| shared.iter().all(|&s| apart(p, s) > 4.0 * band);
-    if let Some(&p) = crossings(x, y).iter().find(|&&p| away(p)) {
+    let crossed = match (x, y) {
+        (Flat::Seg { .. }, Flat::Seg { .. }) => crossings(x, y),
+        _ => shared.first().and_then(|&s| again(x, y, s)).into_iter().collect(),
+    };
+    if let Some(&p) = crossed.iter().find(|&&p| away(p)) {
         return Some(p);
     }
     let x_points = [x.start(), x.end(), x.at(0.5).0].into_iter().filter(|&e| away(e) && y.distance(e) <= band);

@@ -4,8 +4,8 @@
 //! P9's integer grid failed three of its 48 cases, the hole 1e-7 from an arc and the edges of 1e-8 and 1e-10, which the
 //! exact predicates mesh; its holes under a chord are cured by repair, cutting only the edges that collided. The
 //! forty-eighth case, P9's bicubic patch with a collapsed row, is a spline construction cannot make, so occam-mesh
-//! meshes it in its own tests; and the plate with 1,024 holes takes minutes in a debug build, most of them
-//! construction's, so it runs nightly (`just mesh-holes`).
+//! meshes it in its own tests; and the plate with 1,024 holes takes about a minute in a debug build, half of it the
+//! checker's and a third the mesher's, every hole alike, so it runs nightly (`just mesh-holes`).
 
 use core::f64::consts::{FRAC_1_SQRT_2, PI};
 
@@ -145,27 +145,26 @@ fn rise(radius: f64, chord: f64, across: f64) -> f64 {
     sag(chord / 2.0) - sag(across)
 }
 
-/// A crescent about `width` wide between two arcs over one chord, of radius 10 and 500, so that the walls along them,
-/// extruded, bend 50 to 1 apart. Construction finds a point inside a face only off one of its pieces by a share of its
-/// length, which a crescent this thin has none of, so this one is cut short a tenth of the way from one tip by a line.
+/// A crescent `width` wide between two arcs over one chord, of radius 10 and 500, so that the walls along them,
+/// extruded, bend 50 to 1 apart, meshed to a tenth of its width so that each wall is cut as its bend asks. Meshed more
+/// coarsely than it is wide, each wall can be drawn as the plane strip between the tips, the two the same, and their
+/// chords between the tips' middles, one at one place used by both, read as a crack.
 fn crescent(width: f64) -> Case {
     let (near, far) = (10.0, 500.0);
     let chord = (8.0 * width / (1.0 / near - 1.0 / far)).sqrt();
-    let (short, tip) = (-0.4 * chord, at(chord / 2.0, 0.0, 0.0));
-    let (inner, outer) = (at(short, rise(far, chord, short), 0.0), at(short, rise(near, chord, short), 0.0));
+    let tip = |side: f64| at(side * chord / 2.0, 0.0, 0.0);
     let edges = json!([
-        {"arc": [outer, at(0.0, rise(near, chord, 0.0), 0.0), tip]},
-        {"arc": [tip, at(0.0, rise(far, chord, 0.0), 0.0), inner]},
-        {"line": [inner, outer]}
+        {"arc": [tip(-1.0), at(0.0, rise(near, chord, 0.0), 0.0), tip(1.0)]},
+        {"arc": [tip(1.0), at(0.0, rise(far, chord, 0.0), 0.0), tip(-1.0)]}
     ]);
     let steps = and(&bounded(&edges), &[extruded()]);
-    Case { family: "crescent", value: width, steps, tolerance: width / 1000.0, deflection: 0.01 }
+    Case { family: "crescent", value: width, steps, tolerance: width / 1000.0, deflection: width / 10.0 }
 }
 
 /// A needle: two arcs from one tip `tip` radians apart, of radius 1 and 100, bending away from each other, closed by a
-/// line and extruded, so that its walls bend 100 to 1 apart. At a band of 1e-7, construction reads the arcs of the
-/// needle 1e-7 radians wide as crossing 1.8e-6 from its tip, where they are 1.8e-12 apart, so the needles are built to
-/// a band of 1e-5.
+/// line and extruded, so that its walls bend 100 to 1 apart, at the default band of 1e-7. The arcs of the needle 1e-7
+/// radians wide stay within that band of each other for 4.4e-4 from its tip, a sharp corner, as two pieces that meet do
+/// near where they meet.
 fn needle(tip: f64) -> Case {
     let (near, far, half) = (1.0, 100.0, tip / 2.0);
     // Round its centre above the tip, the near arc leaves it at half the tip above +X; round its centre below, the far
@@ -179,7 +178,7 @@ fn needle(tip: f64) -> Case {
         {"arc": [upper(reach), upper(reach / 2.0), at(0.0, 0.0, 0.0)]}
     ]);
     let steps = and(&bounded(&edges), &[extruded()]);
-    Case { family: "needle", value: tip, steps, tolerance: 1e-5, deflection: 0.01 }
+    Case { family: "needle", value: tip, steps, tolerance: 1e-7, deflection: 0.01 }
 }
 
 /// A square of 10 whose top bulges in, as an arc down to 8 in its middle, with a hole of radius 1 `gap` under it.
@@ -405,7 +404,7 @@ fn holes_under_a_chord_mesh_watertight_once_repair_cuts_the_edges_that_collided_
 }
 
 #[test]
-#[ignore = "minutes in a debug build, most of them construction's, so it runs nightly: `just mesh-holes`"]
+#[ignore = "about a minute in a debug build, so it runs nightly: `just mesh-holes`"]
 fn a_plate_with_1024_holes_meshes_watertight_within_its_deflection() {
     meshes([holes()]);
 }
