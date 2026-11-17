@@ -291,24 +291,24 @@ exclude_re = [
     # The closed forms' (intersection.closed). By line. A quotient's sign is the product's; `way` is 1 or -1, so
     # dividing by it is multiplying by it; and a cone's two rulings through its apex in a plane less steep than its
     # side are each other's mirror, both made, so taking the part across away instead of adding it swaps them.
-    "closed/conic\\.rs:111:28: replace \\* with / in plane_cone$",
-    "closed/conic\\.rs:132:94: replace \\* with / in through_apex$",
-    "closed/conic\\.rs:132:79: replace \\+ with - in through_apex$",
+    "closed/conic\\.rs:112:28: replace \\* with / in plane_cone$",
+    "closed/conic\\.rs:133:94: replace \\* with / in through_apex$",
+    "closed/conic\\.rs:133:79: replace \\+ with - in through_apex$",
     # Ties, which give the same value either way: a cosine or a difference of radii of exactly nought, which is its own
     # magnitude; two world axes as little along a normal, either square to it; a parabola's `d` times its slant exactly
     # nought, which only a plane through the apex has, decided before; and circles of one radius, which touch inside
     # each other only where they are one circle, decided before.
-    "closed/conic\\.rs:93:33: replace < with <= in plane_cone$",
-    "closed/conic\\.rs:111:36: replace > with >= in plane_cone$",
+    "closed/conic\\.rs:94:33: replace < with <= in plane_cone$",
+    "closed/conic\\.rs:112:36: replace > with >= in plane_cone$",
     "closed/meet\\.rs:116:16: replace < with <= in magnitude$",
     "closed/meet\\.rs:137:38: replace < with <= in circles$",
-    "closed/piece\\.rs:75:17: replace < with <= in square_to$",
+    "closed/piece\\.rs:76:17: replace < with <= in square_to$",
     # By line. A point two meridians of a coaxial pair meet in twice on the axis is a cone's apex, and a pair with a
     # cone measures its heights from the apex: nought and twice nought are one height.
-    "closed/coaxial\\.rs:144:33: replace - with \\+ in seen$",
+    "closed/coaxial\\.rs:145:33: replace - with \\+ in seen$",
     # By line. A sine or a cosine is at most 1, so four machine epsilons over it is at least four of it: a wider
     # enclosure, still certified, which only a value within a few ulps of a band's edge could tell, and none is.
-    "closed/(conic|coaxial)\\.rs:(77|33):41: replace \\* with / in computed$",
+    "closed/(conic|coaxial)\\.rs:(78|33):41: replace \\* with / in computed$",
     # The closed forms' images and charts, in occam-geom. Ties, which give the same value either way: the smaller and
     # larger of numbers that are equal, a window's nearest sample, an end of it exactly twice as far as that, a height
     # exactly a sphere's radius, which is clamped to it either way, and a collapsing line exactly a quarter from where
@@ -424,7 +424,7 @@ exclude_re = [
     # rulings along which `β` is as near zero, either starts a nodal quartic at its node. A cone's 3×3 part has no eigenvalue that is zero, its vertex being a point, so none is on the fence.
     "occam-intersect/src/pencil/roots\\.rs:223:49: replace > with >= in place$",
     "occam-intersect/src/pencil/mod\\.rs:129:78: replace > with >= in Pair::length$",
-    "occam-intersect/src/pencil/quadric\\.rs:111:53: replace > with >= in Quadric::toward$",
+    "occam-intersect/src/pencil/quadric\\.rs:112:53: replace > with >= in Quadric::toward$",
     "occam-intersect/src/pencil/trig\\.rs:137:21: replace > with >= in Trig::roots$",
     "occam-intersect/src/pencil/nodal\\.rs:87:17: replace < with <= in node$",
     "occam-intersect/src/pencil/nodal\\.rs:(62:45|66:42): replace > with >= in rulings$",
@@ -469,28 +469,28 @@ exclude_re = [
     # corner of a part is from its middle, and the largest gap between two boxes, whose radius is the rounding of its
     # middle alone (occam-math's interval subtraction of exact numbers), so two gaps with one middle are one interval.
     "occam-intersect/src/pieces\\.rs:50:16: replace > with >= in spread$",
-    "occam-intersect/src/traverse\\.rs:112:61: replace > with >= in apart$",
+    "occam-intersect/src/traverse\\.rs:113:61: replace > with >= in apart$",
     # How far along a chord its foot is, by line. A chord of no length gives 0 / 0, not a number, which the clamp below
     # takes to the start, as the other branch does. At either end of the clamp both branches give the same parameter,
     # 1, or a zero of either sign, which moves the foot at most by the sign of a zero, and no distance sees that, nor
     # the cubic through the chord's stations, whose terms are the same at either.
-    "occam-intersect/src/tube\\.rs:53:27: replace > with >= in Chord::along$",
-    "occam-intersect/src/tube\\.rs:(54:14|56:21): replace > with >= in Chord::along$",
+    "occam-intersect/src/tube\\.rs:54:27: replace > with >= in Chord::along$",
+    "occam-intersect/src/tube\\.rs:(55:14|57:21): replace > with >= in Chord::along$",
     # The tube, by line. A chord's two ends at one coordinate give the same cubes in either order. Where the bends
     # either side of a chord are equal, or its sag is the tracer's, keeping either gives the same number. A closed
     # trace of one station has one chord from it to itself at the tracer's sag either way, which is the chord its lone
     # station is given otherwise; an open trace's extra span has no station after it, and is dropped. The half cosine
     # of the turn between a chord's stations is below nought only by rounding, and at nought either branch gives nought.
-    "occam-intersect/src/tube\\.rs:117:18: replace < with <= in Tube::file$",
-    "occam-intersect/src/tube\\.rs:259:55: replace > with >= in between$",
-    "occam-intersect/src/tube\\.rs:(164:47|165:16): replace > with >= in Tube::radius$",
-    "occam-intersect/src/tube\\.rs:175:31: replace && with \\|\\| in Tube::add$",
-    "occam-intersect/src/tube\\.rs:175:47: replace > with >= in Tube::add$",
+    "occam-intersect/src/tube\\.rs:118:18: replace < with <= in Tube::file$",
+    "occam-intersect/src/tube\\.rs:260:55: replace > with >= in between$",
+    "occam-intersect/src/tube\\.rs:(165:47|166:16): replace > with >= in Tube::radius$",
+    "occam-intersect/src/tube\\.rs:176:31: replace && with \\|\\| in Tube::add$",
+    "occam-intersect/src/tube\\.rs:176:47: replace > with >= in Tube::add$",
     # The hybrid, by line. A trace of one station gives one piece of one station, which the fit returns from at once
     # with nothing, so fitting it or not is the same. A box's reach either side of its middle: where the two are equal,
     # keeping either is the same number.
     "occam-intersect/src/hybrid\\.rs:376:57: replace > with >= in finish$",
-    "occam-intersect/src/traverse\\.rs:127:31: replace > with >= in clear$",
+    "occam-intersect/src/traverse\\.rs:128:31: replace > with >= in clear$",
     # Where the curves cross a leaf's edges, by line. Ties that give the same number or the same crossings either way:
     # the larger of two equal reaches or parameter lengths, and a box's side exactly at the domain's end; a box exactly
     # as far across as the gap is from nought, over which the gap can at most touch nought, which the band cannot tell
@@ -521,7 +521,7 @@ exclude_re = [
     "occam-intersect/src/resolution\\.rs:151:61: replace < with <= in Near::between$",
     "occam-intersect/src/tangency\\.rs:71:22: replace > with >= in twin$",
     "occam-intersect/src/tangency\\.rs:166:44: replace > with >= in contacts$",
-    "occam-intersect/src/pencil/emit\\.rs:154:49: delete - in touch$",
+    "occam-intersect/src/pencil/emit\\.rs:155:49: delete - in touch$",
     # Picking's ties, by line. A triangle as near as the nearest face crossed, of the same face, is that face at that
     # distance: taking it or keeping the one held gives the same. Where an edge's segment comes as near the ray as the
     # one held, as far along it, of the same edge and from the same sample, it is the same segment, whose nearest point

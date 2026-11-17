@@ -23,8 +23,9 @@ use occam_geom::{Surface, UvBox};
 use occam_math::{Grain, Interval, Side};
 use occam_units::{Bounds, Tolerance, UvPoint, Vec3};
 
-use crate::decide::{Decide, dot, uncertain};
+use crate::decide::{Decide, uncertain};
 use crate::implicit::{Implicit, magnitude};
+use crate::interval3::norm3;
 use crate::methods::{Spent, Work};
 use crate::on::On;
 use crate::pieces::Piece;
@@ -127,7 +128,7 @@ fn clear(form: &Implicit, bounds: &Bounds) -> Interval {
         Interval::exact(if up > down { up } else { down })
     };
     let half = [reach(low.x, mid.x, high.x), reach(low.y, mid.y, high.y), reach(low.z, mid.z, high.z)];
-    magnitude(form.enclosed(mid)) - dot(half, half).sqrt()
+    magnitude(form.enclosed(mid)) - norm3(half)
 }
 
 /// The lengths that drop `cell`, each above the band where the cell cannot meet the other surface, and where they were

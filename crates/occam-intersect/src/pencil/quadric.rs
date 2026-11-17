@@ -13,10 +13,11 @@ use occam_math::{Interval, Predicate, Ring, Side, sin_cos};
 use occam_units::Vec3;
 
 use super::trig::Trig;
-#[cfg(test)]
-use crate::closed::{along, cross3};
-use crate::closed::{exact3, minus, norm3, square_to, unit};
+use crate::closed::{square_to, unit};
 use crate::decide::{Decisions, Undecided};
+#[cfg(test)]
+use crate::interval3::{along, cross3};
+use crate::interval3::{exact3, minus, norm3};
 
 /// A sphere, a cylinder or a cone, in world coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
