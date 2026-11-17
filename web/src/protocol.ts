@@ -1,7 +1,17 @@
 // The messages between the page and its workers (docs/architecture/browser.md). No wasm runs on the page's main thread:
-// the editing worker holds the model and runs requests, or opens each model `occam view` sends, and each mesh worker
-// meshes ranges of faces from its own copy of the binary twin. Bytes and arrays move by transfer, never through shared memory, so the page needs no
+// the editing worker holds the model and runs requests, or opens and checks each model `occam view` sends, and each
+// mesh worker meshes ranges of faces from its own copy of the binary twin, which it trusts the editing worker checked. Bytes and arrays move by transfer, never through shared memory, so the page needs no
 // SharedArrayBuffer and its server sends no COOP or COEP headers.
+
+declare const checked: unique symbol;
+
+/**
+ * A copy of the binary twin of a model the editing worker has opened or made, and so checked: the only bytes a mesh
+ * worker opens without checking them again (docs/decisions/2026-11-16-mesh-workers-trust-the-editing-worker.md). The
+ * editing worker alone makes one, so bytes fetched from `occam view`, or from anywhere, reach a mesh worker only through
+ * its open.
+ */
+export type Checked = ArrayBuffer & { readonly [checked]: true };
 
 /** What the page asks the editing worker: run `request` on the model, and give `copies` copies of the model it makes. */
 export interface Run {
@@ -30,7 +40,7 @@ export interface Opened {
   readonly id: number;
   /** Each face's id, in id order, as its slot and generation. */
   readonly faces: Uint32Array<ArrayBuffer>;
-  readonly twins: readonly ArrayBuffer[];
+  readonly twins: readonly Checked[];
   /**
    * The places, among the faces in id order, of those to mesh again, and the ids of what keeps its mesh from the model
    * opened last; null for the first model, every face of which is meshed.
@@ -48,7 +58,7 @@ export type FromEditing =
     /** Each face's id, in id order, as its slot and generation. */
     readonly faces: Uint32Array<ArrayBuffer>;
     /** The binary twin, one copy for each mesh worker, if the run changed the model; none if it did not. */
-    readonly twins: readonly ArrayBuffer[];
+    readonly twins: readonly Checked[];
   }
   | Opened
   | { readonly kind: "failed"; readonly id: number; readonly reason: string };
@@ -82,7 +92,7 @@ export type Ask =
 
 /** What the page asks a mesh worker: hold model `model`, the twin given, mesh a range of its faces, or an ask. */
 export type ToMesher =
-  | { readonly kind: "load"; readonly model: number; readonly twin: ArrayBuffer }
+  | { readonly kind: "load"; readonly model: number; readonly twin: Checked }
   | {
     readonly kind: "mesh";
     readonly call: number;

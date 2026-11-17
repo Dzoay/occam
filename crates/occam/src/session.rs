@@ -4,6 +4,8 @@
 //! whole; asked what it holds; and meshed, after a run only where the run touched it. Every command takes many ids and
 //! gives one answer per id, so an id that names nothing is refused alone, `topo.stale-id`, and the others are answered
 //! (L6). The command line and the browser build both wrap this, and its answers' one JSON form is [`Answered::json`].
+//! The browser build alone also opens, without checking it again, the twin a checked session saved, for its mesh
+//! workers.
 
 mod wire;
 
@@ -88,9 +90,28 @@ impl Session {
     /// As `occam_io::load`: bytes that are not the format or not this version, a damaged binary file, and every check
     /// the model fails, each naming its entities.
     pub fn open(bytes: &[u8], exec: &Exec) -> Result<Self, Vec<Report>> {
+        Ok(Self::holding(occam_io::load(bytes, exec)?, bytes))
+    }
+
+    /// The model `bytes` hold in either encoding, which a session of this program measured and checked before it saved
+    /// them: read as [`Session::open`] reads them, refusing bytes that are not the format, but neither measured nor
+    /// checked again. Only the browser build has it, through the `trusted` feature, for its mesh workers, which open
+    /// the twin the editing worker checked (docs/decisions/2026-11-16-mesh-workers-trust-the-editing-worker.md); the
+    /// `occam` command, which opens files, is built without it.
+    ///
+    /// # Errors
+    ///
+    /// As `occam_io::parse`: bytes that are not the format or not this version, a damaged binary file, and a curve or
+    /// surface its family would not make, naming it.
+    #[cfg(feature = "trusted")]
+    pub fn open_trusted(bytes: &[u8]) -> Result<Self, Vec<Report>> {
+        Ok(Self::holding(occam_io::parse(bytes)?.trusted(), bytes))
+    }
+
+    /// A session holding `model`, read from `bytes`, saved in their encoding from now on.
+    fn holding(model: Snapshot, bytes: &[u8]) -> Self {
         let encoding = if bytes.starts_with(occam_io::MAGIC) { Encoding::Binary } else { Encoding::Json };
-        let model = occam_io::load(bytes, exec)?;
-        Ok(Self { model: Some(model), encoding, meshed: None, picking: None })
+        Self { model: Some(model), encoding, meshed: None, picking: None }
     }
 
     /// How the model is saved.

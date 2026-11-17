@@ -17,7 +17,7 @@ declare module "occam-wasm" {
     uvs(): Float64Array<ArrayBuffer>;
   }
 
-  /** A model, as a worker holds it. */
+  /** A model, as the editing worker holds it. */
   export class Session {
     constructor();
     free(): void;
@@ -26,19 +26,27 @@ declare module "occam-wasm" {
     face_count(): number;
     /** Each face's slot and generation, in id order. */
     face_ids(): Uint32Array<ArrayBuffer>;
+    /** The model `native` holds, measured and checked whole; throws the reports refusing it, as JSON text. */
+    static open(native: Uint8Array): Session;
+    run(request: string): string;
+    take_saved(): Uint8Array<ArrayBuffer> | undefined;
+  }
+
+  /** A model as a mesh worker holds it: the twin the editing worker checked, opened without checking it again. */
+  export class Trusted {
+    private constructor();
+    free(): void;
     /** Throws the reports refusing the limits, as JSON text. */
     mesh_part(deflection: number, angle: number, first: number, end: number): Meshed;
-    /** Throws the reports refusing the bytes, as JSON text. */
-    static open(native: Uint8Array): Session;
+    /** The model `twin` holds, read but not measured or checked; throws the reports refusing bytes that do not read. */
+    static open(twin: Uint8Array): Trusted;
     /**
      * What a ray of six numbers, its start and its direction, hits first in the model's mesh, edges within `tolerance`,
      * in the one JSON form `occam pick --json` gives; throws the reports refusing the limits or the ray, as JSON text.
      */
     pick(deflection: number, angle: number, ray: Float64Array, tolerance: number): string;
-    run(request: string): string;
     /** The samples of the edge `edge`, three numbers a point; none for an id that is not an edge a face uses. */
     samples(deflection: number, angle: number, edge: string): Float64Array<ArrayBuffer>;
-    take_saved(): Uint8Array<ArrayBuffer> | undefined;
   }
 
   /** Fetches and instantiates the module at `module_or_path`. */

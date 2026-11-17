@@ -10,7 +10,8 @@ publish.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-occam = { path = "../occam" }
+# With the mesh workers' open of the twin the editing worker checked, which nothing else builds.
+occam = { path = "../occam", features = ["trusted"] }
 # Pinned to the version of wasm-bindgen-cli in scripts/toolchain.sh, which must match. See docs/decisions/2026-11-09-wasm-bindgen.md.
 wasm-bindgen = "=0.2.129"
 

@@ -21,7 +21,7 @@ import { chromium, firefox } from "playwright";
 
 import { pixelOf } from "./demo/harness.mjs";
 
-/** How long to wait for anything: P9's 10,001-face model takes minutes to open, in the server and in each worker. */
+/** How long to wait for anything: P9's 10,001-face model takes minutes to open, in the server and the editing worker. */
 const PATIENCE = 60 * 60_000;
 /** What the page is held to: one frame at 60 Hz. A goal, not a gate. */
 const GOAL_MS = 16.7;
