@@ -1,4 +1,4 @@
-//! The part of the workspace manifest's rule on lints that the sources show: every `allow` and `expect` gives its
+//! The workspace manifest's rule on lints: every `allow` and `expect` gives its
 //! reason, and an `allow` stands only at a crate's root, where the rule puts a relaxation. Anywhere else it is an
 //! `expect`, which stops compiling once nothing under it needs it. `cfg_attr` is read through.
 
