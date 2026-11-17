@@ -609,3 +609,5 @@ pub(super) mod tests {
 
 #[cfg(test)]
 mod tests_meet;
+#[cfg(test)]
+mod tests_rules;
