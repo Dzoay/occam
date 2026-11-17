@@ -1,9 +1,9 @@
 //! Source: original
 //! The command's parts that a running viewer cannot show: the page the build embeds, what the viewer's first line
-//! says, a viewer that says nothing, one that says it will stop and does not, when a port is gone, and a process
-//! started apart.
+//! says, a viewer that takes long to listen or ends without listening, one that says it will stop and does not, when a
+//! port is gone, and a process started apart.
 
-use std::io::{Read as _, Write as _};
+use std::io::Read as _;
 use std::net::{Ipv4Addr, TcpListener};
 use std::path::PathBuf;
 
@@ -59,18 +59,47 @@ fn the_viewers_first_line_is_where_it_listens_or_why_it_could_not() {
     assert_eq!(said("a line from something else"), None);
 }
 
+/// The first line of a viewer that runs `script` in the shell, waited for a period of `every`, and how long it had been
+/// waited for each time it was said to be still opening.
+#[cfg(unix)]
+fn waited_for(script: &str, every: Duration) -> (Option<String>, Vec<Duration>) {
+    let mut child = Command::new("sh").args(["-c", script]).stdout(Stdio::piped()).spawn().unwrap();
+    let mut still = Vec::new();
+    let line = first_line(&mut child, every, |waited| still.push(waited));
+    let _ = child.kill();
+    let _ = child.wait();
+    (line, still)
+}
+
 #[cfg(unix)]
 #[test]
-fn a_viewer_that_says_nothing_has_not_started() {
-    let mut child = Command::new("true").stdout(Stdio::piped()).spawn().unwrap();
-    assert_eq!(first_line(&mut child, Duration::from_secs(5)), None, "it ended, saying nothing");
-    let mut silent = Command::new("sleep").arg("5").stdout(Stdio::piped()).spawn().unwrap();
-    assert_eq!(first_line(&mut silent, Duration::from_millis(100)), None, "nothing within the wait");
-    let _ = silent.kill();
+fn a_viewer_that_takes_longer_than_the_old_thirty_seconds_to_listen_is_waited_for_and_said_to_be_still_opening() {
+    // Forty periods of 10 ms before it listens: at `occam view`'s 5 s a period, 200 s, past the 30 s it used to give.
+    let (line, still) = waited_for("sleep 0.4; echo listening", Duration::from_millis(10));
+    assert_eq!(line.as_deref(), Some("listening\n"));
+    assert!(still.len() > 6, "said to be still opening each period, past six: {still:?}");
+    assert!(still.windows(2).all(|pair| pair[0] < pair[1]), "for longer each time: {still:?}");
+    assert_eq!(
+        still_opening("part.occam", Duration::from_millis(15_400)),
+        "The viewer is still opening part.occam: 15 s so far."
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_viewer_that_ends_is_waited_for_no_longer_and_its_own_words_are_its_answer() {
+    let report = port_taken(4000).to_json(DisplayUnits::default()).unwrap();
+    let (line, _) = waited_for(&format!("sleep 0.1; echo '{report}'; exit 1"), Duration::from_millis(10));
+    assert_eq!(line.as_deref().and_then(said), Some(Err(port_taken(4000))), "why it could not, in its words");
+    let start = Instant::now();
+    let (line, still) = waited_for("sleep 0.2; exit 3", Duration::from_secs(60));
+    assert_eq!((line, still), (None, Vec::new()), "it ended, saying nothing");
+    assert!(start.elapsed() < Duration::from_secs(30), "not waited for once it ended: {:?}", start.elapsed());
+    assert_eq!(waited_for("true", Duration::from_millis(10)).0, None);
     let report = not_started(Path::new("/m/part.occam"));
     assert_eq!(
         report.message(DisplayUnits::default()),
-        "The viewer for /m/part.occam did not start: its server stopped, or did not listen within 30 seconds."
+        "The viewer for /m/part.occam did not start: its server stopped before it listened."
     );
 }
 

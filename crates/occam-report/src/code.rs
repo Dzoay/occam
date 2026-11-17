@@ -666,12 +666,12 @@ catalogue! {
         "The viewer's state file {given} could not be written, so no viewer was started for the model.",
     }
 
-    /// The viewer's server did not say it was listening in time: it could not be run, or it stopped before it could
-    /// say why. Nothing an agent can change cures that, so no remedy can be followed.
+    /// The viewer's server did not say it was listening: it could not be run, or it stopped before it could say why.
+    /// Nothing an agent can change cures that, so no remedy can be followed.
     NotStarted = "view.not-started" {
         Error, [],
         "The viewer's server did not start.",
-        "The viewer for {given} did not start: its server stopped, or did not listen within {seconds} seconds.",
+        "The viewer for {given} did not start: its server stopped before it listened.",
     }
 
     /// The viewer's server said it would stop, and still answered when the wait for it was over. That is a bug in
@@ -1543,7 +1543,7 @@ mod tests {
                 "code": "view.not-started",
                 "severity": "error",
                 "summary": "The viewer's server did not start.",
-                "template": "The viewer for {given} did not start: its server stopped, or did not listen within {seconds} seconds.",
+                "template": "The viewer for {given} did not start: its server stopped before it listened.",
                 "remedies": []
             },
             {

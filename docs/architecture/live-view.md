@@ -38,6 +38,10 @@ flowchart LR
   the server, the same program run again as a process of its own, waits until it listens and has read the model once,
   prints the address (with the token and the model's digest under `--json`), opens the page unless `--no-open`, and
   exits. It opens the page with the program `BROWSER` names, or the system's opener, and only if no page is open.
+- **It waits as long as the server opens the model** ([decision](../decisions/2026-11-17-occam-view-waits-while-its-server-opens.md)),
+  saying on standard error every five seconds that it is still opening. A server that ends first answers in its own
+  words, its report, or `view.not-started` if it said none. An interrupt stops `occam view` alone; the server, finding
+  no one to tell that it listens, stops once it has opened the model and removes its state file.
 - **One server per model.** A state file beside the model, `part.occam.view`, names the process, port and token as
   `{"schema", "pid", "port", "token"}`, written whole and readable by its owner alone. A second `occam view` asks that
   server what it watches and prints its address instead of starting another; a state file whose server does not answer
