@@ -16,8 +16,8 @@ use crate::read::At;
 use crate::request::Units;
 use crate::{construct, measure, primitive, sweep, transform};
 
-/// What the step at a place, asking for an operation, gives in its fields other than `op` and `label`, in the request's
-/// units, if every input is good; every bad input goes in the list.
+/// What the step at a place, asking for an operation, gives in its fields, already held to those the operation takes,
+/// in the request's units, if every input is good; every bad input goes in the list.
 pub(crate) type Reader = fn(&At, Operation, &Map<String, Value>, Units, &mut Vec<Report>) -> Option<Args>;
 
 /// What a step made, if it made one thing a later step can name by its label, or why it made nothing.

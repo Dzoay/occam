@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 
 use super::pose::Pose;
 use crate::operation::Operation;
-use crate::read::{At, needed, number, object, wrong_type};
+use crate::read::{At, gather, needed, number, object, wrong_type};
 use crate::request::Units;
 
 /// How close to `z` an `x` axis may lie, as the sine of the angle between them: the default angle tolerance (O12).
@@ -69,11 +69,6 @@ pub struct PrimitiveArgs {
     pub shape: Shape,
     /// Where it is.
     pub pose: Pose,
-}
-
-/// Keeps `result`'s value, or its report in `out`.
-fn keep<T>(result: Result<T, Report>, out: &mut Vec<Report>) -> Option<T> {
-    result.map_err(|report| out.push(report)).ok()
 }
 
 /// The length `value` at `at`, in `unit`, in millimetres.
@@ -134,8 +129,8 @@ fn lengths(at: &At, value: &Value, unit: LengthUnit) -> Result<[f64; 3], Report>
 
 /// The three sizes of the list at `at`, each greater than zero.
 fn sizes(at: &At, value: &Value, unit: LengthUnit, out: &mut Vec<Report>) -> Option<[f64; 3]> {
-    let [a, b, c] = keep(lengths(at, value, unit), out)?;
-    let [a, b, c] = [(0, a), (1, b), (2, c)].map(|(k, x)| keep(positive(&at.item(k), x), out));
+    let [a, b, c] = gather(lengths(at, value, unit), out)?;
+    let [a, b, c] = [(0, a), (1, b), (2, c)].map(|(k, x)| gather(positive(&at.item(k), x), out));
     Some([a?, b?, c?])
 }
 
@@ -161,12 +156,12 @@ pub(crate) fn pose(at: &At, given: Option<&Value>, unit: LengthUnit, out: &mut V
     let read = |name: &str, f: &dyn Fn(&At, &Value) -> Result<Vec3, Report>, default: Vec3| {
         fields.get(name).map_or(Ok(default), |value| f(&at.field(name), value))
     };
-    let origin = keep(
+    let origin = gather(
         read("origin", &|at, v| lengths(at, v, unit).map(|[a, b, c]| Vec3::new(a, b, c)), Pose::STANDARD.origin),
         out,
     );
-    let z = keep(read("z", &direction, Pose::STANDARD.z), out);
-    let x = keep(read("x", &direction, Pose::STANDARD.x), out);
+    let z = gather(read("z", &direction, Pose::STANDARD.z), out);
+    let x = gather(read("x", &direction, Pose::STANDARD.x), out);
     let (origin, z, x) = (origin?, z?, x?);
     let x = match (fields.contains_key("x"), across(x, z)) {
         (_, Some(x)) => x,
@@ -184,7 +179,7 @@ pub(crate) fn pose(at: &At, given: Option<&Value>, unit: LengthUnit, out: &mut V
 #[expect(clippy::float_cmp, reason = "the radii as given, compared exactly")]
 fn radii(at: &At, fields: &Map<String, Value>, unit: LengthUnit, out: &mut Vec<Report>) -> Option<(f64, f64)> {
     let mut radius =
-        |name: &str| keep(field(at, fields, name, unit).and_then(|r| not_negative(&at.field(name), r)), out);
+        |name: &str| gather(field(at, fields, name, unit).and_then(|r| not_negative(&at.field(name), r)), out);
     let (one, two) = (radius("radius1"), radius("radius2"));
     let (one, two) = (one?, two?);
     if one == two {
@@ -196,8 +191,8 @@ fn radii(at: &At, fields: &Map<String, Value>, unit: LengthUnit, out: &mut Vec<R
 
 /// A torus's two radii, the minor less than the major.
 fn torus(at: &At, fields: &Map<String, Value>, unit: LengthUnit, out: &mut Vec<Report>) -> Option<Shape> {
-    let major = keep(size(at, fields, "major", unit), out);
-    let minor = keep(size(at, fields, "minor", unit), out);
+    let major = gather(size(at, fields, "major", unit), out);
+    let minor = gather(size(at, fields, "minor", unit), out);
     let (major, minor) = (major?, minor?);
     if minor >= major {
         let report = at
@@ -214,12 +209,13 @@ fn torus(at: &At, fields: &Map<String, Value>, unit: LengthUnit, out: &mut Vec<R
 
 /// A wedge's sizes and its top.
 fn wedge(at: &At, fields: &Map<String, Value>, unit: LengthUnit, out: &mut Vec<Report>) -> Option<Shape> {
-    let size = keep(needed(at, fields, "size"), out).and_then(|value| sizes(&at.field("size"), value, unit, out));
+    let size = gather(needed(at, fields, "size"), out).and_then(|value| sizes(&at.field("size"), value, unit, out));
     let top_at = at.field("top");
-    let top = keep(needed(at, fields, "top"), out).and_then(|value| object(&top_at, value, &["start", "width"], out));
+    let top = gather(needed(at, fields, "top"), out).and_then(|value| object(&top_at, value, &["start", "width"], out));
     let top = top.and_then(|top| {
-        let start = keep(field(&top_at, top, "start", unit), out);
-        let width = keep(field(&top_at, top, "width", unit).and_then(|w| not_negative(&top_at.field("width"), w)), out);
+        let start = gather(field(&top_at, top, "start", unit), out);
+        let width =
+            gather(field(&top_at, top, "width", unit).and_then(|w| not_negative(&top_at.field("width"), w)), out);
         Some((start?, width?))
     });
     let (size, (start, width)) = (size?, top?);
@@ -234,10 +230,10 @@ fn shape(
     unit: LengthUnit,
     out: &mut Vec<Report>,
 ) -> Option<Shape> {
-    let size = |name: &str, out: &mut Vec<Report>| keep(size(at, fields, name, unit), out);
+    let size = |name: &str, out: &mut Vec<Report>| gather(size(at, fields, name, unit), out);
     match operation {
         Operation::Box => {
-            keep(needed(at, fields, "size"), out).and_then(|v| sizes(&at.field("size"), v, unit, out)).map(Shape::Box)
+            gather(needed(at, fields, "size"), out).and_then(|v| sizes(&at.field("size"), v, unit, out)).map(Shape::Box)
         }
         Operation::Cylinder => {
             let (radius, height) = (size("radius", out), size("height", out));
@@ -255,16 +251,14 @@ fn shape(
     }
 }
 
-/// The primitive the step at `at`, making `operation`, asks for with `parameters` in `units`, every bad input in `out`.
+/// The primitive the step at `at`, making `operation`, asks for with `fields` in `units`, every bad input in `out`.
 pub(crate) fn read(
     at: &At,
     operation: Operation,
-    parameters: &Map<String, Value>,
+    fields: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
 ) -> Option<PrimitiveArgs> {
-    let all = Value::Object(parameters.clone());
-    let fields = object(at, &all, operation.fields(), out)?;
     let shape = shape(at, operation, fields, units.length, out);
     let pose = pose(&at.field("frame"), fields.get("frame"), units.length, out);
     Some(PrimitiveArgs { shape: shape?, pose: pose? })

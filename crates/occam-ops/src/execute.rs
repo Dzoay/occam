@@ -30,7 +30,6 @@ pub fn execute(edit: &mut Edit, step: &Step, labels: &Labels) -> Result<Option<E
 #[cfg(test)]
 mod tests {
     use occam_topo::Snapshot;
-    use serde_json::Map;
 
     use super::*;
     use crate::args::Args;
@@ -43,7 +42,7 @@ mod tests {
     fn a_step_built_by_hand_without_what_its_operation_reads_is_refused_as_missing_it() {
         let snapshot = Snapshot::empty(default_tolerance().unwrap());
         for operation in Operation::ALL.into_iter().filter(|op| op.supported()) {
-            let step = Step { index: 2, label: None, operation, parameters: Map::new(), args: Args::None };
+            let step = Step { index: 2, label: None, operation, args: Args::None };
             let report = execute(&mut snapshot.edit(), &step, &Labels::default()).unwrap_err();
             assert_eq!((report.code, report.fault), (Code::InputMissing, Some(Fault::InvalidInput)));
             assert_eq!(report.input, Some(Input::at("steps[2]").in_step(2, Some(operation.name()))));
@@ -57,7 +56,7 @@ mod tests {
         let wire = Args::Wire(WireArgs::Points { points: Vec::new(), closed: false, at: Input::at("steps[0]") });
         for operation in Operation::ALL.into_iter().filter(|op| op.supported()) {
             let args = if operation == Operation::Measure { wire.clone() } else { measure.clone() };
-            let step = Step { index: 4, label: None, operation, parameters: Map::new(), args };
+            let step = Step { index: 4, label: None, operation, args };
             let report = execute(&mut snapshot.edit(), &step, &Labels::default()).unwrap_err();
             assert_eq!((report.code, report.fault), (Code::InputMissing, Some(Fault::InvalidInput)), "{operation:?}");
             assert_eq!(report.input, Some(Input::at("steps[4]").in_step(4, Some(operation.name()))));
@@ -68,7 +67,7 @@ mod tests {
     fn an_operation_this_build_does_not_do_is_refused_if_a_step_reaches_it() {
         let snapshot = Snapshot::empty(default_tolerance().unwrap());
         for operation in Operation::ALL.into_iter().filter(|op| !op.supported()) {
-            let step = Step { index: 3, label: None, operation, parameters: Map::new(), args: Args::None };
+            let step = Step { index: 3, label: None, operation, args: Args::None };
             let report = execute(&mut snapshot.edit(), &step, &Labels::default()).unwrap_err();
             assert_eq!((report.code, report.fault), (Code::NotSupported, Some(Fault::NotImplemented)));
             let input = Input::at("steps[3].op").in_step(3, Some(operation.name()));

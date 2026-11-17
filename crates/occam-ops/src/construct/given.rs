@@ -13,7 +13,7 @@ use serde_json::{Map, Value};
 use crate::args::Args;
 use crate::operand::Operand;
 use crate::operation::Operation;
-use crate::read::{At, missing, needed, number, object, wrong_type};
+use crate::read::{At, gather, missing, needed, number, object, wrong_type};
 use crate::request::Units;
 
 /// One edge of a wire as a request gives it, in millimetres.
@@ -95,11 +95,6 @@ pub struct FaceArgs {
     pub outer: WireRef,
     /// The wires round its holes.
     pub holes: Vec<WireRef>,
-}
-
-/// The value of `result`, or nothing with its report kept.
-pub(crate) fn gather<T>(result: Result<T, Report>, out: &mut Vec<Report>) -> Option<T> {
-    result.map_err(|report| out.push(report)).ok()
 }
 
 /// The point at `at`, three numbers in the request's length unit, in millimetres.
@@ -282,29 +277,25 @@ pub(crate) fn face(at: &At, fields: &Map<String, Value>, units: Units, out: &mut
     Some(FaceArgs { outer: outer?, holes })
 }
 
-/// The fields of a `wire` step, at `at`, checking that it takes them.
+/// What a `wire` step, at `at`, gives in `fields`.
 pub(crate) fn wire_step(
     at: &At,
-    operation: Operation,
+    _: Operation,
     fields: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
 ) -> Option<Args> {
-    let value = Value::Object(fields.clone());
-    let fields = object(at, &value, operation.fields(), out)?;
     wire(at, fields, units, out).map(Args::Wire)
 }
 
-/// The fields of a `face` step, at `at`, checking that it takes them.
+/// What a `face` step, at `at`, gives in `fields`.
 pub(crate) fn face_step(
     at: &At,
-    operation: Operation,
+    _: Operation,
     fields: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
 ) -> Option<Args> {
-    let value = Value::Object(fields.clone());
-    let fields = object(at, &value, operation.fields(), out)?;
     face(at, fields, units, out).map(Args::Face)
 }
 

@@ -8,19 +8,13 @@ use occam_ops::{Args, Operation, Request, Step, Units};
 use occam_report::{AngleUnit, DisplayUnits, EntityKind, Input, LengthUnit, Reason, followed_remedy};
 use occam_topo::{Derivation, Lineage, Vertex, VertexRecord};
 use occam_units::{Angle, Length, Point};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use super::*;
 
 /// `n` steps, each labelled `s<index>`.
 fn steps(n: u32) -> Vec<Step> {
-    let step = |index| Step {
-        index,
-        label: Some(format!("s{index}")),
-        operation: Operation::Box,
-        parameters: Map::new(),
-        args: Args::None,
-    };
+    let step = |index| Step { index, label: Some(format!("s{index}")), operation: Operation::Box, args: Args::None };
     (0..n).map(step).collect()
 }
 

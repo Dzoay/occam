@@ -9,7 +9,7 @@ use occam_ops::{Args, Operation, Request, Step, Units};
 use occam_report::{AngleUnit, Code, LengthUnit, Reason, StepRole, Value as Held};
 use occam_topo::{Around, End, Snapshot, VertexRecord};
 use occam_units::{Length, Point};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use super::*;
 use crate::run::run_request;
@@ -275,7 +275,7 @@ fn what_a_refused_step_names_is_described_from_the_model_or_from_nothing() {
 
 /// A request of `n` steps that ask for nothing the runner reads, in millimetres.
 fn steps(n: u32) -> Request {
-    let step = |index| Step { index, label: None, operation: Operation::Box, parameters: Map::new(), args: Args::None };
+    let step = |index| Step { index, label: None, operation: Operation::Box, args: Args::None };
     let units = Units { length: LengthUnit::Millimetre, angle: AngleUnit::Radian };
     Request { units, tolerance: None, steps: (0..n).map(step).collect() }
 }

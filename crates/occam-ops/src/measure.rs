@@ -27,7 +27,7 @@ use serde_json::{Map, Value};
 use crate::args::Args;
 use crate::operand::{Labels, Operand, resolve};
 use crate::operation::{Does, Made, Operation};
-use crate::read::{At, missing, name, object, text, wrong_type};
+use crate::read::{At, gather, missing, name, text, wrong_type};
 use crate::request::{Step, Units};
 use extent::Inside;
 use mass::{Asked, Patch, Sums};
@@ -102,19 +102,10 @@ const fn run(_: &mut Edit, args: &Args, _: &Labels) -> Option<Made> {
     }
 }
 
-/// The measure step whose fields other than `op` and `label` are `fields`, at `at`, with every bad input in `out`.
-fn measure_step(
-    at: &At,
-    operation: Operation,
-    fields: &Map<String, Value>,
-    _: Units,
-    out: &mut Vec<Report>,
-) -> Option<Args> {
-    let all = Value::Object(fields.clone());
-    let fields = object(at, &all, operation.fields(), out)?;
+/// What the measure step at `at` gives in `fields`, with every bad input in `out`.
+fn measure_step(at: &At, _: Operation, fields: &Map<String, Value>, _: Units, out: &mut Vec<Report>) -> Option<Args> {
     let target = fields.get("target").ok_or_else(|| missing(&at.field("target")));
-    let target =
-        target.and_then(|value| text(&at.field("target"), value)).map(Operand::read).map_err(|r| out.push(r)).ok();
+    let target = gather(target.and_then(|value| text(&at.field("target"), value)).map(Operand::read), out);
     let what = match fields.get("what") {
         None => Some(Vec::new()),
         Some(Value::Array(items)) if items.is_empty() => {
@@ -124,7 +115,7 @@ fn measure_step(
         Some(Value::Array(items)) => {
             let names = Measurement::ALL.map(|m| (m.name(), m));
             let read = items.iter().enumerate().map(|(k, item)| name(&at.field("what").item(k), item, &names));
-            read.collect::<Result<Vec<_>, _>>().map_err(|r| out.push(r)).ok()
+            gather(read.collect::<Result<Vec<_>, _>>(), out)
         }
         Some(other) => {
             out.push(wrong_type(&at.field("what"), other, "list"));

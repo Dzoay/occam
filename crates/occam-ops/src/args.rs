@@ -9,7 +9,7 @@ use crate::construct::given::{FaceArgs, WireArgs};
 use crate::measure::MeasureArgs;
 use crate::operation::Operation;
 use crate::primitive::PrimitiveArgs;
-use crate::read::At;
+use crate::read::{At, unknown};
 use crate::request::Units;
 use crate::sweep::{ExtrudeArgs, RevolveArgs};
 use crate::transform::TransformArgs;
@@ -36,8 +36,11 @@ pub enum Args {
     Transform(TransformArgs),
 }
 
-/// What the step at `at`, asking for `operation`, gives in `fields`, its fields other than `op` and `label`, as the
-/// operation's own reader reads them, with every bad input in `out`.
+/// The fields every step takes, whatever its operation.
+const EVERY_STEP: [&str; 2] = ["op", "label"];
+
+/// What the step at `at`, asking for `operation`, gives in `fields`, as the operation's own reader reads them, with
+/// every bad input in `out`: first each field that is neither every step's nor one the operation takes.
 pub(crate) fn read(
     at: &At,
     operation: Operation,
@@ -45,5 +48,8 @@ pub(crate) fn read(
     units: Units,
     out: &mut Vec<Report>,
 ) -> Args {
-    operation.does().and_then(|does| (does.read)(at, operation, fields, units, out)).unwrap_or_default()
+    let Some(does) = operation.does() else { return Args::None };
+    let own = fields.keys().filter(|name| !EVERY_STEP.contains(&name.as_str()));
+    unknown(at, own, operation.fields(), out);
+    (does.read)(at, operation, fields, units, out).unwrap_or_default()
 }

@@ -11,11 +11,11 @@ use occam_units::{Angle, Vec3};
 use serde_json::{Map, Value};
 
 use crate::args::Args;
-use crate::construct::given::{direction, gather, point};
+use crate::construct::given::{direction, point};
 use crate::construct::space::unit;
 use crate::operand::Operand;
 use crate::operation::Operation;
-use crate::read::{At, needed, number, object, text};
+use crate::read::{At, gather, needed, number, text};
 use crate::request::Units;
 
 /// How far past a whole turn an angle may be given and still be read as one, so that 360 degrees converted is a turn.
@@ -79,32 +79,28 @@ fn angle(at: &At, value: &Value, units: Units) -> Result<f64, Report> {
         .with_value(NamedValue::new("high", Quantity::Angle, TAU)))
 }
 
-/// The fields of an `extrude` step, at `at`, checking that it takes them.
+/// What an `extrude` step, at `at`, gives in `fields`.
 pub(crate) fn extrude_step(
     at: &At,
-    operation: Operation,
+    _: Operation,
     fields: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
 ) -> Option<Args> {
-    let value = Value::Object(fields.clone());
-    let fields = object(at, &value, operation.fields(), out)?;
     let face = gather(named(at, fields, "face"), out);
     let vector_at = at.field("vector");
     let vector = gather(needed(at, fields, "vector").and_then(|v| point(&vector_at, v, units)), out);
     Some(Args::Extrude(ExtrudeArgs { face: face?, vector: vector?, vector_at: vector_at.input() }))
 }
 
-/// The fields of a `revolve` step, at `at`, checking that it takes them.
+/// What a `revolve` step, at `at`, gives in `fields`.
 pub(crate) fn revolve_step(
     at: &At,
-    operation: Operation,
+    _: Operation,
     fields: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
 ) -> Option<Args> {
-    let value = Value::Object(fields.clone());
-    let fields = object(at, &value, operation.fields(), out)?;
     let profile = gather(named(at, fields, "profile"), out);
     let origin = gather(needed(at, fields, "origin").and_then(|v| point(&at.field("origin"), v, units)), out);
     let axis_at = at.field("axis");
