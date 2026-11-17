@@ -11,6 +11,7 @@ use occam_units::Vec3;
 use serde_json::{Value, json};
 
 use super::*;
+use crate::construct::tests::run;
 use crate::operand::Labels;
 use crate::request::{Request, default_tolerance};
 
@@ -22,13 +23,7 @@ fn request(steps: &Value) -> String {
 /// Reads `steps` and runs each on a new model, committing each: the model, or what refused it.
 fn made(steps: &Value) -> Result<Snapshot, Vec<Report>> {
     let request = Request::parse(&request(steps))?;
-    let mut snapshot = Snapshot::empty(default_tolerance().map_err(|r| vec![r])?);
-    for step in &request.steps {
-        let mut edit = snapshot.edit();
-        crate::execute(&mut edit, step, &Labels::default()).map_err(|r| vec![r])?;
-        snapshot = edit.commit(&Exec::serial())?.0;
-    }
-    Ok(snapshot)
+    Ok(run(&request, &request.steps)?.model)
 }
 
 /// A model's faces, edges, vertices and loops, and its genus.

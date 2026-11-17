@@ -5,31 +5,48 @@
 
 use occam_math::Exec;
 use occam_report::{Code, EntityKind, EntityRef, Input, Remedy, RemedyKind, Report, followed_remedy};
-use occam_topo::{Body, BodyKind, Edge, Face, Loop, Snapshot, Vertex, Wire};
+use occam_topo::{Body, BodyKind, Changes, Edge, Edit, Face, Loop, Snapshot, Vertex, Wire};
 use occam_units::Vec3;
 use serde_json::{Value, json};
 
-use crate::{Labels, Request, default_tolerance, execute};
+use crate::{Labels, Request, Step, default_tolerance, execute};
 
 /// What a request made: the model, and what each step made.
 pub(crate) type Built = (Snapshot, Vec<Option<EntityRef>>);
+
+/// What steps run on a new model left: the model, the labels, and what each step made and changed.
+pub(crate) struct Run {
+    pub model: Snapshot,
+    pub labels: Labels,
+    pub made: Vec<Option<EntityRef>>,
+    pub changes: Vec<Changes>,
+}
+
+/// Runs `steps` of `request` on a new model as the runner does, each through the runner's own step, with this build's
+/// `execute`: the first refusal, of a step or of its commit, is the result. The one step loop of this crate's tests.
+pub(crate) fn run(request: &Request, steps: &[Step]) -> Result<Run, Vec<Report>> {
+    let model = Snapshot::empty(request.tolerance.unwrap_or(default_tolerance().unwrap()));
+    let mut run = Run { model, labels: Labels::default(), made: Vec::new(), changes: Vec::new() };
+    for step in steps {
+        let work = |edit: &mut Edit| execute(edit, step, &run.labels);
+        let (model, made, changes) = occam_fixtures::step(&run.model, step.index, step.operation.name(), work)
+            .map_err(|(reports, _)| reports)?;
+        if let (Some(label), Some(entity)) = (&step.label, made) {
+            run.labels.insert(label, entity);
+        }
+        run.model = model;
+        run.made.push(made);
+        run.changes.push(changes);
+    }
+    Ok(run)
+}
 
 /// Runs the request `value` on a new model as the runner does: the first refusal, of the request or a step, is the
 /// result.
 pub(crate) fn build(value: &Value) -> Result<Built, Vec<Report>> {
     let request = Request::parse(&value.to_string())?;
-    let mut model = Snapshot::empty(request.tolerance.unwrap_or(default_tolerance().unwrap()));
-    let (mut labels, mut made) = (Labels::default(), Vec::new());
-    for step in &request.steps {
-        let mut edit = model.edit();
-        let one = execute(&mut edit, step, &labels).map_err(|report| vec![report])?;
-        model = edit.commit(&Exec::serial())?.0;
-        if let (Some(label), Some(entity)) = (&step.label, one) {
-            labels.insert(label, entity);
-        }
-        made.push(one);
-    }
-    Ok((model, made))
+    let run = run(&request, &request.steps)?;
+    Ok((run.model, run.made))
 }
 
 /// A request of `steps` in millimetres and degrees.

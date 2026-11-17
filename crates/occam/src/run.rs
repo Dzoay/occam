@@ -129,7 +129,7 @@ fn refused(model: Option<&Snapshot>, units: DisplayUnits, reports: Vec<Report>) 
 type Stepped = (Snapshot, Option<EntityRef>, Changes, Option<Measured>);
 
 /// What a step that failed gives: its reports, and its edit as it stood when it was refused.
-type Stopped = (Vec<Report>, Box<Edit>);
+pub type Stopped = (Vec<Report>, Box<Edit>);
 
 /// A step that failed: its index, its reports, and its edit as it stood when it was refused.
 pub(crate) type Refused = (u32, Vec<Report>, Box<Edit>);
@@ -172,6 +172,31 @@ pub(crate) fn run_request(
     Ran { model: Some(current), units, tolerance: Some(tolerance), done, failed, selection, highlight_cleared }
 }
 
+/// One step of a run, as the runner takes it: an edit of `model`, named as step `index` of its request doing
+/// `operation`, in which `work` is done, then committed on one thread. It gives the model the step leaves, what `work`
+/// gave, and what changed. The runner takes every step that changes a model through here, and so does a test that steps
+/// a model by hand (occam-fixtures hands it on), so that the model it tests is one a run would have made.
+///
+/// # Errors
+///
+/// What `work` reports, or every failure of the commit as [`Edit::try_commit`] gives them, with the edit as it stood.
+/// `model` is unchanged.
+pub fn step<T>(
+    model: &Snapshot,
+    index: u32,
+    operation: &str,
+    work: impl FnOnce(&mut Edit) -> Result<T, Report>,
+) -> Result<(Snapshot, T, Changes), Stopped> {
+    let mut edit = model.edit();
+    edit.name_step(index, operation);
+    let made = match work(&mut edit) {
+        Ok(made) => made,
+        Err(report) => return Err((vec![report], Box::new(edit))),
+    };
+    let (next, changes) = edit.try_commit(&Exec::serial())?;
+    Ok((next, made, changes))
+}
+
 /// Does `step` on `model` and commits it, or, for a measure, which changes nothing, measures `model`; if it fails, gives
 /// its reports and its edit as it stood.
 fn one(
@@ -186,13 +211,8 @@ fn one(
             Err(report) => Err((vec![report], Box::new(model.edit()))),
         };
     }
-    let mut edit = model.edit();
-    edit.name_step(step.index, step.operation.name());
-    let made = match execute(&mut edit, step, labels) {
-        Ok(made) => made,
-        Err(report) => return Err((vec![report], Box::new(edit))),
-    };
-    let (next, changes) = edit.try_commit(&Exec::serial())?;
+    let (next, made, changes) =
+        self::step(model, step.index, step.operation.name(), |edit| execute(edit, step, labels))?;
     Ok((next, made, changes, None))
 }
 
