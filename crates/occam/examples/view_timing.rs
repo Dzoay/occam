@@ -9,7 +9,10 @@
 //!   three: the edges sampled, the faces meshed, the merge and the watertight check;
 //! - `save <target> <file>`: the model in the native format's binary encoding, for `occam view`;
 //! - `open <file>`: a saved model read, measured and checked, as a page's workers each open it, on one thread and six;
-//! - `digest <file>`: a saved model's digest, as a pick in the page computes it, timed five times;
+//! - `digest <file>`: a saved model's digest, as a mesh worker computes it when it makes its picker, timed five times;
+//! - `pick <file>`: picks through a session, as a mesh worker makes them, on one thread at the page's limits: the
+//!   first, which meshes the model whole, and each of the next twenty timed alone, down onto its triangles as
+//!   `gates perf` picks;
 //! - `requests`: construction's requests that `gates perf` times, and its polygon of 1,000 edges, by name, for the
 //!   editing worker's timing in the browser.
 #![allow(clippy::print_stdout, clippy::print_stderr, reason = "a command-line tool prints")]
@@ -21,14 +24,14 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Instant;
 
-use occam::mesh_workloads::{P9_SEED, face_count, quality, synthetic};
-use occam::{Exec, Limits};
+use occam::mesh_workloads::{P9_SEED, face_count, perf_mesh, pick_rays, quality, synthetic};
+use occam::{Exec, Limits, Pick, Session};
 use occam_report::{DisplayUnits, Report};
 use occam_topo::Snapshot;
 use occam_units::{Angle, Length};
 
 const USAGE: &str = "usage: view_timing build <target> | quality <target> <deflection> | \
-                     scale <target> <deflection> <repeats> <threads>... | phases <target> <deflection> <threads>... | save <target> <file> | open <file> | digest <file> | requests";
+                     scale <target> <deflection> <repeats> <threads>... | phases <target> <deflection> <threads>... | save <target> <file> | open <file> | digest <file> | pick <file> | requests";
 
 /// P9's angular limit.
 const ANGLE: f64 = 0.35;
@@ -202,6 +205,31 @@ fn digest(file: &str) -> Result<String, String> {
     ))
 }
 
+/// How many picks `pick` times after the first.
+const PICKS: usize = 20;
+
+fn pick(file: &str) -> Result<String, String> {
+    let bytes = std::fs::read(file).map_err(|e| format!("{file}: {e}"))?;
+    let mut session = Session::open(&bytes, &exec(6)?).map_err(|reports| said(&reports))?;
+    let model = session.model().ok_or("no model")?;
+    let faces = face_count(model);
+    let rays = pick_rays(&perf_mesh(&exec(6)?, model).map_err(|report| said(&[report]))?);
+    let step = (rays.len() / (PICKS + 1)).max(1);
+    let mut times = Vec::new();
+    for ray in rays.iter().step_by(step).take(PICKS + 1) {
+        let (from, to) = (ray.origin, ray.direction);
+        let asked = Pick { from: [from.x, from.y, from.z], direction: [to.x, to.y, to.z], tolerance: 0.01 };
+        let start = Instant::now();
+        session.pick(&Exec::serial(), 0.1, ANGLE, asked).map_err(|reports| said(&reports))?;
+        times.push(start.elapsed().as_secs_f64() * 1e3);
+    }
+    let first = times.first().copied().unwrap_or_default();
+    let (least, median) = least_and_median(times.split_off(1));
+    Ok(format!(
+        r#"{{"mode":"pick","faces":{faces},"first_ms":{first:.1},"picks":{PICKS},"least_ms":{least:.3},"median_ms":{median:.3}}}"#
+    ))
+}
+
 fn requests() -> String {
     use occam::operation_workloads::{MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded};
     let polygon = polygon_extruded(POLYGON_CORNERS);
@@ -249,6 +277,7 @@ fn run(args: &[String]) -> Result<String, String> {
         ["open", file] => open(file),
         ["requests"] => Ok(requests()),
         ["digest", file] => digest(file),
+        ["pick", file] => pick(file),
         _ => Err(USAGE.to_string()),
     }
 }

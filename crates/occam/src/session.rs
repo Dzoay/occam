@@ -158,15 +158,12 @@ impl Session {
     /// what names the model a page shows.
     #[must_use]
     pub fn digest(&self) -> Option<u64> {
-        self.model.as_ref().map(Snapshot::digest)
+        self.model.as_ref().map(digest_of)
     }
 
     /// The model to answer from: an empty one before any request has made one.
     fn answering(&self) -> Result<Cow<'_, Snapshot>, Report> {
-        match &self.model {
-            Some(model) => Ok(Cow::Borrowed(model)),
-            None => default_tolerance().map(|tolerance| Cow::Owned(Snapshot::empty(tolerance))),
-        }
+        answering(self.model.as_ref())
     }
 
     /// The model meshed on `exec` to a chordal `deflection` in millimetres and an `angle` in radians, with its buffers
@@ -276,14 +273,22 @@ impl Session {
         Ok(picking.samples(edge))
     }
 
-    /// The model, and its mesh at the limits made ready to pick: the one kept if it was made to them.
-    fn picking(&mut self, exec: &Exec, deflection: f64, angle: f64) -> Result<(Snapshot, &Picking), Vec<Report>> {
+    /// The model, and its mesh at the limits made ready to pick: the one kept if it was made to them, else one made
+    /// now with the model's digest, which is computed only then. What is kept is dropped when a run changes the model.
+    fn picking(
+        &mut self,
+        exec: &Exec,
+        deflection: f64,
+        angle: f64,
+    ) -> Result<(Cow<'_, Snapshot>, &Picking), Vec<Report>> {
         let limits = limits(deflection, angle).map_err(|report| vec![report])?;
-        let model = self.answering().map_err(|report| vec![report])?.into_owned();
-        let kept = self.picking.take().filter(|picking| picking.limits == limits);
-        let digest = self.digest();
-        let made = || Box::new(Picking::new(limits, digest, occam_mesh::mesh(exec, &model, limits)));
-        let picking = self.picking.insert(kept.unwrap_or_else(made));
+        let Self { model: held, picking, .. } = self;
+        let held = &*held;
+        let model = answering(held.as_ref()).map_err(|report| vec![report])?;
+        let kept = picking.take().filter(|picking| picking.limits == limits);
+        let made =
+            || Box::new(Picking::new(limits, held.as_ref().map(digest_of), occam_mesh::mesh(exec, &model, limits)));
+        let picking = picking.insert(kept.unwrap_or_else(made));
         Ok((model, picking))
     }
 
@@ -315,6 +320,33 @@ impl Session {
     pub fn adjacent(&self, ids: &[EntityRef]) -> Vec<PerId<Vec<EntityRef>>> {
         self.describe(ids).into_iter().map(|(id, described)| (id, described.map(|d| d.adjacent))).collect()
     }
+}
+
+/// `model`, or an empty one where there is none yet.
+fn answering(model: Option<&Snapshot>) -> Result<Cow<'_, Snapshot>, Report> {
+    match model {
+        Some(model) => Ok(Cow::Borrowed(model)),
+        None => default_tolerance().map(|tolerance| Cow::Owned(Snapshot::empty(tolerance))),
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static DIGESTS: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+}
+
+/// `model`'s digest, counted in tests, so that a test can show which calls compute one: on a large model it takes as
+/// long as many picks.
+fn digest_of(model: &Snapshot) -> u64 {
+    #[cfg(test)]
+    DIGESTS.with(|digests| digests.set(digests.get().saturating_add(1)));
+    model.digest()
+}
+
+/// How many digests sessions have computed on this thread.
+#[cfg(test)]
+fn digests() -> usize {
+    DIGESTS.with(core::cell::Cell::get)
 }
 
 /// `model` in `encoding`.
