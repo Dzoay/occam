@@ -214,7 +214,7 @@ impl Meshed {
 /// and radians.
 #[wasm_bindgen]
 #[must_use]
-#[allow(clippy::too_many_arguments, reason = "JavaScript passes flat numbers, so the boundary stays free of objects")]
+#[expect(clippy::too_many_arguments, reason = "JavaScript passes flat numbers, so the boundary stays free of objects")]
 pub fn distance(
     from_x: f64,
     from_y: f64,
@@ -238,7 +238,6 @@ pub fn distance(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::arithmetic_side_effects, reason = "small counts in tests")]
 
     use occam::{Code, Report};
 
