@@ -144,14 +144,18 @@ fn shape(rng: &mut SplitMix, kind: u32) -> Shape {
 }
 
 /// P9's parts for `target` faces from `seed`: drawn until P9 would have counted at least `target` faces, each on a
-/// grid 60 mm apart, 200 to a row, turned about +Z. Each part draws its kind, then its turn, then its sizes.
+/// grid 60 mm apart, 200 to a row, turned about +Z. Each part draws its kind, then its turn, then its sizes. Every part
+/// counts at least one face, so the target is reached within `target` parts: drawing stops there whatever the count
+/// says, so that a count gone wrong cannot draw without end.
 pub(crate) fn parts(target: usize, seed: u64) -> Vec<Part> {
     let mut rng = SplitMix(seed);
     let (mut out, mut faces) = (Vec::new(), 0_usize);
-    let mut place = 0_u32;
-    while faces < target {
+    for place in 0..target {
+        if faces >= target {
+            break;
+        }
+        let place = u32::try_from(place).unwrap_or(u32::MAX);
         let origin = [60.0 * f64::from(place % 200), 60.0 * f64::from(place / 200), 0.0];
-        place = place.saturating_add(1);
         let kind = rng.int(0, 99);
         let turn = rng.range(0.0, TAU);
         let shape = shape(&mut rng, kind);
