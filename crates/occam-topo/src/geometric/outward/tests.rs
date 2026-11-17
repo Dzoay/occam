@@ -65,8 +65,6 @@ fn each_axis_is_tried_along_it_and_then_against_it_x_first() {
 
 #[test]
 fn of_two_numbers_or_places_as_far_the_first_is_kept() {
-    assert_eq!((larger(1.0, 2.0), larger(2.0, 1.0), smaller(1.0, 2.0), smaller(2.0, 1.0)), (2.0, 2.0, 1.0, 1.0));
-    assert!(larger(0.0, -0.0).is_sign_positive() && smaller(-0.0, 0.0).is_sign_negative());
     let place = |slot, reach| Furthest {
         place: Place::Vertex(Id::new(slot, NonZeroU32::MIN)),
         point: Vec3::new(reach, 0.0, 0.0),

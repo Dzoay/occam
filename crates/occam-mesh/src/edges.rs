@@ -15,13 +15,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use occam_geom::Curve;
-use occam_math::{Exec, Grain};
+use occam_math::{Exec, Grain, larger, smaller};
 use occam_report::{Code, Fault, NamedValue, Remedy, RemedyKind, Report};
 use occam_topo::{Edge, Face, Id, Kind, Snapshot, View};
 use occam_units::{Length, ParamKind, Point, Vec3, World};
 
 use crate::curvature;
-use crate::limits::{Limits, higher, lower};
+use crate::limits::Limits;
 
 /// One edge's samples, which every face that uses it is meshed against.
 #[derive(Clone, Debug, PartialEq)]
@@ -138,7 +138,7 @@ fn finest(model: &Snapshot, faces: &[Id<Face>], bends: &[f64]) -> Vec<(Id<Edge>,
     for (&face, &bend) in faces.iter().zip(bends) {
         for edge in model.view(face).map_or_default(View::<Face>::edges) {
             let most = edges.entry(edge).or_insert(0.0);
-            *most = higher(*most, bend);
+            *most = larger(*most, bend);
         }
     }
     edges.into_iter().collect()
@@ -260,7 +260,7 @@ impl Criteria {
 /// How far `p` is from the segment from `a` to `b`: from `a` itself where they are one point.
 fn off_chord(p: Vec3, a: Vec3, b: Vec3) -> f64 {
     let along = b - a;
-    let at = higher(0.0, lower(1.0, (p - a).dot(along) / along.dot(along)));
+    let at = larger(0.0, smaller(1.0, (p - a).dot(along) / along.dot(along)));
     (p - (a + along * at)).norm()
 }
 

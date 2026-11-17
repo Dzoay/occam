@@ -15,6 +15,7 @@
 use core::cell::Cell;
 
 use occam_geom::{ParamCurve, Surface};
+use occam_math::smaller;
 use occam_report::{Code, EntityRef, Fault, Report};
 use occam_topo::{EdgeUse, Face, Id, Loop, Snapshot, View};
 use occam_units::{UvPoint, Vec3};
@@ -201,7 +202,7 @@ pub(super) fn sums(patches: &[Patch<'_>], asked: Asked, budget: &Budget) -> Resu
     let outer = shared(asked.tolerance, patches.iter().flat_map(|p| &p.loops).map(Vec::len).sum());
     let mut total = Integral::ZERO;
     for patch in patches {
-        let start = patch.loops.iter().flatten().flat_map(|p| p.samples()).map(UvPoint::u).fold(f64::INFINITY, least);
+        let start = patch.loops.iter().flatten().flat_map(|p| p.samples()).map(UvPoint::u).fold(f64::INFINITY, smaller);
         let mut face = Integral::ZERO;
         for (k, pieces) in patch.loops.iter().enumerate() {
             let mut whole = Integral::ZERO;
@@ -234,11 +235,6 @@ fn run(points: &[UvPoint]) -> f64 {
 /// share over the run, so that `G`'s error times how far `v` runs is a quarter of it; the share where `v` does not run.
 fn along(share: Sums, run: f64) -> Sums {
     scaled(share, if run > 0.0 { 0.25 / run } else { 1.0 })
-}
-
-/// The lesser of two numbers, the first if they are equal.
-fn least(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
 }
 
 #[cfg(test)]

@@ -55,7 +55,6 @@ exclude_re = [
     "replace < with <= in inside$",
     "replace > with >= in padded$",
     "foot\\.rs:\\d+:\\d+: replace > with >= in within$",
-    "foot\\.rs:\\d+:\\d+: replace < with <= in within$",
     "replace > with >= in inside$",
     # A point as near as the best found is as good a foot: taking it or keeping the best gives the same distance.
     "replace < with <= in nearer$",
@@ -77,7 +76,7 @@ exclude_re = [
     "replace > with >= in free$",
     "replace < with <= in free$",
     # Where `a` is 0, `det` is `-b * b`, never above 0, so the pivot test `a > 0` already fails on `det`.
-    "foot\\.rs:57:16: replace > with >= in newton$",
+    "foot\\.rs:58:16: replace > with >= in newton$",
     # The default is the empty slice, and so is this mutant: the same function, which no test can tell apart.
     "replace Parametric::degeneracies -> &\\[Degeneracy\\] with Vec::leak\\(Vec::new\\(\\)\\)",
     # occam-math's exp.rs, by line: an edit there moves them, and the gate then names the mutant again. Below 2^-54 in
@@ -93,12 +92,11 @@ exclude_re = [
     # as both paths of tools/determinism/exp.py show.
     "exp\\.rs:260:27: replace < with <= in expm1_one$",
     "exp\\.rs:263:13: replace < with <= in expm1_one$",
-    # occam-geom. Where the two sides of a comparison are equal, both branches give the same value: the smaller or
-    # larger of two equal numbers, an end and a parameter at it, an angle at the start of its turn, and equal halves of a
+    # occam-geom. Where the two sides of a comparison are equal, both branches give the same value: two equal numbers
+    # in either order, an end and a parameter at it, an angle at the start of its turn, and equal halves of a
     # span. In `refine`, a zero rate of change is the root, which Newton's step then leaves where it is, and a step onto
     # an end of the bracket, where the rate's sign is known, carries on from there as a step inside it would.
-    "(turn|hyperbola)\\.rs:\\d+:\\d+: replace > with >= in larger$",
-    "turn\\.rs:\\d+:\\d+: replace < with <= in (smaller|above)$",
+    "turn\\.rs:\\d+:\\d+: replace < with <= in above$",
     "hyperbola\\.rs:\\d+:\\d+: replace < with <= in smaller_larger$",
     "domain\\.rs:\\d+:\\d+: replace (< with <=|> with >=) in ParamRange::clamp$",
     "support\\.rs:\\d+:\\d+: replace > with >= in span$",
@@ -243,21 +241,14 @@ exclude_re = [
     # `atan2` gives of two of its products, which its length scales alike, so only its direction counts. Its length
     # squared instead of 1 moves that angle by roundings alone.
     "primitive/polyhedron\\.rs:66:62: replace / with \\* in face_frame$",
-    # The measure step's (construction.measure). Ties, which give the same value either way: the smaller and the larger
-    # of two numbers, and a loop whose region in its parameters has no area, which counts nothing either way round.
-    "occam-ops/src/measure\\.rs:\\d+:\\d+: replace > with >= in larger$",
-    "measure/extent\\.rs:\\d+:\\d+: replace < with <= in smaller$",
-    "measure/extent\\.rs:\\d+:\\d+: replace > with >= in larger$",
+    # The measure step's (construction.measure). A tie, which gives the same value either way: a loop whose region in
+    # its parameters has no area, which counts nothing either way round.
     "measure/mass\\.rs:\\d+:\\d+: replace < with <= in sums$",
-    # Where each `G` starts along `u`: any start gives the same integral round a closed loop, as `dv` adds up to nothing
-    # round it, so the least `u` the face reaches, which keeps each `G` within the surface's domain, is a choice.
-    "measure/mass\\.rs:\\d+:\\d+: replace least -> f64 with ",
-    "measure/mass\\.rs:\\d+:\\d+: replace < with <= in least$",
     # A direction exactly at the threshold of lying along a torus's axis, which reaches as far round whole circles.
     "measure/extent\\.rs:\\d+:\\d+: replace > with >= in turning$",
     # By line. A period from a range's start and end: every analytic family's angle runs from 0, as `turn()` gives it,
     # where its end less its start is its end plus its start.
-    "measure/extent\\.rs:112:100: replace - with \\+ in interior$",
+    "measure/extent\\.rs:103:100: replace - with \\+ in interior$",
     # By line. The rule's nodes come in pairs either side of the middle, each pair with one weight, so taking each node
     # the other side of the middle sums the same evaluations in another order.
     "measure/quadrature\\.rs:73:37: replace \\+ with - in rule$",
@@ -269,7 +260,7 @@ exclude_re = [
     "affine\\.rs:85:67: replace > with >= in Affine::stretch$",
     # The orientation check's (the construction review's first finding). By line. A corner that turns by exactly
     # nought, of either sign, is a cusp taken either way: as no angle or as a whole turn, each within the cusp's band.
-    "geometric/outward\\.rs:444:25: replace > with >= in spanned$",
+    "geometric/outward\\.rs:434:25: replace > with >= in spanned$",
     # A face's pieces in its plane. Ties, which give the same distance either way: the parameter of a point's foot on a
     # segment exactly 1, or exactly nought of either sign, taken as itself or as that end. The foot then differs at most
     # in a nought's sign, which the distance squares away.
@@ -283,7 +274,7 @@ exclude_re = [
     # multiplying by it. The same sign, as clear, and the same angle to within two units in its last place, which is as
     # well as the sum of angles is known: in the suites the part is exactly 1 or -1 at 12 of 14 such places, 1 - 2^-53
     # at the other two.
-    "geometric/outward\\.rs:374:40: replace \\* with / in facing$",
+    "geometric/outward\\.rs:364:40: replace \\* with / in facing$",
     # A face's loops. By line. The remainder of a clearance by 4 for its quarter, as the sag a winding cuts arcs to.
     # Below 4 that is the whole clearance, and a chord strays from its arc by less than the sag (1 - cos x < x^2 / 2),
     # so it still never reaches the point, which is at least that far from the loop; from 4 up the arcs are cut finer.
@@ -297,10 +288,6 @@ exclude_re = [
     # Only a circle in the plane has its curve in the plane's parameters asked for, so its axes' normal is the plane's or
     # the opposite: their product is 1 or -1 within rounding, never 0.
     "construct/space\\.rs:\\d+:\\d+: replace < with <= in Flatland::pcurve$",
-    # The mesh's limits (view.edges). Ties, which give the same value either way: the lower and the higher of two equal
-    # numbers, from the one pair of helpers every bound, box and clamp of occam-mesh is decided by.
-    "occam-mesh/src/limits\\.rs:\\d+:\\d+: replace < with <= in lower$",
-    "occam-mesh/src/limits\\.rs:\\d+:\\d+: replace > with >= in higher$",
     # The closed forms' (intersection.closed). By line. A quotient's sign is the product's; `way` is 1 or -1, so
     # dividing by it is multiplying by it; and a cone's two rulings through its apex in a plane less steep than its
     # side are each other's mirror, both made, so taking the part across away instead of adding it swaps them.

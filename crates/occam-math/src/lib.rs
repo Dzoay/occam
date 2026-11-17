@@ -22,6 +22,7 @@ mod lanes;
 mod mask;
 mod predicate;
 mod real;
+mod smaller;
 mod splitmix;
 pub mod stream;
 #[cfg(test)]
@@ -42,4 +43,5 @@ pub use lanes::Lanes;
 pub use mask::{LaneMask, Mask};
 pub use predicate::{Predicate, Ring, Side, Tally, Verdict, decide_computed, decide_stored};
 pub use real::Real;
+pub use smaller::{larger, smaller};
 pub use trig::{atan2, cos, sin, sin_cos};

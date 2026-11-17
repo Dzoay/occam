@@ -6,10 +6,10 @@
 //! rounding puts a point on one side of a border or the other moves the answer by a rounding at most.
 
 use occam_geom::Surface;
+use occam_math::{larger, smaller};
 use occam_units::{Point, UvPoint, Vec3};
 
 use crate::faces::FaceMesh;
-use crate::limits::{higher, lower};
 
 /// The point of the triangle `a`, `b`, `c` closest to `p`.
 fn closest(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
@@ -54,7 +54,7 @@ const THIN: f64 = 1.0 / 8192.0;
 /// longest side squared. One with no area, or whose numbers are not, is not.
 fn thick(a: Vec3, b: Vec3, c: Vec3) -> bool {
     let twice = (b - a).cross(c - a).norm();
-    let longest = higher(higher((b - a).dot(b - a), (c - b).dot(c - b)), (a - c).dot(a - c));
+    let longest = larger(larger((b - a).dot(b - a), (c - b).dot(c - b)), (a - c).dot(a - c));
     twice > THIN * longest
 }
 
@@ -77,13 +77,13 @@ fn sliver(p: Vec3, [a, b, c]: [Vec3; 3]) -> f64 {
     if over && height.is_finite() {
         return height;
     }
-    [(a, b), (b, c), (c, a)].into_iter().map(|(s, t)| to_segment(p, s, t)).fold(f64::INFINITY, lower)
+    [(a, b), (b, c), (c, a)].into_iter().map(|(s, t)| to_segment(p, s, t)).fold(f64::INFINITY, smaller)
 }
 
 /// How far `p` is from the segment from `a` to `b`: from `a` itself where they are one point.
 fn to_segment(p: Vec3, a: Vec3, b: Vec3) -> f64 {
     let along = b - a;
-    let at = higher(0.0, lower(1.0, (p - a).dot(along) / along.dot(along)));
+    let at = larger(0.0, smaller(1.0, (p - a).dot(along) / along.dot(along)));
     (p - (a + along * at)).norm()
 }
 
@@ -116,7 +116,7 @@ pub fn deviation(mesh: &FaceMesh, surface: &dyn Surface) -> f64 {
         let [Some(a), Some(b), Some(c)] = triangle.map(vertex) else { continue };
         let (corners, flat) = ([a.1, b.1, c.1], [a.0, b.0, c.0].map(Point::to_vec3));
         for at in grid(STEPS) {
-            furthest = higher(furthest, distance(surface.point(between(corners, at, STEPS)).to_vec3(), flat));
+            furthest = larger(furthest, distance(surface.point(between(corners, at, STEPS)).to_vec3(), flat));
         }
     }
     furthest

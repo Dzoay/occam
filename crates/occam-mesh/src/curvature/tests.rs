@@ -3,6 +3,7 @@
 use core::f64::consts::{FRAC_PI_2, PI};
 
 use occam_geom::{Cylinder, Jet1, Plane, Sphere, SplineSurface};
+use occam_math::larger;
 use occam_units::{Length, Placement, Tangent, Vec3};
 
 use super::*;
@@ -35,7 +36,7 @@ fn a_cylinder_bends_by_the_inverse_of_its_radius_and_a_plane_not_at_all() {
 /// The largest curvature read on the grid's points along `v = 0`, where P9's patch collapses.
 fn on_the_row(surface: &dyn Surface) -> f64 {
     let row = grid(patch((0.0, 0.0), (1.0, 1.0))).into_iter().take(GRID);
-    row.map(|uv| principal(&surface.second(uv))).fold(0.0, higher)
+    row.map(|uv| principal(&surface.second(uv))).fold(0.0, larger)
 }
 
 #[test]

@@ -11,10 +11,10 @@ use std::f64::consts::{FRAC_PI_2, TAU};
 use std::sync::Arc;
 
 use occam_geom::{BsplineSurface, Curve, Cylinder, Scratch, Sphere, SplineSurface, Surface};
-use occam_math::sin_cos;
+use occam_math::{sin_cos, smaller};
 use occam_units::{Angle, Bounds, Length, Point, Tolerance, Vec3};
 
-use crate::closed::tests::{O, X, Z, circle, cylinder, from_curve, nearer, placed, plane, sphere, v};
+use crate::closed::tests::{O, X, Z, circle, cylinder, from_curve, placed, plane, sphere, v};
 use crate::trace_tests::{mm, moved, nurbs, placed as turned};
 use crate::{Budget, Closed, Contact, Hybrid, Methods, Pencil, Section, SectionCurve, Tracer};
 
@@ -235,12 +235,12 @@ fn along(curve: &dyn Curve, component: &[Vec3]) -> Vec<Vec3> {
 
 /// How far `p` is from the nearest point of `truth`.
 fn off(truth: &[Vec<Vec3>], p: Vec3) -> f64 {
-    truth.iter().flatten().map(|q| (*q - p).norm()).fold(f64::INFINITY, nearer)
+    truth.iter().flatten().map(|q| (*q - p).norm()).fold(f64::INFINITY, smaller)
 }
 
 /// Whether a curve of `got` runs off `case`'s true section, by more than P5's tolerance and half the truth's spacing.
 fn spurious(case: &Case, got: &Section) -> bool {
-    let tol = case.truth.iter().map(|component| near(component)).fold(f64::INFINITY, nearer) + 0.05;
+    let tol = case.truth.iter().map(|component| near(component)).fold(f64::INFINITY, smaller) + 0.05;
     let off_truth = |c: &SectionCurve| {
         let first = case.truth.first().map_or_default(Vec::as_slice);
         along(c.curve.as_ref(), first).iter().any(|p| off(&case.truth, *p) > tol)
