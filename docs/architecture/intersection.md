@@ -65,7 +65,7 @@ flowchart TD
   one & both --> drop["Drop a part whose box misses,<br/>or where the form keeps one sign"]
   drop --> leaf["Leaves: Newton from the middle,<br/>at most one start each"]
   leaf -->|"gaps all within the band"| over[("Overlap, reported")]
-  leaf --> tube{"In the tube of<br/>a curve found?"}
+  leaf --> tube{"In the tube of a curve<br/>found, and on it?"}
   tube -->|"no"| trace["Trace in rounds of 32"] --> fit["Fit"]
   tube -->|"yes"| skip(["Skipped"])
 ```
@@ -78,7 +78,11 @@ flowchart TD
   its analytic twin: `intersect.incomplete` for `surfaces-coincide`, not curves. A part halved as far as it goes and
   still larger than a leaf is `intersect.incomplete` for `budget-spent`.
 - **The tube** about the curves found is twice each chord's sag wide, and the square root of the band about a touch. A
-  start inside it is not traced, and a trace whose ends and middle all lie in it is dropped. Rounds take every so many
+  start inside it is on the found curve only where a landing confirms it: the corrector, from the cubic through the
+  chord's two stations along the curve at each, onto the plane across the start's curve, lands on the start within the
+  band over the sine between the surfaces. Then it is not traced, and a trace whose ends and middle are all confirmed is
+  dropped. The cubic strays from the curve by a term of the fourth order in the step; from a station along its tangent
+  the corrector starts as far off as the chord sags, and lands on a second curve that near. Rounds take every so many
   start points, so a round's points are far apart.
 - **Near a tangency** the leaves and traces work as [below](#what-the-tolerance-cannot-tell-apart): projections where
   Newton's method loses rank, a mirrored start for a second close curve, branch points cut, and every touch a contact by
@@ -120,7 +124,11 @@ flowchart LR
   within the band over the sine between the surfaces of its start, the curve's own resolution there. Touches within
   each other's bounds are one contact.
 - **Not done here:** the hybrid does not trace a tangency along a curve, which is one `BelowResolution` with an infinite
-  bound; and its tube, twice the tracer's sag wide, is a resolution of its own, below which a second curve is lost.
+  bound. Its tube is no longer a resolution of its own: the two lines a ridge's sides cut a plane in are both found
+  from 1.5e-7 apart, at a band of 1e-7. Two remain. A leaf gives one start, so two curves that cross square through the
+  same leaves, closer than a leaf, give one, and the second is lost: the ridge's lines 1e-3 apart, its crest inside a
+  leaf. And a trace's step strays from a curve by about four times its sag where it bends, so two curves closer than
+  that can be stepped between, which a loop reports as stalled.
 
 ## Edge against surface
 
