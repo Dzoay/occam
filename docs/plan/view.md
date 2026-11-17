@@ -34,7 +34,8 @@ x86-64 and on wasm32 baseline and simd128. In headless Chromium, against `occam 
 **Exit (goal):** [P9's](../evidence/2026-11-09-p9.md) quality and scaling tables on the real mesher; the mesh pool timed
 in the browser beside [P10's](../evidence/2026-11-09-p10.md); the time from a run's save to the page's redraw; and a
 pick timed on real GPUs in Chromium and Firefox within 16.7 ms on P9's 10,001-face model, a
-[goal](../decisions/2026-11-13-gpu-figures-are-goals.md) no measurement grounds.
+[goal](../decisions/2026-11-13-gpu-figures-are-goals.md) no measurement grounds (timed on
+[a GTX 1080 Ti](../evidence/2026-11-16-view-timing.md) and [the laptop's Iris Xe MAX](../evidence/2026-11-17-view-pick-laptop.md)).
 [Write-through](../decisions/2026-11-14-write-through-after-the-first-release.md) and its figures wait for the editing
 tools.
 
