@@ -30,6 +30,10 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 "#;
 
+/// What makes the build that checks a copy say why it compiles what it does: nextest hands it to cargo, which then
+/// gives its reason before each crate, and the gate's finding carries the first.
+const WHY: &str = "--cargo-verbose";
+
 /// What a run's directory is named after, beside its process's number, until the run holds its lock: no sweep takes
 /// a name that ends so for a run's directory.
 const CLAIMING: &str = ".claiming";
@@ -441,7 +445,7 @@ impl Warm {
         if !ok {
             return Err(failed("mutants.copy-failed", "cp", &["-a", "--reflink=auto"], &errors));
         }
-        let (ok, built, errors) = captured(self.command(env!("CARGO"), &copy).args(copies.build), "cargo")?;
+        let (ok, built, errors) = captured(self.command(env!("CARGO"), &copy).args(copies.build).arg(WHY), "cargo")?;
         if !ok {
             return Err(failed("mutants.copy-failed", "cargo", copies.build, &errors));
         }

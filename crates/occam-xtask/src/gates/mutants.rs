@@ -260,15 +260,31 @@ fn once(listed: &str, tested: &Lists) -> Vec<Finding> {
     stopped.into_iter().chain(finding("mutants.tested-twice", &twice, message, remedy)).collect()
 }
 
+/// `line` without the styling cargo gives the word it starts with where colour is forced, as CI forces it: each
+/// `ESC [ … m`. A sequence cut short is dropped.
+fn plain(line: &str) -> String {
+    let (mut out, mut rest) = (String::new(), line);
+    while let Some((before, styled)) = rest.split_once("\u{1b}[") {
+        out.push_str(before);
+        rest = styled.split_once('m').map_or("", |(_, after)| after);
+    }
+    out + rest
+}
+
 /// Refuses a copy in which the build of the unmutated tests, whose `output` this is, compiled anything: the copy was
-/// to find them built, and a copy that does not would build everything, each mutant's time with it.
+/// to find them built, and a copy that does not would build everything, each mutant's time with it. The finding
+/// carries cargo's reason for the first crate, which that build is asked for (`--cargo-verbose`).
 fn fresh(output: &str) -> Result<(), Finding> {
-    let compiled: Vec<&str> = lines(output).filter_map(|line| line.strip_prefix("Compiling ")).collect();
+    let said: Vec<String> = output.lines().map(|line| plain(line).trim().to_string()).collect();
+    let compiled: Vec<&str> = said.iter().filter_map(|line| line.strip_prefix("Compiling ")).collect();
     let Some(first) = compiled.first() else {
         return Ok(());
     };
-    let message = format!("a copy of the built tree rebuilt {} crates, the first: {first}", compiled.len());
-    let remedy = "check that `cp -a` keeps file times where TMPDIR is, which cargo judges a build fresh by";
+    let why = said.iter().find_map(|line| line.strip_prefix("Dirty "));
+    let why = why.map_or_else(String::new, |reason| format!("; cargo's reason: {reason}"));
+    let message = format!("a copy of the built tree rebuilt {} crates, the first: {first}{why}", compiled.len());
+    let remedy = "make what cargo's reason names the same in a copy as in the tree it was copied from: a build script \
+                  names its paths from its crate's directory, and `cp -a` keeps file times where TMPDIR is";
     Err(Finding::new("mutants.copy-cold", "", message, remedy))
 }
 
@@ -798,7 +814,28 @@ mod tests {
         assert!(
             found.message.contains("2 crates") && found.message.ends_with("occam-math v0.0.0 (/x/crates/occam-math)")
         );
-        assert!(found.remedy.contains("file times"), "{found:?}");
+        assert!(found.remedy.contains("file times") && found.remedy.contains("build script"), "{found:?}");
+        // Asked to say why, cargo does, before the crate: the finding carries the first reason.
+        let why = "occam-cli v0.0.0 (/x/crates/occam-cli): the rerun-if-changed instructions changed";
+        let told = format!(
+            "       Fresh occam-math v0.0.0 (/x/crates/occam-math)\n       Dirty {why}\n   Compiling occam-cli v0.0.0 \
+             (/x/crates/occam-cli)\n     Running `rustc --crate-name occam`\n       Dirty occam v0.0.0 (/x): later\n{built}"
+        );
+        let found = fresh(&told).unwrap_err();
+        assert!(found.message.contains("1 crates, the first: occam-cli v0.0.0 (/x/crates/occam-cli)"), "{found:?}");
+        assert!(found.message.ends_with(&format!("; cargo's reason: {why}")), "{found:?}");
+        // Where colour is forced, as CI forces it, each word cargo starts a line with is styled: still a build.
+        let styled = "\u{1b}[1m\u{1b}[92m   Compiling\u{1b}[0m occam v0.0.0 (/x)\n\u{1b}[1m\u{1b}[92m    Finished\u{1b}[0m `mutants`\n";
+        let found = fresh(styled).unwrap_err();
+        assert!(found.message.ends_with("rebuilt 1 crates, the first: occam v0.0.0 (/x)"), "{found:?}");
+        assert_eq!(
+            fresh(
+                "\u{1b}[1m\u{1b}[92m       Fresh\u{1b}[0m occam v0.0.0 (/x)\n\u{1b}[1m\u{1b}[92m    Finished\u{1b}[0m\n"
+            ),
+            Ok(())
+        );
+        // A sequence cut short styles nothing and hides nothing before it.
+        assert!(fresh("Compiling occam v0.0.0 (/x) \u{1b}[1").unwrap_err().message.ends_with("occam v0.0.0 (/x)"));
         // Only cargo's own line: a test or a path that says the word is not a build.
         assert_eq!(fresh("  Executable tests/Compiling.rs\nwarning: not Compiling anything\n"), Ok(()));
         assert!(fresh("Compiling occam v0.0.0 (/x)").is_err());
