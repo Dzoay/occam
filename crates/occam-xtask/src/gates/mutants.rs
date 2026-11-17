@@ -8,6 +8,12 @@
 //! no copy builds from nothing, and runs `cargo mutants --in-place` in every copy at once, each on its own shard
 //! (`docs/decisions/2026-11-14-mutants-keep-the-whole-workspace.md`). The copies are removed however the gate ends.
 //!
+//! Two outcomes are not taken at a copy's word (L13). A mutant that does not build is unviable and passes, so a copy
+//! that lists one must build the unmutated tests once more when it is done: if it cannot, the copy broke, not the
+//! mutants, and the gate fails. A mutant whose tests ran out of time beside the other copies' is tested again, alone
+//! and one at a time, as the suite was when it was timed, and what that says stands: only one that runs out of time
+//! alone too counts as caught.
+//!
 //! It runs in two passes. No crate depends on `occam-xtask`, so only its own tests can catch its mutants and they run
 //! those alone; every other mutant runs the whole workspace's tests. `--shard k/n` runs one of n slices of both, and
 //! the copies split that slice: cargo-mutants deals mutant `i` to shard `i % n`, so copy `j` of `m` takes shard
@@ -19,11 +25,12 @@
 //! (the `exclusions` module); `--exclusions` runs that check alone, as `just preflight` does.
 
 mod exclusions;
+mod pass;
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use crate::repo::{Copies, Repo};
+use crate::repo::{MutantsRun, Repo};
 use crate::verdict::{Finding, Verdict};
 
 /// Each pass: its name and the cargo-mutants arguments that select it. Together they cover every mutant once.
@@ -117,18 +124,10 @@ pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     let started = Instant::now();
     warm.checked("mutants.unmutated-failed", &SUITE).map_err(|e| vec![e])?;
     let timeout = timeout(started.elapsed()).to_string();
+    let gate = pass::Gate { repo, warm: &warm, options: &options, jobs, timeout: &timeout, build: &build };
     let mut passes = Vec::new();
     for ((pass, selection), listed) in PASSES.into_iter().zip(&listed) {
-        let shards = shards(options.shard, jobs, lines(listed).count());
-        let args: Vec<Vec<&str>> =
-            shards.iter().map(|shard| testing(selection, options.iterate, shard, &timeout)).collect();
-        let settled = if options.iterate { repo.mutants_settled(pass) } else { String::new() };
-        let copies = Copies { pass, settled: &settled, build: &build, fresh, shards: &args };
-        let runs = warm.shards(repo, &copies).map_err(|e| vec![e])?;
-        let success = runs.iter().all(|run| run.success);
-        let (lists, untested) = merged(listed, runs.into_iter().map(|run| run.outcomes));
-        repo.mutants_record(pass, &settled, &lists).map_err(|e| vec![e])?;
-        passes.push(format!("{pass}: {}", summary(success, &lists, untested)?));
+        passes.push(pass::run(&gate, pass, selection, listed)?);
     }
     Ok(format!("{exclusions}; mutants of the changes since origin/main: {}", passes.join("; ")))
 }
@@ -251,8 +250,8 @@ fn once(listed: &str, tested: &Lists) -> Vec<Finding> {
     let untested: Vec<&str> = times.iter().filter(|(_, (listed, tested))| tested < listed).map(|(m, _)| *m).collect();
     let twice: Vec<&str> = times.iter().filter(|(_, (listed, tested))| tested > listed).map(|(m, _)| *m).collect();
     let message = format!("{} of {} mutants were not tested", untested.len(), lines(listed).count());
-    let remedy =
-        "read the output of the copy that stopped, in mutants.out/<pass>/shard-<j>, and run `just mutants` again";
+    let remedy = "read the output of the copy that stopped, in mutants.out/<pass>/shard-<j> or retest-<j>, and run \
+                  `just mutants` again";
     let stopped = finding("mutants.not-tested", &untested, message, remedy);
     let were = if twice.len() == 1 { "mutant was" } else { "mutants were" };
     let message = format!("{} {were} tested more often than listed", twice.len());
@@ -273,6 +272,78 @@ fn fresh(output: &str) -> Result<(), Finding> {
     Err(Finding::new("mutants.copy-cold", "", message, remedy))
 }
 
+/// Whether a copy must build the unmutated tests again once its run is over, going by its `lists`: it found a mutant
+/// unviable, which is a mutant that does not build, or a copy that no longer builds anything.
+fn recheck(lists: &Lists) -> bool {
+    let [_, _, _, unviable] = lists;
+    lines(unviable).next().is_some()
+}
+
+/// Fails for each copy that could not build the unmutated tests after its run: its unviable mutants are the
+/// environment's doing, a full disk or a copy removed, and say nothing about the code.
+fn broke(runs: &[MutantsRun]) -> Result<(), Vec<Finding>> {
+    let remedy = "free space where TMPDIR is, check that nothing removes its occam-mutants-warm directory while the \
+                  gate runs, and run `just mutants` again";
+    let found: Vec<Finding> = runs
+        .iter()
+        .enumerate()
+        .filter_map(|(copy, run)| {
+            let said = run.broken.as_deref()?;
+            let [_, _, _, unviable] = &run.outcomes;
+            let (count, first) = (lines(unviable).count(), lines(unviable).next().unwrap_or_default());
+            let are = if count == 1 { "mutant is" } else { "mutants are" };
+            let message = format!(
+                "copy {copy} no longer builds the unmutated tests after its run, so the environment broke and its \
+                 {count} unviable {are} not trusted, the first: {first}\n{said}"
+            );
+            Some(Finding::new(
+                "mutants.environment-broke",
+                first.split(':').next().unwrap_or_default(),
+                message,
+                remedy,
+            ))
+        })
+        .collect();
+    if found.is_empty() { Ok(()) } else { Err(found) }
+}
+
+/// The shard of each mutant to test again, alone: those of `listed`, the mutants of the run's slice `shard`, whose
+/// tests ran out of time in `lists`, in the order listed. None where the pass fails as it is, by `findings` or a
+/// survivor. Dealt one mutant to a shard, the mutant listed at `p` of `c` is alone in the shard copy `p` of `c` takes.
+fn retests(shard: Option<(u32, u32)>, listed: &str, lists: &Lists, findings: &[Finding]) -> Vec<String> {
+    let [_, missed, hung, _] = lists;
+    if !findings.is_empty() || lines(missed).next().is_some() {
+        return Vec::new();
+    }
+    let mut hung: Vec<&str> = lines(hung).collect();
+    let count = lines(listed).count();
+    let alone = shards(shard, count, count);
+    let again = lines(listed).zip(alone).filter_map(|(mutant, shard)| {
+        let at = hung.iter().position(|hung| *hung == mutant)?;
+        hung.swap_remove(at);
+        Some(shard)
+    });
+    again.collect()
+}
+
+/// The pass's lists once the mutants that ran out of time in `first` were tested again: what the retest says of each
+/// stands, in place of the first timeout.
+fn retried(first: &Lists, retested: &Lists) -> Lists {
+    let [caught, missed, _, unviable] = first;
+    let [caught_alone, missed_alone, hung_alone, unviable_alone] = retested;
+    [
+        format!("{caught}{caught_alone}"),
+        format!("{missed}{missed_alone}"),
+        hung_alone.clone(),
+        format!("{unviable}{unviable_alone}"),
+    ]
+}
+
+/// What a pass's line of the summary says of its `retested` mutants.
+fn note(retested: usize) -> String {
+    if retested == 0 { String::new() } else { format!(", {retested} tested again alone after running out of time") }
+}
+
 /// Whether `name`, found beside this run's directory, is a run's directory: each is named by its process's number.
 /// Nothing else there is ever removed, and such a directory only once its run is gone.
 fn leftover(name: &str) -> bool {
@@ -281,7 +352,8 @@ fn leftover(name: &str) -> bool {
 
 /// How long a mutant's tests may run, in seconds, given how long the unmutated suite took: [`TIMEOUT_MULTIPLE`] times
 /// it, a part of a second counted as a whole one, and never less than [`TIMEOUT_FLOOR`]. A mutant no test catches runs
-/// the whole suite, beside the other jobs' builds and tests, and one that ran out of time would count as caught (L13).
+/// the whole suite, beside the other jobs' builds and tests, where the suite was timed alone: one that runs out of time
+/// there is given the same time again, alone ([`retests`]), and only then counts as caught (L13).
 fn timeout(suite: Duration) -> u64 {
     let seconds = suite.as_secs().saturating_add(u64::from(suite.subsec_nanos() > 0));
     seconds.saturating_mul(TIMEOUT_MULTIPLE).max(TIMEOUT_FLOOR)
@@ -583,6 +655,134 @@ mod tests {
         assert_eq!(codes(&found), ["mutants.missed", "mutants.not-tested"]);
         assert_eq!(codes(&summary(false, &survivor, vec![])), ["mutants.missed"]);
         assert_eq!(codes(&summary(false, &lists(A, "", "", ""), vec![])), ["mutants.run-failed"]);
+    }
+
+    fn ran(unviable: &str, broken: Option<&str>) -> MutantsRun {
+        MutantsRun { success: true, outcomes: lists(A, "", "", unviable), broken: broken.map(str::to_string) }
+    }
+
+    #[test]
+    fn a_copy_that_found_a_mutant_unviable_builds_the_unmutated_tests_again() {
+        assert!(recheck(&lists("", "", "", &format!("{D}\n"))));
+        assert!(recheck(&lists(A, B, C, D)));
+        // Nothing unviable, nothing to doubt: no build.
+        assert!(!recheck(&lists(A, B, C, "")));
+        assert!(!recheck(&lists(A, "", "", " \n\n")));
+        assert!(!recheck(&Lists::default()));
+    }
+
+    #[test]
+    fn a_copy_that_no_longer_builds_fails_the_gate_and_does_not_pass_for_unviable_mutants() {
+        // A mutant that does not build is unviable, and the copy builds clean afterwards: accepted, as before.
+        assert_eq!(broke(&[ran(&format!("{C}\n{D}\n"), None), ran("", None)]), Ok(()));
+        assert_eq!(broke(&[]), Ok(()));
+        // The disk filled: every mutant after it "does not build", and neither do the unmutated tests.
+        let full = "error: failed to write `target/x.rmeta`: No space left on device (os error 28)";
+        let found = broke(&[ran("", None), ran(&format!("{C}\n{D}\n"), Some(full)), ran(D, Some("gone"))]).unwrap_err();
+        assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["mutants.environment-broke"; 2]);
+        assert_eq!(found[0].file, "src/b.rs");
+        assert!(found[0].message.starts_with("copy 1 no longer builds the unmutated tests"), "{found:?}");
+        assert!(found[0].message.contains("the environment broke and its 2 unviable mutants are not trusted"));
+        assert!(found[0].message.contains(&format!("the first: {C}")) && found[0].message.ends_with(full));
+        assert!(found[1].message.starts_with("copy 2 ") && found[1].message.contains("its 1 unviable mutant is not"));
+        // The remedy, followed: with room on the disk and the copies left alone, the next run's copies build.
+        assert!(found[0].remedy.contains("TMPDIR") && found[0].remedy.contains("run `just mutants` again"));
+    }
+
+    #[test]
+    fn a_mutant_that_ran_out_of_time_is_tested_again_alone_in_a_shard_of_its_own() {
+        let listed = format!("{A}\n{B}\n{C}\n{D}\n");
+        let hung = |timeout: &str| lists("", "", timeout, "");
+        // The whole pass: the mutant listed at p of 4 is the only one of shard p/4.
+        assert_eq!(retests(None, &listed, &hung(&format!("{C}\n")), &[]), ["2/4"]);
+        // In the order listed, whatever order the copies reported them in.
+        assert_eq!(retests(None, &listed, &hung(&format!("{D}\n{A}\n")), &[]), ["0/4", "3/4"]);
+        // Slice 3 of 16 holds the mutants numbered 3, 19, 35 and 51: the third of them is 35, alone in 35/64.
+        assert_eq!(retests(Some((3, 16)), &listed, &hung(&format!("{C}\n")), &[]), ["35/64"]);
+        // Each shard holds its mutant alone: of the slice's mutants, numbered k + n·p, only the one at p falls in it.
+        for (p, again) in retests(Some((3, 16)), &listed, &hung(&listed), &[]).iter().enumerate() {
+            let (shard, of) = shard(again).unwrap();
+            let within: Vec<u32> = (0..4_u32).filter(|q| (3 + 16 * q) % of == shard).collect();
+            assert_eq!(within, [u32::try_from(p).unwrap()], "{again}");
+        }
+        // A mutant listed twice and hung once is retested once; hung twice, twice.
+        let twice = format!("{A}\n{B}\n{A}\n");
+        assert_eq!(retests(None, &twice, &hung(A), &[]), ["0/3"]);
+        assert_eq!(retests(None, &twice, &hung(&format!("{A}\n{A}\n")), &[]), ["0/3", "2/3"]);
+        // No timeout, no retest.
+        assert_eq!(retests(None, &listed, &lists(&listed, "", "", ""), &[]), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_pass_that_fails_as_it_is_spends_no_time_on_retests() {
+        let listed = format!("{A}\n{B}\n{C}\n");
+        let untested = Finding::new("mutants.not-tested", "", "1 of 3", "run it again");
+        assert_eq!(retests(None, &listed, &lists(A, "", C, ""), &[untested]), Vec::<String>::new());
+        assert_eq!(retests(None, &listed, &lists(A, B, C, ""), &[]), Vec::<String>::new());
+        assert_eq!(retests(None, &listed, &lists(A, " \n", C, ""), &[]), ["2/3"]);
+    }
+
+    #[test]
+    fn what_the_retest_says_of_a_mutant_stands_in_place_of_its_first_timeout() {
+        let first = lists(&format!("{A}\n"), "", &format!("{B}\n{C}\n"), &format!("{D}\n"));
+        // Alone, one is caught and the other runs out of time again: that one counts as caught, by timeout.
+        let retested = lists(&format!("{B}\n"), "", &format!("{C}\n"), "");
+        let after = retried(&first, &retested);
+        assert_eq!(after, lists(&format!("{A}\n{B}\n"), "", &format!("{C}\n"), &format!("{D}\n")));
+        assert_eq!(summary(false, &after, vec![]), Ok("3 caught (1 by timeout), 1 unviable".to_string()));
+        // Alone, one survives: it had only been slow beside the other copies, and the gate fails on it.
+        let survived = retried(&first, &lists(&format!("{C}\n"), &format!("{B}\n"), "", ""));
+        assert_eq!(survived, lists(&format!("{A}\n{C}\n"), &format!("{B}\n"), "", &format!("{D}\n")));
+        let found = summary(false, &survived, vec![]).unwrap_err();
+        assert_eq!(found.iter().map(|f| f.code).collect::<Vec<_>>(), ["mutants.missed"]);
+        assert!(found[0].message.ends_with(B), "{found:?}");
+        // Both caught alone: the retests' cargo-mutants succeeded, and nothing is left by timeout.
+        let caught = retried(&first, &lists(&format!("{B}\n{C}\n"), "", "", ""));
+        assert_eq!(summary(true, &caught, vec![]), Ok("3 caught (0 by timeout), 1 unviable".to_string()));
+        // Every mutant is still in one list, once.
+        let listed = format!("{A}\n{B}\n{C}\n{D}\n");
+        assert_eq!([once(&listed, &after), once(&listed, &survived), once(&listed, &caught)], [vec![], vec![], vec![]]);
+    }
+
+    #[test]
+    fn a_pass_says_how_many_mutants_it_tested_again() {
+        assert_eq!(note(0), "");
+        assert_eq!(note(1), ", 1 tested again alone after running out of time");
+        assert_eq!(note(12), ", 12 tested again alone after running out of time");
+    }
+
+    #[test]
+    fn a_run_claiming_its_directory_is_never_swept_as_one_whose_run_is_gone() {
+        use crate::repo::{stake, sweep};
+        let all = std::env::temp_dir().join(format!("occam-mutants-claim-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&all));
+        std::fs::create_dir_all(all.join("7")).unwrap();
+        // A run whose process is 41 has made its directory. Another run starts and sweeps before 41 settles.
+        let claim = stake(&all, "41").unwrap();
+        let names = |all: &std::path::Path| {
+            let mut names: Vec<String> =
+                std::fs::read_dir(all).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+            names.sort();
+            names
+        };
+        // Until then, nothing a sweep takes for a run's directory names it.
+        assert_eq!(names(&all).iter().filter(|name| leftover(name)).collect::<Vec<_>>(), ["7"]);
+        sweep(&all, leftover);
+        // The sweep removed the run that is gone, 7, and not the one that is starting.
+        assert_eq!(names(&all).len(), 1);
+        let (home, held) = claim.settle().unwrap();
+        assert_eq!((home.clone(), names(&all)), (all.join("41"), vec!["41".to_string()]));
+        // Settled, it is locked: a later sweep leaves it, until its run is gone.
+        std::fs::write(home.join("staging"), "").unwrap();
+        sweep(&all, leftover);
+        assert!(home.join("staging").is_file());
+        // A second run of the same number, which a container can give, is refused while this one lives.
+        assert!(stake(&all, "41").and_then(crate::repo::Claim::settle).is_err());
+        assert!(home.join("staging").is_file());
+        drop(held);
+        sweep(&all, leftover);
+        assert_eq!(names(&all), Vec::<String>::new());
+        std::fs::remove_dir_all(&all).unwrap();
     }
 
     #[test]

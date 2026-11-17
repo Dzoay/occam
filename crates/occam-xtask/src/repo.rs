@@ -30,10 +30,24 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 "#;
 
+/// What a run's directory is named after, beside its process's number, until the run holds its lock: no sweep takes
+/// a name that ends so for a run's directory.
+const CLAIMING: &str = ".claiming";
+
 /// One copy's cargo-mutants run: whether it succeeded, then its caught, missed, timeout and unviable lists.
 pub struct MutantsRun {
     pub success: bool,
     pub outcomes: [String; 4],
+    /// Where the copy was asked to build the unmutated tests again after its run and could not: the end of what that
+    /// build said.
+    pub broken: Option<String>,
+}
+
+/// A run's directory, locked, and not yet under the name a sweep looks for.
+pub struct Claim {
+    staked: PathBuf,
+    home: PathBuf,
+    held: fs::File,
 }
 
 /// One pass of the mutants gate over copies of the built tree.
@@ -46,6 +60,11 @@ pub struct Copies<'a> {
     pub build: &'a [&'a str],
     /// Refuses that build's output in a copy, if it compiled anything.
     pub fresh: fn(&str) -> Result<(), Finding>,
+    /// Whether a copy's lists call for that build again once its run is over, to tell a broken copy from broken
+    /// mutants.
+    pub recheck: fn(&[String; 4]) -> bool,
+    /// Whether the copies run one after another, each alone, and not all at once: a retest, written to `retest-<j>`.
+    pub alone: bool,
     /// The cargo-mutants arguments of each copy.
     pub shards: &'a [Vec<&'a str>],
 }
@@ -323,16 +342,10 @@ impl Repo {
         let all = all.join("occam-mutants-warm");
         let shown = all.display().to_string();
         fs::create_dir_all(&all).map_err(|e| io(&shown, &e))?;
-        for entry in fs::read_dir(&all).map_err(|e| io(&shown, &e))?.flatten() {
-            let run = entry.file_name().to_str().is_some_and(leftover);
-            if run && fs::File::open(entry.path()).is_ok_and(|dir| dir.try_lock().is_ok()) {
-                drop(fs::remove_dir_all(entry.path()));
-            }
-        }
-        let home = all.join(process::id().to_string());
-        fs::create_dir(&home).map_err(|e| io(&shown, &e))?;
-        let held = fs::File::open(&home).map_err(|e| io(&shown, &e))?;
-        held.try_lock().map_err(|e| Finding::new("repo.io", &shown, e.to_string(), "run `just mutants` again"))?;
+        sweep(&all, leftover);
+        let claimed = stake(&all, &process::id().to_string()).and_then(Claim::settle);
+        let (home, held) =
+            claimed.map_err(|e| Finding::new("repo.io", &shown, e.to_string(), "run `just mutants` again"))?;
         let mut janitor = Command::new("sh");
         grouped(janitor.args(["-c", JANITOR, "sh"]).arg(&home).stdin(Stdio::piped()), 0);
         let janitor = janitor.spawn().map_err(|e| {
@@ -369,13 +382,19 @@ impl Warm {
         if ok { Ok(()) } else { Err(failed(code, "cargo", args, &(out + &errors))) }
     }
 
-    /// Runs one pass: every copy at once, each made from the staging tree with its file times, checked to be built
-    /// already, and mutated in place by a cargo-mutants of its own. The copies are removed afterwards.
+    /// Runs one pass: every copy at once, or one after another where they are to run `alone`, each made from the
+    /// staging tree with its file times, checked to be built already, and mutated in place by a cargo-mutants of its
+    /// own. Each copy is removed when its run is over.
     pub fn shards(&self, repo: &Repo, copies: &Copies) -> Result<Vec<MutantsRun>, Finding> {
         let dir = repo.mutants_out(copies.pass);
+        if copies.alone {
+            let outs = (0..copies.shards.len()).map(|index| (index, dir.join(format!("retest-{index}"))));
+            return outs.map(|(index, out)| self.shard(&out, copies, index)).collect();
+        }
         // An earlier run's, which may have had more copies: none of its lists may pass for this run's.
         for old in fs::read_dir(&dir).into_iter().flatten().flatten() {
-            if old.file_name().to_str().is_some_and(|name| name.starts_with("shard-")) {
+            let ours = |name: &str| name.starts_with("shard-") || name.starts_with("retest-");
+            if old.file_name().to_str().is_some_and(ours) {
                 drop(fs::remove_dir_all(old.path()));
             }
         }
@@ -386,9 +405,6 @@ impl Warm {
                 outs.map(|(index, out)| scope.spawn(move || self.shard(&out, copies, index))).collect();
             started.into_iter().map(|run| run.join().unwrap_or_else(|_| Err(died()))).collect()
         });
-        for index in 0..copies.shards.len() {
-            drop(fs::remove_dir_all(self.copy(index)));
-        }
         runs.into_iter().collect()
     }
 
@@ -396,8 +412,28 @@ impl Warm {
         self.home.join(format!("copy-{index}"))
     }
 
-    /// One copy's run, writing what cargo-mutants writes to `out`.
+    /// One copy's run, writing what cargo-mutants writes to `out`. The copy is removed afterwards.
     fn shard(&self, out: &Path, copies: &Copies, index: usize) -> Result<MutantsRun, Finding> {
+        let run = self.mutated(out, copies, index);
+        drop(fs::remove_dir_all(self.copy(index)));
+        run
+    }
+
+    /// Whether `copy` still builds the unmutated tests, by `build`, once its mutants are done: the end of what the
+    /// build said where it does not, or of why it could not start. cargo-mutants puts each file back as it was, so
+    /// only a broken environment fails here: a full disk, a copy removed.
+    fn broken(&self, copy: &Path, build: &[&str]) -> Option<String> {
+        match captured(self.command(env!("CARGO"), copy).args(build), "cargo") {
+            Ok((true, _, _)) => None,
+            Ok((false, out, errors)) => {
+                Some(failed("mutants.environment-broke", "cargo", build, &(out + &errors)).message)
+            }
+            Err(finding) => Some(finding.message),
+        }
+    }
+
+    /// Makes copy `index`, checks it, and runs its cargo-mutants.
+    fn mutated(&self, out: &Path, copies: &Copies, index: usize) -> Result<MutantsRun, Finding> {
         let (copy, shown) = (self.copy(index), out.display().to_string());
         // `-a` keeps the file times cargo judges a build fresh by; a reflink where the file system has them.
         let mut cp = self.command("cp", &self.home);
@@ -427,7 +463,8 @@ impl Warm {
             .map_err(|e| Finding::new("repo.no-tool", "cargo-mutants", e.to_string(), "run `just setup`"))?;
         // Only what this run wrote: the list seeded above is not among these.
         let outcomes = LISTS.map(|name| fs::read_to_string(lists.join(name)).unwrap_or_default());
-        Ok(MutantsRun { success: status.success(), outcomes })
+        let broken = if (copies.recheck)(&outcomes) { self.broken(&copy, copies.build) } else { None };
+        Ok(MutantsRun { success: status.success(), outcomes, broken })
     }
 }
 
@@ -437,6 +474,49 @@ impl Drop for Warm {
         // The janitor's input ends, and it finds nothing left to remove.
         drop(self.janitor.stdin.take());
         drop(self.janitor.wait());
+    }
+}
+
+/// Removes the runs' directories in `all` whose runs are gone: those `leftover` names that nothing holds a lock on.
+/// The lock is held while one is removed.
+pub fn sweep(all: &Path, leftover: fn(&str) -> bool) {
+    for entry in fs::read_dir(all).into_iter().flatten().flatten() {
+        if !entry.file_name().to_str().is_some_and(leftover) {
+            continue;
+        }
+        if let Ok(dir) = fs::File::open(entry.path())
+            && dir.try_lock().is_ok()
+        {
+            drop(fs::remove_dir_all(entry.path()));
+        }
+    }
+}
+
+/// Makes the directory of the run `name` in `all` and locks it, under a name no sweep takes for a run's: a sweep that
+/// found it under `name` before it was locked would remove it as a run's that is gone.
+pub fn stake(all: &Path, name: &str) -> std::io::Result<Claim> {
+    let staked = all.join(format!("{name}{CLAIMING}"));
+    // One left by a run that was killed between making it and naming it is taken over, if nothing holds its lock.
+    match fs::create_dir(&staked) {
+        Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => return Err(e),
+        _ => {}
+    }
+    let held = fs::File::open(&staked)?;
+    held.try_lock()?;
+    Ok(Claim { staked, home: all.join(name), held })
+}
+
+impl Claim {
+    /// Gives the directory its run's name, now that its lock is held, and returns it with the lock. Refused where
+    /// the name is taken: by a run that lives, or by one that is gone and is being removed.
+    pub fn settle(self) -> std::io::Result<(PathBuf, fs::File)> {
+        let taken = || std::io::Error::new(std::io::ErrorKind::AlreadyExists, "another run's directory has this name");
+        let named = if self.home.exists() { Err(taken()) } else { fs::rename(&self.staked, &self.home) };
+        if let Err(e) = named {
+            drop(fs::remove_dir(&self.staked));
+            return Err(e);
+        }
+        Ok((self.home, self.held))
     }
 }
 

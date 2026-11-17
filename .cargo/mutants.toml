@@ -17,7 +17,7 @@ profile = "mutants"
 # a mutant no test catches runs the whole suite: 137 s at most, with 3 jobs on a laptop, so a slower machine could
 # run out of time and count it as caught (L13). This floor is for a run by hand with a baseline: cargo-mutants times
 # that on the mutated packages only, so the timeout it derives can be shorter than one full workspace run. A mutant
-# that really hangs costs the timeout.
+# that really hangs costs the timeout twice: the gate tests one that ran out of time again, alone, before it counts.
 minimum_test_timeout = 300
 
 exclude_globs = [
