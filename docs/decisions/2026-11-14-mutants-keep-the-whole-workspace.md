@@ -115,8 +115,8 @@ What was a risk on 14 November, and what the gate does about it:
 ## What a copy says is checked
 
 Added 2026-11-17, after a review of the gate found three ways it could pass when it should not. None was measured;
-each was read from the code and shown by a failing test. These rules are Claude's choices, as the timeout rule is, and
-the user can change them.
+each was read from the code and shown by a failing test. The user
+[accepted them](2026-11-17-what-the-mutants-and-counts-gates-accept.md) the same day.
 
 - **Unviable mutants pass only from a copy that still builds.** A mutant that does not build is unviable, and that is
   accepted, as it was. But if the disk fills or a copy loses files during a run, every mutant after that fails to
