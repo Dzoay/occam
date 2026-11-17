@@ -4,7 +4,8 @@
 //! simd128 build by time. A kernel that is not clearly faster at its width runs at width 1 (L29).
 
 use crate::interval::Interval;
-use crate::predicate::{Predicate, Ring};
+use crate::orientation::Orientation;
+use crate::predicate::Predicate;
 use crate::real::Real;
 use crate::trig::{atan2, sin_cos};
 
@@ -63,19 +64,6 @@ pub fn masks<R: Real>(items: &[f64]) -> Vec<f64> {
         let smaller = R::select(a.lt(b), a, b);
         [R::select(c.le(smaller), c, smaller)]
     })
-}
-
-/// The orientation of three points, `(b - a) x (c - a)`.
-struct Orientation;
-
-impl Predicate<6> for Orientation {
-    const DEGREE: u32 = 2;
-
-    #[inline(always)]
-    fn value<T: Ring>(&self, [ax, ay, bx, by, cx, cy]: &[T; 6]) -> T {
-        let first = bx.sub(ax).mul(&cy.sub(ay));
-        first.sub(&by.sub(ay).mul(&cx.sub(ax)))
-    }
 }
 
 /// The predicate filter: an orientation in interval arithmetic, from six operands, giving each enclosure's bounds.
