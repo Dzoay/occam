@@ -40,7 +40,7 @@ pub fn again(exec: &Exec, before: &Snapshot, after: &Snapshot, limits: Limits) -
     let faces = after.ids::<Face>();
     let users = users(after, &faces);
     let first: Vec<Id<Face>> = faces.iter().copied().filter(|&face| drawn_from(after, face, &touched)).collect();
-    let edges_of = |face: Id<Face>| after.view(face).map(View::<Face>::edges).unwrap_or_default();
+    let edges_of = |face: Id<Face>| after.view(face).map_or_default(View::<Face>::edges);
     let wanted: BTreeSet<Id<Edge>> = first.iter().flat_map(|&face| edges_of(face)).collect();
     let moved = moved(&sampled(exec, before, &wanted, limits), &sampled(exec, after, &wanted, limits));
     let along = moved.iter().flat_map(|edge| users.get(edge).into_iter().flatten().copied());
@@ -63,7 +63,7 @@ type Samples = BTreeMap<Id<Edge>, Result<EdgeSamples, Report>>;
 /// The edges of `model` in `wanted` that a face uses, each sampled on `exec` to `limits` as [`crate::mesh`] samples it
 /// there, its step read from every face along it, by id.
 fn sampled(exec: &Exec, model: &Snapshot, wanted: &BTreeSet<Id<Edge>>, limits: Limits) -> Samples {
-    let faces_of = |edge: Id<Edge>| model.view(edge).map(View::<Edge>::faces).unwrap_or_default();
+    let faces_of = |edge: Id<Edge>| model.view(edge).map_or_default(View::<Edge>::faces);
     let bent: BTreeSet<Id<Face>> = wanted.iter().flat_map(|&edge| faces_of(edge)).collect();
     let bent: Vec<Id<Face>> = bent.into_iter().collect();
     sample_some(exec, model, &bent, &|edge| wanted.contains(&edge), limits).into_iter().collect()
@@ -72,7 +72,7 @@ fn sampled(exec: &Exec, model: &Snapshot, wanted: &BTreeSet<Id<Edge>>, limits: L
 /// Each of `faces` with the cuts repair makes in it in `model`, on `exec`, against its edges sampled to `limits` as
 /// [`crate::mesh`] samples them there: none for a face `model` does not have.
 fn cut(exec: &Exec, model: &Snapshot, faces: &[Id<Face>], limits: Limits) -> BTreeMap<Id<Face>, Cuts> {
-    let edges_of = |face: Id<Face>| model.view(face).map(View::<Face>::edges).unwrap_or_default();
+    let edges_of = |face: Id<Face>| model.view(face).map_or_default(View::<Face>::edges);
     let wanted: BTreeSet<Id<Edge>> = faces.iter().flat_map(|&face| edges_of(face)).collect();
     let edges = Edges::new(sampled(exec, model, &wanted, limits).into_iter().collect(), limits);
     let (read, sampled, of) = (Arc::new(model.clone()), Arc::new(edges), Arc::<[Id<Face>]>::from(faces));

@@ -8,7 +8,6 @@ exclude = ["crates/occam-xtask/probes"] # lint probes, built only in scratch cop
 version = "0.0.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/Dzoay/occam"
 publish = false # unpublished unless a crate says otherwise
 
 # Every lint is on from the start (L19), and `probes::clippy_rejects_every_banned_pattern` proves each ban fires. A crate

@@ -46,7 +46,7 @@ pub(crate) fn cuts(model: &Snapshot, face: Id<Face>, edges: &Edges) -> Cuts {
 
 /// The edges of `face`, as `edges` holds them.
 fn local(model: &Snapshot, face: Id<Face>, edges: &Edges) -> Edges {
-    let own: BTreeSet<Id<Edge>> = model.view(face).map(View::<Face>::edges).unwrap_or_default().into_iter().collect();
+    let own: BTreeSet<Id<Edge>> = model.view(face).map_or_default(View::<Face>::edges).into_iter().collect();
     let held = |edge: Id<Edge>| edges.get(edge).map(|sampled| (edge, sampled.cloned().map_err(Report::clone)));
     Edges::new(own.into_iter().filter_map(held).collect(), edges.limits())
 }

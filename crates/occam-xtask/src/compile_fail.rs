@@ -41,24 +41,42 @@ fn judge(expected: &str, fails: &Compiled, compiles: &Compiled) -> Option<String
     }
 }
 
-/// The compiled libraries the fixtures name, and the directory holding what those depend on.
+/// The compiled libraries the fixtures name, and the directories holding what those depend on.
 struct Libraries {
     units: PathBuf,
     report: PathBuf,
-    deps: PathBuf,
+    deps: BTreeSet<PathBuf>,
 }
 
-/// The `.rlib` cargo reported for the crate called `name` in its `--message-format=json` output.
-fn rlib(stdout: &str, name: &str) -> PathBuf {
-    let artifacts = stdout.lines().filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok());
-    let wanted = artifacts.filter(|value| value["reason"] == "compiler-artifact" && value["target"]["name"] == name);
-    let files: Vec<String> = wanted
-        .flat_map(|value| value["filenames"].as_array().unwrap().clone())
-        .map(|file| file.as_str().unwrap().to_string())
-        .collect();
-    PathBuf::from(
-        files.iter().find(|file| Path::new(file).extension().is_some_and(|extension| extension == "rlib")).unwrap(),
-    )
+/// Each file cargo reported building in its `--message-format=json` output, with the name of the crate it belongs to.
+fn artifacts(stdout: &str) -> Vec<(String, PathBuf)> {
+    let messages = stdout.lines().filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok());
+    let mut found = Vec::new();
+    for built in messages.filter(|value| value["reason"] == "compiler-artifact") {
+        let name = built["target"]["name"].as_str().unwrap();
+        let files = built["filenames"].as_array().unwrap().iter();
+        found.extend(files.map(|file| (name.to_string(), PathBuf::from(file.as_str().unwrap()))));
+    }
+    found
+}
+
+/// The `.rlib` cargo reported for the crate called `name`.
+fn rlib(artifacts: &[(String, PathBuf)], name: &str) -> PathBuf {
+    let rlibs = artifacts.iter().filter(|(crate_name, file)| crate_name == name && has_extension(file, &["rlib"]));
+    rlibs.map(|(_, file)| file.clone()).next().unwrap()
+}
+
+fn has_extension(file: &Path, extensions: &[&str]) -> bool {
+    file.extension().is_some_and(|extension| extensions.iter().any(|wanted| extension == *wanted))
+}
+
+/// Every directory holding a library cargo reported, compiled or a procedural macro, for rustc's `-L dependency=`. Up to
+/// 1.99 cargo put every one in `deps/`; from 1.100 each has its own `build/<package>/<hash>/out/`. A build script is
+/// not a library, so its directory is not one.
+fn library_directories(artifacts: &[(String, PathBuf)]) -> BTreeSet<PathBuf> {
+    let libraries =
+        artifacts.iter().filter(|(_, file)| has_extension(file, &["rlib", "rmeta", env::consts::DLL_EXTENSION]));
+    libraries.map(|(_, file)| file.parent().unwrap().to_path_buf()).collect()
 }
 
 fn libraries() -> Libraries {
@@ -68,10 +86,12 @@ fn libraries() -> Libraries {
         .output()
         .unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let report = rlib(&stdout, "occam_report");
-    let deps = report.parent().unwrap().to_path_buf();
-    Libraries { units: rlib(&stdout, "occam_units"), report, deps }
+    let built = artifacts(&String::from_utf8(output.stdout).unwrap());
+    Libraries {
+        units: rlib(&built, "occam_units"),
+        report: rlib(&built, "occam_report"),
+        deps: library_directories(&built),
+    }
 }
 
 fn compile(file: &Path, libraries: &Libraries, out: &Path) -> Compiled {
@@ -83,8 +103,7 @@ fn compile(file: &Path, libraries: &Libraries, out: &Path) -> Compiled {
         .args(["--error-format=json", "--out-dir"])
         .arg(out)
         .args(externs.iter().flat_map(|name| ["--extern", name]))
-        .arg("-L")
-        .arg(format!("dependency={}", libraries.deps.display()))
+        .args(libraries.deps.iter().flat_map(|deps| ["-L".to_string(), format!("dependency={}", deps.display())]))
         .arg(file)
         .output()
         .unwrap();
@@ -176,4 +195,61 @@ fn only_coded_errors_count() {
         "\nnot json\n",
     );
     assert_eq!(error_codes(stderr), BTreeSet::from(["E0277".to_string()]));
+}
+
+/// Cargo's `--message-format=json` output for a build of occam-units, from a build script, serde's procedural macro,
+/// occam-report and occam-units, each file named by `place`; occam-units' `.rlib` is the copy cargo puts in the profile's
+/// own directory.
+fn cargo_output(place: impl Fn(&str, &str) -> String) -> String {
+    let built = |name: &str, files: &[String]| {
+        serde_json::json!({"reason": "compiler-artifact", "target": {"name": name}, "filenames": files}).to_string()
+    };
+    let macro_file = format!("libserde_derive-1.{}", env::consts::DLL_EXTENSION);
+    let lines = [
+        built("build-script-build", &[place("serde", "build_script_build")]),
+        built("serde_derive", &[place("serde_derive", &macro_file)]),
+        built(
+            "occam_report",
+            &[place("occam-report", "liboccam_report-2.rmeta"), place("occam-report", "liboccam_report-2.rlib")],
+        ),
+        built(
+            "occam_units",
+            &["/target/debug/liboccam_units.rlib".to_string(), place("occam-units", "liboccam_units-3.rmeta")],
+        ),
+        r#"{"reason":"build-finished","success":true}"#.to_string(),
+    ];
+    lines.join("\n")
+}
+
+fn paths(names: &[&str]) -> BTreeSet<PathBuf> {
+    names.iter().map(PathBuf::from).collect()
+}
+
+#[test]
+fn up_to_cargo_1_99_every_dependency_is_in_deps() {
+    let stdout = cargo_output(|package, file| match package {
+        "serde" => format!("/target/debug/build/serde-0/{file}"),
+        _ => format!("/target/debug/deps/{file}"),
+    });
+    let built = artifacts(&stdout);
+    assert_eq!(rlib(&built, "occam_report"), PathBuf::from("/target/debug/deps/liboccam_report-2.rlib"));
+    assert_eq!(rlib(&built, "occam_units"), PathBuf::from("/target/debug/liboccam_units.rlib"));
+    assert_eq!(library_directories(&built), paths(&["/target/debug", "/target/debug/deps"]));
+}
+
+#[test]
+fn from_cargo_1_100_each_dependency_has_its_own_directory() {
+    let stdout = cargo_output(|package, file| format!("/target/debug/build/{package}/0/out/{file}"));
+    let built = artifacts(&stdout);
+    assert_eq!(
+        rlib(&built, "occam_report"),
+        PathBuf::from("/target/debug/build/occam-report/0/out/liboccam_report-2.rlib")
+    );
+    let expected = [
+        "/target/debug",
+        "/target/debug/build/occam-report/0/out",
+        "/target/debug/build/occam-units/0/out",
+        "/target/debug/build/serde_derive/0/out",
+    ];
+    assert_eq!(library_directories(&built), paths(&expected));
 }

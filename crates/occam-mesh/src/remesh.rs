@@ -107,7 +107,7 @@ type Meshes = BTreeMap<Id<Face>, Result<FaceMesh, Report>>;
 pub(crate) fn users(model: &Snapshot, faces: &[Id<Face>]) -> BTreeMap<Id<Edge>, Vec<Id<Face>>> {
     let mut users: BTreeMap<Id<Edge>, Vec<Id<Face>>> = BTreeMap::new();
     for &face in faces {
-        for edge in model.view(face).map(View::<Face>::edges).unwrap_or_default() {
+        for edge in model.view(face).map_or_default(View::<Face>::edges) {
             users.entry(edge).or_default().push(face);
         }
     }
@@ -145,7 +145,7 @@ fn resampled(
     first: &[Id<Face>],
 ) -> (Edges, Vec<Id<Edge>>, Vec<Id<Edge>>) {
     let wanted: BTreeSet<Id<Edge>> =
-        first.iter().flat_map(|&f| model.view(f).map(View::<Face>::edges).unwrap_or_default()).collect();
+        first.iter().flat_map(|&f| model.view(f).map_or_default(View::<Face>::edges)).collect();
     // Every face along an edge sampled again, for its bending, in id order.
     let bent: BTreeSet<Id<Face>> = wanted.iter().flat_map(|e| users.get(e).into_iter().flatten().copied()).collect();
     let bent: Vec<Id<Face>> = bent.into_iter().collect();
@@ -165,7 +165,7 @@ pub(crate) fn drawn_from(model: &Snapshot, face: Id<Face>, touched: &BTreeSet<En
     let mut parts = vec![face.entity(), view.surface_id().entity()];
     for each in view.loops() {
         parts.push(each.entity());
-        let uses = model.view(each).map(View::<Loop>::uses).unwrap_or_default();
+        let uses = model.view(each).map_or_default(View::<Loop>::uses);
         for used in uses.into_iter().filter_map(|u| model.view(u)) {
             parts.push(used.id().entity());
             parts.extend(used.pcurve_id().map(Id::entity));

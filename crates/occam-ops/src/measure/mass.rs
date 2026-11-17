@@ -136,7 +136,7 @@ pub(super) fn of(view: View<'_, Face>) -> Result<Patch<'_>, Report> {
     let surface = view.surface().ok_or_else(|| corrupt(view.surface_id().entity()))?;
     let mut loops = Vec::new();
     for id in view.loops() {
-        let uses = view.of(id).map(View::<Loop>::uses).unwrap_or_default();
+        let uses = view.of(id).map_or_default(View::<Loop>::uses);
         loops.push(pieces(view, &uses)?);
     }
     Ok(Patch { surface, reversed: view.reversed(), loops })

@@ -162,7 +162,7 @@ pub fn quality(exec: &Exec, model: &Arc<Snapshot>, mesh: &Arc<Mesh>) -> Vec<Qual
     let against = (limits.deflection().millimetres(), limits.angle().radians());
     let (shared, meshed) = (Arc::clone(model), Arc::clone(mesh));
     let faces = exec.map(mesh.blocks.len(), Grain::Each, move |k| {
-        meshed.blocks.get(k).map(|block| face(&shared, &meshed, block)).unwrap_or_default()
+        meshed.blocks.get(k).map_or_default(|block| face(&shared, &meshed, block))
     });
     let fresh = |family: &str| Quality { family: family.to_string(), smallest: 180.0, ..Quality::default() };
     let mut all = fresh("all");

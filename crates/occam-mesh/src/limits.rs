@@ -107,7 +107,7 @@ mod tests {
 
     /// The parameter and the value a refusal names.
     fn refused(report: &Report) -> (Code, String, Option<f64>) {
-        let parameter = report.input.as_ref().map(|input| input.parameter.clone()).unwrap_or_default();
+        let parameter = report.input.as_ref().map_or_default(|input| input.parameter.clone());
         (report.code, parameter, report.value("value").and_then(NamedValue::number))
     }
 

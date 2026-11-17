@@ -162,11 +162,9 @@ impl Target {
 
     /// Its faces.
     fn faces(self, model: &Snapshot) -> Vec<Id<Face>> {
-        let of_shell = |s: Id<Shell>| model.view(s).map(occam_topo::View::<Shell>::faces).unwrap_or_default();
+        let of_shell = |s: Id<Shell>| model.view(s).map_or_default(occam_topo::View::<Shell>::faces);
         match self {
-            Self::Body(id, _) => {
-                model.view(id).map(|b| b.shells().into_iter().flat_map(of_shell).collect()).unwrap_or_default()
-            }
+            Self::Body(id, _) => model.view(id).map_or_default(|b| b.shells().into_iter().flat_map(of_shell).collect()),
             Self::Shell(id) => of_shell(id),
             Self::Face(id) => vec![id],
             Self::Wire(_) | Self::Edge(_) | Self::Vertex(_) => Vec::new(),
@@ -178,10 +176,10 @@ impl Target {
         let of_uses = |uses: Vec<Id<occam_topo::EdgeUse>>| -> Vec<Id<Edge>> {
             uses.into_iter().filter_map(|u| model.view(u).map(occam_topo::View::edge)).collect()
         };
-        let of_wire = |w: Id<Wire>| model.view(w).map(|w| of_uses(w.uses())).unwrap_or_default();
+        let of_wire = |w: Id<Wire>| model.view(w).map_or_default(|w| of_uses(w.uses()));
         let mut edges: Vec<Id<Edge>> = match self {
             Self::Body(id, _) => {
-                let wires = model.view(id).map(occam_topo::View::wires).unwrap_or_default();
+                let wires = model.view(id).map_or_default(occam_topo::View::wires);
                 let faces = self.faces(model).into_iter().filter_map(|f| model.view(f));
                 faces.flat_map(occam_topo::View::<Face>::edges).chain(wires.into_iter().flat_map(of_wire)).collect()
             }
@@ -381,7 +379,7 @@ pub fn face_bounds(face: View<'_, Face>, tolerance: Tolerance) -> Result<Option<
         Inside::Boxed(b) => (Vec::new(), Some(b)),
     };
     let rough = spanned(edges.iter().filter_map(|&e| face.of(e)), &points);
-    Ok(boxed.into_iter().fold(rough, |all, b| Some(all.map_or(b, |a| a.union(&b)))))
+    Ok(boxed.map_or(rough, |b| Some(rough.map_or(b, |a| a.union(&b)))))
 }
 
 /// The low and high corners of `bounds`, or of the origin where there are none.

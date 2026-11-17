@@ -175,7 +175,7 @@ fn a_request_refused_when_it_is_read_is_worded_in_its_own_units_once_they_are_re
                 {{"op": "revolve", "profile": "p", "origin": [0, 0, 0], "axis": [0, 0, 1], "angle": 400}}]}}"#
         );
         let ran = run(None, &text);
-        let reports = ran.failed.map(|failed| failed.reports).unwrap_or_default();
+        let reports = ran.failed.map_or_default(|failed| failed.reports);
         (ran.units, reports.iter().map(|report| report.message(ran.units)).collect::<Vec<String>>())
     };
     let inch = DisplayUnits { length: LengthUnit::Inch, angle: AngleUnit::Degree };
