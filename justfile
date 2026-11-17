@@ -8,7 +8,7 @@ set lazy := true
 
 # This checkout's shared cargo target directory (L48), asked for once per `just` run, only by the recipes that run cargo.
 target := `scripts/target-dir.sh`
-# On disk, not in a RAM-backed /tmp: cargo-mutants copies the tree there and builds each copy.
+# On disk, not in a RAM-backed /tmp: the mutants gate builds the tree's tests there once, then copies it per job, built.
 tmp := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-tmp"
 # The OCCT wheel's virtualenv lives outside the repository too (docs/decisions/2026-11-09-occt-oracle.md).
 oracle_venv := env("XDG_CACHE_HOME", env("HOME") / ".cache") / "occam-oracle" / "venv"
