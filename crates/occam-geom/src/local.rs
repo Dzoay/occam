@@ -166,9 +166,10 @@ pub fn surface_local(
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::{mm, point};
     use std::f64::consts::{FRAC_PI_2, PI};
 
-    use occam_units::{Angle, Length};
+    use occam_units::Angle;
 
     use super::*;
     use crate::conformance::{forms, local, placement, tolerance};
@@ -176,10 +177,6 @@ mod tests {
         Circle, Cone, Cylinder, Ellipse, Extrusion, Hyperbola, Line, Parabola, Plane, Sphere, SplineCurve,
         SplineSurface, Torus,
     };
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     fn close(got: f64, want: f64) -> bool {
         (got - want).abs() <= 1e-12 * (1.0 + want.abs())
@@ -191,10 +188,6 @@ mod tests {
 
     fn on_surface(s: &dyn Surface, uv: UvPoint) -> SurfaceLocal {
         surface_local(s, uv, tolerance(), &mut Scratch::default()).unwrap()
-    }
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
     }
 
     #[test]

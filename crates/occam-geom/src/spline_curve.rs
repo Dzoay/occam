@@ -273,16 +273,13 @@ impl ParametricCurve for SplineCurve {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::point;
     use occam_math::Lanes;
     use occam_report::Code;
 
     use super::*;
     use crate::conformance::{self, Check, WrongSecondCurve, tolerance};
     use crate::curve::Curve;
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
 
     /// `n` poles along a twisting path, with nothing symmetric.
     fn poles(n: u32) -> Vec<Point<World>> {

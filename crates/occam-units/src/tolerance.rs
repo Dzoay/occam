@@ -93,14 +93,7 @@ impl Tolerance {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
-
-    fn rad(x: f64) -> Angle {
-        Angle::from_radians(x)
-    }
+    use crate::testing::{mm, rad};
 
     #[test]
     fn a_positive_tolerance_keeps_what_it_was_given() {

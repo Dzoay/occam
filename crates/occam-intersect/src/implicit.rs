@@ -134,13 +134,10 @@ impl Implicit {
 
 #[cfg(test)]
 mod tests {
-    use occam_units::{Angle, Direction, Length, Point};
+    use occam_fixtures::point;
+    use occam_units::{Angle, Direction, Length};
 
     use super::*;
-
-    fn point(x: f64, y: f64, z: f64) -> Point<occam_units::World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
 
     fn up() -> Direction<occam_units::World> {
         Direction::normalised(Vec3::new(0.0, 0.0, 1.0))

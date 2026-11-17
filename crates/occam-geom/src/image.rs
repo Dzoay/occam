@@ -537,6 +537,7 @@ impl<C: ParametricCurve + Clone> ParametricParamCurve for Image<C> {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::mm;
     use std::f64::consts::{FRAC_PI_6, TAU};
 
     use occam_units::{Angle, Direction, Length};
@@ -547,10 +548,6 @@ mod tests {
         BsplineSurface, Circle, Cone, Curve, Cylinder, Ellipse, Hyperbola, Line, Parabola, ParamCurve, Plane, Sphere,
         SplineSurface, Surface, Torus,
     };
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     /// The point at `(x, y, z)` in [`placement`]'s frame.
     fn at(x: f64, y: f64, z: f64) -> Vec3 {

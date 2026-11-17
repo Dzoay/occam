@@ -204,6 +204,7 @@ impl<C: ParametricCurve> ParametricCurve for OffsetCurve<C> {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::mm;
     use occam_report::Code;
     use occam_units::Vec3;
 
@@ -211,10 +212,6 @@ mod tests {
     use crate::conformance::{self, Check, Fitted, WrongSecondCurve, local, placement, twist};
     use crate::curve::Curve;
     use crate::{Circle, Ellipse, Hyperbola, Line, Parabola};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     /// The Z axis of [`placement`], square to the plane every planar curve here lies in.
     fn up() -> Direction<World> {

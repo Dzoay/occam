@@ -7,6 +7,7 @@
 
 mod hostile;
 
+use occam_fixtures::{mm, point as at};
 use std::sync::Arc;
 
 use occam_fixtures::topo::workloads::models;
@@ -16,17 +17,13 @@ use occam_geom::{
 };
 use occam_report::{Code, Reason};
 use occam_topo::{CurveRecord, ParamCurveRecord, SurfaceRecord};
-use occam_units::{Angle, Direction, Local, Placement, Point, Vec3, Vector, World};
+use occam_units::{Angle, Direction, Local, Placement, Vec3, Vector, World};
 use serde_json::Value;
 
 use super::*;
 
 fn serial() -> Exec {
     Exec::serial()
-}
-
-fn mm(x: f64) -> Length {
-    Length::from_millimetres(x)
 }
 
 /// A placement turned about a skew axis and moved, so that no axis is a world axis.
@@ -38,10 +35,6 @@ fn skewed() -> Placement<Local, World> {
     >::translation(
         Vector::from_vec3(Vec3::new(3.0, -2.0, 5.5)),
     ))
-}
-
-fn at(x: f64, y: f64, z: f64) -> Point<World> {
-    Point::from_vec3(Vec3::new(x, y, z))
 }
 
 /// A model holding one curve or surface of every family the format writes, and a parameter curve of each family of

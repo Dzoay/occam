@@ -25,7 +25,7 @@ const BAND: f64 = 5e-11;
 const SCALE: f64 = 4.0;
 
 fn tol() -> Tolerance {
-    Tolerance::new(Length::from_millimetres(BAND), Angle::from_radians(1e-9)).unwrap()
+    occam_fixtures::tol_of(BAND)
 }
 
 /// The blossom of `x^power`, of degree three, at `knots`: the average of the products of `power` of them.

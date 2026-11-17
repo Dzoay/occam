@@ -3,9 +3,10 @@
 //! constructor would make is refused.
 
 use core::f64::consts::{FRAC_PI_4, TAU};
+use occam_fixtures::mm;
 
 use occam_report::Code;
-use occam_units::{Angle, Direction, Length, Local, Placement, Point, Vec3, Vector, World};
+use occam_units::{Angle, Direction, Local, Placement, Point, Vec3, Vector, World};
 
 use crate::bspline::{BsplineCurve, BsplineSurface};
 use crate::curve::ParametricCurve;
@@ -24,10 +25,6 @@ fn skewed() -> Placement<Local, World> {
     >::translation(
         Vector::from_vec3(Vec3::new(3.0, -2.0, 5.5)),
     ))
-}
-
-fn mm(x: f64) -> Length {
-    Length::from_millimetres(x)
 }
 
 /// The numbers a surface's content holds after its family's name.

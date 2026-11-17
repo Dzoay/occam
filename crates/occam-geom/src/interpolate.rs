@@ -150,10 +150,7 @@ mod tests {
     use super::*;
     use crate::curve::Curve;
     use crate::spline_curve::SplineCurve;
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
+    use occam_fixtures::point;
 
     /// A cubic's points, `(t, t^2 - t, 2 t^3 - t)`, at uneven parameters.
     fn on_a_cubic() -> (Vec<f64>, Vec<Point<World>>) {

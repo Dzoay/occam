@@ -173,17 +173,14 @@ pub(crate) fn extruded(form: BsplineCurve, direction: Vec3, v: (f64, f64)) -> Bs
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::mm;
     use std::f64::consts::{PI, TAU};
 
-    use occam_units::{Angle, Direction, Length, Placement, UvPoint};
+    use occam_units::{Angle, Direction, Placement, UvPoint};
 
     use super::*;
     use crate::conformance::{self, placement};
     use crate::{Circle, Cone, Curve, Cylinder, Ellipse, Hyperbola, Line, Parabola, Plane, Sphere, Surface, Torus};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     fn patch(lo: (f64, f64), hi: (f64, f64)) -> UvBox {
         UvBox::new(UvPoint::new(lo.0, lo.1), UvPoint::new(hi.0, hi.1))

@@ -119,10 +119,7 @@ pub(crate) fn finite(p: Point<World>) -> Result<(), Report> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn point(x: f64, y: f64, z: f64) -> Point<occam_units::World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
+    use occam_fixtures::point;
 
     #[test]
     fn the_box_holds_every_interval() {

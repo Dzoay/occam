@@ -8,8 +8,8 @@
 //! Everything here is built through the kernel crates' public APIs. A kernel crate's unit tests link a second build of
 //! their own crate through this one, whose types are not theirs, so they may take from here only what is typed by the
 //! crates above their own, as [`mm`] is. Where they need a model of their own crate's types, they compile the module
-//! that builds it into their tests by `#[path]`: [`spline_workloads`] in occam-geom, [`topo`]'s `models` and `testing`
-//! in occam-topo, [`mesh`]'s `layouts` in occam-mesh. Such a module names its kernel crate by its name, never `crate`,
+//! that builds it into their tests by `#[path]`: these quantities in occam-units, [`spline_workloads`] in occam-geom,
+//! [`topo`]'s `models` and `testing` in occam-topo. Such a module names its kernel crate by its name, never `crate`,
 //! its neighbours by `super`, and this crate by its name, and carries no tests of its own, which would run twice.
 #![allow(
     clippy::unwrap_used,

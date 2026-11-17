@@ -246,15 +246,12 @@ impl Chart {
 
 #[cfg(test)]
 mod tests {
-    use occam_units::{Angle, Length, Local, Placement, Vector};
+    use occam_fixtures::mm;
+    use occam_units::{Angle, Local, Placement, Vector};
 
     use super::*;
     use crate::conformance::{placement, tolerance};
     use crate::{BsplineSurface, Cone, Cylinder, Plane, Sphere, SplineSurface, Torus};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     fn surfaces() -> Vec<Box<dyn Surface>> {
         vec![

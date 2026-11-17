@@ -470,6 +470,7 @@ dependencies = [
 name = "occam-geom"
 version = "0.0.0"
 dependencies = [
+ "occam-fixtures",
  "occam-math",
  "occam-report",
  "occam-units",
@@ -479,6 +480,7 @@ dependencies = [
 name = "occam-intersect"
 version = "0.0.0"
 dependencies = [
+ "occam-fixtures",
  "occam-geom",
  "occam-math",
  "occam-report",

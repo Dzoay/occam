@@ -27,9 +27,10 @@ The design:
 - **A crate's unit tests cannot take a fixture typed by their own crate from it.** They link a second build of their
   crate through occam-fixtures, whose types are not theirs. So they take from it only what is typed by crates above
   their own. Where they need a fixture of their own crate's types, they compile occam-fixtures' source file into their
-  tests with `#[path]`, under `#[cfg(test)]`: one source, built twice, never in a library. occam-geom does this for the
-  measured spline, occam-topo for its models and helpers. Such a file names its kernel crate by its name, which the
-  crate's tests make resolve with `extern crate self`, and carries no tests of its own, which would run twice.
+  tests with `#[path]`, under `#[cfg(test)]`: one source, built twice, never in a library. occam-units does this for
+  `mm` and its kin, occam-geom for the measured spline, occam-topo for its models and helpers. Such a file names its
+  kernel crate by its name, which the crate's tests make resolve with `extern crate self`, and carries no tests of its
+  own, which would run twice.
 - **What needs private access stays in its crate under `#[cfg(test)]`.** The topology's determinism probe corrupts
   models through occam-topo's own tables, as no edit could, so it is a test of occam-topo: `gates determinism` runs
   that test as every build and reads the hashes it prints, where it runs the other probes' examples. occam-topo's look

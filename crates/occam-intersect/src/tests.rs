@@ -2,6 +2,7 @@
 //! The method list, the section and `sections` against stub methods, whose answers are made up but depend on argument
 //! order, so that only canonical order makes them symmetric.
 
+use occam_fixtures::tol;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -11,10 +12,6 @@ use occam_report::{Code, Fault, NamedValue, Reason};
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tolerance, UvPoint, Vec3, Vector, World};
 
 use crate::{Answer, Budget, Contact, Method, Methods, Section, SectionCurve, Spent, SurfacePair, Work, sections};
-
-fn tol() -> Tolerance {
-    Tolerance::new(Length::from_millimetres(1e-7), Angle::from_radians(1e-9)).unwrap()
-}
 
 const fn budget(steps: u32) -> Budget {
     Budget { steps }

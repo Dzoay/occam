@@ -6,12 +6,13 @@
 //! The mesher has no lane kernel: it evaluates its surfaces a point at a time, so it is counted as one class, scalar.
 #![allow(clippy::unwrap_used, missing_docs, reason = "a benchmark, where a failed setup should stop the run")]
 
+use occam_fixtures::{mm, point};
 use std::hint::black_box;
 
 use gungraun::{library_benchmark, library_benchmark_group, main};
 use occam::{
-    Angle, Encoding, EntityKind, EntityRef, Jets, Lanes, Length, Model, Point, Real, Session, SplineSurface, Tolerance,
-    UvPoint, World, distance,
+    Angle, Encoding, EntityKind, EntityRef, Jets, Lanes, Model, Real, Session, SplineSurface, Tolerance, UvPoint,
+    distance,
 };
 use occam_fixtures::lane_workloads as workloads;
 use occam_fixtures::mesh_workloads::{P9_SEED, PERF_TARGET, perf_mesh, pick_rays};
@@ -25,16 +26,8 @@ use occam_math::{Exec, Level, stream, width};
 use occam_topo::Edit;
 use occam_units::{Direction, Vec3};
 
-fn mm(value: f64) -> Length {
-    Length::from_millimetres(value)
-}
-
 fn model() -> Model {
     Model::new(Tolerance::new(mm(0.001), Angle::from_radians(1e-6)).unwrap())
-}
-
-fn point(x: f64, y: f64, z: f64) -> Point<World> {
-    Point::new(mm(x), mm(y), mm(z))
 }
 
 #[library_benchmark]

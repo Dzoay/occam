@@ -154,14 +154,7 @@ impl<F: Frame, R: Real> Div<R> for Vector<F, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::new(mm(x), mm(y), mm(z))
-    }
+    use crate::testing::{mm, point};
 
     fn vector(x: f64, y: f64, z: f64) -> Vector<World> {
         Vector::new(mm(x), mm(y), mm(z))

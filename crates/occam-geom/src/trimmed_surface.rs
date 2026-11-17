@@ -176,20 +176,16 @@ impl<S: Parametric> Parametric for TrimmedSurface<S> {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::mm;
     use std::f64::consts::{FRAC_PI_2, PI, TAU};
 
     use occam_report::Code;
-    use occam_units::Length;
 
     use super::*;
     use crate::batch::Jets;
     use crate::conformance::{self, local, placement, tolerance};
     use crate::surface::Surface;
     use crate::{Cylinder, MeshSurface, Plane, Sphere, SplineSurface, workloads};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     fn window(lo: (f64, f64), hi: (f64, f64)) -> UvBox {
         UvBox::new(UvPoint::new(lo.0, lo.1), UvPoint::new(hi.0, hi.1))
