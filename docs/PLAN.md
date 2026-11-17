@@ -121,6 +121,10 @@ tests and wasm. CI runs all of them, with the same commands. Goal: a PR's CI fin
 Nightly, not per PR: the full corpus, randomised boolean sequences, and the OCCT comparison (L16, L17). The workflow comes
 from `bedrock.ci`, and jobs join it as the corpus and operations arrive.
 
+Per PR, in `test`: the corpus cases that occam builds today and that record a closed-form answer are built, measured and
+judged against it by `occam-verify`, which takes seconds. Both corpus tests pin what they leave out by reason and count,
+and fail on a case the runner refuses, a count that moves or an empty corpus.
+
 ## 6. Milestones
 
 Named, not numbered. They run in this order, except where a row says otherwise:
