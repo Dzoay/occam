@@ -287,3 +287,28 @@ fn a_model_given_after_another_is_meshed_again_only_where_it_differs() {
     let refused = grown.again(&boxed, &Exec::serial(), 0.0, 0.35).unwrap_err();
     assert_eq!(refused.iter().map(|r| r.code).collect::<Vec<_>>(), [Code::LimitNotPositive]);
 }
+
+#[test]
+fn a_pick_on_a_model_picked_before_computes_no_digest_and_one_after_a_run_picks_the_model_it_made() {
+    let mut session = boxed(Encoding::Json);
+    let exec = Exec::serial();
+    let down = Pick { from: [5.0, 10.0, 50.0], direction: [0.0, 0.0, -1.0], tolerance: 0.0 };
+    let counted = digests();
+    let first = session.pick(&exec, 0.1, 0.35, down).unwrap();
+    assert_eq!(digests() - counted, 1, "the picker made, with the model's digest");
+    let again = session.pick(&exec, 0.1, 0.35, down).unwrap();
+    let edge = session.list(&[EntityKind::Edge]).remove(0).entities[0];
+    assert!(session.samples(&exec, 0.1, 0.35, edge).unwrap().is_some());
+    assert_eq!(digests() - counted, 1, "no digest for a pick or samples on the model picked before");
+    assert_eq!((&again, first.digest), (&first, session.digest()), "the same answer, naming the model");
+    let (ran, _) =
+        session.run(&in_millimetres(r#"[{"op": "box", "size": [10, 20, 10], "frame": {"origin": [0, 0, 30]}}]"#));
+    assert!(ran.failed.is_none(), "{:?}", ran.failed);
+    let counted = digests();
+    let after = session.pick(&exec, 0.1, 0.35, down).unwrap();
+    assert_eq!(digests() - counted, 1, "a new picker for the model the run made");
+    assert_eq!(after.digest, session.digest());
+    assert_ne!(after.digest, first.digest);
+    let (was, now) = (first.hit.unwrap(), after.hit.unwrap());
+    assert_eq!((was.point[2], now.point[2]), (30.0, 40.0), "the new box's top, above the first's");
+}

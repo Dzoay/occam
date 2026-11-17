@@ -15,14 +15,13 @@
 import { spawn } from "node:child_process";
 import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
-import { createInterface } from "node:readline";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { chromium, firefox } from "playwright";
 
 import { pixelOf } from "./demo/harness.mjs";
 
-/** How long to wait for anything: P9's 10,001-face model takes minutes to open, in the server and in each worker. */
+/** How long to wait for anything: P9's 10,001-face model takes minutes to open, in the server and the editing worker. */
 const PATIENCE = 60 * 60_000;
 /** What the page is held to: one frame at 60 Hz. A goal, not a gate. */
 const GOAL_MS = 16.7;
@@ -133,20 +132,20 @@ async function targets(page, picks) {
 }
 
 /**
- * The viewer's server for `file`, started as `occam view` starts it but waited for as long as the model takes to open:
- * `occam view` gives a server 30 s to say it listens, and on P9's larger model its first look takes longer. Resolves
- * with the page's address and a way to stop it.
+ * `occam view` of `file`, opening no page, which waits however long the model takes to open, saying so on standard
+ * error, passed through. Resolves with the page's address and a way to stop it.
  */
 async function serving(occam, file) {
-  const server = spawn(occam, ["view", "--serve", "--idle", "3600", "--model", file], { stdio: ["ignore", "pipe", "inherit"] });
-  const lines = createInterface({ input: server.stdout });
-  const first = await new Promise((resolve, reject) => {
-    lines.once("line", resolve);
-    server.once("exit", (code) => reject(new Error(`occam view --serve ended, ${code}, before it listened`)));
+  const view = (...args) => new Promise((resolve, reject) => {
+    const child = spawn(occam, ["view", "--model", file, ...args], { stdio: ["ignore", "pipe", "inherit"] });
+    let out = "";
+    child.stdout.on("data", (chunk) => (out += chunk));
+    child.once("error", reject);
+    child.once("close", () => resolve(out));
   });
-  const said = JSON.parse(first);
-  if (!said.port || !said.token) throw new Error(`occam view --serve did not start: ${first}`);
-  return { url: `http://127.0.0.1:${said.port}/${said.token}/`, stop: () => server.kill("SIGTERM") };
+  const said = JSON.parse(await view("--no-open", "--idle", "3600", "--json"));
+  if (!said.running) throw new Error(`occam view did not start: ${JSON.stringify(said)}`);
+  return { url: said.url, stop: () => view("--stop") };
 }
 
 const quantile = (xs, q) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(q * xs.length))];
@@ -189,7 +188,7 @@ async function measure(options, reached) {
       within_goal: summary(shown).median <= GOAL_MS,
     };
   } finally {
-    started?.stop();
+    await started?.stop();
     await rm(dir, { recursive: true, force: true });
   }
 }

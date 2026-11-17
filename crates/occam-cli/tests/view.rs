@@ -2,7 +2,8 @@
 //! `occam view` as an agent starts it (docs/architecture/live-view.md): the command returns once its viewer listens,
 //! one viewer runs for a model, `--status` and `--stop` answer for it, a stale state file is replaced, every address
 //! wants the token, the model goes out as the binary twin and each change that reads whole as an event, and a file
-//! that is not a model, or is not there, is named while the viewer keeps watching. Every viewer a test starts is
+//! that is not a model, or is not there, is named while the viewer keeps watching; a viewer whose `occam view` was
+//! interrupted before it listened stops by itself. Every viewer a test starts is
 //! stopped when the test ends, and stops itself two minutes after if that fails. A wasm test run cannot start one.
 #![cfg(not(target_family = "wasm"))]
 #![allow(clippy::unwrap_used, reason = "a failed step should fail the test")]
@@ -16,7 +17,7 @@
 use std::io::{Read as _, Write as _};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 use occam::{Code, RemedyKind, Report, followed_remedy};
@@ -355,6 +356,26 @@ fn a_state_file_that_cannot_be_written_starts_no_viewer() {
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!((refused.status, &refused.started["running"]), (Some(1), &Value::Bool(false)), "{}", refused.started);
     assert_eq!(codes(&refused.started), ["view.state-not-written"]);
+}
+
+#[test]
+fn a_viewer_whose_occam_view_was_interrupted_before_it_listened_stops_and_leaves_no_state_file() {
+    let model = fresh("interrupted").join("part.occam");
+    build(&model, BOX);
+    let mut viewer = Command::new(env!("CARGO_BIN_EXE_occam"))
+        .args(["view", "--serve", "--idle", IDLE, "--model", utf8(&model)])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // What an interrupted `occam view` leaves its viewer: no one to read the line that says it listens.
+    drop(viewer.stdout.take());
+    let mut ended = None;
+    eventually("the viewer ended", || {
+        ended = viewer.try_wait().unwrap();
+        ended.is_some()
+    });
+    assert_eq!(ended.and_then(|status| status.code()), Some(0), "it stopped by itself");
+    assert!(!model.with_extension("occam.view").exists(), "its state file removed");
 }
 
 #[test]

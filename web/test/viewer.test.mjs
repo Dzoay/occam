@@ -608,6 +608,26 @@ test("a mesh call that throws is reported by the faces it held, the rest are dra
   await followedRemedy(page, "view.mesh-failed", "reload-page", () => page.reload().then(() => ready(page)), { over: true });
 });
 
+/** Gives each mesh worker, in place of the twin the editing worker checked, bytes that do not read as a model. */
+function garbleTwins() {
+  const post = Worker.prototype.postMessage;
+  Worker.prototype.postMessage = function (message, transfer) {
+    if (message?.kind !== "load") return post.call(this, message, transfer);
+    const twin = new TextEncoder().encode("not a model").buffer;
+    return post.call(this, { ...message, twin }, [twin]);
+  };
+}
+
+test("a mesh worker, which trusts the editing worker's check, still refuses bytes that do not read as a model", async () => {
+  const page = await open("&workers=2", { before: garbleTwins });
+  const { faces } = await snapshot(page);
+  assert.deepEqual(faces, [], "nothing drawn");
+  const shown = page.locator(".report.notice");
+  assert.equal(await shown.getAttribute("data-entities"), CUBE_FACES.join(" "), "naming every face");
+  assert.match(await shown.locator(".message").textContent(), /io\.not-readable/, "as the kernel refused the bytes");
+  await page.close();
+});
+
 test("every report the page can show is in occam-report's catalogue, worded as there, with the same remedy", async () => {
   const catalogue = JSON.parse(await readFile(CATALOGUE, "utf8"));
   const page = await open();

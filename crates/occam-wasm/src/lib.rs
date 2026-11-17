@@ -7,7 +7,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A model in the browser, as the editing worker keeps it (P10). Its requests run as the command line's do: one that goes
 /// through and changes the model is kept, and its native bytes, the binary twin, wait to be published; one that stops
-/// short leaves the model as it was.
+/// short leaves the model as it was. A model it opens is measured and checked whole, and its check is the one the mesh
+/// workers trust ([`Trusted`]).
 #[wasm_bindgen]
 pub struct Session {
     session: occam::Session,
@@ -83,7 +84,7 @@ impl Session {
     /// What a page that drew `before`'s model, meshed to a chordal `deflection` in millimetres and an `angle` in radians,
     /// must mesh again to draw this one: the editing worker asks it of each model `occam view` sends, so the mesh
     /// workers mesh only the faces that changed. Its one JSON form gives the faces' places, counted in id order as
-    /// [`Session::mesh_part`] counts them, and the ids of what keeps its mesh.
+    /// [`Trusted::mesh_part`] counts them, and the ids of what keeps its mesh.
     ///
     /// # Errors
     ///
@@ -91,6 +92,29 @@ impl Session {
     pub fn again(&self, before: &Self, deflection: f64, angle: f64) -> Result<String, String> {
         let again = self.session.again(&before.session, &Exec::serial(), deflection, angle);
         again.map(|again| again.json()).map_err(|r| Answered::Refused(r).json())
+    }
+}
+
+/// A model as a mesh worker holds it: the binary twin the editing worker published, which it checked when it opened or
+/// made the model, read again without being measured or checked
+/// (docs/decisions/2026-11-16-mesh-workers-trust-the-editing-worker.md). It meshes ranges of faces and picks, and
+/// nothing else: it runs no request and gives no bytes, so what it holds never leaves it as a model.
+#[wasm_bindgen]
+pub struct Trusted {
+    session: occam::Session,
+}
+
+#[wasm_bindgen]
+impl Trusted {
+    /// The model `twin` holds, in either encoding, read but neither measured nor checked: only for a copy of the twin the
+    /// editing worker published.
+    ///
+    /// # Errors
+    ///
+    /// The reports refusing bytes that do not read as a model, in the commands' one JSON form.
+    pub fn open(twin: &[u8]) -> Result<Self, String> {
+        let session = occam::Session::open_trusted(twin).map_err(|r| Answered::Refused(r).json())?;
+        Ok(Self { session })
     }
 
     /// The model's faces from `first` up to `end`, counted in id order, meshed to a chordal `deflection` in millimetres
@@ -123,7 +147,7 @@ impl Session {
         picked.map(|picked| picked.json()).map_err(|r| Answered::Refused(r).json())
     }
 
-    /// The samples of the edge `edge`, written as its id, in the mesh [`Session::pick`] picks against: three numbers a
+    /// The samples of the edge `edge`, written as its id, in the mesh [`Trusted::pick`] picks against: three numbers a
     /// point, in millimetres, what the page draws a selected or highlighted edge through. None for an id that is not
     /// an edge a face uses.
     ///
@@ -304,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn a_session_meshes_ranges_of_its_faces_whose_arrays_laid_end_to_end_are_its_whole_meshs() {
+    fn a_mesh_worker_meshes_ranges_of_the_faces_whose_arrays_laid_end_to_end_are_the_whole_mesh() {
         let mut session = Session::new();
         let _ = session.run(BOX);
         let _ = session.run(
@@ -314,8 +338,9 @@ mod tests {
         assert_eq!(session.face_count(), 10);
         let ids: Vec<u32> = (0..10).flat_map(|slot| [slot, 1]).collect();
         assert_eq!(session.face_ids(), ids, "each face's slot and generation, in id order");
+        let worker = Trusted::open(&session.take_saved().unwrap()).unwrap();
         let parts: Vec<Meshed> =
-            [(0, 4), (4, 9), (9, 64)].map(|(first, end)| session.mesh_part(0.1, 0.35, first, end).unwrap()).into();
+            [(0, 4), (4, 9), (9, 64)].map(|(first, end)| worker.mesh_part(0.1, 0.35, first, end).unwrap()).into();
         let whole = session.mesh(0.1, 0.35).unwrap();
         let joined = |of: fn(&Meshed) -> Vec<f64>| parts.iter().flat_map(of).map(f64::to_bits).collect::<Vec<_>>();
         let bits = |numbers: Vec<f64>| numbers.into_iter().map(f64::to_bits).collect::<Vec<_>>();
@@ -328,7 +353,7 @@ mod tests {
         assert_eq!(slots, (0..10).collect::<Vec<_>>(), "each face once, in id order");
         assert_eq!(parts[1].faces()[2], 0, "each part numbered from its own start");
         let refused =
-            serde_json::from_str::<serde_json::Value>(&session.mesh_part(0.1, -1.0, 0, 1).err().unwrap()).unwrap();
+            serde_json::from_str::<serde_json::Value>(&worker.mesh_part(0.1, -1.0, 0, 1).err().unwrap()).unwrap();
         assert_eq!(refused["reports"][0]["code"], "mesh.limit-not-positive");
     }
 
@@ -352,9 +377,10 @@ mod tests {
     }
 
     #[test]
-    fn a_session_picks_what_a_ray_hits_first_and_gives_an_edges_samples() {
-        let mut session = Session::new();
-        let _ = session.run(BOX);
+    fn a_mesh_worker_picks_what_a_ray_hits_first_and_gives_an_edges_samples() {
+        let mut editing = Session::new();
+        let _ = editing.run(BOX);
+        let mut session = Trusted::open(&editing.take_saved().unwrap()).unwrap();
         let picked: serde_json::Value =
             serde_json::from_str(&session.pick(0.1, 0.35, &[0.5, 1.0, 9.0, 0.0, 0.0, -1.0], 0.0).unwrap()).unwrap();
         assert_eq!((&picked["ok"], &picked["point"]), (&serde_json::json!(true), &serde_json::json!([0.5, 1.0, 3.0])));
@@ -375,6 +401,60 @@ mod tests {
         let refused = session.pick(0.1, 0.35, &[0.0; 3], 0.0).err().unwrap();
         let refused: serde_json::Value = serde_json::from_str(&refused).unwrap();
         assert_eq!(refused["reports"][0]["code"], "input.no-direction", "a ray of three numbers has no direction");
+    }
+
+    /// The box saved in the readable JSON, as `occam run` would write it, and changed by `change`.
+    fn box_changed(change: impl FnOnce(&mut serde_json::Value)) -> Vec<u8> {
+        let (_, saved) = occam::Session::new(Encoding::Json).run(BOX);
+        let mut file: serde_json::Value = serde_json::from_slice(&saved.unwrap()).unwrap();
+        change(&mut file);
+        serde_json::to_vec(&file).unwrap()
+    }
+
+    /// The code of the first report `refused` gives.
+    fn code(refused: &str) -> String {
+        let refused: serde_json::Value = serde_json::from_str(refused).unwrap();
+        refused["reports"][0]["code"].as_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn a_mesh_workers_open_measures_and_checks_nothing_but_refuses_bytes_that_do_not_read_as_a_model() {
+        let moved = box_changed(|file| file["vertices"][0]["record"]["point"][2] = serde_json::json!(5));
+        assert_eq!(code(&Session::open(&moved).err().unwrap()), "check.invariant-failed", "a corner off its edges");
+        assert!(Trusted::open(&moved).is_ok(), "nothing checked");
+        let written = box_changed(|file| file["edges"][0]["record"]["deviation"] = serde_json::json!(1e-9));
+        let checked = occam::Session::open(&written, &Exec::serial()).unwrap();
+        let (_, saved) = occam::Session::new(Encoding::Json).run(BOX);
+        let digest = occam::Session::open(&saved.unwrap(), &Exec::serial()).unwrap().digest();
+        assert_eq!(checked.digest(), digest, "the editing worker's open measures the edge again");
+        assert_ne!(
+            Trusted::open(&written).unwrap().session.digest(),
+            digest,
+            "nothing measured: the deviation as written"
+        );
+        let mut damaged = {
+            let mut editing = Session::new();
+            let _ = editing.run(BOX);
+            editing.take_saved().unwrap()
+        };
+        let middle = damaged.len() / 2;
+        damaged[middle] ^= 0xff;
+        for (bytes, refused) in [(&b"not a model"[..], "io.not-readable"), (&damaged[..], "io.damaged")] {
+            assert_eq!(code(&Trusted::open(bytes).err().unwrap()), refused);
+        }
+    }
+
+    #[test]
+    fn the_twin_the_editing_worker_checked_opens_in_a_mesh_worker_as_the_same_model() {
+        let mut editing = Session::new();
+        let ran = editing.run(occam::operation_workloads::TRANSFORMS);
+        assert!(ran.contains(r#""ok":true"#), "{ran}");
+        let twin = editing.take_saved().unwrap();
+        let checked = occam::Session::open(&twin, &Exec::serial()).unwrap();
+        let worker = Trusted::open(&twin).unwrap();
+        assert!(checked.face_count() > 10, "a box, its copy and two cylinders, one with B-spline sides");
+        assert_eq!(worker.session.digest(), editing.session.digest(), "the editing worker's model");
+        assert_eq!(worker.session.digest(), checked.digest(), "and the one a checked open gives, so picks name it");
     }
 
     #[test]

@@ -1,8 +1,8 @@
 //! Source: original
 //! `occam view`: the model shown live in a page on this machine (docs/architecture/live-view.md), started by the agent
 //! (docs/decisions/2026-11-14-the-agent-starts-the-viewer.md). The command starts the model's viewer, a server that is
-//! this program run again with `--serve` as a process of its own, waits until it listens, says where its page is and
-//! returns. The state file beside the model, `<model>.view`, names the viewer's process, port and token, so a second
+//! this program run again with `--serve` as a process of its own, waits until it listens, however long it takes to
+//! open the model, says where its page is and returns. The state file beside the model, `<model>.view`, names the viewer's process, port and token, so a second
 //! `occam view` finds the one that runs and starts nothing; one whose viewer does not answer is stale, and is
 //! replaced. `--status` says whether it runs and where, and `--stop` stops it.
 
@@ -15,10 +15,10 @@ mod server;
 mod state;
 mod watch;
 
-use std::io::{BufRead as _, BufReader};
+use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use occam::{Code, Fault, Input, NamedValue, Remedy, RemedyKind, Report, Viewed, Viewer, Watching};
@@ -26,8 +26,8 @@ use occam::{Code, Fault, Input, NamedValue, Remedy, RemedyKind, Report, Viewed, 
 use crate::args::ViewArgs;
 use crate::commands::Said;
 
-/// How long `occam view` waits, in seconds, for the viewer it started to say it listens.
-const READY: u32 = 30;
+/// How often `occam view` says that the viewer it started is still opening the model, while it waits for it to listen.
+const STILL: Duration = Duration::from_secs(5);
 /// How long `occam view --stop` waits, in seconds, for the viewer to stop once it has said it will.
 const STOPPING: u32 = 10;
 
@@ -116,8 +116,11 @@ fn gone(port: u16, wait: Duration) -> bool {
     true
 }
 
-/// Starts the viewer of `model` as a process of its own and waits for it to say it listens: the viewer, as its state
-/// file names it, or why it could not start.
+/// Starts the viewer of `model` as a process of its own and waits for it to say it listens, however long it takes to
+/// open the model, saying every [`STILL`] that it is still opening it
+/// (docs/decisions/2026-11-17-occam-view-waits-while-its-server-opens.md): the viewer, as its state file names it, or
+/// why it could not start, in its own words if it said any. An interrupt stops this command alone; the viewer, finding
+/// no one to tell that it listens, then stops once it has opened the model, and removes its state file.
 fn spawn(model: &Path, args: &ViewArgs) -> Result<Viewer, Report> {
     let program = std::env::current_exe().map_err(|_| not_started(model))?;
     let mut command = Command::new(program);
@@ -128,15 +131,20 @@ fn spawn(model: &Path, args: &ViewArgs) -> Result<Viewer, Report> {
     command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     detach(&mut command);
     let mut child = command.spawn().map_err(|_| not_started(model))?;
-    let said = first_line(&mut child, Duration::from_secs(READY.into())).and_then(|line| said(&line));
+    let given = args.model.display().to_string();
+    let still = |waited: Duration| {
+        let _ = writeln!(std::io::stderr().lock(), "{}", still_opening(&given, waited));
+    };
+    let said = first_line(&mut child, STILL, still).and_then(|line| said(&line));
     said.unwrap_or_else(|| {
         let _ = child.kill();
         Err(not_started(model))
     })
 }
 
-/// The first line `child` writes to standard output, if it writes one within `wait`.
-fn first_line(child: &mut Child, wait: Duration) -> Option<String> {
+/// The first line `child` writes to standard output, waited for as long as it runs, or `None` if it ends without
+/// one. Each `every` it has said nothing, `waiting` is told how long it has been waited for.
+fn first_line(child: &mut Child, every: Duration, mut waiting: impl FnMut(Duration)) -> Option<String> {
     let out = child.stdout.take()?;
     let (send, receive) = mpsc::channel();
     std::thread::spawn(move || {
@@ -144,7 +152,19 @@ fn first_line(child: &mut Child, wait: Duration) -> Option<String> {
         let read = BufReader::new(out).read_line(&mut line);
         let _ = send.send(read.ok().filter(|&count| count > 0).map(|_| line));
     });
-    receive.recv_timeout(wait).ok().flatten()
+    let start = Instant::now();
+    loop {
+        match receive.recv_timeout(every) {
+            Ok(line) => return line,
+            Err(RecvTimeoutError::Timeout) => waiting(start.elapsed()),
+            Err(RecvTimeoutError::Disconnected) => return None,
+        }
+    }
+}
+
+/// What `occam view` says while the viewer of `given` is still opening the model, `waited` after it started.
+fn still_opening(given: &str, waited: Duration) -> String {
+    format!("The viewer is still opening {given}: {} s so far.", waited.as_secs())
 }
 
 /// What the viewer's first line says: that it listens, as its state file names it, or why it could not.
@@ -170,9 +190,7 @@ fn given_model(model: &Path) -> Input {
 
 /// `view.not-started` for the viewer of `model`.
 fn not_started(model: &Path) -> Report {
-    Report::new(Code::NotStarted, Fault::Internal)
-        .with_input(given_model(model))
-        .with_value(NamedValue::count("seconds", READY))
+    Report::new(Code::NotStarted, Fault::Internal).with_input(given_model(model))
 }
 
 /// `view.port-taken` for `port`, with the remedy of asking for none.

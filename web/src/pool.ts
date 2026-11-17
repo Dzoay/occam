@@ -7,7 +7,7 @@
 // the samples of edges to outline, is asked of one worker, which meshes the model whole once to answer.
 
 import type { FaceRange, Mesh } from "./mesh.ts";
-import type { Answer, Ask, FromMesher, KernelReport, Part, ToMesher } from "./protocol.ts";
+import type { Answer, Ask, Checked, FromMesher, KernelReport, Part, ToMesher } from "./protocol.ts";
 
 /** About how many calls a job is cut into (P10). */
 export const CALLS = 64;
@@ -195,12 +195,12 @@ export class Pool {
   }
 
   /**
-   * Gives each worker its own copy of a model, `twins` one each, and meshes its faces, whose slots and generations are
+   * Gives each worker its own copy of a model the editing worker checked, `twins` one each, and meshes its faces, whose slots and generations are
    * `ids`, to `limits`: those whose places `only` gives, if it is given, the rest keeping the blocks `keeping` gives
    * them. Resolves with the parts laid end to end, or with null if another model came first.
    */
   mesh(
-    twins: readonly ArrayBuffer[],
+    twins: readonly Checked[],
     ids: Uint32Array,
     limits: Limits,
     only: readonly number[] | null = null,

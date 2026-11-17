@@ -1,17 +1,20 @@
 // A mesh worker, one of the page's pool, kept alive between requests. It loads its own copy of each model the editing
-// worker publishes, read-only, and meshes the ranges of its faces the page deals it, one call at a time, transferring
-// the flat arrays back with what refused any of them. It also picks against its model's whole CPU mesh, made the
-// first time it is asked and kept, and gives the samples of the edges the page outlines.
+// worker publishes, read-only, trusting the editing worker's check: it reads the copy, refusing bytes that do not read
+// as a model, but neither measures nor checks it again
+// (docs/decisions/2026-11-16-mesh-workers-trust-the-editing-worker.md). It meshes the ranges of its faces the page
+// deals it, one call at a time, transferring the flat arrays back with what refused any of them. It also picks against
+// its model's whole CPU mesh, made the first time it is asked and kept, and gives the samples of the edges the page
+// outlines.
 
-import { Session } from "occam-wasm";
+import { Trusted } from "occam-wasm";
 
 import type { Answer, Ask, FromMesher, KernelReport, Part, ToMesher } from "../protocol.ts";
 import { kernelReport, own } from "../protocol.ts";
 import { kernel, said } from "./kernel.ts";
 
 const port = own<ToMesher, FromMesher>();
-/** The model this worker holds, or why it could not open it. */
-let held: { readonly model: number; readonly session: Session | null; readonly refused: string } | null = null;
+/** The model this worker holds, or why it could not read it. */
+let held: { readonly model: number; readonly session: Trusted | null; readonly refused: string } | null = null;
 
 type Mesh = Extract<ToMesher, { kind: "mesh" }>;
 
@@ -24,8 +27,8 @@ function reports(summary: string): KernelReport[] {
   return [...answers.flatMap((answer) => (answer.report ? [answer.report] : [])), ...rest].map(kernelReport);
 }
 
-/** The session that holds model `model`, as a call or an ask names it. */
-function holding(model: number): Session {
+/** What holds model `model`, as a call or an ask names it. */
+function holding(model: number): Trusted {
   if (!held || held.model !== model) throw new Error(`this worker holds no model ${model}`);
   if (!held.session) throw new Error(held.refused);
   return held.session;
@@ -81,7 +84,7 @@ async function answer(message: ToMesher): Promise<void> {
     held = null;
     try {
       await kernel();
-      held = { model: message.model, session: Session.open(new Uint8Array(message.twin)), refused: "" };
+      held = { model: message.model, session: Trusted.open(new Uint8Array(message.twin)), refused: "" };
     } catch (error) {
       held = { model: message.model, session: null, refused: said(error) };
     }

@@ -11,10 +11,14 @@
 //   redraw <model file> [rounds]     the time from a run's save, the file's modification time, to the page's redraw of
 //                                    the model the run made, ten times unless `rounds` says otherwise. A request's
 //                                    `.json` in place of a model is run first to make one.
+//   memory <model file> [workers]    the page's peak memory with two mesh workers unless `workers` says otherwise, from
+//                                    navigation to the model drawn and picked once, a pick meshing it whole in a
+//                                    worker: the most each of the browser's processes held resident, the renderer's
+//                                    being the page's and its workers', read from Linux's /proc.
 //
 // Run by `just view-timing-browser`, which builds the page and a release `occam`, which serves it.
 import { execFile } from "node:child_process";
-import { copyFile, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,7 +35,7 @@ const DIST = fileURLToPath(new URL("../../crates/occam-cli/page", import.meta.ur
 const PATIENCE = 30 * 60_000;
 
 const usage = () => {
-  console.error("usage: timing.mjs pool <model file> [workers ...] | editing | redraw <model file> [rounds]");
+  console.error("usage: timing.mjs pool <model file> [workers ...] | editing | redraw <model file> [rounds] | memory <model file> [workers]");
   process.exit(2);
 };
 const print = (row) => console.log(JSON.stringify(row));
@@ -200,6 +204,66 @@ async function redraw(browser, model, rounds) {
   }
 }
 
+/**
+ * Each process this one started, and those they started, as its kind (Chromium's `--type`, or `browser`) and the most
+ * it has held resident so far, in MB: Linux's `VmHWM`. `occam view`'s server is not among them, since `occam view`
+ * leaves it to run apart.
+ */
+async function peaks() {
+  const parent = new Map();
+  for (const name of await readdir("/proc")) {
+    const stat = /^\d+$/.test(name) ? await readFile(`/proc/${name}/stat`, "utf8").catch(() => null) : null;
+    // The parent is the second field after the command, which is in parentheses and may hold spaces.
+    if (stat) parent.set(Number(name), Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]));
+  }
+  const ours = (pid) => {
+    for (let at = parent.get(pid); at !== undefined && at > 1; at = parent.get(at)) if (at === process.pid) return true;
+    return false;
+  };
+  const found = [];
+  for (const pid of [...parent.keys()].filter(ours)) {
+    const status = await readFile(`/proc/${pid}/status`, "utf8").catch(() => "");
+    const line = await readFile(`/proc/${pid}/cmdline`, "utf8").catch(() => "");
+    const peak = /VmHWM:\s+(\d+) kB/.exec(status);
+    const kind = /--type=([\w-]+)/.exec(line)?.[1] ?? "browser";
+    if (peak) found.push({ kind, peak_mb: Math.round(Number(peak[1]) / 1024) });
+  }
+  return found;
+}
+
+async function memory(browser, model, workers) {
+  const view = await viewing(model);
+  try {
+    const opened = await page(browser, `${view.started.url}?inspect&workers=${workers}`);
+    const start = Date.now();
+    await opened.page.waitForFunction(() => (window.occamViewer?.live()?.models ?? 0) >= 1, null, { polling: 100 });
+    await opened.page.evaluate(() => window.occamViewer.settled());
+    const drawn = Date.now() - start;
+    const before = await opened.page.evaluate(() => window.occamViewer.picked());
+    const box = await opened.page.locator("#view").boundingBox();
+    await opened.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await opened.page.waitForFunction((was) => window.occamViewer.picked()?.json !== was, before?.json, { polling: 100 });
+    const picked = Date.now() - start - drawn;
+    const found = await peaks();
+    const most = (kind) => Math.max(0, ...found.filter((p) => p.kind === kind).map((p) => p.peak_mb));
+    print({
+      mode: "memory",
+      model: basename(model),
+      workers,
+      faces: await opened.page.evaluate(() => window.occamViewer.mesh().faces.length),
+      drawn_ms: drawn,
+      first_pick_ms: picked,
+      renderer_peak_mb: most("renderer"),
+      gpu_peak_mb: most("gpu-process"),
+      browser_peak_mb: most("browser"),
+      processes: found,
+    });
+    await opened.close();
+  } finally {
+    await view.done();
+  }
+}
+
 const [mode, ...rest] = process.argv.slice(2);
 if (!OCCAM || WEBGPU.length === 0) {
   console.error("OCCAM and OCCAM_WEBGPU_FLAGS are not set: run this with `just view-timing-browser`");
@@ -215,6 +279,8 @@ try {
     await editing(browser);
   } else if (mode === "redraw" && rest[0]) {
     await redraw(browser, rest[0], Number(rest[1] ?? 10));
+  } else if (mode === "memory" && rest[0]) {
+    await memory(browser, rest[0], Number(rest[1] ?? 2));
   } else {
     usage();
   }

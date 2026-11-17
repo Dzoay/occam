@@ -2,6 +2,7 @@
 //! The second way to make a snapshot: from what a file holds, slot by slot (PARITY 2.17). Nothing from outside is
 //! trusted, so it is as strict as [`Edit::commit`](crate::Edit::commit): every edge's deviation from its faces is
 //! measured again and stored (the deviation cap's decision), and the whole model is checked. Any failure refuses it.
+//! The browser build alone may take a model as its bytes hold it, for bytes this program checked before it saved them.
 
 use core::num::NonZeroU32;
 
@@ -61,6 +62,16 @@ impl Restore {
         let snapshot = Snapshot { model };
         failures.extend(snapshot.check_all(exec));
         if failures.is_empty() { Ok(snapshot) } else { Err(failures) }
+    }
+
+    /// The snapshot as the bytes held it, every edge's deviation as written, nothing measured or checked: only for bytes
+    /// saved from a snapshot this program had measured and checked, as the browser's mesh workers open the twin the
+    /// editing worker checked (docs/decisions/2026-11-16-mesh-workers-trust-the-editing-worker.md). Only a build with
+    /// the `trusted` feature has it.
+    #[cfg(feature = "trusted")]
+    #[must_use]
+    pub fn trusted(self) -> Snapshot {
+        Snapshot { model: self.model }
     }
 }
 
