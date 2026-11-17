@@ -295,17 +295,16 @@ fn a_sphere_touching_a_plane_is_one_contact_below_the_resolution() {
 const STEEP: f64 = 10.0;
 
 /// A ridge, and a plane that cuts it just below its crest in two parallel lines `apart` apart, both placed rigidly: the
-/// bilinear B-spline over `[-1, 1]^2` of `z = -STEEP |x|`, whose parameters are `x` and `y`, and the plane
-/// `z = -STEEP apart / 2`, which meets it along `x = ±apart / 2`. They cross square to within a tenth of a radian, so
-/// the band tells apart two lines more than itself apart. The crest is where the domain is first halved, so that each
-/// line has leaves of its own.
-fn ridge(apart: f64) -> (Plane, SplineSurface) {
-    let corner = |(x, y): (f64, f64)| placed(x, y, -STEEP * x.abs());
-    let poles = [(-1.0, -1.0), (0.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (0.0, 1.0), (1.0, 1.0)].map(corner);
+/// bilinear B-spline over `[-1, 1]^2` of `z = -STEEP |x - crest|`, whose parameters are `x` and `y`, and the plane
+/// `z = -STEEP apart / 2`, which meets it along `x = crest ± apart / 2`. They cross square to within a tenth of a
+/// radian, so the band tells apart two lines more than itself apart.
+fn ridge_at(crest: f64, apart: f64) -> (Plane, SplineSurface) {
+    let corner = |(x, y): (f64, f64)| placed(x, y, -STEEP * (x - crest).abs());
+    let poles = [(-1.0, -1.0), (crest, -1.0), (1.0, -1.0), (-1.0, 1.0), (crest, 1.0), (1.0, 1.0)].map(corner);
     let form = BsplineSurface {
         degree: (1, 1),
         count: (3, 2),
-        knots_u: vec![-1.0, -1.0, 0.0, 1.0, 1.0],
+        knots_u: vec![-1.0, -1.0, crest, 1.0, 1.0],
         knots_v: vec![-1.0, -1.0, 1.0, 1.0],
         poles: poles.into(),
         weights: None,
@@ -313,14 +312,19 @@ fn ridge(apart: f64) -> (Plane, SplineSurface) {
     (Plane::placed(&moved([0.0, 0.0, -STEEP * apart / 2.0]).then(&rigid())), SplineSurface::new(&form).unwrap())
 }
 
-/// Which of the ridge's two lines `apart` apart `curve` runs along from edge to edge, `-1` or `1`: every point of it is
-/// within a quarter of `apart` of that line.
-fn line_of(curve: &SectionCurve, apart: f64) -> f64 {
+/// The ridge with its crest where the domain is first halved, so that each line has leaves of its own.
+fn ridge(apart: f64) -> (Plane, SplineSurface) {
+    ridge_at(0.0, apart)
+}
+
+/// Which of the two lines `apart` apart about `crest` `curve` runs along from edge to edge, `-1` or `1`: every point of
+/// it is within a quarter of `apart` of that line.
+fn line_of(curve: &SectionCurve, (crest, apart): (f64, f64)) -> f64 {
     let (back, range) = (rigid().inverse(), curve.curve.range());
     let at = |k: u32| back.point(curve.curve.point(range.lo + (range.hi - range.lo) * f64::from(k) / 32.0)).to_vec3();
-    let side = if at(16).x < 0.0 { -1.0 } else { 1.0 };
+    let side = if at(16).x < crest { -1.0 } else { 1.0 };
     for p in (0..=32).map(at) {
-        assert!((p.x - side * apart / 2.0).abs() <= apart / 4.0, "{apart}: off its line at {p:?}");
+        assert!((p.x - crest - side * apart / 2.0).abs() <= apart / 4.0, "{apart}: off its line at {p:?}");
     }
     let ends = [at(0).y.abs(), at(32).y.abs()];
     assert!(ends.iter().all(|y| (y - 1.0).abs() <= BAND), "{apart}: from edge to edge, to the band: {ends:?}");
@@ -336,11 +340,43 @@ fn two_lines_closer_than_the_tracers_sag_but_apart_to_the_band_are_both_found() 
     let got = separations.map(|apart| {
         let (plane, ridge) = ridge(apart);
         let found = alone(hybrid(1e-4, 0.05, 0.25)).section(&plane, &ridge, tol(), within(20_000));
-        let mut lines: Vec<f64> = found.curves.iter().map(|curve| line_of(curve, apart)).collect();
+        let mut lines: Vec<f64> = found.curves.iter().map(|curve| line_of(curve, (0.0, apart))).collect();
         lines.sort_by(f64::total_cmp);
         (apart, lines, found.failures.len(), found.contacts.len())
     });
     assert_eq!(got, separations.map(|apart| (apart, vec![-1.0, 1.0], 0, 0)));
+}
+
+/// Where the ridge's crest lies inside a leaf, not where the domain is halved: the leaf about it runs from 0.296875 to
+/// 0.3125 across x, a 64th of the domain, and its middle is 3e-4 from the crest.
+const INSIDE: f64 = 0.305;
+
+/// Which lines of the ridge with its crest `INSIDE`, cut `apart` apart, the hybrid finds, and how many failures and
+/// contacts it gives: against the plane, or where `bowed`, against the graph of `k (x - INSIDE)^2 - k INSIDE^2`, which
+/// presents no analytic form and, for `k INSIDE^2` the plane's depth, meets the ridge in two lines as near as makes no
+/// odds where the plane does.
+fn lines_found(apart: f64, bowed: bool) -> (Vec<f64>, usize, usize) {
+    let (plane, ridge) = ridge_at(INSIDE, apart);
+    let k = STEEP * apart / 2.0 / (INSIDE * INSIDE);
+    let bowl = graph((k, -2.0 * k * INSIDE), (0.0, 0.0));
+    let other: &dyn Surface = if bowed { &bowl } else { &plane };
+    let found = alone(hybrid(1e-4, 0.05, 0.25)).section(other, &ridge, tol(), within(20_000));
+    let mut lines: Vec<f64> = found.curves.iter().map(|curve| line_of(curve, (INSIDE, apart))).collect();
+    lines.sort_by(f64::total_cmp);
+    (lines, found.failures.len(), found.contacts.len())
+}
+
+#[test]
+fn two_lines_through_the_same_leaves_with_the_crest_inside_them_are_both_found_on_either_hold() {
+    // A leaf gave one start, so where the crest lies inside the leaves, the second line through them was lost, with no
+    // failure, from 1.5e-7 apart up to 1e-2. From just over the band up to nearly as far apart as the leaf about the
+    // crest is wide, against the plane's implicit form and, fewer, both subdivided against a bowed B-spline.
+    let separations = [1.5e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1.4e-2];
+    let got = separations.map(|apart| (apart, lines_found(apart, false)));
+    assert_eq!(got, separations.map(|apart| (apart, (vec![-1.0, 1.0], 0, 0))));
+    let separations = [1.5e-7, 1e-4, 1.4e-2];
+    let got = separations.map(|apart| (apart, lines_found(apart, true)));
+    assert_eq!(got, separations.map(|apart| (apart, (vec![-1.0, 1.0], 0, 0))));
 }
 
 #[test]

@@ -63,8 +63,9 @@ flowchart TD
   held -->|"yes"| one["Subdivide the other,<br/>against the implicit form"]
   held -->|"no"| both["Subdivide both,<br/>pairs of parts"]
   one & both --> drop["Drop a part whose box misses,<br/>or where the form keeps one sign"]
-  drop --> leaf["Leaves: Newton from the middle,<br/>at most one start each"]
+  drop --> leaf["Leaves: Newton from the middle;<br/>more than one curve across:<br/>a start at each edge crossing"]
   leaf -->|"gaps all within the band"| over[("Overlap, reported")]
+  leaf -->|"a crossing settles nowhere"| lost[("Unresolved, reported")]
   leaf --> tube{"In the tube of a curve<br/>found, and on it?"}
   tube -->|"no"| trace["Trace in rounds of 32"] --> fit["Fit"]
   tube -->|"yes"| skip(["Skipped"])
@@ -73,10 +74,20 @@ flowchart TD
 - **Breadth first,** a level at a time, each part halved across its wider side until its box is a leaf across. A part
   is dropped when its box misses the other's by more than the band, or, against an analytic side, when the implicit
   function's size at the box's middle less the box's half diagonal is above the band (P8). Each is a band decision.
-- **A leaf** gives at most one start point, where Newton's method from its middle settles inside it. A leaf where the
-  surfaces are within the band of each other at its middle and corners is an overlap, such as a rational cylinder on
-  its analytic twin: `intersect.incomplete` for `surfaces-coincide`, not curves. A part halved as far as it goes and
-  still larger than a leaf is `intersect.incomplete` for `budget-spent`.
+- **A leaf** gives a start point where Newton's method from its middle settles inside it. A leaf where the surfaces
+  are within the band of each other at its middle and corners is an overlap, such as a rational cylinder on its
+  analytic twin: `intersect.incomplete` for `surfaces-coincide`, not curves. A part halved as far as it goes and still
+  larger than a leaf is `intersect.incomplete` for `budget-spent`.
+- **More than one curve through a leaf** is found at its edges
+  ([`crossings`](../../crates/occam-intersect/src/crossings.rs)). The gap, signed, is read at the corners with its rate
+  along the part's parameters. An edge whose ends differ in sign crosses one curve; one whose ends agree crosses two
+  where the gap turns back towards nought from both ends and probing towards the turn finds it past nought. The
+  probes stop where two crossings would be too close for the tube to tell apart, or where the box over what is left
+  is nearer than the gap is to nought, since the gap changes no faster than its point moves. A leaf whose edges are
+  crossed more than twice gives a start at each crossing, found by Newton's method along the edge, and the tube keeps
+  one trace a curve. A crossing that settles nowhere inside the leaf is reported as an unresolved part is. This takes
+  the gap to have at most one extremum along an edge, as a smooth gap over a small leaf and a B-spline's crease
+  across it have.
 - **The tube** about the curves found is twice each chord's sag wide, and the square root of the band about a touch. A
   start inside it is on the found curve only where a landing confirms it: the corrector, from the cubic through the
   chord's two stations along the curve at each, onto the plane across the start's curve, lands on the start within the
@@ -124,11 +135,13 @@ flowchart LR
   within the band over the sine between the surfaces of its start, the curve's own resolution there. Touches within
   each other's bounds are one contact.
 - **Not done here:** the hybrid does not trace a tangency along a curve, which is one `BelowResolution` with an infinite
-  bound. Its tube is no longer a resolution of its own: the two lines a ridge's sides cut a plane in are both found
-  from 1.5e-7 apart, at a band of 1e-7. Two remain. A leaf gives one start, so two curves that cross square through the
-  same leaves, closer than a leaf, give one, and the second is lost: the ridge's lines 1e-3 apart, its crest inside a
-  leaf. And a trace's step strays from a curve by about four times its sag where it bends, so two curves closer than
-  that can be stepped between, which a loop reports as stalled.
+  bound. Neither its tube nor its leaves are a resolution of their own: the two lines a ridge's sides cut a plane in
+  are both found from 1.5e-7 apart, at a band of 1e-7, with the crest where the domain is halved or inside a leaf, up
+  to as far apart as the leaf is wide, and with both surfaces subdivided too. What a leaf's edges cannot show remains:
+  a gap with more than one extremum along an edge, as two creases inside one leaf give, and a closed loop inside a
+  leaf, which crosses no edge and is found from the middle or by projections as before. And a trace's step strays
+  from a curve by about four times its sag where it bends, so two curves closer than that can be stepped between,
+  which a loop reports as stalled.
 
 ## Edge against surface
 
