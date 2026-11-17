@@ -291,7 +291,6 @@ fn faults(totals: &Totals) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "the full corpus runs nightly, not per PR (docs/PLAN.md section 5): `just corpus-hits`"]
 fn on_the_corpus_the_box_test_removes_scans_and_changes_no_digest() {
     let totals = tried(&cases());
     let Totals { cases, built, pairs, removed, points, failures, skipped, booleans_skipped, refused } = &totals;

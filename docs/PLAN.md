@@ -118,11 +118,13 @@ tests and wasm. CI runs all of them, with the same commands. Goal: a PR's CI fin
 | `gates determinism` | [The contract](DETERMINISM.md): output hashes match on x86-64 at 1 and N threads and on single-threaded wasm32, with NaNs canonicalised before hashing (L23) | `bedrock.maths` |
 | `gates perf` | Native instruction counts per operation class, scalar and lanes. Browser timing is reported on every PR; only the same-run simd128-against-scalar ratio is gated (L30, L31) | `bedrock.perf` |
 
-Nightly, not per PR: the full corpus, randomised boolean sequences, and the OCCT comparison (L16, L17). The workflow comes
+Nightly, not per PR: randomised boolean sequences, and the OCCT comparison (L16, L17), which
+[runs the oracle over the corpus and then `occam-verify`'s comparison](decisions/2026-11-17-the-corpus-per-pr-the-oracle-nightly.md), so that no oracle output enters the repository. The workflow comes
 from `bedrock.ci`, and jobs join it as the corpus and operations arrive.
 
 Per PR, in `test`: the corpus cases that occam builds today and that record a closed-form answer are built, measured and
-judged against it by `occam-verify`, which takes seconds. Both corpus tests pin what they leave out by reason and count,
+judged against it by `occam-verify`, and intersection's hits on every case's operands are held to the unculled scan;
+each takes seconds. Both corpus tests pin what they leave out by reason and count,
 and fail on a case the runner refuses, a count that moves or an empty corpus.
 
 ## 6. Milestones
