@@ -1,7 +1,8 @@
 //! Source: original
 //! The face's checks at their edges: the turn of a thin outline is measured finely enough to have its sign, a loop of no
 //! area is taken as it is given, a hole that is turned names its edges as given, an open wire's gap runs from its start
-//! to its end, and a wire is taken only as the one wire of its body.
+//! to its end, a wire is taken only as the one wire of its body, and a crescent too thin for a point off its arcs bounds a
+//! face where its middle is clear of them.
 
 use core::f64::consts::PI;
 
@@ -45,6 +46,28 @@ fn a_thin_outline_turns_as_its_arc_does_cut_finely() {
     let at = |u: f64, v: f64| surface.point(occam_units::UvPoint::new(u, v)).to_vec3();
     let normal = (at(1.0, 0.0) - at(0.0, 0.0)).cross(at(0.0, 1.0) - at(0.0, 0.0));
     assert!(normal.z > 0.99, "the face faces +z, about which its outline runs anticlockwise: {normal:?}");
+}
+
+#[test]
+fn a_crescent_bounds_a_face_if_its_middle_is_further_than_sixteen_bands_from_both_arcs() {
+    // Arcs over the chord from (-1, 0) to (1, 0) through (0, 0.05) and (0, 0.05 - width), at the default band of 1e-7:
+    // 4e-6 across, its middle is 2e-6 from both, clear of them by more than 16 bands, though no point off an arc by a
+    // thirty-second of its length is inside it; 3e-6 across, no point is that clear.
+    let crescent = |width: f64| {
+        let arcs = [
+            json!({"arc": [[-1, 0, 0], [0, 0.05, 0], [1, 0, 0]]}),
+            json!({"arc": [[1, 0, 0], [0, 0.05 - width, 0], [-1, 0, 0]]}),
+        ];
+        json!([{"op": "face", "outer": {"edges": arcs}}])
+    };
+    let (model, made) = built(crescent(4e-6));
+    let face = model.view(model.resolve::<Face>(made[0].unwrap()).unwrap()).unwrap();
+    let witness = model.view(face.loops()[0]).unwrap().witness();
+    let surface = face.surface().unwrap();
+    let place = surface.point(witness).to_vec3();
+    assert!(near([place.x, place.y, place.z], [0.0, 0.05 - 2e-6, 0.0]), "the middle of its middle: {place:?}");
+    let report = refused(crescent(3e-6));
+    assert_eq!((report.code, number(&report, "clearance")), (Code::NoInterior, 16.0 * 1e-7));
 }
 
 /// Two squares 2 across that meet at a corner, (12, 12), as one loop from `(14, 12)` that crosses itself there: round

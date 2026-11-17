@@ -139,10 +139,10 @@ exclude_re = [
     "swept\\.rs:\\d+:\\d+: replace && with \\|\\| in window$",
     # `side` is -1 or 1, never 0.
     "revolution\\.rs:\\d+:\\d+: replace < with <= in collapse$",
-    # Refining more pieces, or one whose slope is exactly zero at a sample, which the piece before already refines to,
-    # finds no point nearer than the minimum the search finds without them.
-    "nearest\\.rs:69:21: replace < with <= in nearest_by$",
-    "nearest\\.rs:69:27: replace && with \\|\\| in nearest_by$",
+    # By line. Refining more pieces, or one whose slope is exactly zero at a sample, which the piece before already
+    # refines to, finds no point nearer than the minimum the search finds without them.
+    "nearest\\.rs:88:29: replace < with <= in nearest_in$",
+    "nearest\\.rs:89:13: replace && with \\|\\| in nearest_in$",
     # The measures step's (geometry.measures). Ties, which give the same value either way: a length's ends in order.
     "arc\\.rs:\\d+:\\d+: replace < with <= in length$",
     # By line where the operator is not alone in its function. Derivatives of equal length in order, and a spread of

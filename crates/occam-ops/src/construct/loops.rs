@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use occam_units::UvPoint;
 
 use super::boxes::{Bounds, Boxes, EMPTY, padded, slack, union, with};
-use super::flat::{Flat, P2, add, chain_of, scale, sub};
+use super::flat::{Flat, P2, add, apart, chain_of, crossings, dot, scale, sub};
 
 /// The box that holds what piece `k` of the closed loop `pieces` gives its chain: the piece, where the piece before it
 /// ends, and for the last, where the first begins.
@@ -98,22 +98,53 @@ impl<'a> Loops<'a> {
     /// A witness for loop `k` (the outer loop first): a point strictly inside it and, for the outer loop, outside every
     /// hole, further than `clear` from every loop. The clearest of the points a quarter, a half and three quarters of the
     /// way along each piece, moved off it either way by a half, an eighth and a thirty-second of its length, the first of
-    /// them that is as clear: each point's clearance is found first, and the clearest are tried in turn.
+    /// them that is as clear. A loop thinner than a thirty-second of its pieces, as a crescent is, has none of those
+    /// inside it; failing them, the clearest of the middles of the stretches between where the lines square to its
+    /// pieces at those points cross the face's loops ([`Loops::across`]), so that a loop more than twice `clear` across
+    /// where such a line crosses it has a witness. Each point's clearance is found first, and the clearest are tried in
+    /// turn, whether a point is inside decided exactly ([`Loops::witnesses`]).
     pub(crate) fn witness(&self, k: usize, clear: f64) -> Option<(P2, f64)> {
-        let mut found: Vec<(P2, f64)> = Vec::new();
-        for piece in self.face.get(k).into_iter().flatten() {
+        let pieces = self.face.get(k).map_or(&[][..], Vec::as_slice);
+        let mut off = Vec::new();
+        for piece in pieces {
             for f in [0.5, 0.25, 0.75] {
                 let (p, n) = piece.at(f);
                 for d in [0.5, 0.125, 0.031_25].map(|share| share * piece.length()) {
-                    let points = [add(p, scale(n, d)), sub(p, scale(n, d))];
-                    found.extend(
-                        points.into_iter().map(|q| (q, self.clearance(q, None))).filter(|&(_, room)| room > clear),
-                    );
+                    off.extend([add(p, scale(n, d)), sub(p, scale(n, d))]);
                 }
             }
         }
+        self.clearest(k, clear, off).or_else(|| {
+            let around = self.whole.get(k);
+            let reach = apart([around[0], around[1]], [around[2], around[3]]);
+            let square = pieces.iter().flat_map(|piece| [0.5, 0.25, 0.75].map(|f| piece.at(f)));
+            self.clearest(k, clear, square.flat_map(|(p, n)| self.across(p, n, reach)).collect())
+        })
+    }
+
+    /// Of `points`, the clearest further than `clear` from every loop that is a witness for loop `k`, the first of those
+    /// as clear.
+    fn clearest(&self, k: usize, clear: f64, points: Vec<P2>) -> Option<(P2, f64)> {
+        let mut found: Vec<(P2, f64)> =
+            points.into_iter().map(|q| (q, self.clearance(q, None))).filter(|&(_, room)| room > clear).collect();
         found.sort_by(|a, b| b.1.total_cmp(&a.1));
         found.into_iter().find(|&(q, room)| self.witnesses(k, q, room))
+    }
+
+    /// The middles of the stretches between where the line through `p` along the unit `n` crosses or meets a piece of
+    /// any loop, no further than `reach` from `p` either way, in order along it. Inside a loop, where `p` lies on it, one
+    /// of them is the middle of the crossing from `p` to the far side, as far from both as the loop is thick there.
+    fn across(&self, p: P2, n: P2, reach: f64) -> Vec<P2> {
+        let line = Flat::Seg { a: sub(p, scale(n, reach)), b: add(p, scale(n, reach)) };
+        let mut near = self.boxes.meeting(line.bounds());
+        near.sort_unstable();
+        let pieces = near.into_iter().filter_map(|k| self.piece(k));
+        let mut along: Vec<f64> = pieces.flat_map(|piece| crossings(line, piece)).map(|q| dot(sub(q, p), n)).collect();
+        along.sort_by(f64::total_cmp);
+        along
+            .windows(2)
+            .filter_map(|pair| Some(add(p, scale(n, f64::midpoint(*pair.first()?, *pair.get(1)?)))))
+            .collect()
     }
 
     /// Whether loop `inner`, which neither touches nor crosses loop `outer`, lies inside it: whether its start does.
@@ -139,10 +170,12 @@ impl<'a> Loops<'a> {
 mod tests {
     use core::f64::consts::PI;
 
+    use occam_math::atan2;
+
     use super::*;
     use crate::construct::boxes::meet;
     use crate::construct::flat::least;
-    use crate::construct::flat::tests::{circle, polygon, regular, seg, square, winding};
+    use crate::construct::flat::tests::{circle, near, polygon, regular, seg, square, winding};
 
     /// A witness for loop `k` of `face`.
     fn witness(face: &[Vec<Flat>], k: usize, clear: f64) -> Option<(P2, f64)> {
@@ -166,24 +199,58 @@ mod tests {
         inside(own) && (k > 0 || face.iter().skip(1).all(|hole| winding(hole, q, clear) == Some(0)))
     }
 
-    /// A witness for loop `k` of `face`, trying each point in turn against every piece.
-    fn witness_reading_all(face: &[Vec<Flat>], k: usize, clear: f64) -> Option<(P2, f64)> {
+    /// Of `points`, tried in turn against every piece of `face`, the clearest further than `clear` from them that is a
+    /// witness for loop `k`, the first of those as clear.
+    fn clearest_reading_all(face: &[Vec<Flat>], k: usize, clear: f64, points: &[P2]) -> Option<(P2, f64)> {
         let mut best: Option<(P2, f64)> = None;
-        for piece in face.get(k).into_iter().flatten() {
-            for f in [0.5, 0.25, 0.75] {
-                let (p, n) = piece.at(f);
-                for d in [0.5, 0.125, 0.031_25].map(|share| share * piece.length()) {
-                    for q in [add(p, scale(n, d)), sub(p, scale(n, d))] {
-                        let room = clearance_reading_all(face, q);
-                        let better = best.is_none_or(|(_, so_far)| room > so_far);
-                        if room > clear && better && witnesses_reading_all(face, k, q, room) {
-                            best = Some((q, room));
-                        }
-                    }
-                }
+        for &q in points {
+            let room = clearance_reading_all(face, q);
+            let better = best.is_none_or(|(_, so_far)| room > so_far);
+            if room > clear && better && witnesses_reading_all(face, k, q, room) {
+                best = Some((q, room));
             }
         }
         best
+    }
+
+    /// The middles between where the line through `p` along `n`, `reach` either way, crosses each piece of `face`.
+    fn across_reading_all(face: &[Vec<Flat>], p: P2, n: P2, reach: f64) -> Vec<P2> {
+        let line = seg(sub(p, scale(n, reach)), add(p, scale(n, reach)));
+        let mut along: Vec<f64> =
+            face.iter().flatten().flat_map(|&piece| crossings(line, piece)).map(|q| dot(sub(q, p), n)).collect();
+        along.sort_by(f64::total_cmp);
+        along.windows(2).map(|pair| add(p, scale(n, f64::midpoint(pair[0], pair[1])))).collect()
+    }
+
+    /// A witness for loop `k` of `face`, trying each point in turn against every piece: those off its pieces, then the
+    /// middles of the crossings of the lines square to them.
+    fn witness_reading_all(face: &[Vec<Flat>], k: usize, clear: f64) -> Option<(P2, f64)> {
+        let (mut off, mut square) = (Vec::new(), Vec::new());
+        for piece in face.get(k).into_iter().flatten() {
+            for (p, n) in [0.5, 0.25, 0.75].map(|f| piece.at(f)) {
+                let shares = [0.5, 0.125, 0.031_25].map(|share| share * piece.length());
+                off.extend(shares.into_iter().flat_map(|d| [add(p, scale(n, d)), sub(p, scale(n, d))]));
+                square.push((p, n));
+            }
+        }
+        let around = Loops::new(face).whole.get(k);
+        let reach = apart([around[0], around[1]], [around[2], around[3]]);
+        let across: Vec<P2> = square.into_iter().flat_map(|(p, n)| across_reading_all(face, p, n, reach)).collect();
+        clearest_reading_all(face, k, clear, &off).or_else(|| clearest_reading_all(face, k, clear, &across))
+    }
+
+    /// The heights of the middles of the arcs of [`crescent`].
+    fn heights() -> (f64, f64) {
+        (10.0 - 99.0_f64.sqrt(), 20.0 - 399.0_f64.sqrt())
+    }
+
+    /// A crescent between arcs of radius 10 and 20 over the chord from (1, 0) to (-1, 0), anticlockwise: over by the
+    /// first and back by the second, 0.025 across at its middle, so that no point off a piece by a thirty-second of its
+    /// length lies inside it.
+    fn crescent() -> Vec<Flat> {
+        let arc = |r: f64, c: f64, sweep: f64| Flat::Arc { c: [0.0, -c], r, from: atan2(c, sweep.signum()), sweep };
+        let (wide, narrow) = (atan2(99.0_f64.sqrt(), 1.0), atan2(399.0_f64.sqrt(), 1.0));
+        vec![arc(10.0, 99.0_f64.sqrt(), PI - 2.0 * wide), arc(20.0, 399.0_f64.sqrt(), 2.0 * narrow - PI)]
     }
 
     /// Whether `inner` lies inside `outer`, winding the whole of `outer` about its start.
@@ -261,6 +328,30 @@ mod tests {
                     assert_eq!(bits(found), bits(witness_reading_all(face, k, clear)), "face {n}, loop {k}, {clear}");
                     assert_eq!(found.is_some(), k < face.len(), "face {n}, loop {k}");
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn a_crescent_too_thin_for_a_point_off_its_pieces_has_its_witness_at_the_middle_of_a_crossing() {
+        let ((high, low), face) = (heights(), vec![crescent()]);
+        assert!(near(face[0][0].end(), [-1.0, 0.0]) && near(face[0][1].end(), [1.0, 0.0]), "{face:?}");
+        let loops = Loops::new(&face);
+        let middle = [0.0, f64::midpoint(high, low)];
+        let (q, room) = loops.witness(0, 1e-6).unwrap();
+        assert!(apart(q, middle) < 1e-12 && (room - (high - low) / 2.0).abs() < 1e-12, "{q:?} {room}");
+        let half = (high - low) / 2.0;
+        assert_eq!(loops.witness(0, half * (1.0 + 1e-9)), None, "nowhere is clearer than half across its middle");
+        let found = loops.across([0.0, high], [0.0, -1.0], 1.0);
+        assert!(found.len() == 1 && apart(found[0], middle) < 1e-12, "one crossing, to the far arc: {found:?}");
+        let short = loops.across([0.0, high], [0.0, -1.0], half);
+        assert_eq!(short, Vec::<P2>::new(), "a line that stops short of the far arc crosses nothing but the near");
+        let mut holed = vec![square(-2.0, 2.0), face[0].iter().rev().map(|piece| piece.reversed()).collect()];
+        holed.push(vec![circle([0.0, -1.0], 0.5).reversed()]);
+        for (n, face) in [face, holed].iter().enumerate() {
+            for (k, clear) in (0..=face.len()).flat_map(|k| [(k, 1e-6), (k, 1e-3), (k, 0.02)]) {
+                let found = Loops::new(face).witness(k, clear);
+                assert_eq!(bits(found), bits(witness_reading_all(face, k, clear)), "face {n}, loop {k}, {clear}");
             }
         }
     }
