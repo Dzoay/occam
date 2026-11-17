@@ -15,9 +15,28 @@ use occam_report::{EntityRef, Report};
 use occam_topo::Edit;
 
 pub use given::TransformArgs;
-pub(crate) use given::transform_step;
 
+use crate::args::Args;
 use crate::operand::Labels;
+use crate::operation::{Does, Made};
+
+/// A `transform` step: its reader and its runner.
+pub(crate) const TRANSFORM: Does = Does { read: given::transform_step, run: run_transform };
+
+/// A `copy` step: a transform's reader, and its own runner.
+pub(crate) const COPY: Does = Does { read: given::transform_step, run: run_copy };
+
+/// Moves the body `args` names in place, if it holds a transform's.
+fn run_transform(edit: &mut Edit, args: &Args, labels: &Labels) -> Option<Made> {
+    let Args::Transform(args) = args else { return None };
+    Some(transform(edit, args, labels))
+}
+
+/// Copies the body `args` names, if it holds a transform's.
+fn run_copy(edit: &mut Edit, args: &Args, labels: &Labels) -> Option<Made> {
+    let Args::Transform(args) = args else { return None };
+    Some(copy(edit, args, labels))
+}
 
 /// Moves the body `args` names in place, and gives it.
 ///
@@ -25,7 +44,7 @@ use crate::operand::Labels;
 ///
 /// What naming the body reports, [`occam_report::Code::NoExactForm`] for a curve or surface with no exact form under
 /// the map, naming it, and what the edit reports.
-pub(crate) fn transform(edit: &mut Edit, args: &TransformArgs, labels: &Labels) -> Result<Option<EntityRef>, Report> {
+fn transform(edit: &mut Edit, args: &TransformArgs, labels: &Labels) -> Result<Option<EntityRef>, Report> {
     let body = body::target(edit.base(), &args.target, labels)?;
     let parts = body::parts(edit.base(), body);
     let moves = moved::Moves::of(edit, &parts, &args.map, &args.scale_at)?;
@@ -38,7 +57,7 @@ pub(crate) fn transform(edit: &mut Edit, args: &TransformArgs, labels: &Labels) 
 /// # Errors
 ///
 /// As [`transform`].
-pub(crate) fn copy(edit: &mut Edit, args: &TransformArgs, labels: &Labels) -> Result<Option<EntityRef>, Report> {
+fn copy(edit: &mut Edit, args: &TransformArgs, labels: &Labels) -> Result<Option<EntityRef>, Report> {
     let body = body::target(edit.base(), &args.target, labels)?;
     let parts = body::parts(edit.base(), body);
     let moves = moved::Moves::of(edit, &parts, &args.map, &args.scale_at)?;

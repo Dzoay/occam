@@ -10,6 +10,7 @@ use occam_report::{Code, Fault, Input, NamedValue, Quantity, Report};
 use occam_units::{Length, Vec3};
 use serde_json::{Map, Value};
 
+use crate::args::Args;
 use crate::operand::Operand;
 use crate::operation::Operation;
 use crate::read::{At, missing, needed, number, object, wrong_type};
@@ -282,17 +283,29 @@ pub(crate) fn face(at: &At, fields: &Map<String, Value>, units: Units, out: &mut
 }
 
 /// The fields of a `wire` step, at `at`, checking that it takes them.
-pub(crate) fn wire_step(at: &At, fields: &Map<String, Value>, units: Units, out: &mut Vec<Report>) -> Option<WireArgs> {
+pub(crate) fn wire_step(
+    at: &At,
+    operation: Operation,
+    fields: &Map<String, Value>,
+    units: Units,
+    out: &mut Vec<Report>,
+) -> Option<Args> {
     let value = Value::Object(fields.clone());
-    let fields = object(at, &value, Operation::Wire.fields(), out)?;
-    wire(at, fields, units, out)
+    let fields = object(at, &value, operation.fields(), out)?;
+    wire(at, fields, units, out).map(Args::Wire)
 }
 
 /// The fields of a `face` step, at `at`, checking that it takes them.
-pub(crate) fn face_step(at: &At, fields: &Map<String, Value>, units: Units, out: &mut Vec<Report>) -> Option<FaceArgs> {
+pub(crate) fn face_step(
+    at: &At,
+    operation: Operation,
+    fields: &Map<String, Value>,
+    units: Units,
+    out: &mut Vec<Report>,
+) -> Option<Args> {
     let value = Value::Object(fields.clone());
-    let fields = object(at, &value, Operation::Face.fields(), out)?;
-    face(at, fields, units, out)
+    let fields = object(at, &value, operation.fields(), out)?;
+    face(at, fields, units, out).map(Args::Face)
 }
 
 #[cfg(test)]
