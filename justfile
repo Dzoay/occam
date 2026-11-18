@@ -210,11 +210,11 @@ corpus-test *args:
     python3 -B -m unittest discover -s tools/corpus/tests -t tools/corpus "$@"
 
 # Intersection's hits on every corpus case's operands, the box test against the unculled scan by digest, printing the
-# totals. Minutes in a debug build, so nightly, not per PR (docs/PLAN.md section 5)
+# totals. Seconds in a debug build, so `test` runs it on every PR (docs/PLAN.md section 5); this runs it alone
 [env("CARGO_TARGET_DIR", target)]
 [group('corpus')]
 corpus-hits *args:
-    cargo nextest run -p occam-verify --test corpus_hits --run-ignored only --no-capture "$@"
+    cargo nextest run -p occam-verify --test corpus_hits --no-capture on_the_corpus "$@"
 
 # The mesher's adversarial catalogue's slow case, P9's plate with 1,024 holes: about a minute in a debug build, so nightly
 [env("CARGO_TARGET_DIR", target)]
