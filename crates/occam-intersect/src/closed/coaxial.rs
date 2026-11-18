@@ -11,8 +11,9 @@ use occam_units::Vec3;
 
 use super::meet::{Flat, Meeting, Shape, meet};
 use super::piece::Plan;
-use super::{Found, Touch, along, exact3};
+use super::{Found, Touch};
 use crate::decide::{Decisions, Undecided};
+use crate::interval3::{along, exact3};
 use crate::resolution::{MARGIN, hidden};
 
 /// An axis: a point on it and its unit direction.

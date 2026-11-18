@@ -9,7 +9,7 @@ use occam_geom::Analytic;
 use occam_math::{Interval, sin_cos};
 use occam_units::Vec3;
 
-use crate::decide::{dot, exact, less};
+use crate::interval3::{dot3, exact3, minus, norm3};
 
 /// A surface as the zero set of a function of space.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -36,8 +36,8 @@ fn split(x: Vec3, origin: Vec3, axis: Vec3) -> (f64, Vec3, f64) {
 
 /// `x - origin` as its part along `axis` and its part across it, enclosed.
 fn parts(x: Vec3, origin: Vec3, axis: Vec3) -> (Interval, [Interval; 3]) {
-    let (w, axis) = (less(exact(x), exact(origin)), exact(axis));
-    let along = dot(w, axis);
+    let (w, axis) = (minus(exact3(x), exact3(origin)), exact3(axis));
+    let along = dot3(w, axis);
     let [wx, wy, wz] = w;
     let [ax, ay, az] = axis;
     (along, [wx - ax * along, wy - ay * along, wz - az * along])
@@ -105,21 +105,20 @@ impl Implicit {
     /// the cone, changes no faster than one, so over a ball of radius `r` about `x` the function stays within `r` of it
     /// (P8's implicit test).
     pub(crate) fn enclosed(&self, x: Vec3) -> Interval {
-        let length = |v: [Interval; 3]| dot(v, v).sqrt();
         match *self {
-            Self::Plane { origin, normal } => dot(less(exact(x), exact(origin)), exact(normal)),
-            Self::Sphere { centre, radius } => length(less(exact(x), exact(centre))) - Interval::exact(radius),
+            Self::Plane { origin, normal } => dot3(minus(exact3(x), exact3(origin)), exact3(normal)),
+            Self::Sphere { centre, radius } => norm3(minus(exact3(x), exact3(centre))) - Interval::exact(radius),
             Self::Cylinder { on_axis, axis, radius } => {
                 let (_, across) = parts(x, on_axis, axis);
-                length(across) - Interval::exact(radius)
+                norm3(across) - Interval::exact(radius)
             }
             Self::Cone { apex, axis, slope: (sin, cos) } => {
                 let (along, across) = parts(x, apex, axis);
-                length(across) * Interval::exact(cos) - magnitude(along) * Interval::exact(sin)
+                norm3(across) * Interval::exact(cos) - magnitude(along) * Interval::exact(sin)
             }
             Self::Torus { centre, axis, major, minor } => {
                 let (along, across) = parts(x, centre, axis);
-                let out = length(across) - Interval::exact(major);
+                let out = norm3(across) - Interval::exact(major);
                 (out * out + along * along).sqrt() - Interval::exact(minor)
             }
         }

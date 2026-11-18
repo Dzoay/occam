@@ -3,6 +3,7 @@
 //! its neighbours refined by Newton's method kept inside the window, and the nearest of those. It needs nothing of the
 //! family but its second derivatives, so every surface family without a closed form shares it, as curves share theirs.
 
+use occam_math::smaller;
 use occam_units::{Point, UvPoint, Vec3, World};
 
 use crate::batch::Scratch;
@@ -89,7 +90,7 @@ fn nearer<S: Parametric>(
 fn within((du, dv): (f64, f64), reach: (f64, f64)) -> (f64, f64) {
     let over = |d: f64, most: f64| if d.abs() > most { most / d.abs() } else { 1.0 };
     let (a, b) = (over(du, reach.0), over(dv, reach.1));
-    let scale = if b < a { b } else { a };
+    let scale = smaller(a, b);
     (du * scale, dv * scale)
 }
 

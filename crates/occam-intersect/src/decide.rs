@@ -18,6 +18,7 @@ use occam_math::{Interval, Predicate, Ring, Side, Tally, Verdict, decide_compute
 use occam_report::{Code, Fault, NamedValue, Quantity, Report};
 use occam_units::{Length, Point, Tolerance, Vec3};
 
+use crate::interval3::{cross3, dot3, exact3, minus, norm3};
 use crate::trace::Uncertain;
 
 /// A length or an angle already formed in interval arithmetic: the predicate's value is its input.
@@ -97,39 +98,22 @@ pub(crate) fn undecided(uncertain: &Uncertain, band: f64) -> Report {
         .with_tolerance_in_force(band)
 }
 
-/// `v` as three exact intervals.
-pub(crate) fn exact(v: Vec3) -> [Interval; 3] {
-    [Interval::exact(v.x), Interval::exact(v.y), Interval::exact(v.z)]
-}
-
-/// `a - b`.
-pub(crate) fn less([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> [Interval; 3] {
-    [ax - bx, ay - by, az - bz]
-}
-
-/// `a . b`.
-pub(crate) fn dot([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> Interval {
-    ax * bx + ay * by + az * bz
-}
-
 /// The distance from `a` to `b`.
 pub(crate) fn distance(a: Vec3, b: Vec3) -> Interval {
-    let d = less(exact(a), exact(b));
-    dot(d, d).sqrt()
+    norm3(minus(exact3(a), exact3(b)))
 }
 
 /// How far `to` is ahead of `from` along the unit vector `along`.
 pub(crate) fn ahead(from: Vec3, to: Vec3, along: Vec3) -> Interval {
-    dot(less(exact(to), exact(from)), exact(along))
+    dot3(minus(exact3(to), exact3(from)), exact3(along))
 }
 
 /// The gap a touch of radius `longest` has where the unit normals of its two surfaces are `normals` apart:
 /// `longest |n x m|^2 / 2`, its distance from the touch being `longest |n x m|`. It is within the band where the
 /// surfaces cannot be told to cross at the trace's scale, and so touch.
 pub(crate) fn touch(longest: f64, (n, m): (Vec3, Vec3)) -> Interval {
-    let ([nx, ny, nz], [mx, my, mz]) = (exact(n), exact(m));
-    let cross = [ny * mz - nz * my, nz * mx - nx * mz, nx * my - ny * mx];
-    Interval::exact(longest) * Interval::exact(0.5) * dot(cross, cross)
+    let cross = cross3(exact3(n), exact3(m));
+    Interval::exact(longest) * Interval::exact(0.5) * dot3(cross, cross)
 }
 
 /// How far a parameter at `t` is past `end`, the end of its range above the other where `upward`, in the length a

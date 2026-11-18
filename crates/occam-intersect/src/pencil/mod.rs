@@ -42,8 +42,8 @@ use occam_units::{Bounds, Tolerance, Vec3};
 
 use self::quadric::{Natural, Quadric, Ruling};
 use self::roots::{Multiple, Singular};
-use crate::closed::{cross3, exact3, minus, norm3};
 use crate::decide::{Decisions, Undecided};
+use crate::interval3::{cross3, exact3, minus, norm3};
 use crate::methods::{Answer, Method, Spent, Work};
 use crate::section::Section;
 

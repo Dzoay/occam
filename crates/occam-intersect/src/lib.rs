@@ -62,6 +62,7 @@ mod hybrid;
 #[cfg(test)]
 mod hybrid_tests;
 mod implicit;
+mod interval3;
 mod march;
 #[cfg(test)]
 mod march_tests;

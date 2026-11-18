@@ -14,6 +14,7 @@
 //!   face's parameters, which holds it, not proved tight.
 
 use occam_geom::{Analytic, Scratch, Surface, UvBox, Wrap};
+use occam_math::{larger, smaller};
 use occam_topo::winding_number;
 use occam_units::{Bounds, Point, Tolerance, UvPoint, Vec3, World};
 
@@ -21,16 +22,6 @@ use super::mass::Patch;
 
 /// The world's axes.
 const AXES: [Vec3; 3] = [Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 1.0)];
-
-/// The smaller of two numbers, the first if they are equal.
-fn smaller(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
-}
-
-/// The larger of two numbers, the first if they are equal.
-fn larger(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
-}
 
 /// The points of `surface`, analytic to `tolerance`, where it reaches furthest along an axis further than its edges
 /// may, either way along it; `None` where it has no analytic form.
@@ -208,11 +199,6 @@ mod tests {
         let outer = ring(&[(0.01, TAU + 0.3), (TAU - 0.01, TAU + 0.3), (TAU - 0.01, TAU + 1.3), (0.01, TAU + 1.3)]);
         let patch = Patch { surface: &torus, reversed: false, loops: vec![pieces(&outer)] };
         assert_eq!(interior(&patch, Some(all.clone()), tolerance), Inside::Points(vec![all[3], all[4]]), "{all:?}");
-    }
-
-    #[test]
-    fn the_smaller_and_the_larger_of_two_numbers() {
-        assert_eq!((smaller(1.0, 2.0), smaller(2.0, 1.0), larger(1.0, 2.0), larger(2.0, 1.0)), (1.0, 1.0, 2.0, 2.0));
     }
 
     /// The straight curve in the parameters from `a` to `b`, and its length.

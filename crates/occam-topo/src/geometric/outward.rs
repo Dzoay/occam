@@ -22,7 +22,7 @@ use core::f64::consts::{PI, TAU};
 use std::collections::BTreeSet;
 
 use occam_geom::{Analytic, Curve, Scratch, Surface, UvBox};
-use occam_math::atan2;
+use occam_math::{atan2, larger, smaller};
 use occam_report::{EntityRef, NamedValue, Quantity, Reason, Report};
 use occam_units::{Bounds, Point, UvPoint, Vec3};
 
@@ -184,16 +184,6 @@ fn shell_at(model: &Model, place: Place) -> Option<EntityRef> {
 /// Whether `reach` is past `best` by more than `slack`.
 fn past(reach: f64, best: f64, slack: f64) -> bool {
     reach > best + slack
-}
-
-/// The larger of two numbers, the first if they are equal.
-fn larger(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
-}
-
-/// The smaller of two numbers, the first if they are equal.
-fn smaller(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
 }
 
 /// The further of two places, the first if they are as far.

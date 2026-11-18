@@ -3,7 +3,7 @@
 //! chosen [`width`](occam_math::width) as [`Lanes`](occam_math::Lanes): natively by instruction count, and in the browser's
 //! simd128 build by time. A kernel that is not clearly faster at its width runs at width 1 (L29).
 
-use occam_math::{Interval, Predicate, Real, Ring, atan2, sin_cos};
+use occam_math::{Interval, Orientation, Predicate, Real, atan2, sin_cos};
 
 /// The items each kernel runs over: a multiple of every width.
 pub const ITEMS: usize = 4096;
@@ -60,19 +60,6 @@ pub fn masks<R: Real>(items: &[f64]) -> Vec<f64> {
         let smaller = R::select(a.lt(b), a, b);
         [R::select(c.le(smaller), c, smaller)]
     })
-}
-
-/// The orientation of three points, `(b - a) x (c - a)`.
-struct Orientation;
-
-impl Predicate<6> for Orientation {
-    const DEGREE: u32 = 2;
-
-    #[inline(always)]
-    fn value<T: Ring>(&self, [ax, ay, bx, by, cx, cy]: &[T; 6]) -> T {
-        let first = bx.sub(ax).mul(&cy.sub(ay));
-        first.sub(&by.sub(ay).mul(&cx.sub(ax)))
-    }
 }
 
 /// The predicate filter: an orientation in interval arithmetic, from six operands, giving each enclosure's bounds.

@@ -4,9 +4,9 @@
 //! the same tree on every target; a walk visits every item whose box, grown by a reach, the ray may cross, and decides
 //! nothing itself.
 
+use occam_math::{larger, smaller};
 use occam_units::Vec3;
 
-use crate::limits::{higher, lower};
 use crate::pick::Ray;
 
 /// How many items a leaf holds at most.
@@ -43,7 +43,7 @@ const fn axes(v: Vec3) -> [f64; 3] {
 /// The box holding both.
 fn union((lo, hi): Bounds, (low, high): Bounds) -> Bounds {
     let pick = |a: Vec3, b: Vec3, f: fn(f64, f64) -> f64| Vec3::new(f(a.x, b.x), f(a.y, b.y), f(a.z, b.z));
-    (pick(lo, low, lower), pick(hi, high, higher))
+    (pick(lo, low, smaller), pick(hi, high, larger))
 }
 
 /// The box of the points.
@@ -117,7 +117,7 @@ impl Tree {
 /// far more than its rounding can move it.
 fn crosses(ray: &Ray, (lo, hi): Bounds, reach: f64) -> bool {
     let (origin, direction) = (axes(ray.origin), axes(ray.direction));
-    let size = [lo, hi, ray.origin].into_iter().flat_map(axes).fold(1.0, |most, x| higher(most, x.abs()));
+    let size = [lo, hi, ray.origin].into_iter().flat_map(axes).fold(1.0, |most, x| larger(most, x.abs()));
     let grown = reach + size * 1e-12;
     let (mut near, mut far) = (0.0_f64, f64::INFINITY);
     for ((o, d), (low, high)) in origin.into_iter().zip(direction).zip(axes(lo).into_iter().zip(axes(hi))) {
@@ -130,8 +130,8 @@ fn crosses(ray: &Ray, (lo, hi): Bounds, reach: f64) -> bool {
         }
         let (a, b) = ((low - o) / d, (high - o) / d);
         let (enter, leave) = if a < b { (a, b) } else { (b, a) };
-        near = higher(near, enter);
-        far = lower(far, leave);
+        near = larger(near, enter);
+        far = smaller(far, leave);
         if far < near {
             return false;
         }

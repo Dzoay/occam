@@ -4,7 +4,7 @@
 
 use std::f64::consts::TAU;
 
-use occam_math::{Real, atan2, sin_cos};
+use occam_math::{Real, atan2, larger, sin_cos, smaller};
 use occam_units::{Bounds, Length, ParamKind, Point, Tangent, Vec3, World};
 
 use crate::axes::Axes;
@@ -73,16 +73,6 @@ pub(crate) fn turn_derivatives(axes: &Axes, (a, b): (f64, f64), t: f64, order: u
 pub(crate) fn above(angle: f64, lo: f64) -> f64 {
     let moved = angle - ((angle - lo) / TAU).floor() * TAU;
     if moved < lo { lo } else { moved }
-}
-
-/// The smaller of two numbers, the first if they are equal.
-pub(crate) fn smaller(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
-}
-
-/// The larger of two numbers, the first if they are equal.
-pub(crate) fn larger(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
 }
 
 /// The least and the greatest of `o + x cos t + y sin t` for `t` from `lo` to `hi`, both finite, whose values at the ends

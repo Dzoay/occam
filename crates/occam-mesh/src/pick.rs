@@ -18,11 +18,11 @@ mod tree;
 
 use std::collections::BTreeMap;
 
+use occam_math::{larger, smaller};
 use occam_report::{Code, EntityRef, Fault, Input, NamedValue, Remedy, RemedyKind, Report};
 use occam_topo::{Edge, Face, Id};
 use occam_units::{Length, Point, Vec3, World};
 
-use crate::limits::{higher, lower};
 use crate::merge::{Mesh, span};
 use crate::predicates::{P3, orient3d};
 use tree::{Bounds, Tree, ZERO, around};
@@ -302,7 +302,7 @@ impl Near {
 
 /// `s` held to the segment, from 0 to 1, NaN as 0: what a quotient over a segment of no length gives.
 fn unit(s: f64) -> f64 {
-    lower(1.0, higher(0.0, s))
+    smaller(1.0, larger(0.0, s))
 }
 
 /// Where the segment from `a` to `b`, from sample `sample` of the edge at `edge`, comes nearest the ray, at or after
@@ -314,7 +314,7 @@ fn approach(ray: &Ray, [a, b]: [Vec3; 2], (edge, sample): (u32, u32)) -> Near {
     let (ahead, behind) = (along_edge.dot(from), ray.direction.dot(from));
     let gap = square - cosine * cosine;
     let s = if gap > 0.0 { unit((ahead - behind * cosine) / gap) } else { 0.0 };
-    let t = higher(0.0, s * cosine - behind);
+    let t = larger(0.0, s * cosine - behind);
     let s = unit((ahead + t * cosine) / square);
     let point = a + along_edge * s;
     Near { edge, sample, apart: (ray.at(t) - point).norm(), along: t, point }

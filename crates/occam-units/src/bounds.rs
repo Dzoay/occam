@@ -6,23 +6,13 @@ use crate::frame::{Point, World};
 use crate::measure::Length;
 use crate::tolerance::Tolerance;
 use crate::vec3::Vec3;
+use occam_math::{larger, smaller};
 
 /// An axis-aligned box in `World`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bounds {
     low: Vec3,
     high: Vec3,
-}
-
-/// The smaller of two numbers, the first if they are equal, so the sign of a zero is fixed. Not `f64::min`, which may
-/// return either zero (rule 2).
-fn smaller(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
-}
-
-/// The larger of two numbers, the first if they are equal.
-fn larger(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
 }
 
 /// Each component the smaller or the larger of the two.
@@ -158,15 +148,6 @@ mod tests {
         assert!(a.overlaps(&near, tolerance) && near.overlaps(&a, tolerance));
         assert!(!a.overlaps(&far, tolerance) && !far.overlaps(&a, tolerance));
         assert!(!a.overlaps(&above, tolerance) && !above.overlaps(&a, tolerance));
-    }
-
-    #[test]
-    fn smaller_and_larger_pick_without_min_or_max() {
-        assert_eq!((smaller(1.0, 2.0), smaller(2.0, 1.0)), (1.0, 1.0));
-        assert_eq!((larger(1.0, 2.0), larger(2.0, 1.0)), (2.0, 2.0));
-        let bits = |x: f64| x.to_bits();
-        assert_eq!((bits(smaller(0.0, -0.0)), bits(smaller(-0.0, 0.0))), (bits(0.0), bits(-0.0)), "the first zero");
-        assert_eq!((bits(larger(0.0, -0.0)), bits(larger(-0.0, 0.0))), (bits(0.0), bits(-0.0)), "the first zero");
     }
 
     #[test]

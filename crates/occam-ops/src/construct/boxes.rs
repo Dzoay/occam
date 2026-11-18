@@ -5,7 +5,9 @@
 //! found in about the logarithm of the count, where the boxes are spread. A box that is not finite is in every answer,
 //! so that a search never leaves out what a reading of every box would have found.
 
-use super::flat::{P2, least};
+use occam_math::{larger, smaller};
+
+use super::flat::P2;
 
 /// A box, `[lo_u, lo_v, hi_u, hi_v]`.
 pub(crate) type Bounds = [f64; 4];
@@ -16,14 +18,9 @@ pub(crate) const EMPTY: Bounds = [f64::INFINITY, f64::INFINITY, f64::NEG_INFINIT
 /// How many boxes a group holds before it is halved.
 const LEAF: usize = 8;
 
-/// The larger of `a` and `b`, the first if they are equal.
-pub(crate) fn most(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
-}
-
 /// The box that holds `a` and `b`.
 pub(crate) fn union(a: Bounds, b: Bounds) -> Bounds {
-    [least(a[0], b[0]), least(a[1], b[1]), most(a[2], b[2]), most(a[3], b[3])]
+    [smaller(a[0], b[0]), smaller(a[1], b[1]), larger(a[2], b[2]), larger(a[3], b[3])]
 }
 
 /// The box that holds `a` and the point `p`.
@@ -44,13 +41,13 @@ pub(crate) fn meet(a: Bounds, b: Bounds) -> bool {
 /// How far beyond rounding a box is padded: a billionth of the largest coordinate among `boxes`, and at least that of
 /// one, where any distance or point computed from them is off by some ten thousandths of that.
 pub(crate) fn slack(boxes: &[Bounds]) -> f64 {
-    let largest = boxes.iter().flatten().filter(|x| x.is_finite()).fold(1.0, |so_far: f64, x| most(so_far, x.abs()));
+    let largest = boxes.iter().flatten().filter(|x| x.is_finite()).fold(1.0, |so_far: f64, x| larger(so_far, x.abs()));
     largest * 1e-9
 }
 
 /// How far `q` is from `a`: nothing inside it.
 fn far(a: Bounds, q: P2) -> f64 {
-    let off = |lo: f64, x: f64, hi: f64| most(most(lo - x, x - hi), 0.0);
+    let off = |lo: f64, x: f64, hi: f64| larger(larger(lo - x, x - hi), 0.0);
     let (du, dv) = (off(a[0], q[0], a[2]), off(a[1], q[1], a[3]));
     (du * du + dv * dv).sqrt()
 }
@@ -155,7 +152,7 @@ impl Boxes {
     /// `q` than the box is, short by at most `slack`: a group further from `q` than the least found so far, by more than
     /// `slack`, holds nothing nearer, and is skipped. A distance that is not a number is passed over.
     pub(crate) fn least(&self, q: P2, slack: f64, distance: impl Fn(usize) -> f64) -> f64 {
-        let mut nearest = self.wild.iter().fold(f64::INFINITY, |so_far, &k| least(so_far, distance(k)));
+        let mut nearest = self.wild.iter().fold(f64::INFINITY, |so_far, &k| smaller(so_far, distance(k)));
         let mut todo: Vec<usize> = (!self.groups.is_empty()).then_some(0).into_iter().collect();
         while let Some(group) = todo.pop().and_then(|g| self.groups.get(g)) {
             if far(group.bounds, q) - slack > nearest {
@@ -168,7 +165,7 @@ impl Boxes {
                 }
                 Below::Run(start, end) => {
                     for &k in self.order.get(start..end).unwrap_or_default() {
-                        nearest = least(nearest, distance(k));
+                        nearest = smaller(nearest, distance(k));
                     }
                 }
             }
@@ -205,9 +202,6 @@ mod tests {
         assert_eq!(with(with(EMPTY, [1.0, 2.0]), [-1.0, 3.0]), [-1.0, 2.0, 1.0, 3.0]);
         assert_eq!(padded(a, 0.5), [-0.5, -0.5, 1.5, 1.5]);
         assert_eq!((far(a, [0.5, 0.5]), far(a, [4.0, 5.0]), far(a, [-2.0, 0.5])), (0.0, 5.0, 2.0));
-        assert_eq!((most(1.0, 2.0), most(2.0, 1.0)), (2.0, 2.0));
-        let equal = [most(0.0, -0.0), most(-0.0, 0.0)].map(f64::to_bits);
-        assert_eq!(equal, [0.0, -0.0].map(f64::to_bits), "of two equal, the first, whatever the sign of a nought");
         let slacks = (slack(&[[0.0, 0.0, 0.5, -2000.0], EMPTY]), slack(&[EMPTY]));
         assert_eq!(slacks, (2000.0 * 1e-9, 1e-9), "a billionth of the largest coordinate, and of one at least");
     }
@@ -276,7 +270,7 @@ mod tests {
                 let c = centre(k);
                 ((c[0] - q[0]) * (c[0] - q[0]) + (c[1] - q[1]) * (c[1] - q[1])).sqrt()
             };
-            let all = (0..items.len()).fold(f64::INFINITY, |so_far, k| least(so_far, distance(k)));
+            let all = (0..items.len()).fold(f64::INFINITY, |so_far, k| smaller(so_far, distance(k)));
             assert_eq!(boxes.least(q, 0.0, distance).to_bits(), all.to_bits(), "{q:?}");
         }
         let skipped = Boxes::new(vec![[0.0, 0.0, 1.0, 1.0], [f64::NAN; 4]]);

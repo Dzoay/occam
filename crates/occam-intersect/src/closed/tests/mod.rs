@@ -12,7 +12,7 @@ pub(crate) use occam_fixtures::mm;
 use std::sync::Arc;
 
 use occam_geom::{Cone, Curve, Cylinder, ParamRange, Plane, Scratch, Sphere, Surface, Torus, Wrap};
-use occam_math::atan2;
+use occam_math::{atan2, smaller};
 use occam_units::{Angle, Direction, Length, Local, ParamKind, Placement, Point, Tolerance, Vec3, Vector, World};
 
 use crate::{Budget, Closed, Coincidence, Contact, Methods, Section, SectionCurve};
@@ -273,11 +273,6 @@ pub(crate) fn tangency(kappa: f64) -> f64 {
     2.0 * (2.0 * band / (kappa / scale())).sqrt()
 }
 
-/// The nearer of two distances.
-pub(crate) fn nearer(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
-}
-
 /// The closed forms answer `a` with `b` as `want` says, with every point on both surfaces.
 pub(crate) fn check(name: &str, a: &dyn Surface, b: &dyn Surface, want: &Want) {
     let got = section(a, b);
@@ -286,7 +281,7 @@ pub(crate) fn check(name: &str, a: &dyn Surface, b: &dyn Surface, want: &Want) {
     let counts = (got.curves.len(), got.contacts.len(), got.coincidence);
     assert_eq!(counts, (want.curves, want.contacts.len(), want.coincidence), "{name}");
     for p in want.on.iter().map(|p| placed(*p)) {
-        let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, nearer);
+        let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, smaller);
         assert!(near <= 1e-9 * SIZE, "{name}: no curve passes through {p:?}: the nearest is {near} away");
     }
     for (k, p) in want.contacts.iter().map(|p| placed(*p)).enumerate() {

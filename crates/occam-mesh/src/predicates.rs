@@ -14,22 +14,10 @@
 //! the four points are within a rounding of one circle, as the samples of a circle all are; a flip is made only where
 //! the point is certainly inside, so every flip is valid and no tie costs the exact stage.
 
-use occam_math::{Predicate, Ring, Side, Verdict, decide_stored};
+use occam_math::{Orientation, Predicate, Ring, Side, Verdict, decide_stored};
 
 /// A point of the plane a face is triangulated in.
 pub(crate) type P2 = [f64; 2];
-
-/// Twice the signed area of `a`, `b`, `c` from `[ax, ay, bx, by, cx, cy]`: above zero when `c` lies left of `a` to
-/// `b`, so that `a`, `b`, `c` run anticlockwise.
-struct Orientation;
-
-impl Predicate<6> for Orientation {
-    const DEGREE: u32 = 2;
-
-    fn value<T: Ring>(&self, [ax, ay, bx, by, cx, cy]: &[T; 6]) -> T {
-        bx.sub(ax).mul(&cy.sub(ay)).sub(&by.sub(ay).mul(&cx.sub(ax)))
-    }
-}
 
 /// The side `predicate` certainly gives `item` against zero, or `None` where it cannot be decided: a coordinate that
 /// is not finite, or beyond the range the exact stage is exact for.

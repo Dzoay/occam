@@ -13,14 +13,12 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
 use occam_geom::{Surface, Wrap};
-use occam_math::sin_cos;
+use occam_math::{sin_cos, smaller};
 use occam_units::{Bounds, Placement, Point, Vec3, World};
 
 use super::scale::{SCALES, grown, kind};
 use super::{Seeded, class, cone_by, cylinder_by, moved};
-use crate::closed::tests::{
-    O, Z, at_scale, contact_maps, from_curve, lies_on_both, mm, nearer, samples, scale, size, tol, v,
-};
+use crate::closed::tests::{O, Z, at_scale, contact_maps, from_curve, lies_on_both, mm, samples, scale, size, tol, v};
 use crate::{Budget, Closed, Contact, Methods, Pencil, Section};
 
 const Y: Vec3 = v(0.0, 1.0, 0.0);
@@ -215,7 +213,7 @@ fn check(case: &Reaching, reach: f64) {
     let inside: Vec<Vec3> = on.filter(|p| extent.contains(Point::from_vec3(*p))).collect();
     assert!(inside.len() >= 8, "{name}: only {} points of the section in the extent", inside.len());
     for p in inside {
-        let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, nearer);
+        let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, smaller);
         assert!(near <= 1e-9 * size(), "{name}: no curve passes through {p:?}: the nearest is {near} away");
     }
     let (ends, apexes) = (ends(&got), case.apexes.iter().map(|p| moved(&case.place, *p)).collect::<Vec<_>>());

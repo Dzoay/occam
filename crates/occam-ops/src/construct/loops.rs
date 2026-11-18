@@ -170,11 +170,10 @@ impl<'a> Loops<'a> {
 mod tests {
     use core::f64::consts::PI;
 
-    use occam_math::atan2;
+    use occam_math::{atan2, smaller};
 
     use super::*;
     use crate::construct::boxes::meet;
-    use crate::construct::flat::least;
     use crate::construct::flat::tests::{circle, near, polygon, regular, seg, square, winding};
 
     /// A witness for loop `k` of `face`.
@@ -189,7 +188,7 @@ mod tests {
 
     /// How far `q` is from every piece of `face`, reading each.
     fn clearance_reading_all(face: &[Vec<Flat>], q: P2) -> f64 {
-        face.iter().flatten().fold(f64::INFINITY, |so_far, piece| least(so_far, piece.distance(q)))
+        face.iter().flatten().fold(f64::INFINITY, |so_far, piece| smaller(so_far, piece.distance(q)))
     }
 
     /// Whether `q` is a witness for loop `k` of `face`, winding every loop's whole chain about it.
@@ -256,7 +255,7 @@ mod tests {
     /// Whether `inner` lies inside `outer`, winding the whole of `outer` about its start.
     fn inside_reading_all(outer: &[Flat], inner: &[Flat]) -> bool {
         let Some(q) = inner.first().map(|piece| piece.start()) else { return false };
-        let room = outer.iter().fold(f64::INFINITY, |so_far, piece| least(so_far, piece.distance(q)));
+        let room = outer.iter().fold(f64::INFINITY, |so_far, piece| smaller(so_far, piece.distance(q)));
         winding(outer, q, room).is_some_and(|w| w != 0)
     }
 
