@@ -2,7 +2,7 @@
 //! The hyperbola: `centre + a cosh t x + b sinh t y`, the branch that opens along `x`, with the usual parameter, which
 //! has no unit (PARITY 2.1; `docs/decisions/2026-11-11-exp-from-arm.md`). Its foot is searched for.
 
-use occam_math::{Interval, Real, exp, sinh_cosh};
+use occam_math::{Interval, Real, exp, larger, sinh_cosh};
 use occam_report::{NamedValue, Report};
 use occam_units::{Affine, Bounds, Direction, Length, Local, ParamKind, Placement, Point, Tangent, World};
 
@@ -179,11 +179,6 @@ impl ParametricCurve for Hyperbola {
         let radii = (self.radii.0 * similar.scale, self.radii.1 * similar.scale);
         Some((Self { axes: self.axes.moved(&similar), radii, range: self.range }, ParamMap::IDENTITY))
     }
-}
-
-/// The larger of two numbers, the first if they are equal.
-fn larger(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
 }
 
 /// The two numbers, smaller first.

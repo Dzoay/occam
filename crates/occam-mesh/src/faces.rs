@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use occam_geom::{Degeneracy, Surface};
-use occam_math::{Exec, Grain};
+use occam_math::{Exec, Grain, larger, smaller};
 use occam_report::{Fault, Reason, Report};
 use occam_topo::{Edge, Face, Id, Snapshot, View};
 use occam_units::{Direction, Point, Tolerance, UvPoint, Vec3, World};
@@ -24,7 +24,7 @@ use occam_units::{Direction, Point, Tolerance, UvPoint, Vec3, World};
 use crate::boundary::{self, Boundary, not_meshed};
 use crate::deviation::between;
 use crate::edges::{Edges, stale};
-use crate::limits::{Limits, higher, lower};
+use crate::limits::Limits;
 use crate::refine::{Points, Work, refine};
 use crate::triangulation::{Fail, Triangulation};
 
@@ -197,7 +197,7 @@ fn spans(su: Vec3, sv: Vec3, angle: f64) -> Option<Vec3> {
     let (a, b) = (su.norm(), sv.norm());
     let across = su.cross(sv);
     let length = across.norm();
-    let (short, long) = (lower(a, b), higher(a, b));
+    let (short, long) = (smaller(a, b), larger(a, b));
     let spanned = short > 64.0 * f64::EPSILON * long && length > angle * a * b && length.is_normal();
     spanned.then(|| across * (1.0 / length))
 }

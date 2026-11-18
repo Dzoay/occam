@@ -15,8 +15,9 @@ use occam_units::{Direction, ParamKind, Point, Vec3};
 use super::emit::touch;
 use super::quadric::{Natural, Ruling};
 use super::{Pair, cut};
-use crate::closed::{Found, Plan, Touch, cross3, exact3, minus, norm3, solve, unit};
+use crate::closed::{Found, Plan, Touch, solve, unit};
 use crate::decide::{Decisions, Undecided};
+use crate::interval3::{cross3, exact3, minus, norm3};
 
 /// Points of each conic or line, in the world, to hold it to the other surface: at parameters spread over a closed
 /// conic's turn, and along an open curve from its vertex, a parameter that is a length taken in the pair's.

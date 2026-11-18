@@ -1,0 +1,905 @@
+{
+  "codes": [
+    {
+      "code": "report.malformed",
+      "name": "Malformed",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The text is not a report.",
+      "template": "The text is not a valid report: the problem is at line {line}, column {column}."
+    },
+    {
+      "code": "report.unsupported-schema",
+      "name": "UnsupportedSchema",
+      "remedies": [
+        "use-schema"
+      ],
+      "severity": "error",
+      "summary": "The report uses a schema version this build cannot read.",
+      "template": "Schema version {found} is not supported. This build reads version {supported}."
+    },
+    {
+      "code": "units.not-finite",
+      "name": "NotFinite",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A number given as a length or an angle is not finite.",
+      "template": "The number given is {value}, which is not finite in occam's internal units."
+    },
+    {
+      "code": "units.tolerance-out-of-range",
+      "name": "ToleranceOutOfRange",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A tolerance must be a finite number greater than zero.",
+      "template": "The tolerance {tolerance} is not a finite number greater than zero."
+    },
+    {
+      "code": "measure.tolerance-below-model",
+      "name": "ToleranceBelowModel",
+      "remedies": [
+        "use-model-tolerance"
+      ],
+      "severity": "error",
+      "summary": "An operation cannot work to a finer tolerance than its model is built to.",
+      "template": "The tolerance asked for, {requested}, is finer than the model's tolerance, {model}."
+    },
+    {
+      "code": "measure.tolerance-used",
+      "name": "ToleranceUsed",
+      "remedies": [],
+      "severity": "note",
+      "summary": "The tolerance an operation worked to.",
+      "template": "The operation worked to a tolerance of {tolerance}."
+    },
+    {
+      "code": "cli.bad-argument",
+      "name": "BadArgument",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A command-line argument is missing or is not understood.",
+      "template": "The command line is wrong at {parameter}. `occam help` lists the commands and what each takes."
+    },
+    {
+      "code": "cli.file-not-read",
+      "name": "FileNotRead",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A file the command line names could not be read.",
+      "template": "The file {given}, given as {parameter}, could not be read."
+    },
+    {
+      "code": "cli.file-not-written",
+      "name": "FileNotWritten",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The model could not be written to the file the command line names, which is left as it was.",
+      "template": "The model could not be written to {given}, given as {parameter}; the file is as it was."
+    },
+    {
+      "code": "exec.threads-unavailable",
+      "name": "ThreadsUnavailable",
+      "remedies": [
+        "use-threads"
+      ],
+      "severity": "error",
+      "summary": "The threads asked for could not be started.",
+      "template": "{threads} threads could not be started on this machine."
+    },
+    {
+      "code": "geom.degenerate-direction",
+      "name": "DegenerateDirection",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A vector no longer than the model's tolerance has no direction.",
+      "template": "The vector is {length} long, no longer than the tolerance of {tolerance}, so it has no direction."
+    },
+    {
+      "code": "geom.undefined-parameter",
+      "name": "UndefinedParameter",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve or surface is not defined at the parameter asked for.",
+      "template": "The parameter {parameter} is outside the domain from {low} to {high}."
+    },
+    {
+      "code": "geom.size-not-positive",
+      "name": "SizeNotPositive",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve or surface was given a size that is not a finite number greater than zero.",
+      "template": "The size given, {size}, is not a finite number greater than zero."
+    },
+    {
+      "code": "geom.out-of-range",
+      "name": "OutOfRange",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve or surface was given a size or an angle outside the range its form allows.",
+      "template": "The value given, {value}, is not strictly between {low} and {high}."
+    },
+    {
+      "code": "geom.wrong-count",
+      "name": "WrongCount",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve or surface was given the wrong number of knots, poles or weights.",
+      "template": "{found} were given where {needed} are needed."
+    },
+    {
+      "code": "geom.knots-not-valid",
+      "name": "KnotsNotValid",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A B-spline's knots must not decrease, and may repeat at most its degree times inside and once more at an end.",
+      "template": "Knot {index}, {knot}, is out of order or repeated more often than the degree allows."
+    },
+    {
+      "code": "geom.weight-not-positive",
+      "name": "WeightNotPositive",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A rational curve or surface was given a weight that is not a finite number greater than zero.",
+      "template": "Weight {index} is {weight}, which is not a finite number greater than zero."
+    },
+    {
+      "code": "geom.no-derivative",
+      "name": "NoDerivative",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A surface was asked for a derivative of an order it does not have.",
+      "template": "A derivative of order {order} was asked for, and this surface has them to order {highest}."
+    },
+    {
+      "code": "geom.triangle-not-valid",
+      "name": "TriangleNotValid",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A mesh's triangle must name three of its vertices, run anticlockwise with some area in the parameters, and overlap no other there.",
+      "template": "Triangle {index} names a vertex there is not, does not run anticlockwise with some area in the parameters, or overlaps another there."
+    },
+    {
+      "code": "geom.swept-along-itself",
+      "name": "SweptAlongItself",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve swept along a direction it runs along makes no surface, or one with an edge at infinity.",
+      "template": "The curve runs along {direction}, the direction it is swept along: trim it, or sweep it another way."
+    },
+    {
+      "code": "geom.not-smooth",
+      "name": "NotSmooth",
+      "remedies": [],
+      "severity": "error",
+      "summary": "An offset needs a surface with second derivatives, so that its normal is continuous.",
+      "template": "The surface has derivatives to order {highest}, and an offset needs them to order {needed}."
+    },
+    {
+      "code": "geom.edge-off-surface",
+      "name": "EdgeOffSurface",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve in a face's parameters does not lie along its edge's curve within the band.",
+      "template": "The edge's curve on the face is {gap} from its own at {point}, more than the band of {band}."
+    },
+    {
+      "code": "geom.not-in-plane",
+      "name": "NotInPlane",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A parameter curve must be drawn in the plane z = 0, whose x and y are the face's parameters.",
+      "template": "The curve reaches {height} from the plane z = 0, in which a parameter curve is drawn."
+    },
+    {
+      "code": "geom.singular-point",
+      "name": "SingularPoint",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve has no tangent, or a surface no normal, where its derivatives span no direction.",
+      "template": "The derivatives at the parameter asked span {span}, too little to give a direction there."
+    },
+    {
+      "code": "geom.join-below-continuity",
+      "name": "JoinBelowContinuity",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A join is less smooth than the continuity required of it.",
+      "template": "The join first fails at order {failed}, short of the order {required} required, by {gap}."
+    },
+    {
+      "code": "measure.not-converged",
+      "name": "NotConverged",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A measure did not reach the accuracy asked within the work it is allowed.",
+      "template": "The measure reached an accuracy of {reached} where {asked} was asked for."
+    },
+    {
+      "code": "topo.stale-id",
+      "name": "StaleId",
+      "remedies": [],
+      "severity": "error",
+      "summary": "An id names no live entity of the kind wanted: it was removed, or its slot holds a newer one.",
+      "template": "No live entity of the kind wanted has this slot and generation: the slot holds generation {live} now, or nothing if that is 0."
+    },
+    {
+      "code": "check.invariant-failed",
+      "name": "InvariantFailed",
+      "remedies": [],
+      "severity": "error",
+      "summary": "An edit would leave the model breaking an invariant of the B-rep, so it was not committed.",
+      "template": "The edit would break the invariant given as the reason, at the entities named, so the model is unchanged."
+    },
+    {
+      "code": "request.malformed",
+      "name": "RequestMalformed",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The request is not JSON.",
+      "template": "The request is not JSON: the problem is at line {line}, column {column}."
+    },
+    {
+      "code": "request.unsupported-schema",
+      "name": "RequestUnsupportedSchema",
+      "remedies": [
+        "use-schema"
+      ],
+      "severity": "error",
+      "summary": "The request uses a schema version this build cannot read.",
+      "template": "Request schema version {found} is not supported. This build reads version {supported}."
+    },
+    {
+      "code": "request.unknown-operation",
+      "name": "UnknownOperation",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A step asks for an operation occam does not have.",
+      "template": "{parameter} is {given}, which is not an operation occam has."
+    },
+    {
+      "code": "request.not-supported",
+      "name": "NotSupported",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A step asks for an operation occam does not do yet.",
+      "template": "{parameter} is {operation}, which occam does not do yet."
+    },
+    {
+      "code": "input.missing",
+      "name": "InputMissing",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request leaves out something it needs.",
+      "template": "{parameter} is missing."
+    },
+    {
+      "code": "input.wrong-type",
+      "name": "InputWrongType",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request gives something of the wrong kind where it gives it.",
+      "template": "{parameter} is a {given}, where a {expected} is wanted."
+    },
+    {
+      "code": "input.unknown-name",
+      "name": "InputUnknownName",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request gives a name that is not one of those allowed there.",
+      "template": "{parameter} is {given}, which is not one of {expected}."
+    },
+    {
+      "code": "input.unknown-field",
+      "name": "InputUnknownField",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request gives a field that is not taken there.",
+      "template": "{parameter} is not a field the request takes there; it takes {expected}."
+    },
+    {
+      "code": "input.unit-written-out",
+      "name": "InputUnitWrittenOut",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request names a unit in full where its short name is wanted.",
+      "template": "{parameter} is {given}, which a request writes {expected}."
+    },
+    {
+      "code": "input.duplicate-label",
+      "name": "InputDuplicateLabel",
+      "remedies": [],
+      "severity": "error",
+      "summary": "Two steps of a request have the same label.",
+      "template": "{parameter} is {given}, which step {first} is already labelled."
+    },
+    {
+      "code": "input.label-not-valid",
+      "name": "InputLabelNotValid",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A label must be text that is not empty and is not an entity's id.",
+      "template": "{parameter} is {given}: a label is text that is not empty and is not an entity's id."
+    },
+    {
+      "code": "input.unknown-label",
+      "name": "InputUnknownLabel",
+      "remedies": [],
+      "severity": "error",
+      "summary": "An operand names a label no earlier step has.",
+      "template": "{parameter} names {given}, which no earlier step is labelled."
+    },
+    {
+      "code": "input.one-of",
+      "name": "InputOneOf",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request gives none, or more than one, of the fields that are alternatives there.",
+      "template": "{parameter} gives {given}, where exactly one of {expected} is wanted."
+    },
+    {
+      "code": "construct.no-length",
+      "name": "NoLength",
+      "remedies": [],
+      "severity": "error",
+      "summary": "An edge would have no length: its ends, or its circle's radius, are within the band.",
+      "template": "{parameter} gives an edge {length} long, no longer than the band of {band}."
+    },
+    {
+      "code": "construct.points-in-line",
+      "name": "PointsInLine",
+      "remedies": [],
+      "severity": "error",
+      "summary": "An arc's three points lie on one line, so no circle passes through them.",
+      "template": "{parameter} gives an arc whose middle point is {offset} from the line through its ends, no more than the band of {band}."
+    },
+    {
+      "code": "construct.arc-ends-meet",
+      "name": "ArcEndsMeet",
+      "remedies": [
+        "use-circle"
+      ],
+      "severity": "error",
+      "summary": "An arc's two ends meet, so its three points fix no circle; a whole circle is written as a circle.",
+      "template": "{parameter} gives an arc whose ends are {gap} apart, no more than the band of {band}: a whole circle is written as a circle, by its centre, radius and normal."
+    },
+    {
+      "code": "construct.wire-gap",
+      "name": "WireGap",
+      "remedies": [
+        "meet-at"
+      ],
+      "severity": "error",
+      "summary": "An edge of a wire does not begin where the one before it ends.",
+      "template": "{parameter} begins {gap} from where the edge before it ends, at {end}, more than the band of {band}."
+    },
+    {
+      "code": "construct.wire-open",
+      "name": "WireOpen",
+      "remedies": [
+        "meet-at"
+      ],
+      "severity": "error",
+      "summary": "A face needs a closed wire, and this one does not come back to where it begins.",
+      "template": "{parameter} ends {gap} from where it begins, at {start}, more than the band of {band}."
+    },
+    {
+      "code": "construct.wire-crosses-itself",
+      "name": "WireCrossesItself",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A wire touches or crosses itself.",
+      "template": "{parameter} touches or crosses itself at {point}, where its edges {first} and {second}, counted from 0, come within the band of {band}."
+    },
+    {
+      "code": "construct.wires-cross",
+      "name": "WiresCross",
+      "remedies": [],
+      "severity": "error",
+      "summary": "Two wires of a face touch or cross.",
+      "template": "{parameter} touches or crosses the face's wire {other}, counted from 0 with the outer one first, at {point}, within the band of {band}."
+    },
+    {
+      "code": "construct.hole-outside",
+      "name": "HoleOutside",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A hole of a face is not inside its outer wire.",
+      "template": "{parameter} is a hole that does not lie inside the face's outer wire: it begins at {point}."
+    },
+    {
+      "code": "construct.holes-nested",
+      "name": "HolesNested",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A hole of a face lies inside another of its holes.",
+      "template": "{parameter} lies inside the face's wire {other}, another hole."
+    },
+    {
+      "code": "construct.not-planar",
+      "name": "NotPlanar",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A face's wires do not lie in one plane.",
+      "template": "{parameter} reaches {point}, {distance} from the plane of the face's outer wire, more than the band of {band}."
+    },
+    {
+      "code": "construct.no-interior",
+      "name": "NoInterior",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A face's wire bounds no point clear of its edges.",
+      "template": "{parameter} bounds no point further than {clearance} from the face's wires."
+    },
+    {
+      "code": "construct.not-a-wire",
+      "name": "NotAWire",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A face names something that is not a wire it can be made from.",
+      "template": "{parameter} names {given}, which is not a wire a face can be made from."
+    },
+    {
+      "code": "io.not-readable",
+      "name": "NotReadable",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The bytes given to load are not a model in the native format.",
+      "template": "The file is not a native model: it fails at line {line}, column {column}."
+    },
+    {
+      "code": "io.other-version",
+      "name": "OtherVersion",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A native model file is of a format version this build does not read.",
+      "template": "The file is format version {version}; this build reads version {supported}."
+    },
+    {
+      "code": "io.not-saved",
+      "name": "NotSaved",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A model holds a curve or surface of a family the native format does not write yet, so it was not saved.",
+      "template": "The geometry named is of a family the native format does not write yet, so nothing was saved."
+    },
+    {
+      "code": "io.damaged",
+      "name": "Damaged",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A binary model file's checksum does not match its contents.",
+      "template": "The file's last four bytes, its CRC-32, do not match the rest of it: it was changed or damaged after it was written."
+    },
+    {
+      "code": "input.negative",
+      "name": "InputNegative",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request gives a negative value where none may be.",
+      "template": "{parameter} is {value}, which is less than zero."
+    },
+    {
+      "code": "input.cone-radii-equal",
+      "name": "InputConeRadiiEqual",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A cone's two radii must differ.",
+      "template": "{parameter} is {value}, as is the cone's other radius: a cone's radii differ, and equal ones make a cylinder."
+    },
+    {
+      "code": "input.no-direction",
+      "name": "InputNoDirection",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request gives a direction that is zero or not finite.",
+      "template": "{parameter} is zero or not finite, so it has no direction."
+    },
+    {
+      "code": "input.axes-parallel",
+      "name": "InputAxesParallel",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A frame's x axis lies along its z axis.",
+      "template": "{parameter} lies along the frame's z axis, so it gives no x direction across it."
+    },
+    {
+      "code": "input.angle-out-of-range",
+      "name": "InputAngleOutOfRange",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A request gives an angle outside the range its step allows.",
+      "template": "{parameter} is {value}, outside the range allowed: more than {low} and at most {high}."
+    },
+    {
+      "code": "construct.vector-in-plane",
+      "name": "VectorInPlane",
+      "remedies": [],
+      "severity": "error",
+      "summary": "An extrusion's vector lies in its face's plane, so it sweeps no volume.",
+      "template": "{parameter} rises {height} from the face's plane, no more than the band of {band}."
+    },
+    {
+      "code": "construct.not-a-profile",
+      "name": "NotAProfile",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A sweep names something that is not a profile it can sweep.",
+      "template": "{parameter} names {given}, which is not a profile a sweep can be made from."
+    },
+    {
+      "code": "construct.axis-off-plane",
+      "name": "AxisOffPlane",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A revolution's profile does not lie in one plane with its axis.",
+      "template": "The profile reaches {point}, {distance} from the plane through {parameter} and the profile's farthest point, more than the band of {band}."
+    },
+    {
+      "code": "construct.profile-crosses-axis",
+      "name": "ProfileCrossesAxis",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A revolution's profile lies on both sides of its axis.",
+      "template": "The profile reaches {point}, {distance} beyond {parameter} from its farthest point, more than the band of {band}."
+    },
+    {
+      "code": "construct.profile-touches-axis",
+      "name": "ProfileTouchesAxis",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A revolution's profile touches its axis at a point where what it makes would pinch.",
+      "template": "The profile touches {parameter} at {point}, within the band of {band}, where what it makes would pinch: a profile may meet its axis only along a piece on it, at a wire's end, or at a vertex of a face turned less than a whole turn."
+    },
+    {
+      "code": "measure.not-defined",
+      "name": "MeasureNotDefined",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A measure is asked of something that does not have it.",
+      "template": "{parameter} is {given}, which what the step measures does not have: it has {expected}."
+    },
+    {
+      "code": "measure.no-parameter-curve",
+      "name": "NoParameterCurve",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A face's edge has no curve in the face's parameters, which measuring the face needs.",
+      "template": "The edge named has no curve in the parameters of the face named, which its area and volume are measured by."
+    },
+    {
+      "code": "input.scale-not-positive",
+      "name": "InputScaleNotPositive",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A scale factor is not greater than zero.",
+      "template": "{parameter} is {value}, which is not greater than zero: a scale grows or shrinks, and never turns inside out."
+    },
+    {
+      "code": "construct.not-a-body",
+      "name": "NotABody",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A transform or a copy names something that is not a body.",
+      "template": "{parameter} names {given}, which is not a body."
+    },
+    {
+      "code": "construct.no-exact-form",
+      "name": "NoExactForm",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve or surface has no exact form under a scale that differs along its axes.",
+      "template": "The geometry named has no exact form under the scale {parameter} gives, which differs along its axes, and occam does not approximate it."
+    },
+    {
+      "code": "intersect.incomplete",
+      "name": "Incomplete",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A section of two surfaces stopped before it was complete; what it found is kept.",
+      "template": "The section stopped with {curves} curves and {contacts} contacts found, and more may be missing."
+    },
+    {
+      "code": "intersect.hits-incomplete",
+      "name": "HitsIncomplete",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The hits of a curve on a surface stopped before they were complete; what was found is kept.",
+      "template": "The hits stopped with {hits} points and {overlaps} overlaps found, and more may be missing."
+    },
+    {
+      "code": "decide.undecided",
+      "name": "Undecided",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A decision cannot be made at this resolution: the value's certified enclosure reaches across an edge of the band.",
+      "template": "The value {quantity}, certified to within {radius}, cannot be placed against the band of {band}."
+    },
+    {
+      "code": "intersect.fit-outside-band",
+      "name": "FitOutsideBand",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A curve fitted to traced points, or an image of it, is not within the band of both surfaces; it is kept with its fit.",
+      "template": "The curve fitted to {points} traced points and its images lie within {reached} of both surfaces, outside the band of {band}."
+    },
+    {
+      "code": "mesh.limit-not-positive",
+      "name": "LimitNotPositive",
+      "remedies": [],
+      "severity": "error",
+      "summary": "A limit a mesh is made to must be a finite number greater than zero.",
+      "template": "{parameter} is {value}, which is not a finite number greater than zero."
+    },
+    {
+      "code": "mesh.edge-over-cap",
+      "name": "EdgeOverCap",
+      "remedies": [
+        "use-deflection"
+      ],
+      "severity": "error",
+      "summary": "An edge would need more samples than one edge may have at the deflection asked.",
+      "template": "The edge would need more than {cap} samples at a deflection of {deflection}."
+    },
+    {
+      "code": "mesh.face-not-meshed",
+      "name": "FaceNotMeshed",
+      "remedies": [
+        "use-deflection"
+      ],
+      "severity": "error",
+      "summary": "A face could not be meshed, so the mesh leaves a hole where it is.",
+      "template": "The face could not be meshed, for the reason given; the faces around it are meshed without it."
+    },
+    {
+      "code": "mesh.not-watertight",
+      "name": "NotWatertight",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The mesh is not watertight: a face is missing, a segment is not used once each way, or a shell's counts are wrong.",
+      "template": "The mesh is not watertight, for the reason given, at the entities named."
+    },
+    {
+      "code": "view.webgpu-missing",
+      "name": "WebgpuMissing",
+      "remedies": [
+        "use-webgpu-browser"
+      ],
+      "severity": "error",
+      "summary": "The browser has no WebGPU, which the viewer draws with.",
+      "template": "This browser has no WebGPU, which the viewer draws with."
+    },
+    {
+      "code": "view.no-adapter",
+      "name": "NoAdapter",
+      "remedies": [
+        "turn-on-webgpu"
+      ],
+      "severity": "error",
+      "summary": "The browser has WebGPU but gave the page no GPU adapter.",
+      "template": "The browser has WebGPU but gave the page no GPU adapter, so the viewer cannot draw."
+    },
+    {
+      "code": "view.no-device",
+      "name": "NoDevice",
+      "remedies": [
+        "reload-page"
+      ],
+      "severity": "error",
+      "summary": "The GPU adapter would not give the page a device.",
+      "template": "The GPU adapter would not give the page a device: {reason}"
+    },
+    {
+      "code": "view.device-lost",
+      "name": "DeviceLost",
+      "remedies": [
+        "reload-page"
+      ],
+      "severity": "error",
+      "summary": "The GPU device was lost, so the page has stopped drawing.",
+      "template": "The GPU device was lost, so the page has stopped drawing: {reason}"
+    },
+    {
+      "code": "view.mesh-malformed",
+      "name": "MeshMalformed",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The page was given a mesh that breaks the renderer contract, which is a bug in occam.",
+      "template": "The page was given a mesh that breaks the renderer contract, which is a bug in occam: {reason}. It still draws the last good model."
+    },
+    {
+      "code": "view.mesh-failed",
+      "name": "MeshFailed",
+      "remedies": [
+        "reload-page"
+      ],
+      "severity": "error",
+      "summary": "A mesh worker could not mesh some of the model's faces, so the page draws the model without them.",
+      "template": "A mesh worker could not mesh {faces}, so the page draws the model without them: {reason}"
+    },
+    {
+      "code": "view.model-missing",
+      "name": "ModelMissing",
+      "remedies": [
+        "make-model"
+      ],
+      "severity": "error",
+      "summary": "The model the viewer watches is not there.",
+      "template": "There is no model at {given}: the viewer keeps watching, and its page draws the model once a run writes it."
+    },
+    {
+      "code": "view.port-taken",
+      "name": "PortTaken",
+      "remedies": [
+        "use-any-port"
+      ],
+      "severity": "error",
+      "summary": "The port the viewer was asked to listen on is taken.",
+      "template": "Port {port} is taken on this machine, so the viewer could not listen there."
+    },
+    {
+      "code": "view.state-not-written",
+      "name": "StateNotWritten",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The viewer's state file could not be written, so no viewer was started.",
+      "template": "The viewer's state file {given} could not be written, so no viewer was started for the model."
+    },
+    {
+      "code": "view.not-started",
+      "name": "NotStarted",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The viewer's server did not start.",
+      "template": "The viewer for {given} did not start: its server stopped before it listened."
+    },
+    {
+      "code": "view.not-stopped",
+      "name": "NotStopped",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The viewer's server did not stop when asked.",
+      "template": "The viewer for {given}, process {pid}, still answered {seconds} seconds after it was asked to stop."
+    },
+    {
+      "code": "mesh.ray-missed",
+      "name": "RayMissed",
+      "remedies": [
+        "aim-at"
+      ],
+      "severity": "error",
+      "summary": "A ray hits no face of the mesh and passes no edge within the tolerance.",
+      "template": "The ray from {from} hits no face of the model's mesh and passes no edge within {tolerance} of it."
+    },
+    {
+      "code": "view.selection-stale",
+      "name": "SelectionStale",
+      "remedies": [
+        "select-again"
+      ],
+      "severity": "error",
+      "summary": "The selection was made on another model than the file holds now.",
+      "template": "The selection was made on another model than {given} holds now, so it names nothing: select again."
+    },
+    {
+      "code": "cli.skill-present",
+      "name": "SkillPresent",
+      "remedies": [
+        "use-force"
+      ],
+      "severity": "error",
+      "summary": "Another skill is where `occam skill --install` writes the occam skill, so it was left as it was.",
+      "template": "{given} holds a skill other than this build's occam skill, so it was left as it was; --force replaces it."
+    },
+    {
+      "code": "cli.skill-not-written",
+      "name": "SkillNotWritten",
+      "remedies": [],
+      "severity": "error",
+      "summary": "The occam skill could not be written into the project.",
+      "template": "The occam skill could not be written to {given}."
+    }
+  ],
+  "remedies": [
+    {
+      "kind": "use-schema",
+      "name": "UseSchema",
+      "parameters": [
+        "version"
+      ],
+      "summary": "Use the schema version given."
+    },
+    {
+      "kind": "use-model-tolerance",
+      "name": "UseModelTolerance",
+      "parameters": [
+        "tolerance"
+      ],
+      "summary": "Ask for the model's tolerance, or for a coarser one."
+    },
+    {
+      "kind": "use-threads",
+      "name": "UseThreads",
+      "parameters": [
+        "threads"
+      ],
+      "summary": "Run on the number of threads given. One thread needs none started, so it always works."
+    },
+    {
+      "kind": "meet-at",
+      "name": "MeetAt",
+      "parameters": [
+        "point"
+      ],
+      "summary": "Move the end the report names to the point given, so that the two ends meet."
+    },
+    {
+      "kind": "use-circle",
+      "name": "UseCircle",
+      "parameters": [
+        "centre",
+        "radius",
+        "normal"
+      ],
+      "summary": "Write the edge the report names as a whole circle with the centre, radius and normal given."
+    },
+    {
+      "kind": "use-deflection",
+      "name": "UseDeflection",
+      "parameters": [
+        "deflection"
+      ],
+      "summary": "Mesh at the deflection given, at which the edge the report names fits under its cap."
+    },
+    {
+      "kind": "use-webgpu-browser",
+      "name": "UseWebgpuBrowser",
+      "parameters": [],
+      "summary": "Open the page in a current Chromium or Firefox, which draw with WebGPU."
+    },
+    {
+      "kind": "turn-on-webgpu",
+      "name": "TurnOnWebgpu",
+      "parameters": [],
+      "summary": "Turn on WebGPU and hardware acceleration in the browser's settings; in Chromium, chrome://gpu says why WebGPU is off."
+    },
+    {
+      "kind": "reload-page",
+      "name": "ReloadPage",
+      "parameters": [],
+      "summary": "Reload the page."
+    },
+    {
+      "kind": "make-model",
+      "name": "MakeModel",
+      "parameters": [],
+      "summary": "Make the model by running a request on it with `occam run --model`; the viewer draws it once it is written."
+    },
+    {
+      "kind": "use-any-port",
+      "name": "UseAnyPort",
+      "parameters": [],
+      "summary": "Leave out --port, so that the viewer listens on a free port."
+    },
+    {
+      "kind": "aim-at",
+      "name": "AimAt",
+      "parameters": [
+        "point"
+      ],
+      "summary": "Pick again from the same point with --towards at the point given, the centre of a triangle of the mesh."
+    },
+    {
+      "kind": "select-again",
+      "name": "SelectAgain",
+      "parameters": [],
+      "summary": "Select again in the viewer's page, which draws the model as the file holds it now; ask the person to, if the selection is theirs."
+    },
+    {
+      "kind": "use-force",
+      "name": "UseForce",
+      "parameters": [],
+      "summary": "Run the same command again with --force, which replaces the file the report names."
+    }
+  ],
+  "schema": 2
+}

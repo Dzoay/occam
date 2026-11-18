@@ -14,9 +14,8 @@
 
 mod constrain;
 
-use occam_math::Side;
+use occam_math::{Side, larger, smaller};
 
-use crate::limits::{higher, lower};
 use crate::predicates::{P2, incircle, orient};
 
 /// No triangle: what lies across an edge of the outermost triangle.
@@ -159,10 +158,10 @@ impl Triangulation {
     fn around(points: &[P2]) -> Self {
         let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
         for p in points {
-            lo = [lower(lo[0], p[0]), lower(lo[1], p[1])];
-            hi = [higher(hi[0], p[0]), higher(hi[1], p[1])];
+            lo = [smaller(lo[0], p[0]), smaller(lo[1], p[1])];
+            hi = [larger(hi[0], p[0]), larger(hi[1], p[1])];
         }
-        let size = higher(hi[0] - lo[0], hi[1] - lo[1]);
+        let size = larger(hi[0] - lo[0], hi[1] - lo[1]);
         let size = if size > 0.0 { size } else { 1.0 };
         let (x, y, far) = (lo[0].midpoint(hi[0]), lo[1].midpoint(hi[1]), 16.0 * size);
         let mut all = vec![[x - far, y - far], [x + far, y - far], [x, y + far]];

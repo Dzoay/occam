@@ -27,7 +27,8 @@ use occam_math::{Interval, Side};
 use occam_units::Vec3;
 
 use crate::correct::{Here, Other, Pair, foot};
-use crate::decide::{Decide, distance, dot, exact, less};
+use crate::decide::{Decide, distance};
+use crate::interval3::{dot3, exact3, minus, norm3};
 use crate::march::{Frame, frame};
 use crate::trace::{End, Station, Trace, Tracer, Uncertain};
 
@@ -272,11 +273,11 @@ fn between(pair: &Pair<'_>, [from, to]: [Here; 2], along: f64) -> Option<Here> {
 /// How far `landed` is from the station of `onto` across its curve, times the sine between the surfaces there: the gap
 /// that far across makes between them.
 fn across(landed: Vec3, onto: &Frame) -> Interval {
-    let (off, along) = (less(exact(landed), exact(onto.here.at)), exact(onto.along));
-    let ahead = dot(off, along);
-    let aside = less(off, along.map(|part| part * ahead));
+    let (off, along) = (minus(exact3(landed), exact3(onto.here.at)), exact3(onto.along));
+    let ahead = dot3(off, along);
+    let aside = minus(off, along.map(|part| part * ahead));
     let sine = onto.normals.0.cross(onto.normals.1).norm();
-    dot(aside, aside).sqrt() * Interval::exact(sine)
+    norm3(aside) * Interval::exact(sine)
 }
 
 #[cfg(test)]

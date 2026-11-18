@@ -5,6 +5,7 @@ use core::f64::consts::{FRAC_PI_2, PI};
 use std::num::NonZeroUsize;
 
 use occam_geom::{BsplineCurve, Circle, Line, SplineCurve};
+use occam_math::{larger, smaller};
 use occam_report::{Code, DisplayUnits, NamedValue, RemedyKind, followed_remedy};
 use occam_units::{Angle, Direction, Placement};
 
@@ -31,7 +32,7 @@ fn strays(curve: &dyn Curve, samples: &EdgeSamples) -> Vec<f64> {
     let pieces = samples.params.windows(2).zip(samples.points.windows(2));
     let piece = |(t, p): (&[f64], &[Point<World>])| {
         let along = |k: u32| curve.point(t[0] + (t[1] - t[0]) * f64::from(k) / 16.0).to_vec3();
-        (1..16).map(|k| off_chord(along(k), p[0].to_vec3(), p[1].to_vec3())).fold(0.0, higher)
+        (1..16).map(|k| to_segment(along(k), p[0].to_vec3(), p[1].to_vec3())).fold(0.0, larger)
     };
     pieces.map(piece).collect()
 }
@@ -270,7 +271,7 @@ fn a_corner_is_cut_to_its_parameters_resolution_and_stops_there() {
     let piece = Piece { curve: &corner, range: (0.0, 1.0), closed: false };
     let fine = piece.cut(&Criteria { turn: limits(1.0, 0.35).half_turn_cosine(), ..OPEN }).unwrap();
     assert!(fine.len() < 200, "{} samples", fine.len());
-    let near = fine.windows(2).map(|s| s[1].at - s[0].at).fold(1.0, lower);
+    let near = fine.windows(2).map(|s| s[1].at - s[0].at).fold(1.0, smaller);
     assert!(near <= f64::EPSILON, "the corner's pieces are a bit of the parameter wide, not {near}");
     let floored = piece.cut(&Criteria::new(limits(0.01, 0.35), 0.0)).unwrap();
     assert!(floored.len() < 20, "{} samples", floored.len());

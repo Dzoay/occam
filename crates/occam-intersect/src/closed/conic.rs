@@ -11,8 +11,9 @@ use occam_units::Vec3;
 
 use super::meet::{Flat, Meeting, Shape, meet};
 use super::piece::{Plan, square_to};
-use super::{Found, Touch, along, cross3, exact3, norm3, unit};
+use super::{Found, Touch, unit};
 use crate::decide::{Decisions, Undecided};
+use crate::interval3::{along, cross3, exact3, norm3};
 
 /// A plane, as a point on it and the unit normal it faces.
 pub(super) type Flatness = (Vec3, Vec3);

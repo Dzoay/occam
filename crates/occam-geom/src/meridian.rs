@@ -4,14 +4,14 @@
 //! and `j` times in `v` is `ρ⁽ʲ⁾(v) e⁽ⁱ⁾(u)`, plus `ζ⁽ʲ⁾(v) z` where `i` is 0: one formula for every order, which the
 //! rungs and `derivatives` both call, so they agree bit for bit.
 
-use occam_math::{Real, atan2, sin_cos};
+use occam_math::{Real, atan2, larger, sin_cos, smaller};
 use occam_units::{Bounds, Length, Point, Tangent, UvPoint, Vec3, World};
 
 use crate::axes::Axes;
 use crate::batch::{Jet1, Jet2};
 use crate::domain::UvBox;
 use crate::support::{everything, splat};
-use crate::turn::{above, larger, quarter_turns, smaller, swing};
+use crate::turn::{above, quarter_turns, swing};
 
 /// Where a surface turned about an axis is, in a plane through the axis, as `v` runs: `ρ` across the axis and `ζ` along
 /// it.

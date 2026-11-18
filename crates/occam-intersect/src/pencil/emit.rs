@@ -19,8 +19,9 @@ use occam_units::{Point, Vec3};
 use super::fan::{Ball, Fan};
 use super::quadric::{Kind, Natural, Quadric, Ruling};
 use super::{Class, Pair, nodal, smooth, split};
-use crate::closed::{Found, Plan, Touch, decided, emit, exact3, minus, norm3, square_to, unit};
+use crate::closed::{Found, Plan, Touch, decided, emit, square_to, unit};
 use crate::decide::{Decisions, Undecided};
+use crate::interval3::{exact3, minus, norm3};
 use crate::resolution::{NULL, Near};
 use crate::section::{Contact, Section, SectionCurve};
 
