@@ -12,6 +12,10 @@ Two things were asked.
 - Whether to move in stages or at once. The user chose **"All at once"**, in one PR, against the recommendation of
   staging.
 
+**Accepted by the user, 2026-11-18,** when shown the design as built: fixture sources shared into three crates' tests
+by `#[path]`, the public names `occam::step` and `occam::Stopped`, the topology's determinism probe as an ignored test
+that the gate runs, and the compile cost of one fixtures crate for a single crate's test run.
+
 ## What it means in practice
 
 This section is Claude's working reading of the decision. The user can change it.
