@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 
 use crate::args::{self, Args};
 use crate::operation::Operation;
-use crate::read::{At, count, name, needed, number, object, text, whole, without_knock_ons, wrong_type};
+use crate::read::{At, count, gather, name, needed, number, object, text, whole, without_knock_ons, wrong_type};
 
 /// The version of the request's JSON form this build reads.
 pub const SCHEMA: u32 = 1;
@@ -35,9 +35,7 @@ pub struct Step {
     pub label: Option<String>,
     /// What it asks for.
     pub operation: Operation,
-    /// Its other fields, which its operation reads.
-    pub parameters: Map<String, Value>,
-    /// What its operation reads of them, checked and converted.
+    /// What its operation reads of its other fields, checked and converted.
     pub args: Args,
 }
 
@@ -114,11 +112,6 @@ pub struct Unread {
     pub units: Option<Units>,
     /// Every bad input, each with its own code and its place in the request.
     pub reports: Vec<Report>,
-}
-
-/// The value of `result`, or nothing with its report kept.
-fn gather<T>(result: Result<T, Report>, out: &mut Vec<Report>) -> Option<T> {
-    result.map_err(|report| out.push(report)).ok()
 }
 
 /// Text that is not JSON, and where.
@@ -239,11 +232,8 @@ fn step(
     let label = fields.get("label").and_then(|given| gather(label(&at.field("label"), given, labels, index), out));
     let op = needed(&at, fields, "op").and_then(|given| text(&at.field("op"), given));
     let operation = gather(op.and_then(|name| Operation::asked(&at.field("op"), name)), out)?;
-    let mut parameters = fields.clone();
-    parameters.remove("op");
-    parameters.remove("label");
-    let args = args::read(&at, operation, &parameters, units, out);
-    Some(Step { index, label, operation, parameters, args })
+    let args = args::read(&at, operation, fields, units, out);
+    Some(Step { index, label, operation, args })
 }
 
 /// The label at `at`, of the `index`th step, which no earlier step in `labels` may have; it is added there.

@@ -90,14 +90,24 @@ pub(crate) fn object<'a>(
         out.push(wrong_type(at, value, "object"));
         return None;
     };
-    let unknown = fields.keys().filter(|name| !known.contains(&name.as_str()));
+    unknown(at, fields.keys(), known, out);
+    Some(fields)
+}
+
+/// Every one of `names`, the fields of the object at `at`, that is not in `known`, reported as a field it does not
+/// take, with those it does.
+pub(crate) fn unknown<'a>(at: &At, names: impl Iterator<Item = &'a String>, known: &[&str], out: &mut Vec<Report>) {
     let taken = known.join(", ");
     let report = |name: &String| {
         let input = at.field(name).input().given(name).expected(&taken);
         Report::new(Code::InputUnknownField, Fault::InvalidInput).with_input(input)
     };
-    out.extend(unknown.map(report));
-    Some(fields)
+    out.extend(names.filter(|name| !known.contains(&name.as_str())).map(report));
+}
+
+/// The value of `result`, or nothing with its report kept in `out`.
+pub(crate) fn gather<T>(result: Result<T, Report>, out: &mut Vec<Report>) -> Option<T> {
+    result.map_err(|report| out.push(report)).ok()
 }
 
 /// The field `name` of `fields`, which is needed.

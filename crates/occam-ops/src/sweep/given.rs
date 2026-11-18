@@ -10,11 +10,12 @@ use occam_report::{Code, Input, NamedValue, Quantity, Report};
 use occam_units::{Angle, Vec3};
 use serde_json::{Map, Value};
 
-use crate::construct::given::{direction, gather, point};
+use crate::args::Args;
+use crate::construct::given::{direction, point};
 use crate::construct::space::unit;
 use crate::operand::Operand;
 use crate::operation::Operation;
-use crate::read::{At, needed, number, object, text};
+use crate::read::{At, gather, needed, number, text};
 use crate::request::Units;
 
 /// How far past a whole turn an angle may be given and still be read as one, so that 360 degrees converted is a turn.
@@ -78,42 +79,40 @@ fn angle(at: &At, value: &Value, units: Units) -> Result<f64, Report> {
         .with_value(NamedValue::new("high", Quantity::Angle, TAU)))
 }
 
-/// The fields of an `extrude` step, at `at`, checking that it takes them.
+/// What an `extrude` step, at `at`, gives in `fields`.
 pub(crate) fn extrude_step(
     at: &At,
+    _: Operation,
     fields: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
-) -> Option<ExtrudeArgs> {
-    let value = Value::Object(fields.clone());
-    let fields = object(at, &value, Operation::Extrude.fields(), out)?;
+) -> Option<Args> {
     let face = gather(named(at, fields, "face"), out);
     let vector_at = at.field("vector");
     let vector = gather(needed(at, fields, "vector").and_then(|v| point(&vector_at, v, units)), out);
-    Some(ExtrudeArgs { face: face?, vector: vector?, vector_at: vector_at.input() })
+    Some(Args::Extrude(ExtrudeArgs { face: face?, vector: vector?, vector_at: vector_at.input() }))
 }
 
-/// The fields of a `revolve` step, at `at`, checking that it takes them.
+/// What a `revolve` step, at `at`, gives in `fields`.
 pub(crate) fn revolve_step(
     at: &At,
+    _: Operation,
     fields: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
-) -> Option<RevolveArgs> {
-    let value = Value::Object(fields.clone());
-    let fields = object(at, &value, Operation::Revolve.fields(), out)?;
+) -> Option<Args> {
     let profile = gather(named(at, fields, "profile"), out);
     let origin = gather(needed(at, fields, "origin").and_then(|v| point(&at.field("origin"), v, units)), out);
     let axis_at = at.field("axis");
     let axis = gather(needed(at, fields, "axis").and_then(|v| direction(&axis_at, v)), out);
     let angle_at = at.field("angle");
     let angle = gather(needed(at, fields, "angle").and_then(|v| angle(&angle_at, v, units)), out);
-    Some(RevolveArgs {
+    Some(Args::Revolve(RevolveArgs {
         profile: profile?,
         origin: origin?,
         axis: unit(axis?),
         axis_at: axis_at.input(),
         angle: angle?,
         angle_at: angle_at.input(),
-    })
+    }))
 }
