@@ -64,6 +64,14 @@ mod tests {
     }
 
     #[test]
+    fn a_measure_step_with_its_own_arguments_makes_nothing_and_is_not_refused() {
+        let snapshot = Snapshot::empty(default_tolerance().unwrap());
+        let args = Args::Measure(MeasureArgs { target: Operand::read("block"), what: Vec::new() });
+        let step = Step { index: 1, label: None, operation: Operation::Measure, args };
+        assert_eq!(execute(&mut snapshot.edit(), &step, &Labels::default()), Ok(None));
+    }
+
+    #[test]
     fn an_operation_this_build_does_not_do_is_refused_if_a_step_reaches_it() {
         let snapshot = Snapshot::empty(default_tolerance().unwrap());
         for operation in Operation::ALL.into_iter().filter(|op| !op.supported()) {
