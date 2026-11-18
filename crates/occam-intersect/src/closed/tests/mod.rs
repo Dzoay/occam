@@ -8,6 +8,7 @@ mod edges;
 mod more;
 mod p5;
 
+pub(crate) use occam_fixtures::mm;
 use std::sync::Arc;
 
 use occam_geom::{Cone, Curve, Cylinder, ParamRange, Plane, Scratch, Sphere, Surface, Torus, Wrap};
@@ -122,10 +123,6 @@ pub(crate) fn frame_by(origin: Vec3, z: Vec3, rigid: &Placement<World, World>) -
 
 pub(crate) fn frame(origin: Vec3, z: Vec3) -> Placement<Local, World> {
     frame_by(origin, z, &rigid())
-}
-
-pub(crate) fn mm(x: f64) -> Length {
-    Length::from_millimetres(x)
 }
 
 pub(crate) fn plane(origin: Vec3, normal: Vec3) -> Arc<dyn Surface> {

@@ -305,3 +305,27 @@ fn a_runs_measurements_come_first_in_its_json_before_the_long_list_of_what_each_
     let none = ran_json(&crate::run(None, r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": []}"#));
     assert!(!none.contains(r#""measured""#), "a run that measured nothing says nothing of it: {none}");
 }
+
+#[test]
+fn a_step_taken_by_hand_leaves_what_the_runner_leaves_and_a_refused_one_gives_back_its_edit() {
+    let ran = run_request(None, &request(steps(3), LengthUnit::Millimetre), adds_vertices(None));
+    let mut model = Snapshot::empty(default_tolerance().unwrap());
+    for index in 0..3_u32 {
+        let add = |edit: &mut Edit| Ok(edit.add(vertex(f64::from(index))).entity());
+        let Ok((next, made, changes)) = step(&model, index, Operation::Box.name(), add) else { panic!("step {index}") };
+        assert_eq!((Some(made), &changes), (ran.done[index as usize].made, &ran.done[index as usize].changes));
+        model = next;
+    }
+    let runners = ran.model.unwrap();
+    assert_eq!(model.digest(), runners.digest());
+    let notes = |model: &Snapshot| model.notes().map(|(step, note)| (step, note.clone())).collect::<Vec<_>>();
+    assert_eq!(notes(&model), notes(&runners), "each step named as its request numbers and names it");
+    assert_eq!(notes(&model).len(), 3);
+    let refused = step(&model, 3, "box", |edit| {
+        edit.add(vertex(9.0));
+        Err::<(), _>(boom())
+    });
+    let Err((reports, edit)) = refused else { panic!("the step was not refused") };
+    assert_eq!((reports, edit.base().digest()), (vec![boom()], model.digest()));
+    assert_eq!(edit.note(edit.step()).map(|note| note.request_step), Some(3), "named before the work was done");
+}

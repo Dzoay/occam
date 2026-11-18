@@ -11,19 +11,20 @@ use occam_math::sin_cos;
 use occam_units::{Direction, Length, Local, Placement, Point, UvPoint, Vec3, Vector, World};
 
 use super::{Built, EdgeSpec, FaceSpec, Spec, facing, point, segment, sheet};
-use crate::edit::Edit;
-use crate::records::{BodyKind, CurveRecord, EdgeRole, EdgeUseRecord, ParamCurveRecord, SurfaceRecord, UseOwner};
-use crate::testing::tolerance;
+use occam_fixtures::tol as tolerance;
+use occam_topo::Edit;
+use occam_topo::{BodyKind, CurveRecord, EdgeRole, EdgeUseRecord, ParamCurveRecord, SurfaceRecord, UseOwner};
 
 /// The straight line in a face's parameters from `(u, v)`, along `(du, dv)`, its parameter the distance along it.
-pub(crate) fn uv_line((u, v): (f64, f64), (du, dv): (f64, f64)) -> ParamCurveRecord {
+#[must_use]
+pub fn uv_line((u, v): (f64, f64), (du, dv): (f64, f64)) -> ParamCurveRecord {
     let line = Line::new(point(u, v, 0.0), Direction::normalised(Vec3::new(du, dv, 0.0)));
     ParamCurveRecord(Arc::new(UvCurve::new(line).unwrap()))
 }
 
 /// The straight line in `surface`'s parameters through the images of `curve`'s points at the ends of `range`, its
 /// parameter running over `range`: the parameter curve of a straight edge on a plane, whose parameters are lengths.
-pub(crate) fn straight(surface: &dyn Surface, curve: &dyn Curve, (lo, hi): (f64, f64)) -> ParamCurveRecord {
+pub fn straight(surface: &dyn Surface, curve: &dyn Curve, (lo, hi): (f64, f64)) -> ParamCurveRecord {
     let image = |t| surface.invert(curve.point(t), None, tolerance(), &mut Scratch::default()).unwrap();
     let (a, b) = (image(lo), image(hi));
     let d = Vec3::new(b.u() - a.u(), b.v() - a.v(), 0.0);
@@ -33,7 +34,7 @@ pub(crate) fn straight(surface: &dyn Surface, curve: &dyn Curve, (lo, hi): (f64,
 
 /// Gives each use of a face's loop in `built` the parameter curve [`straight`] makes, so a body of straight edges on
 /// planes, as [`super::polyhedron`] builds, has one for every use.
-pub(crate) fn straight_pcurves(edit: &mut Edit, built: &Built) {
+pub fn straight_pcurves(edit: &mut Edit, built: &Built) {
     for &u in &built.uses {
         let record = edit.record(u).unwrap();
         let UseOwner::Loop(l) = record.owner else { continue };
@@ -49,7 +50,8 @@ pub(crate) fn straight_pcurves(edit: &mut Edit, built: &Built) {
 /// A cylinder of radius 1 and height 2 about +Z, its side two patches split at `u = start` and `u = start + π`, with the
 /// seam edge at `start`, and flat ends. From `start` above 0 the second patch runs past `u = 2π`, across the surface's
 /// own seam.
-pub(crate) fn cylinder_from(start: f64) -> Spec {
+#[must_use]
+pub fn cylinder_from(start: f64) -> Spec {
     let (a, b, c) = (start, start + PI, start + 2.0 * PI);
     let lift = |z: f64| {
         Placement::<Local, World>::identity().then(&Placement::translation(Vector::from_vec3(Vec3::new(0.0, 0.0, z))))
@@ -94,7 +96,7 @@ pub(crate) fn cylinder_from(start: f64) -> Spec {
 /// Gives the uses of the side of a cylinder from [`cylinder_from`] their parameter curves, `shift` further on in `u`:
 /// each straight edge at its angle, the seam at `start` on the first patch and a turn further on the second, and each
 /// circle along its height.
-pub(crate) fn cylinder_pcurves(edit: &mut Edit, built: &Built, start: f64, shift: f64) {
+pub fn cylinder_pcurves(edit: &mut Edit, built: &Built, start: f64, shift: f64) {
     let (a, b, c) = (start + shift, start + PI + shift, start + 2.0 * PI + shift);
     let patches = [
         (0, [(2, None), (1, Some(b)), (4, None), (0, Some(a))]),
@@ -114,7 +116,8 @@ pub(crate) fn cylinder_pcurves(edit: &mut Edit, built: &Built, start: f64, shift
 
 /// A flat disc of radius 1 about the origin, facing +Z: one face bounded by one closed circular edge, whose two ends
 /// are one vertex.
-pub(crate) fn disc() -> Spec {
+#[must_use]
+pub fn disc() -> Spec {
     let circle = Circle::placed(&Placement::identity(), Length::from_millimetres(1.0)).unwrap();
     let edges = vec![EdgeSpec {
         curve: CurveRecord(Arc::new(circle)),
@@ -136,7 +139,8 @@ pub(crate) fn disc() -> Spec {
 
 /// A square sheet 3 by 3 in the XY plane, facing +Z, with a square hole 1 by 1 in its middle: the outer loop runs
 /// anticlockwise with its witness in the sheet, and the hole clockwise with its witness in the hole.
-pub(crate) fn holed_sheet() -> Spec {
+#[must_use]
+pub fn holed_sheet() -> Spec {
     let corners = [[0., 0.], [3., 0.], [3., 3.], [0., 3.], [1., 1.], [1., 2.], [2., 2.], [2., 1.]];
     let points: Vec<Point<World>> = corners.iter().map(|&[x, y]| point(x, y, 0.0)).collect();
     let ring = |k: usize| [(k, k + 1), (k + 1, k + 2), (k + 2, k + 3), (k + 3, k)];
@@ -151,7 +155,8 @@ pub(crate) fn holed_sheet() -> Spec {
 
 /// [`sheet`] with a second loop of the same edges run the other way, its own reversal attached as a hole (S1's
 /// 52-case bug): every point of the hole is inside the outer loop, the outer loop's witness included.
-pub(crate) fn sheet_holed_by_its_reversal() -> Spec {
+#[must_use]
+pub fn sheet_holed_by_its_reversal() -> Spec {
     let mut spec = sheet();
     let face = &mut spec.faces[0];
     let (outer, witness) = face.loops[0].clone();

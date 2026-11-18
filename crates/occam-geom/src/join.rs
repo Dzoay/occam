@@ -125,6 +125,7 @@ pub fn join_edge(
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::mm;
     use std::f64::consts::FRAC_PI_2;
 
     use occam_units::{Angle, Direction, Local, Placement, Point, UvPoint, Vector, World};
@@ -135,10 +136,6 @@ mod tests {
         BsplineCurve, Circle, Cone, Cylinder, Extrusion, Line, MeshSurface, OffsetSurface, Plane, Revolution, Sphere,
         SplineCurve, SplineSurface, Torus, TrimmedSurface, UvBox, UvCurve,
     };
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     fn p(x: f64, y: f64, z: f64) -> Point<World> {
         Point::from_vec3(Vec3::new(x, y, z))

@@ -13,57 +13,78 @@ use occam_geom::{Line, Plane};
 use occam_report::StepRole;
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, UvPoint, Vec3, Vector, World};
 
-use crate::edit::Edit;
-use crate::kind::{Body, Edge, EdgeUse, Face, Id, Loop, Shell, Vertex, Wire};
-use crate::records::{
+use occam_topo::Edit;
+use occam_topo::{
     Around, BodyKind, BodyRecord, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, FaceRecord, LoopRecord, Sheet,
     ShellRecord, SurfaceRecord, UseOwner, VertexRecord, WireRecord,
 };
+use occam_topo::{Body, Edge, EdgeUse, Face, Id, Loop, Shell, Vertex, Wire};
 
 mod geometric;
 mod split;
 
-pub(crate) use geometric::{
-    cylinder_from, cylinder_pcurves, disc, holed_sheet, sheet_holed_by_its_reversal, straight_pcurves,
+pub use geometric::{
+    cylinder_from, cylinder_pcurves, disc, holed_sheet, sheet_holed_by_its_reversal, straight_pcurves, uv_line,
 };
-pub(crate) use split::{split, top_square};
+pub use split::{split, top_square};
 
 /// An edge: its curve, the part of it, the indices of its start and finish vertices, and its role.
-pub(crate) struct EdgeSpec {
+pub struct EdgeSpec {
+    /// The curve it lies on.
     pub curve: CurveRecord,
+    /// The part of the curve it covers, start then finish.
     pub range: (f64, f64),
+    /// The indices of its start and finish vertices.
     pub ends: (usize, usize),
+    /// Its role.
     pub role: EdgeRole,
 }
 
 /// A face: the index of its surface, whether it is reversed, and its loops, the outer first, each a list of edge
 /// indices and whether the use runs against the edge, with a witness.
-pub(crate) struct FaceSpec {
+pub struct FaceSpec {
+    /// The index of its surface.
     pub surface: usize,
+    /// Whether it faces against its surface.
     pub reversed: bool,
+    /// Its loops, the outer first: each a list of edge indices and whether the use runs against the edge, with a
+    /// witness.
     pub loops: Vec<(Vec<(usize, bool)>, UvPoint)>,
 }
 
 /// A body to build.
-pub(crate) struct Spec {
+pub struct Spec {
+    /// What kind of body it is.
     pub kind: BodyKind,
+    /// Its vertices' points.
     pub points: Vec<Point<World>>,
+    /// Its edges.
     pub edges: Vec<EdgeSpec>,
+    /// Its surfaces.
     pub surfaces: Vec<SurfaceRecord>,
+    /// Its faces.
     pub faces: Vec<FaceSpec>,
     /// Open wires, each a list of edge indices and directions.
     pub wires: Vec<Vec<(usize, bool)>>,
 }
 
 /// The ids a build gave, in the spec's order. `uses` lists the faces' loops' uses, then the wires'.
-pub(crate) struct Built {
+pub struct Built {
+    /// The body.
     pub body: Id<Body>,
+    /// Its shell, if it has faces.
     pub shell: Option<Id<Shell>>,
+    /// The faces.
     pub faces: Vec<Id<Face>>,
+    /// The faces' loops.
     pub loops: Vec<Id<Loop>>,
+    /// The open wires.
     pub wires: Vec<Id<Wire>>,
+    /// The faces' loops' uses, then the wires'.
     pub uses: Vec<Id<EdgeUse>>,
+    /// The edges.
     pub edges: Vec<Id<Edge>>,
+    /// The vertices.
     pub vertices: Vec<Id<Vertex>>,
 }
 
@@ -76,7 +97,8 @@ struct UseSpec {
 }
 
 /// The point at these coordinates.
-pub(crate) fn point(x: f64, y: f64, z: f64) -> Point<World> {
+#[must_use]
+pub fn point(x: f64, y: f64, z: f64) -> Point<World> {
     Point::from_vec3(Vec3::new(x, y, z))
 }
 
@@ -112,7 +134,7 @@ fn successors(groups: &[Vec<usize>], n: usize) -> Vec<usize> {
 }
 
 /// Builds `spec` in `edit` and gives the ids made.
-pub(crate) fn build(edit: &mut Edit, spec: &Spec) -> Built {
+pub fn build(edit: &mut Edit, spec: &Spec) -> Built {
     let vertices: Vec<Id<Vertex>> = spec.points.iter().map(|&p| edit.add(vertex_at(p))).collect();
     let surfaces: Vec<_> = spec.surfaces.iter().map(|s| edit.add(s.clone())).collect();
     let edges: Vec<Id<Edge>> = spec.edges.iter().map(|_| edit.reserve()).collect();
@@ -192,7 +214,7 @@ fn write_edges(
 }
 
 /// Writes the faces and their loops.
-fn write_faces(edit: &mut Edit, spec: &Spec, built: &Built, surfaces: &[Id<crate::kind::SurfaceGeom>]) {
+fn write_faces(edit: &mut Edit, spec: &Spec, built: &Built, surfaces: &[Id<occam_topo::SurfaceGeom>]) {
     let mut first_use = 0;
     let mut next_loop = 0;
     for (k, f) in spec.faces.iter().enumerate() {
@@ -250,7 +272,8 @@ fn segment(a: Point<World>, b: Point<World>, ends: (usize, usize)) -> EdgeSpec {
 }
 
 /// The placement whose XY plane passes through `p` and faces along `normal`, which is along an axis.
-pub(crate) fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
+#[must_use]
+pub fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
     let axis = |x, y, z| Direction::<Local>::normalised(Vec3::new(x, y, z));
     let (about, angle) = if normal.x != 0.0 {
         (axis(0.0, 1.0, 0.0), FRAC_PI_2.copysign(normal.x))
@@ -265,7 +288,8 @@ pub(crate) fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
 
 /// A body of flat faces along the axes, each a list of vertex indices anticlockwise seen from outside, its edges in
 /// the order the faces first meet them.
-pub(crate) fn polyhedron(kind: BodyKind, corners: &[[f64; 3]], faces: &[&[usize]]) -> Spec {
+#[must_use]
+pub fn polyhedron(kind: BodyKind, corners: &[[f64; 3]], faces: &[&[usize]]) -> Spec {
     let points: Vec<Point<World>> = corners.iter().map(|&[x, y, z]| point(x, y, z)).collect();
     let mut edges: Vec<EdgeSpec> = Vec::new();
     let mut pairs: BTreeMap<(usize, usize), usize> = BTreeMap::new();
@@ -301,7 +325,8 @@ pub(crate) fn polyhedron(kind: BodyKind, corners: &[[f64; 3]], faces: &[&[usize]
 }
 
 /// The unit cube, its corner 0 at the origin.
-pub(crate) fn cube() -> Spec {
+#[must_use]
+pub fn cube() -> Spec {
     let corners = [
         [0., 0., 0.],
         [1., 0., 0.],
@@ -318,7 +343,7 @@ pub(crate) fn cube() -> Spec {
 }
 
 /// A block 3 by 3 by 1 with a 1 by 1 hole through it: a ring of sixteen faces, of genus 1.
-pub(crate) fn frame() -> Spec {
+pub fn frame() -> Spec {
     let square = [[0., 0.], [3., 0.], [3., 3.], [0., 3.], [1., 1.], [2., 1.], [2., 2.], [1., 2.]];
     let corners: Vec<[f64; 3]> = [0.0, 1.0].iter().flat_map(|&z| square.iter().map(move |&[x, y]| [x, y, z])).collect();
     let (o, i, top) = (|k: usize| k % 4, |k: usize| 4 + k % 4, 8);
@@ -334,12 +359,14 @@ pub(crate) fn frame() -> Spec {
 }
 
 /// A unit square sheet in the XY plane, facing +Z.
-pub(crate) fn sheet() -> Spec {
+#[must_use]
+pub fn sheet() -> Spec {
     polyhedron(BodyKind::Sheet, &[[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.]], &[&[0, 1, 2, 3]])
 }
 
 /// An open wire of three straight edges.
-pub(crate) fn wire() -> Spec {
+#[must_use]
+pub fn wire() -> Spec {
     let points = vec![point(0.0, 0.0, 0.0), point(1.0, 0.0, 0.0), point(1.0, 1.0, 0.0), point(2.0, 1.0, 0.0)];
     let edges = (0..3).map(|k| segment(points[k], points[k + 1], (k, k + 1))).collect();
     let wires = vec![vec![(0, false), (1, false), (2, false)]];
@@ -347,7 +374,8 @@ pub(crate) fn wire() -> Spec {
 }
 
 /// A cylinder of radius 1 and height 2 about +Z, its side two patches split at `u = 0` and `u = π`, with flat ends.
-pub(crate) fn cylinder() -> Spec {
+#[must_use]
+pub fn cylinder() -> Spec {
     cylinder_from(0.0)
 }
 
@@ -358,7 +386,7 @@ fn whole(n: usize) -> f64 {
 
 /// A plate `k` by `k` by 1, its bottom and then its top each tiled by `k²` unit squares, then each side by `k`:
 /// `2k² + 4k` faces. Top square `(i, j)` is face `k² + jk + i`.
-pub(crate) fn plate(k: usize) -> Spec {
+pub fn plate(k: usize) -> Spec {
     let n = k + 1;
     let (bottom, top) = (|i: usize, j: usize| j * n + i, |i: usize, j: usize| n * n + j * n + i);
     let corners: Vec<[f64; 3]> =
@@ -383,7 +411,7 @@ pub(crate) fn plate(k: usize) -> Spec {
 /// `a` in `1..m - 1` (`y = 1`, `y = m - 1`, `x = 1`, `x = m - 1`). Of genus 1. With `A = 4(m - 1)` squares a side, top
 /// square `(c, 0)` is face `c`, the bottom one `A + c`, the outer wall below it `2A + 4c`, and the inner wall above it
 /// `2A + 4m + 4(c - 1)`.
-pub(crate) fn ring(m: usize) -> Spec {
+pub fn ring(m: usize) -> Spec {
     let on = |x: usize, y: usize| x <= 1 || y <= 1 || x + 1 >= m || y + 1 >= m;
     let grid: Vec<(usize, usize)> =
         (0..=m).flat_map(|y| (0..=m).map(move |x| (x, y))).filter(|&(x, y)| on(x, y)).collect();
@@ -422,7 +450,7 @@ const QUADS: [[usize; 4]; 6] = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3,
 
 /// Two unit cubes that meet only at the corner `(1, 1, 1)`, as one body of one shell: the first cube's faces, then the
 /// second's.
-pub(crate) fn pinched() -> Spec {
+pub fn pinched() -> Spec {
     let mut corners: Vec<[f64; 3]> = UNIT.to_vec();
     corners.extend(UNIT.iter().skip(1).map(|&[x, y, z]| [x + 1., y + 1., z + 1.]));
     // The second cube's corners: its own 0 is the first cube's 6, and its 1 to 7 follow the first cube's eight.
@@ -435,7 +463,7 @@ pub(crate) fn pinched() -> Spec {
 
 /// `n` unit cubes along x, each 2 on from the one before, as one body of one shell: the first cube's faces, then the
 /// second's, and so on.
-pub(crate) fn apart(n: usize) -> Spec {
+pub fn apart(n: usize) -> Spec {
     let along = |k: usize| 2.0 * f64::from(u32::try_from(k).unwrap());
     let corners: Vec<[f64; 3]> = (0..n).flat_map(|k| UNIT.map(|[x, y, z]| [x + along(k), y, z])).collect();
     let faces: Vec<Vec<usize>> = (0..n).flat_map(|k| QUADS.map(|q| q.map(|c| c + 8 * k).to_vec())).collect();
@@ -445,7 +473,7 @@ pub(crate) fn apart(n: usize) -> Spec {
 
 /// Joins `place` into the star of `vertex`, if it is live in `edit`, after the place its star names, and gives the place
 /// that comes after it.
-pub(crate) fn join_star(edit: &mut Edit, vertex: Id<Vertex>, place: Around) -> Around {
+pub fn join_star(edit: &mut Edit, vertex: Id<Vertex>, place: Around) -> Around {
     let Some(record) = edit.record(vertex) else { return place };
     let Some(star) = record.star else {
         edit.set(vertex, VertexRecord { star: Some(place), ..record }).unwrap();

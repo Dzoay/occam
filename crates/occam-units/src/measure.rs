@@ -181,19 +181,12 @@ impl<U: Unit, R: Real> Div for Measure<U, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{mm, rad};
 
     const LENGTH_UNITS: [LengthUnit; 4] =
         [LengthUnit::Millimetre, LengthUnit::Centimetre, LengthUnit::Metre, LengthUnit::Inch];
     const ANGLE_UNITS: [AngleUnit; 2] = [AngleUnit::Radian, AngleUnit::Degree];
     const NUMBERS: [f64; 9] = [1.0, 0.1, 25.4, 1e-7, 1e9, 1.0 / 3.0, -2.5, 0.0, 180.0];
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
-
-    fn rad(x: f64) -> Angle {
-        Angle::from_radians(x)
-    }
 
     /// Multiplying and dividing by the same factor rounds twice, so a round trip is within two parts in 2^52.
     fn close(got: f64, want: f64) -> bool {

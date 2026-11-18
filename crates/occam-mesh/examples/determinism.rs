@@ -8,8 +8,8 @@ use std::iter::once;
 use std::num::NonZeroUsize;
 use std::process::ExitCode;
 
+use occam_fixtures::mesh::probe::{OPERATIONS, hashes};
 use occam_math::Exec;
-use occam_mesh::probe::{OPERATIONS, hashes};
 use occam_report::DisplayUnits;
 
 const USAGE: &str = "usage: determinism --threads <count> | determinism --record";
@@ -17,7 +17,7 @@ const USAGE: &str = "usage: determinism --threads <count> | determinism --record
 /// The record's header. The record is what this build prints on one thread: see the probe's documentation.
 const HEADER: &str = "\
 # `gates determinism` and occam-mesh's probe test: what the mesher's probe must hash to, `<operation> <hash>`, in the
-# order of `OPERATIONS` in crates/occam-mesh/src/probe.rs. Unlike ci/determinism-hashes.txt, these do not come from a
+# order of `OPERATIONS` in crates/occam-fixtures/src/mesh/probe.rs. Unlike ci/determinism-hashes.txt, these do not come from a
 # separate implementation, as there is no second mesher: they are what the x86-64 build printed on one thread
 # (`just determinism-mesh`). Every other build and thread count is held to them. See docs/DETERMINISM.md before
 # changing one.

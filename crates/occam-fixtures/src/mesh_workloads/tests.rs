@@ -66,7 +66,7 @@ fn each_kind_of_part_a_request_makes_is_made_as_recorded() {
         .collect();
     let panel = Shape::Panel { size: (1.0, 1.0, 1.0), phase: 0.0 };
     assert!(request::steps(&picked[0].frame, "panel", &panel).is_empty(), "no request makes a panel");
-    let ran = crate::run(None, &request::request(&steps));
+    let ran = occam::run(None, &request::request(&steps));
     assert!(ran.failed.is_none(), "{:?}", ran.failed);
     let model = ran.model.unwrap();
     assert_eq!(format!("{:016x}", model.digest()), "dd9633c24dcc8058");
@@ -76,7 +76,7 @@ fn each_kind_of_part_a_request_makes_is_made_as_recorded() {
 #[test]
 fn a_pick_ray_starts_a_millimetre_off_its_triangle_s_middle_and_points_into_it() {
     // A box turned so that every face's normal has all three components, which a ray's direction must each turn round.
-    let ran = crate::run(
+    let ran = occam::run(
         None,
         r#"{"schema": 1, "units": {"length": "mm", "angle": "deg"}, "steps": [
         {"op": "box", "size": [2, 3, 5], "frame": {"origin": [10, 20, 30], "z": [1, 2, 2], "x": [2, -2, 1]}}]}"#,

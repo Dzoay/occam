@@ -12,9 +12,10 @@
 use std::cell::RefCell;
 use std::hint::black_box;
 
-use occam::mesh_workloads::PerfParts;
-use occam::operation_workloads::{MEASURES, PRIMITIVES, SWEEPS, TRANSFORMS};
-use occam::{Encoding, Jets, Lanes, Real, Session, SplineSurface, ran_json, spline_workloads, width, workloads};
+use occam::{Encoding, Jets, Lanes, Real, Session, SplineSurface, ran_json, width};
+use occam_fixtures::mesh_workloads::PerfParts;
+use occam_fixtures::operation_workloads::{MEASURES, PRIMITIVES, SWEEPS, TRANSFORMS};
+use occam_fixtures::{lane_workloads as workloads, spline_workloads};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A point on the cubic with these control points, at `at`.

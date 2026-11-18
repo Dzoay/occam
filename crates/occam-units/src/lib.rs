@@ -11,12 +11,22 @@
     reason = "a kernel compiles at a dispatched instruction level only through what is inlined into it (P4)"
 )]
 
+/// This crate by its name, for the helpers its tests compile from occam-fixtures' source.
+#[cfg(test)]
+extern crate self as occam_units;
+
 mod affine;
 mod bounds;
 mod direction;
 mod frame;
 mod measure;
 mod placement;
+/// Quantities as the tests write them: occam-fixtures' source, compiled into the tests alone, where it names this crate
+/// as any caller does.
+#[cfg(test)]
+#[path = "../../occam-fixtures/src/units.rs"]
+#[allow(dead_code, reason = "not every helper is used by this crate's own tests")]
+mod testing;
 mod tolerance;
 mod uv;
 mod vec3;

@@ -10,42 +10,31 @@
 //! to make a snapshot, so no unchecked model exists. It hands back [`Changes`]: what was created, changed and deleted,
 //! and where each new entity came from.
 
+/// This crate by its name, for the fixtures its tests compile from occam-fixtures' source.
+#[cfg(test)]
+extern crate self as occam_topo;
+
 mod check;
 mod digest;
 mod edit;
 mod geometric;
 mod kind;
+/// The tests' models: occam-fixtures' source, compiled into the tests alone, where it names this crate as any caller
+/// does.
 #[cfg(test)]
+#[path = "../../occam-fixtures/src/topo/models/mod.rs"]
+#[allow(dead_code, unused_imports, reason = "not every test model is used by this crate's own tests")]
 mod models;
-/// The tests' models, built outside the tests only for the determinism probe and the workloads, which nothing that ships
-/// turns on.
-#[cfg(all(any(feature = "determinism", feature = "workloads"), not(test)))]
-#[allow(
-    dead_code,
-    unused_imports,
-    clippy::indexing_slicing,
-    clippy::unwrap_used,
-    reason = "the tests' models, as they are written"
-)]
-mod models;
-#[cfg(any(test, feature = "determinism"))]
-#[doc(hidden)]
-pub mod probe;
+#[cfg(test)]
+mod probe;
 mod records;
 mod restore;
 mod snapshot;
 mod table;
 #[cfg(test)]
 mod testing;
-/// What the tests share, which the models use, so it comes with them for the determinism probe and the workloads.
-#[cfg(all(any(feature = "determinism", feature = "workloads"), not(test)))]
-#[allow(dead_code, clippy::unwrap_used, reason = "what the tests share, as they are written")]
-mod testing;
 mod view;
 mod whole;
-#[cfg(any(test, feature = "workloads"))]
-#[doc(hidden)]
-pub mod workloads;
 
 pub use edit::{Changes, Derivation, Edit, Lineage};
 pub use geometric::winding_number;

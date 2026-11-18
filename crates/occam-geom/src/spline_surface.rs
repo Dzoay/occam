@@ -427,16 +427,13 @@ impl Parametric for SplineSurface {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::point;
     use occam_math::Lanes;
     use occam_report::Code;
 
     use super::*;
     use crate::conformance::{self, Check, wrong_second};
     use crate::surface::Surface;
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
 
     /// A grid of `nu` by `nv` poles, regular but with nothing symmetric, a row of constant `v` at a time.
     fn poles(nu: u32, nv: u32) -> Vec<Point<World>> {

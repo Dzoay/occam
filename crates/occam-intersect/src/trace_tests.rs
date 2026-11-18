@@ -3,6 +3,7 @@
 //! neighbouring loop, a closed NURBS's seam, a sphere's pole, a double cone's lower nappe and a tangency; then a
 //! patch's edges, and traces in rounds at one and many threads.
 
+pub(crate) use occam_fixtures::{mm, point};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -10,7 +11,7 @@ use std::sync::Arc;
 use occam_geom::{Cone, Cylinder, Plane, Scratch, Sphere, SplineSurface, Surface, Torus, UvBox};
 use occam_math::{Exec, sin_cos};
 use occam_report::{Code, Fault, NamedValue, Reason};
-use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tolerance, UvPoint, Vec3, Vector, World};
+use occam_units::{Angle, Direction, Local, Placement, Point, Tolerance, UvPoint, Vec3, Vector, World};
 
 use crate::correct::{Here, Pair};
 use crate::decide::{Decide, touch};
@@ -23,11 +24,7 @@ pub(crate) const BAND: f64 = 1e-7;
 pub(crate) const CONVERGED: f64 = 1e-6;
 
 pub(crate) fn tol() -> Tolerance {
-    Tolerance::new(Length::from_millimetres(BAND), Angle::from_radians(1e-9)).unwrap()
-}
-
-pub(crate) fn mm(x: f64) -> Length {
-    Length::from_millimetres(x)
+    occam_fixtures::tol_of(BAND)
 }
 
 pub(crate) fn tracer(sag: f64, longest: f64, steps: u32) -> Tracer {
@@ -54,10 +51,6 @@ pub(crate) fn level(height: f64) -> Plane {
 /// The plane `x = across`, facing along X.
 pub(crate) fn upright(across: f64) -> Plane {
     Plane::placed(&placed([0.0, 1.0, 0.0], FRAC_PI_2, [across, 0.0, 0.0]))
-}
-
-pub(crate) fn point(x: f64, y: f64, z: f64) -> Point<World> {
-    Point::from_vec3(Vec3::new(x, y, z))
 }
 
 pub(crate) fn ball(radius: f64, centre: [f64; 3]) -> Sphere {

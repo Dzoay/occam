@@ -120,6 +120,7 @@ pub(super) fn interior(patch: &Patch<'_>, turning: Option<Vec<Vec3>>, tolerance:
 #[cfg(test)]
 mod tests {
     use core::f64::consts::{PI, TAU};
+    use occam_fixtures::point as at;
 
     use occam_geom::{Ellipse, Extrusion, Line, UvCurve};
     use occam_units::{Direction, Length, Local, Placement};
@@ -127,10 +128,6 @@ mod tests {
     use super::*;
     use crate::measure::mass::Piece;
     use crate::request::default_tolerance;
-
-    fn at(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
 
     #[test]
     fn a_sphere_and_a_torus_reach_furthest_at_their_centres_plus_and_minus_along_each_axis() {

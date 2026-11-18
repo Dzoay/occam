@@ -15,6 +15,7 @@ occam-units = { path = "../occam-units" }
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
 [dev-dependencies]
+occam-fixtures = { path = "../occam-fixtures" }
 # What occam-intersect answers for the pieces `construct/flat.rs` judges, beside its own answers (flat/tests_rules.rs).
 occam-intersect = { path = "../occam-intersect" }
 # Meshes every face construction makes (view.faces): occam-mesh sits above this crate in the layers.

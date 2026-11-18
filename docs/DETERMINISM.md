@@ -74,16 +74,17 @@ stream as scalar and as two, four and eight lanes. Every hash must agree, and mu
 The same stream is a test, so the suite checks it in debug builds on x86-64 and on wasm32 baseline and simd128 (`just
 test-all` and `just wasm`).
 
-The topology has a probe of its own, `crates/occam-topo/src/probe.rs`, built for the gate by
-`crates/occam-topo/examples/determinism.rs` under occam-topo's `determinism` feature, which nothing that ships turns on.
-It hashes the digests of models built through `Edit`, and the reports `Snapshot::check_all` gives on models corrupted
-as no edit could, each report as its JSON. The gate runs it on x86-64 on one thread and on many, and on wasm32-wasip2
-baseline and simd128, but not at the narrower instruction levels, because the topology passes no level to anything.
-Every hash must agree, and must equal the record in `ci/determinism-topology.txt`. Its test checks the same in debug
-builds, on one thread and on four.
+The topology has a probe of its own, `crates/occam-topo/src/probe.rs`. It hashes the digests of models built through
+`Edit`, and the reports `Snapshot::check_all` gives on models corrupted as no edit could, each report as its JSON.
+Corrupting a model takes occam-topo's own tables, so the probe is built only into that crate's tests, and no library
+holds it ([decision](decisions/2026-11-17-occam-fixtures.md)): the gate runs one of those tests for release, which
+prints every hash, where it runs the other probes' examples. It runs it on x86-64 on one thread and on many, and on
+wasm32-wasip2 baseline and simd128, but not at the narrower instruction levels, because the topology passes no level to
+anything. Every hash must agree, and must equal the record in `ci/determinism-topology.txt`. Another of its tests
+checks the same in debug builds, on one thread and on four.
 
-The mesher has one too, `crates/occam-mesh/src/probe.rs`, built for the gate by
-`crates/occam-mesh/examples/determinism.rs` under occam-mesh's `determinism` feature. It hashes each test model's whole
+The mesher has one too, `crates/occam-fixtures/src/mesh/probe.rs`, which needs only the mesher's public API, built
+for the gate by `crates/occam-mesh/examples/determinism.rs`. It hashes each test model's whole
 mesh, its edges' samples, its faces' blocks and the watertight check's reports, as `Mesh::digest` gives them, one model
 with a face that will not mesh, and the check's reports on a mesh cracked by one ulp. It runs as the topology's does, on
 the same builds and not at the narrower levels: the mesher passes no level to anything and has no lane kernel yet. Every

@@ -151,10 +151,7 @@ mod tests {
     use crate::direction::Direction;
     use crate::frame::Vector;
     use crate::measure::Angle;
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
+    use crate::testing::point;
 
     fn near(a: Point<World>, b: Point<World>) -> bool {
         (a - b).to_vec3().norm() <= 1e-12 * (1.0 + b.to_vec3().norm())

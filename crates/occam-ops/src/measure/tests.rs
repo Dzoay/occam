@@ -15,6 +15,7 @@ use serde_json::{Value, json};
 use super::mass::SUMS;
 use super::quadrature::{Budget, Integral};
 use super::*;
+use crate::construct::tests::run;
 use crate::operation::Operation;
 use crate::request::{Request, default_tolerance};
 
@@ -26,19 +27,10 @@ fn request(steps: &Value) -> String {
 /// Runs `steps` on a new model, as the runner does, until the last, a measure, which measures it.
 fn measured(steps: &Value) -> Result<(Snapshot, Measured), Vec<Report>> {
     let request = Request::parse(&request(steps))?;
-    let mut snapshot = Snapshot::empty(default_tolerance().map_err(|r| vec![r])?);
-    let mut labels = Labels::default();
     let (last, rest) = request.steps.split_last().unwrap();
-    for step in rest {
-        let mut edit = snapshot.edit();
-        let made = crate::execute(&mut edit, step, &labels).map_err(|r| vec![r])?;
-        if let (Some(label), Some(made)) = (&step.label, made) {
-            labels.insert(label, made);
-        }
-        snapshot = edit.commit(&Exec::serial())?.0;
-    }
-    let found = measure(&snapshot, last, &labels).map_err(|r| vec![r])?;
-    Ok((snapshot, found))
+    let run = run(&request, rest)?;
+    let found = measure(&run.model, last, &run.labels).map_err(|r| vec![r])?;
+    Ok((run.model, found))
 }
 
 /// What `step`, labelled `it`, measures with a measure of it asking for `what`, or for everything if `what` is null.

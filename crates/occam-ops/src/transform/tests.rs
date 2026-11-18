@@ -14,9 +14,10 @@ use occam_topo::{Body, Changes, Derivation, Edge, Face, Shell, Snapshot, Surface
 use occam_units::{Affine, Length, Local, Placement, UvPoint, Vec3, World};
 use serde_json::{Value, json};
 
+use crate::construct::tests::run;
 use crate::measure::{Measured, measure};
 use crate::operand::Labels;
-use crate::request::{Request, default_tolerance};
+use crate::request::Request;
 
 /// The request with these steps, in millimetres.
 fn request(steps: &Value) -> String {
@@ -26,18 +27,8 @@ fn request(steps: &Value) -> String {
 /// Runs `steps` on a new model, as the runner does, each committed: the model, the labels, and what each step changed.
 fn ran(steps: &Value) -> Result<(Snapshot, Labels, Vec<Changes>), Vec<Report>> {
     let request = Request::parse(&request(steps))?;
-    let mut snapshot = Snapshot::empty(default_tolerance().map_err(|r| vec![r])?);
-    let (mut labels, mut changes) = (Labels::default(), Vec::new());
-    for step in &request.steps {
-        let mut edit = snapshot.edit();
-        let made = crate::execute(&mut edit, step, &labels).map_err(|r| vec![r])?;
-        if let (Some(label), Some(made)) = (&step.label, made) {
-            labels.insert(label, made);
-        }
-        let (next, done) = edit.commit(&Exec::serial())?;
-        (snapshot, changes) = (next, [changes, vec![done]].concat());
-    }
-    Ok((snapshot, labels, changes))
+    let run = run(&request, &request.steps)?;
+    Ok((run.model, run.labels, run.changes))
 }
 
 /// The model `steps` make.
@@ -341,7 +332,7 @@ fn skew() -> Placement<Local, World> {
 #[test]
 fn an_offset_has_no_exact_form_under_a_stretch_and_is_not_approximated() {
     let patch = UvBox::new(UvPoint::new(0.0, 0.0), UvPoint::new(1.0, 1.0));
-    let base = SplineSurface::new(&occam_geom::workloads::spline()).unwrap();
+    let base = SplineSurface::new(&occam_fixtures::spline_workloads::spline()).unwrap();
     let offset: Arc<dyn Surface> = Arc::new(OffsetSurface::new(base, Length::from_millimetres(0.5)).unwrap());
     let stretch = Affine::stretch(&skew(), [2.0, 1.0, 0.5]).unwrap();
     let alike = Affine::stretch(&skew(), [2.0, 2.0, 2.0]).unwrap();

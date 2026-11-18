@@ -230,20 +230,13 @@ pub fn by_deflection(c: &dyn Curve, (lo, hi): (f64, f64), deflection: Length) ->
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::{mm, point};
     use occam_report::Code;
-    use occam_units::{Direction, Point, World};
+    use occam_units::Direction;
 
     use super::*;
     use crate::conformance::placement;
     use crate::{Circle, Ellipse, Hyperbola, Line, Parabola, SplineCurve};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
 
     /// Every analytic family over a part, and two splines: an S with an inflection and a sharp hook.
     fn curves() -> Vec<(Box<dyn Curve>, (f64, f64))> {

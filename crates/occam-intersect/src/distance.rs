@@ -212,14 +212,11 @@ pub(crate) fn judge(value: Interval, eps: f64) -> (Verdict, Tally) {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::point as at;
     use occam_geom::{Circle, Line};
     use occam_units::Local;
 
     use super::*;
-
-    fn at(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
 
     /// One point, exactly: a box of nothing but it.
     fn only(p: Point<World>) -> Spread {

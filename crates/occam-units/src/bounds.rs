@@ -97,10 +97,7 @@ impl Bounds {
 mod tests {
     use super::*;
     use crate::measure::Angle;
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
+    use crate::testing::point;
 
     fn tolerance(length: f64) -> Tolerance {
         Tolerance::new(Length::from_millimetres(length), Angle::from_radians(1e-9)).unwrap()

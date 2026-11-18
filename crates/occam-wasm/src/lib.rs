@@ -446,7 +446,7 @@ mod tests {
     #[test]
     fn the_twin_the_editing_worker_checked_opens_in_a_mesh_worker_as_the_same_model() {
         let mut editing = Session::new();
-        let ran = editing.run(occam::operation_workloads::TRANSFORMS);
+        let ran = editing.run(occam_fixtures::operation_workloads::TRANSFORMS);
         assert!(ran.contains(r#""ok":true"#), "{ran}");
         let twin = editing.take_saved().unwrap();
         let checked = occam::Session::open(&twin, &Exec::serial()).unwrap();

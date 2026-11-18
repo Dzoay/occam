@@ -3,7 +3,7 @@
 //! of edits behind it, each with its commit, and the whole-model check at one to eight threads. These are goals, not
 //! gates (L46): `topology.scale` reports them. In release:
 //!
-//! `cargo run --release -p occam-topo --features workloads --example scale -- [squares across] [repetitions]`
+//! `cargo run --release -p occam-topo --example scale -- [squares across] [repetitions]`
 //!
 //! An edit splits one top square of the plate by its diagonal (six new entities and four changed records), and its
 //! commit checks it, where S3-P3's edits were Euler operators with no checker. Times are medians of the repetitions.
@@ -16,9 +16,9 @@ use std::num::NonZeroUsize;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
+use occam_fixtures::topo::workloads::Plate;
 use occam_math::Exec;
 use occam_topo::Face;
-use occam_topo::workloads::Plate;
 
 /// `SplitMix64` (Steele, Lea and Flood 2014): which squares the scattered edits split, the same on every run.
 struct Squares(u64);

@@ -25,8 +25,9 @@ struct Probe {
     name: &'static str,
     /// The package whose example it is.
     package: &'static str,
-    /// The cargo features the example needs.
-    features: Option<&'static str>,
+    /// The unit test of the package's library that prints it, for a probe that reaches inside its crate, as only the
+    /// crate's own tests can; `None` for one the package's `determinism` example prints.
+    test: Option<&'static str>,
     /// The file its findings point at.
     source: &'static str,
     /// The record it must equal.
@@ -41,7 +42,7 @@ struct Probe {
 const MATHS: Probe = Probe {
     name: "maths",
     package: "occam-math",
-    features: None,
+    test: None,
     source: STREAM,
     record: RECORDED,
     executors: &EXECUTORS,
@@ -49,11 +50,12 @@ const MATHS: Probe = Probe {
 };
 
 /// The topology's digests and whole-model checks, recorded from the x86-64 build on one thread. Topology passes no
-/// instruction level to anything, so it is not run at the narrower ones.
+/// instruction level to anything, so it is not run at the narrower ones. It corrupts models as no edit could, from
+/// inside occam-topo, so it is a test of that crate, built into nothing else.
 const TOPOLOGY: Probe = Probe {
     name: "topology",
     package: "occam-topo",
-    features: Some("determinism"),
+    test: Some("probe::tests::the_gate_reads_every_hash_on_one_thread_and_on_every_thread"),
     source: "crates/occam-topo/src/probe.rs",
     record: "ci/determinism-topology.txt",
     executors: &["scalar"],
@@ -66,8 +68,8 @@ const TOPOLOGY: Probe = Probe {
 const MESH: Probe = Probe {
     name: "mesh",
     package: "occam-mesh",
-    features: Some("determinism"),
-    source: "crates/occam-mesh/src/probe.rs",
+    test: None,
+    source: "crates/occam-fixtures/src/mesh/probe.rs",
     record: "ci/determinism-mesh.txt",
     executors: &["scalar"],
     levels: false,
@@ -129,24 +131,47 @@ fn builds_of<'a>(probe: &Probe, builds: &'a [Build]) -> Vec<&'a Build> {
     builds.iter().filter(|build| probe.levels || !build.narrower).collect()
 }
 
-/// Cargo's arguments for running `probe` as `build`. The simd128 build has a target directory of its own, because its
-/// flags differ.
+/// What a probe run as a test puts before each line the gate reads, among the lines the test harness prints.
+const MARK: &str = "determinism: ";
+
+/// Cargo's arguments for running `probe` as `build`: its example, told the thread count, or its test, which prints
+/// every thread count the build has. The simd128 build has a target directory of its own, because its flags differ.
 fn cargo_args<'a>(build: &'a Build, probe: &'a Probe, simd_dir: &'a str, threads: &'a str) -> Vec<&'a str> {
-    let mut args = vec!["run", "--quiet", "--release", "-p", probe.package, "--example", "determinism"];
-    if let Some(features) = probe.features {
-        args.extend(["--features", features]);
-    }
+    let mut args = match probe.test {
+        Some(_) => vec!["test", "--quiet", "--release", "-p", probe.package, "--lib"],
+        None => vec!["run", "--quiet", "--release", "-p", probe.package, "--example", "determinism"],
+    };
     if let Some(triple) = build.triple {
         args.extend(["--target", triple]);
     }
     if build.simd128 {
         args.extend(["--target-dir", simd_dir, "--config", SIMD128]);
     }
-    args.extend(["--", "--threads", threads]);
+    match probe.test {
+        Some(test) => args.extend(["--", "--exact", test, "--ignored", "--nocapture"]),
+        None => args.extend(["--", "--threads", threads]),
+    }
     if build.triple.is_none() && probe.levels {
         args.extend(["--level", &build.level]);
     }
     args
+}
+
+/// What a run of `probe` printed for `build`. An example prints nothing else. A test prints among the harness's lines,
+/// and every thread count in one run, so it is the marked lines from `build`'s own build line to the next; or from the
+/// first build line, where `build`'s is not there, which `parse` then refuses as the wrong build.
+fn printed(probe: &Probe, build: &Build, output: String) -> String {
+    if probe.test.is_none() {
+        return output;
+    }
+    let want = header(probe, build);
+    let marked: Vec<&str> = output.lines().filter_map(|line| line.strip_prefix(MARK)).collect();
+    let own = marked.iter().skip_while(|line| **line != want).count();
+    let from = if own == 0 { 0 } else { marked.len().saturating_sub(own) };
+    let mut lines = marked.into_iter().skip(from);
+    let first = lines.next().into_iter();
+    let block: Vec<&str> = first.chain(lines.take_while(|line| !line.starts_with("build "))).collect();
+    if block.is_empty() { String::new() } else { block.join("\n") + "\n" }
 }
 
 /// A finding for a probe that did not run.
@@ -182,13 +207,15 @@ fn runs_of(repo: &Repo, probe: &Probe, builds: &[Build]) -> Result<Vec<(Build, S
         if !ok {
             return Err(run_failed(probe.source, &format!("{} as {}", probe.name, build.name), &errors));
         }
-        runs.push((build.clone(), output));
+        runs.push((build.clone(), printed(probe, build, output)));
     }
     Ok(runs)
 }
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     no_args(args)?;
+    // The same count is in occam-topo's probe test (`every_thread` in crates/occam-topo/src/probe.rs), which takes no
+    // argument and which this crate cannot share code with. If the two differ, the topology fails as the wrong build.
     let threads = thread::available_parallelism().map_or(2, |count| count.get().max(2));
     let builds = builds(threads, &levels(repo)?);
     let mut summaries = Vec::new();
@@ -639,14 +666,38 @@ mod tests {
         );
         let [native, many, _, simd] = builds_of(&TOPOLOGY, &all)[..] else { panic!() };
         assert_eq!(header(&TOPOLOGY, native), "build x86_64 simd128=false threads=1");
+        let test = "-- --exact probe::tests::the_gate_reads_every_hash_on_one_thread_and_on_every_thread --ignored --nocapture";
         assert_eq!(
             cargo_args(many, &TOPOLOGY, "SIMD-DIR", "4").join(" "),
-            "run --quiet --release -p occam-topo --example determinism --features determinism -- --threads 4"
+            format!("test --quiet --release -p occam-topo --lib {test}"),
+            "a test takes no thread count: it prints every one, and `printed` picks the build's"
         );
         let want = format!(
-            "run --quiet --release -p occam-topo --example determinism --features determinism --target wasm32-wasip2 --target-dir SIMD-DIR --config {SIMD128} -- --threads 1"
+            "test --quiet --release -p occam-topo --lib --target wasm32-wasip2 --target-dir SIMD-DIR --config {SIMD128} {test}"
         );
         assert_eq!(cargo_args(simd, &TOPOLOGY, "SIMD-DIR", "1").join(" "), want);
+    }
+
+    #[test]
+    fn a_probe_run_as_a_test_is_read_from_its_marked_lines_for_the_build_and_an_example_whole() {
+        let all = builds(4, &levels(&["avx2"]));
+        let [native, many, baseline, _] = builds_of(&TOPOLOGY, &all)[..] else { panic!() };
+        let marked =
+            |text: &str| text.lines().map(|line| format!("{MARK}{line}")).collect::<Vec<_>>().join("\n") + "\n";
+        let (one, four) = (topology_output(native, "00000000000000aa"), topology_output(many, "00000000000000bb"));
+        let harness = format!("\nrunning 1 test\n\n{}{}.\ntest result: ok. 1 passed\n", marked(&one), marked(&four));
+        assert_eq!(printed(&TOPOLOGY, native, harness.clone()), one);
+        assert_eq!(printed(&TOPOLOGY, many, harness.clone()), four);
+        assert_eq!(printed(&MATHS, native, harness.clone()), harness, "an example prints nothing else");
+        let runs = vec![(native.clone(), printed(&TOPOLOGY, native, harness.clone()))];
+        assert_eq!(codes(&check(&TOPOLOGY, &runs, GOOD)), Vec::<&str>::new());
+        // A build the test did not print is read as the first it did print, which is the wrong build; one that printed
+        // nothing marked is malformed; and a line that only resembles a build line ends no block.
+        let other = vec![(baseline.clone(), printed(&TOPOLOGY, baseline, harness))];
+        assert_eq!(codes(&check(&TOPOLOGY, &other, GOOD)), ["determinism.wrong-build"]);
+        assert_eq!(printed(&TOPOLOGY, native, "running 1 test\nbuild x86_64\n".to_string()), "");
+        let odd = marked(&one.replace("sqrt scalar", "building scalar"));
+        assert_eq!(printed(&TOPOLOGY, native, odd), one.replace("sqrt scalar", "building scalar"));
     }
 
     #[test]
@@ -674,18 +725,18 @@ mod tests {
         );
         assert_eq!(PROBES.map(|probe| (probe.levels, probe.executors.len())), [(true, 4), (false, 1), (false, 1)]);
         assert_eq!(PROBES.map(|probe| probe.package), ["occam-math", "occam-topo", "occam-mesh"]);
-        assert_eq!(MATHS.features, None);
+        assert_eq!(PROBES.map(|probe| probe.test.is_some()), [false, true, false], "only the topology reaches inside");
     }
 
     #[test]
-    fn the_mesh_runs_as_the_topology_does_under_its_own_feature_and_files() {
+    fn the_mesh_runs_as_the_topology_does_from_its_own_example_and_files() {
         let all = builds(4, &levels(&["avx2", "sse2"]));
         let names = |probe: &Probe| builds_of(probe, &all).iter().map(|build| build.name.clone()).collect::<Vec<_>>();
         assert_eq!(names(&MESH), names(&TOPOLOGY));
         let [_, many, ..] = builds_of(&MESH, &all)[..] else { panic!() };
         assert_eq!(
             cargo_args(many, &MESH, "SIMD-DIR", "4").join(" "),
-            "run --quiet --release -p occam-mesh --example determinism --features determinism -- --threads 4"
+            "run --quiet --release -p occam-mesh --example determinism -- --threads 4"
         );
         let mut runs: Vec<(Build, String)> = builds_of(&MESH, &all)
             .into_iter()

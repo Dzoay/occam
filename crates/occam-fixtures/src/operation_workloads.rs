@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn the_polygon_extruded_is_a_solid_prism_with_a_side_for_each_corner_spaced_evenly_round_the_circle() {
-        let ran = crate::run(None, &polygon_extruded(12));
+        let ran = occam::run(None, &polygon_extruded(12));
         assert!(ran.failed.is_none(), "{:?}", ran.failed);
         assert_eq!(ran.done.len(), 3);
         let model = ran.model.unwrap();

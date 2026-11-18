@@ -83,12 +83,14 @@ occam-ops         operations as data: validation, construction, measurement, boo
 occam-io          the native format and its readable dump, STEP
 occam             the composition crate, with the request runner and the describer: all below bind it alone (L25)
 occam-wasm, occam-cli, occam-capi, occam-mcp          thin facades
-occam-verify, occam-xtask                             oracles, corpus, gates; never published
+occam-fixtures, occam-verify, occam-xtask             fixtures, oracles, corpus, gates; never published
 web/                                                  the renderer; consumes data only
 ```
 
 `occam-verify` and `occam-xtask` may also name any crate above them in `[dev-dependencies]`, for their tests
-([decision](decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md)).
+([decision](decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md)). `occam-fixtures` holds what tests,
+benchmarks and probes build with: it binds any crate above it, and any crate may name it, in `[dev-dependencies]` only
+([decision](decisions/2026-11-17-occam-fixtures.md)).
 
 ## 5. Gates
 

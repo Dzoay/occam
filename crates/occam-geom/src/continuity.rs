@@ -326,23 +326,16 @@ pub fn require_surface_join(
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::{mm, point};
     use std::f64::consts::FRAC_PI_2;
 
-    use occam_units::{Angle, Direction, Length, Local, Placement, Point, Vector};
+    use occam_units::{Angle, Direction, Local, Placement, Point, Vector};
 
     use super::*;
     use crate::conformance::{agree, forms, placement, tolerance};
     use crate::{
         BsplineCurve, BsplineSurface, Circle, Cylinder, Line, MeshSurface, Plane, Sphere, SplineCurve, SplineSurface,
     };
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::from_vec3(Vec3::new(x, y, z))
-    }
 
     /// Turned about `axis` by `angle`, then moved to `origin`.
     fn placed(axis: Vec3, angle: f64, origin: Vec3) -> Placement<Local, World> {

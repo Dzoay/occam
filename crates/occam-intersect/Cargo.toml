@@ -12,5 +12,8 @@ occam-math = { path = "../occam-math" }
 occam-report = { path = "../occam-report" }
 occam-units = { path = "../occam-units" }
 
+[dev-dependencies]
+occam-fixtures = { path = "../occam-fixtures" }
+
 [lints]
 workspace = true

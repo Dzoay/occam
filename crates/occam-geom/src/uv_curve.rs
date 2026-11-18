@@ -189,6 +189,7 @@ impl<C: ParametricCurve> ParametricParamCurve for UvCurve<C> {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::mm;
     use std::f64::consts::TAU;
 
     use occam_math::Lanes;
@@ -198,10 +199,6 @@ mod tests {
     use crate::conformance::{self, Check, WrongSecondCurve};
     use crate::param_curve::ParamCurve;
     use crate::{Circle, Ellipse, Hyperbola, Line, OffsetCurve, Parabola, SplineCurve, TrimmedCurve};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     /// The plane's frame at `(x, y)`, turned by `angle` about its normal: one that draws in the plane `z = 0`.
     fn flat_frame(x: f64, y: f64, angle: f64) -> Placement<Local, World> {

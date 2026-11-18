@@ -2,7 +2,8 @@
 //! Curves of every family to sweep, each placed skew to [`placement`]'s Z axis and away from it, and a comparison of two
 //! surfaces over a window, for the swept families' tests.
 
-use occam_units::{Angle, Direction, Length, Local, Placement, Point, UvPoint, Vec3, Vector, World};
+use occam_fixtures::mm;
+use occam_units::{Angle, Direction, Local, Placement, Point, UvPoint, Vec3, Vector, World};
 
 use super::{distance, local, placement, tolerance, unit};
 use crate::{BsplineCurve, Circle, Ellipse, Hyperbola, Line, Parabola, SplineCurve, Surface, UvBox};
@@ -15,10 +16,6 @@ fn frame(offset: [f64; 3], about: [f64; 3], angle: f64) -> Placement<Local, Worl
     let turn = Placement::<Local, Local>::rotation(axis, Angle::from_radians(angle));
     let shift = Placement::<Local, Local>::translation(Vector::from_vec3(Vec3::new(ox, oy, oz)));
     turn.then(&shift).then(&placement())
-}
-
-fn mm(x: f64) -> Length {
-    Length::from_millimetres(x)
 }
 
 /// A line without end, skew to the axis.

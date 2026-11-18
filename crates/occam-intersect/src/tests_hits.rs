@@ -3,6 +3,7 @@
 //! a surface with no analytic form, a spent budget, and the box test compared with the unculled scan by digest on a
 //! generated set of primitives placed as the corpus's families place them.
 
+pub(crate) use occam_fixtures::{mm, tol};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -13,24 +14,14 @@ use occam_geom::{
 };
 use occam_math::{Digest, Exec, Real, atan2};
 use occam_report::{Code, NamedValue, Reason, Report};
-use occam_units::{
-    Angle, Bounds, Direction, Frame, Length, Local, Placement, Point, Tangent, Tolerance, UvPoint, Vec3, Vector, World,
-};
+use occam_units::{Angle, Bounds, Direction, Frame, Local, Placement, Point, Tangent, UvPoint, Vec3, Vector, World};
 
 use crate::{Budget, Hit, HitPair, Hits, Overlap, Span, boxes_meet, hits, hits_of_pairs, scan};
-
-pub(crate) fn tol() -> Tolerance {
-    Tolerance::new(Length::from_millimetres(1e-7), Angle::from_radians(1e-9)).unwrap()
-}
 
 pub(crate) const BUDGET: Budget = Budget { steps: 100_000 };
 
 pub(crate) fn v(x: f64, y: f64, z: f64) -> Vec3 {
     Vec3::new(x, y, z)
-}
-
-pub(crate) fn mm(x: f64) -> Length {
-    Length::from_millimetres(x)
 }
 
 /// Turned by `turn` about `axis`, then moved by `shift`, within one frame.

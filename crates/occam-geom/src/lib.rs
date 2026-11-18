@@ -15,6 +15,10 @@
     reason = "a kernel compiles at a dispatched instruction level only through what is inlined into it (P4)"
 )]
 
+/// This crate by its name, for the fixtures its tests compile from occam-fixtures' source.
+#[cfg(test)]
+extern crate self as occam_geom;
+
 mod analytic;
 mod arc;
 mod axes;
@@ -81,7 +85,12 @@ mod trimmed_curve;
 mod trimmed_surface;
 mod turn;
 mod uv_curve;
-pub mod workloads;
+/// The spline `gates perf` measures, which the families' tests are run on too: occam-fixtures' source, compiled into
+/// the tests alone, where it names this crate as any caller does.
+#[cfg(test)]
+#[path = "../../occam-fixtures/src/spline_workloads.rs"]
+#[allow(dead_code, reason = "the tests use the spline, not what is measured on it")]
+mod workloads;
 
 pub use analytic::Analytic;
 pub use arc::{length, rule as gauss_legendre};

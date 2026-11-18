@@ -11,10 +11,11 @@ mod profiles;
 mod seeded;
 mod surfaces;
 
+pub(crate) use occam_fixtures::tol as tolerance;
 use std::collections::BTreeSet;
 
 use occam_math::canonical_bits;
-use occam_units::{Angle, Direction, Length, Local, Placement, Point, Tangent, Tolerance, Vec3, Vector, World};
+use occam_units::{Angle, Direction, Local, Placement, Point, Tangent, Vec3, Vector, World};
 
 pub(crate) use curves::{curve, presented_curve};
 pub(crate) use lifted::param_curve;
@@ -80,11 +81,6 @@ impl Findings {
 pub(crate) fn checks(failures: &[Failure]) -> Vec<Check> {
     let failed: BTreeSet<Check> = failures.iter().map(|f| f.check).collect();
     failed.into_iter().collect()
-}
-
-/// The model tolerance the suite works to.
-pub(crate) fn tolerance() -> Tolerance {
-    Tolerance::new(Length::from_millimetres(1e-7), Angle::from_radians(1e-9)).unwrap()
 }
 
 /// A placement neither on the axes nor at the origin, so that no symmetry hides a fault.

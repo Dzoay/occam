@@ -281,6 +281,7 @@ impl<S: Parametric> Parametric for OffsetSurface<S> {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::mm;
     use std::f64::consts::{FRAC_PI_2, TAU};
 
     use occam_units::{Angle, Direction};
@@ -289,10 +290,6 @@ mod tests {
     use crate::conformance::{self, Check, arc, local, placement, tolerance, wrong_second};
     use crate::surface::Surface;
     use crate::{Cone, Cylinder, MeshSurface, Plane, Revolution, Sphere, SplineSurface, Torus};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     fn window(lo: (f64, f64), hi: (f64, f64)) -> UvBox {
         UvBox::new(UvPoint::new(lo.0, lo.1), UvPoint::new(hi.0, hi.1))

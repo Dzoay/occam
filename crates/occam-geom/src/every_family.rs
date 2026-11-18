@@ -6,9 +6,10 @@
 //! keeps its own suite tests, over more windows and with seeded faults: the table is the one place that shows every
 //! family passing the same checks, which is what the seam was frozen on. Each row is its own test, so they run at once.
 
+use occam_fixtures::mm;
 use std::f64::consts::{FRAC_PI_2, TAU};
 
-use occam_units::{Angle, Direction, Length, Placement, Point, UvPoint, Vec3, World};
+use occam_units::{Angle, Direction, Placement, Point, UvPoint, Vec3, World};
 
 use crate::conformance::{self, Failure, arc, local, placement, twist};
 use crate::{
@@ -34,10 +35,6 @@ fn failures(row: &Row) -> Vec<Failure> {
         Row::Curve(c, (lo, hi)) => conformance::curve(c.as_ref(), *lo, *hi),
         Row::Param(c, (lo, hi)) => conformance::param_curve(c.as_ref(), *lo, *hi),
     }
-}
-
-fn mm(x: f64) -> Length {
-    Length::from_millimetres(x)
 }
 
 fn window(lo: (f64, f64), hi: (f64, f64)) -> UvBox {

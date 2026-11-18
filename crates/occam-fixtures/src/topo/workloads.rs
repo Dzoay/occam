@@ -8,11 +8,11 @@
 use occam_math::Exec;
 use occam_units::{Angle, Length, Tolerance};
 
-use crate::edit::Edit;
-use crate::models::{
+use super::models::{
     Built, build, cube, cylinder, disc, frame, holed_sheet, plate, sheet, split, straight_pcurves, top_square, wire,
 };
-use crate::snapshot::Snapshot;
+use occam_topo::Edit;
+use occam_topo::Snapshot;
 
 /// A plate `k` by `k` by 1 of unit squares, committed: its bottom and its top each `k²` squares, and each side `k`, so
 /// `2k² + 4k` faces.
@@ -95,7 +95,7 @@ pub fn models(exec: &Exec) -> Vec<(&'static str, Snapshot)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kind::Face;
+    use occam_topo::Face;
 
     #[test]
     fn a_plate_has_two_k_squared_and_four_k_faces_and_splitting_squares_adds_one_face_each() {

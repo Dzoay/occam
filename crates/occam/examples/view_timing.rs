@@ -24,8 +24,8 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Instant;
 
-use occam::mesh_workloads::{P9_SEED, face_count, perf_mesh, pick_rays, quality, synthetic};
 use occam::{Exec, Limits, Pick, Session};
+use occam_fixtures::mesh_workloads::{P9_SEED, face_count, perf_mesh, pick_rays, quality, synthetic};
 use occam_report::{DisplayUnits, Report};
 use occam_topo::Snapshot;
 use occam_units::{Angle, Length};
@@ -231,7 +231,9 @@ fn pick(file: &str) -> Result<String, String> {
 }
 
 fn requests() -> String {
-    use occam::operation_workloads::{MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded};
+    use occam_fixtures::operation_workloads::{
+        MEASURES, POLYGON_CORNERS, PRIMITIVES, SWEEPS, TRANSFORMS, polygon_extruded,
+    };
     let polygon = polygon_extruded(POLYGON_CORNERS);
     let named = [
         ("construct_primitives", PRIMITIVES),

@@ -1,13 +1,9 @@
 //! Source: original
 //! The lane kernels `gates perf` measures, each written once over [`Real`] and run at width 1 as `f64` and at its
-//! chosen [`width`](crate::width) as [`Lanes`](crate::Lanes): natively by instruction count, and in the browser's
+//! chosen [`width`](occam_math::width) as [`Lanes`](occam_math::Lanes): natively by instruction count, and in the browser's
 //! simd128 build by time. A kernel that is not clearly faster at its width runs at width 1 (L29).
 
-use crate::interval::Interval;
-use crate::orientation::Orientation;
-use crate::predicate::Predicate;
-use crate::real::Real;
-use crate::trig::{atan2, sin_cos};
+use occam_math::{Interval, Orientation, Predicate, Real, atan2, sin_cos};
 
 /// The items each kernel runs over: a multiple of every width.
 pub const ITEMS: usize = 4096;
@@ -92,9 +88,9 @@ pub fn angles<R: Real>(items: &[f64]) -> Vec<f64> {
 
 #[cfg(test)]
 mod tests {
+    use occam_math::{Lanes, canonical_bits};
+
     use super::*;
-    use crate::hash::canonical_bits;
-    use crate::lanes::Lanes;
 
     fn bits(values: &[f64]) -> Vec<u64> {
         values.iter().map(|value| canonical_bits(*value)).collect()

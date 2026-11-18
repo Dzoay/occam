@@ -94,20 +94,13 @@ pub fn distance_json(query: &DistanceQuery) -> Answer {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::{mm, point};
     use occam_report::followed_remedy;
 
     use super::*;
 
-    fn mm(value: f64) -> Length {
-        Length::from_millimetres(value)
-    }
-
     fn model(length: f64) -> Model {
         Model::new(Tolerance::new(mm(length), Angle::from_radians(1e-6)).unwrap())
-    }
-
-    fn point(x: f64, y: f64, z: f64) -> Point<World> {
-        Point::new(mm(x), mm(y), mm(z))
     }
 
     fn origin() -> Point<World> {

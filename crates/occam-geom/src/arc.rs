@@ -120,6 +120,7 @@ pub fn length(c: &dyn Curve, (lo, hi): (f64, f64), tolerance: Length) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use occam_fixtures::mm;
 
     #[test]
     fn the_rule_integrates_polynomials_of_degree_below_twice_its_points_exactly() {
@@ -199,10 +200,6 @@ mod tests {
 
     use crate::conformance::placement;
     use crate::{Circle, Ellipse, Hyperbola, Line, Parabola, SplineCurve};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     fn measured(c: &dyn Curve, range: (f64, f64)) -> f64 {
         length(c, range, mm(1e-11)).unwrap().millimetres()

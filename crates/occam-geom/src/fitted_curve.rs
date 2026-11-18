@@ -123,6 +123,7 @@ impl<C: ParametricCurve> ParametricCurve for FittedCurve<C> {
 
 #[cfg(test)]
 mod tests {
+    use occam_fixtures::mm;
     use occam_report::Code;
     use occam_units::{Placement, Vec3, Vector};
 
@@ -131,10 +132,6 @@ mod tests {
     use crate::curve::Curve;
     use crate::param_curve::ParamCurve;
     use crate::{Circle, Line, SplineCurve, UvCurve};
-
-    fn mm(x: f64) -> Length {
-        Length::from_millimetres(x)
-    }
 
     fn fitted<C: ParametricCurve>(base: C, fit: f64) -> FittedCurve<C> {
         FittedCurve::new(base, mm(fit)).unwrap()
