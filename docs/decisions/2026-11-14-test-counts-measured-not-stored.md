@@ -16,6 +16,8 @@ This section is Claude's working reading of the decision. The user can change it
   config) and `just counts` go.
 - The guard stays: tests still cannot silently disappear. `gates counts` lists the tests of the change's base and of the
   change itself, and fails when a test binary has fewer tests than on the base, or is gone.
+  Since 2026-11-17 it compares the tests' names, not how many there are: a binary fails when a test it has on the base
+  is not among its tests now, so a test swapped for another, or renamed, is a removal too. Nothing more is stored.
 - A deliberate removal names itself in the change, with its reason, as a commit footer that the gate reads, as
   lowering a minimum by hand needed a reason before.
 - Building the base costs a second build, so the comparison runs in CI. A local run without a base to compare against
