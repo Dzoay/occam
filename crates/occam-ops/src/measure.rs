@@ -19,6 +19,7 @@ mod quadrature;
 #[cfg(test)]
 mod tests;
 
+use occam_math::larger;
 use occam_report::{Code, EntityKind, EntityRef, Fault, NamedValue, Quantity, Reason, Report};
 use occam_topo::{Body, BodyKind, Edge, Edit, Face, Id, Shell, Snapshot, Vertex, View, Wire};
 use occam_units::{Bounds, Point, Tolerance, Vec3, World};
@@ -277,11 +278,6 @@ fn second(rough: Sums, size: f64, solid: bool) -> Sums {
     let area = larger(area, FIRST * size * size);
     let moment = RELATIVE * size * volume;
     held([RELATIVE * volume, RELATIVE * area, moment, moment, moment, 0.0], solid)
-}
-
-/// The larger of two numbers, the first if they are equal.
-fn larger(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
 }
 
 /// What the measure step `step` asks of `model`, with `labels` naming what earlier steps made.

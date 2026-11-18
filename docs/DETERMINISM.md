@@ -42,8 +42,9 @@ model in the browser and on a server is the case that would need more
      build gave different bits in release and debug (S5).
 2. **Nothing else computes.** Clippy's `disallowed-methods` bans every `f64` method whose result Rust does not pin down:
    the transcendental functions and powers it documents as non-deterministic, with `to_degrees` and `to_radians`; `min`,
-   `max` and `clamp`, which may return either zero; `algebraic_*`, which the optimiser may rewrite; and `mul_add`, which
-   rounds once and so differs from `a * b + c`.
+   `max` and `clamp`, which may return either zero, where `occam_math::smaller` and `larger` give the first of two
+   that tie; `algebraic_*`, which the optimiser may rewrite; and `mul_add`, which rounds once and so differs from
+   `a * b + c`.
 3. **A NaN's sign and payload mean nothing.** Rust leaves both unspecified for the result of arithmetic. Whether a value
    is NaN is deterministic, so code may test `is_nan`, but nothing may depend on the sign or payload (`is_sign_negative`,
    `copysign`, `total_cmp`, `to_bits`). Every NaN is replaced by one pattern, `canonical_bits`, before it is hashed. The

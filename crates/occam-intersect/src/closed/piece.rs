@@ -13,8 +13,9 @@ use occam_geom::{
 use occam_math::{Side, atan2};
 use occam_units::{Direction, Point, Vec3};
 
-use super::{exact3, minus, norm3, unit};
+use super::unit;
 use crate::decide::{Decisions, Undecided};
+use crate::interval3::{exact3, minus, norm3};
 
 /// A curve a closed form found, before it is made.
 #[derive(Clone, Copy, Debug)]

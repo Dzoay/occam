@@ -173,13 +173,6 @@ fn the_arcs_of_a_needle_s_tip_meet_only_there() {
 }
 
 #[test]
-fn the_least_of_two_equal_numbers_is_the_first_even_where_they_are_noughts_of_either_sign() {
-    assert_eq!(least(0.0, -0.0).to_bits(), 0.0_f64.to_bits());
-    assert_eq!(least(-0.0, 0.0).to_bits(), (-0.0_f64).to_bits());
-    assert_eq!((least(1.0, 2.0), least(2.0, 1.0)), (1.0, 1.0));
-}
-
-#[test]
 fn an_arc_is_cut_into_as_few_steps_as_its_sag_allows_and_never_more_than_two_to_the_sixteenth() {
     // Steps of √(8 sag / r) = 1/8 radian, eight of which are exactly the sweep.
     let (fits, sag) = (Flat::Arc { c: [0.0, 0.0], r: 8.0, from: 0.0, sweep: 1.0 }, 1.0 / 64.0);

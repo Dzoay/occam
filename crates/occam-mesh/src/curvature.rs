@@ -9,10 +9,9 @@
 //! as where its derivatives span no normal at all.
 
 use occam_geom::{Jet2, Surface, UvBox};
+use occam_math::{larger, smaller};
 use occam_topo::{Face, Id, Loop, Snapshot, View};
 use occam_units::{Point, UvPoint, World};
-
-use crate::limits::{higher, lower};
 
 /// How many grid points along each parameter, the box's edges included.
 const GRID: usize = 8;
@@ -35,8 +34,8 @@ pub(crate) fn of_face(model: &Snapshot, face: Id<Face>) -> f64 {
 
 /// The box holding both.
 fn joined(a: UvBox, b: UvBox) -> UvBox {
-    let lo = UvPoint::new(lower(a.lo.u(), b.lo.u()), lower(a.lo.v(), b.lo.v()));
-    let hi = UvPoint::new(higher(a.hi.u(), b.hi.u()), higher(a.hi.v(), b.hi.v()));
+    let lo = UvPoint::new(smaller(a.lo.u(), b.lo.u()), smaller(a.lo.v(), b.lo.v()));
+    let hi = UvPoint::new(larger(a.hi.u(), b.hi.u()), larger(a.hi.v(), b.hi.v()));
     UvBox::new(lo, hi)
 }
 
@@ -71,7 +70,7 @@ pub(crate) fn largest(surface: &dyn Surface, patch: UvBox, band: f64) -> f64 {
     let jets: Vec<Jet2> = grid(patch).into_iter().map(|uv| surface.second(uv)).collect();
     let points: Vec<Point<World>> = jets.iter().map(|jet| jet.first.point).collect();
     let kept = jets.iter().zip(collapsed(&points, band)).filter(|(_, skipped)| !skipped);
-    kept.fold(0.0, |most, (jet, _)| higher(most, principal(jet)))
+    kept.fold(0.0, |most, (jet, _)| larger(most, principal(jet)))
 }
 
 /// The larger of the principal curvatures' sizes at `jet`, `|H| + sqrt(H^2 - K)`: NaN where its derivatives span no

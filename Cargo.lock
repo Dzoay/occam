@@ -509,6 +509,7 @@ name = "occam-ops"
 version = "0.0.0"
 dependencies = [
  "occam-geom",
+ "occam-intersect",
  "occam-math",
  "occam-mesh",
  "occam-report",

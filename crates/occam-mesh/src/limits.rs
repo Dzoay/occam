@@ -3,7 +3,7 @@
 //! below, and the most samples one edge may have. They are read before any geometry, so that no estimate gone wrong can
 //! ask for more than they allow.
 
-use occam_math::cos;
+use occam_math::{cos, larger, smaller};
 use occam_report::{Code, Fault, Input, NamedValue, Quantity, Report};
 use occam_units::{Angle, Length};
 
@@ -21,16 +21,6 @@ fn positive(parameter: &str, quantity: Quantity, value: f64) -> Result<(), Repor
     }
     let report = Report::new(Code::LimitNotPositive, Fault::InvalidInput).with_input(Input::at(parameter));
     Err(report.with_value(NamedValue::new("value", quantity, value)))
-}
-
-/// The lower of two numbers: `a` where they tie or `b` is not a number, without `f64::min`'s choice between zeros.
-pub(crate) fn lower(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
-}
-
-/// The higher of two numbers: `a` where they tie or `b` is not a number.
-pub(crate) fn higher(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
 }
 
 impl Limits {
@@ -86,7 +76,7 @@ impl Limits {
         let deflection = self.deflection.millimetres();
         let chordal = 2.0 * (deflection / curvature).sqrt();
         let angular = self.angle.radians() / curvature;
-        higher(deflection, lower(chordal, angular))
+        larger(deflection, smaller(chordal, angular))
     }
 
     /// The cosine of half the angle: what the angle between two tangents half a piece apart is held to.

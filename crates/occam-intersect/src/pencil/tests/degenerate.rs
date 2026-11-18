@@ -9,12 +9,12 @@ use std::f64::consts::PI;
 use std::sync::Arc;
 
 use occam_geom::{Cylinder, Surface};
-use occam_math::{atan2, sin_cos};
+use occam_math::{atan2, sin_cos, smaller};
 use occam_report::{Code, Fault, Reason};
 use occam_units::{Angle, Direction, Length, Placement, Tolerance};
 
 use super::{Case, Class, Seeded, alone, both, check, class, cone_by, cylinder_by, extent, sphere_along};
-use crate::closed::tests::{O, SIZE, Want, X, Z, cone, cylinder, from_curve, nearer, section, sphere, v};
+use crate::closed::tests::{O, SIZE, Want, X, Z, cone, cylinder, from_curve, section, sphere, v};
 use crate::{Budget, Methods, Pencil, Section};
 
 /// Two cylinders of radius `r` whose axes cross at the origin at the angle `psi`: two ellipses, in the planes through
@@ -141,7 +141,7 @@ fn farthest(from: &Section, to: &Section) -> f64 {
         let (lo, hi) = if range.lo.is_finite() { (range.lo, range.hi) } else { (-4.0, 4.0) };
         for k in 0..=32 {
             let p = piece.curve.point(lo + (hi - lo) * f64::from(k) / 32.0).to_vec3();
-            let near = to.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, nearer);
+            let near = to.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, smaller);
             worst = if near > worst { near } else { worst };
         }
     }

@@ -15,12 +15,11 @@ mod unbounded;
 use std::sync::Arc;
 
 use occam_geom::{Analytic, Sphere, Surface};
+use occam_math::smaller;
 use occam_units::{Bounds, Direction, Placement, Point, Vec3, World};
 
 use super::{Class, Pair, Pencil, classify};
-use crate::closed::tests::{
-    Want, contact_maps, frame_by, from_curve, is_contact, lies_on_both, mm, nearer, scale, size, tol,
-};
+use crate::closed::tests::{Want, contact_maps, frame_by, from_curve, is_contact, lies_on_both, mm, scale, size, tol};
 use crate::decide::Decisions;
 use crate::{Budget, Closed, Contact, Methods, Section};
 
@@ -91,7 +90,7 @@ fn check(case: &Case) {
     let contacts = want.contacts.len().saturating_add(case.unnamed);
     assert_eq!((got.curves.len(), got.contacts.len()), (want.curves, contacts), "{name}");
     for p in want.on.iter().map(|p| moved(&case.place, *p)) {
-        let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, nearer);
+        let near = got.curves.iter().map(|c| from_curve(c.curve.as_ref(), p)).fold(f64::INFINITY, smaller);
         assert!(near <= 1e-9 * size(), "{name}: no curve passes through {p:?}: the nearest is {near} away");
     }
     for (k, p) in want.contacts.iter().map(|p| moved(&case.place, *p)).enumerate() {

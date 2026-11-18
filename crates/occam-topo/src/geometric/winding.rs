@@ -5,21 +5,8 @@
 //! shared end is counted once. Which side the point is on is decided exactly on the numbers given (`decide_stored`,
 //! Shewchuk 1997), so the count is the same on every target, and a point on a segment gives no count at all.
 
-use occam_math::{Predicate, Ring, Side, Verdict, decide_stored};
+use occam_math::{Orientation, Side, Verdict, decide_stored};
 use occam_units::UvPoint;
-
-/// Twice the signed area of the triangle `a`, `b`, `q`, from `[au, av, bu, bv, qu, qv]`: above zero when `q` is on the
-/// left of `a` to `b`.
-struct Orientation;
-
-impl Predicate<6> for Orientation {
-    const DEGREE: u32 = 2;
-
-    fn value<T: Ring>(&self, inputs: &[T; 6]) -> T {
-        let [au, av, bu, bv, qu, qv] = inputs;
-        bu.sub(au).mul(&qv.sub(av)).sub(&bv.sub(av).mul(&qu.sub(au)))
-    }
-}
 
 /// The winding number of the closed chain `segments` about `q`, or `None` where `q` lies on a segment that crosses
 /// its line, or a side cannot be decided exactly.
@@ -96,12 +83,5 @@ mod tests {
             [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)];
         assert_eq!(number(&chain(&twice), uv(0.1, 0.1)), Some(2));
         assert_eq!(number(&[], uv(0.0, 0.0)), Some(0));
-    }
-
-    #[test]
-    fn the_orientation_is_twice_the_signed_area() {
-        let value = Orientation.value(&[0.0, 0.0, 2.0, 0.0, 0.0, 3.0]);
-        assert_eq!(value, 6.0);
-        assert_eq!(Orientation.value(&[1.0, 1.0, 3.0, 1.0, 1.0, -2.0]), -6.0);
     }
 }

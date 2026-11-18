@@ -1,6 +1,6 @@
 //! Source: original
-//! The remedies: every kind of fix occam can suggest (L8). A new one is an entry in `text_enum!` below, an arm in each
-//! match of `impl RemedyKind`, and a row in the listing test in `code.rs`.
+//! The remedies: every kind of fix occam can suggest (L8). A new one is an entry in `text_enum!` below and an arm in
+//! each match of `impl RemedyKind`, recorded by `just catalogue-record` in `ci/catalogue.json`.
 
 text_enum! {
     /// A kind of fix occam can suggest. The values to apply it with are in the [`crate::Remedy`].

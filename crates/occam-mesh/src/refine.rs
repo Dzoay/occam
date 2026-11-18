@@ -22,10 +22,10 @@
 use std::collections::VecDeque;
 
 use occam_geom::Surface;
+use occam_math::larger;
 use occam_units::{Point, UvPoint, Vec3, World};
 
 use crate::deviation::{between, distance, grid};
-use crate::limits::higher;
 use crate::triangulation::{Fail, Triangulation};
 
 /// How many steps a side the grid refinement reads on each triangle has.
@@ -69,7 +69,7 @@ fn strays(work: &Work<'_>, uv: UvPoint, flat: [Vec3; 3], middle: Option<Vec3>) -
     let off = distance(jet.point.to_vec3(), flat) / (SHARE * work.deflection);
     let across = jet.du.rate().cross(jet.dv.rate());
     let (Some(middle), true) = (middle, across.norm().is_normal()) else { return off };
-    higher(off, (1.0 - across.dot(middle) / across.norm()) / (1.0 - work.turn))
+    larger(off, (1.0 - across.dot(middle) / across.norm()) / (1.0 - work.turn))
 }
 
 /// Where triangle `t` of `mesh` takes a new point, if it strays too far or is turned over.
@@ -87,7 +87,7 @@ fn wants(work: &Work<'_>, [a, b, c]: [UvPoint; 3], [pa, pb, pc]: [Vec3; 3], fixe
     if pa == pb || pb == pc || pc == pa {
         return None;
     }
-    let longest = higher(higher((pb - pa).norm(), (pc - pb).norm()), (pa - pc).norm());
+    let longest = larger(larger((pb - pa).norm(), (pc - pb).norm()), (pa - pc).norm());
     let at_middle = normal(work.surface, between([a, b, c], [1, 1, 1], 3));
     let across = (pb - pa).cross(pc - pa);
     let over = at_middle.is_some_and(|n| across.dot(n) <= work.square * across.norm());
@@ -101,7 +101,7 @@ fn wants(work: &Work<'_>, [a, b, c]: [UvPoint; 3], [pa, pb, pc]: [Vec3; 3], fixe
         }
         let place = between([a, b, c], at, STEPS);
         let score = strays(work, place, [pa, pb, pc], middle);
-        worst = higher(worst, score);
+        worst = larger(worst, score);
         if i > 0 && j > 0 && k > 0 && best.is_none_or(|(most, _)| score > most) {
             best = Some((score, place));
         }

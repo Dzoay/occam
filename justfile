@@ -243,6 +243,13 @@ mutants-on host *args:
 errors:
     cargo run --quiet -p occam-report --example catalogue
 
+# The catalogue's record, ci/catalogue.json, as this build lists it, one value a line: a new or changed code or remedy is a line of its diff, and occam-report's test holds the catalogue to it
+[env("CARGO_TARGET_DIR", target)]
+[group('tools')]
+catalogue-record:
+    cargo run --quiet -p occam-report --example catalogue -- --record > ci/catalogue.json.new
+    mv ci/catalogue.json.new ci/catalogue.json
+
 # Check locked dependencies against the RustSec advisories; the nightly workflow runs this
 [group('tools')]
 advisories:

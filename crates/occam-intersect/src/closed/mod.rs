@@ -26,6 +26,7 @@ use occam_units::{Point, Tolerance, Vec3};
 use self::coaxial::{Axis, coaxial};
 pub(crate) use self::piece::{Plan, square_to};
 use crate::decide::{Decisions, Undecided};
+use crate::interval3::{cross3, exact3, minus, norm3};
 use crate::methods::{Answer, Method, Spent, Work};
 use crate::resolution::contact;
 use crate::section::{Coincidence, Contact, Section, SectionCurve};
@@ -73,30 +74,6 @@ impl Found {
 
 pub(crate) fn unit(v: Vec3) -> Vec3 {
     v * (1.0 / v.norm())
-}
-
-/// `v`'s parts, each exactly.
-pub(crate) fn exact3(v: Vec3) -> [Interval; 3] {
-    [v.x, v.y, v.z].map(Interval::exact)
-}
-
-/// `p − from`, certified.
-pub(crate) fn minus([px, py, pz]: [Interval; 3], [fx, fy, fz]: [Interval; 3]) -> [Interval; 3] {
-    [px - fx, py - fy, pz - fz]
-}
-
-/// `(p − from) · towards`, certified.
-pub(crate) fn along(p: [Interval; 3], from: [Interval; 3], [tx, ty, tz]: [Interval; 3]) -> Interval {
-    let [x, y, z] = minus(p, from);
-    x * tx + y * ty + z * tz
-}
-
-pub(crate) fn cross3([ax, ay, az]: [Interval; 3], [bx, by, bz]: [Interval; 3]) -> [Interval; 3] {
-    [ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx]
-}
-
-pub(crate) fn norm3([x, y, z]: [Interval; 3]) -> Interval {
-    (x * x + y * y + z * z).sqrt()
 }
 
 /// The axis a surface is turned about, for a cylinder, a cone or a torus.

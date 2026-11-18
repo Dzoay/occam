@@ -12,13 +12,13 @@
 
 use std::ops::Range;
 
+use occam_math::{larger, smaller};
 use occam_report::{Code, Fault, Reason, Report};
 use occam_topo::{Edge, EdgeUse, Face, Id, Loop, Snapshot, View};
 use occam_units::{Point, UvPoint, World};
 
 use crate::edges::{Edges, stale};
 use crate::faces::Side;
-use crate::limits::{higher, lower};
 use crate::triangulation::Fail;
 
 /// A face's boundary in its parameters.
@@ -55,7 +55,7 @@ pub(crate) struct Piece {
 impl Piece {
     /// The piece of `edge` between its samples at `a` and `b`, either way round.
     fn of(edge: Id<Edge>, a: f64, b: f64) -> Self {
-        Self { edge, from: lower(a, b), to: higher(a, b) }
+        Self { edge, from: smaller(a, b), to: larger(a, b) }
     }
 }
 
@@ -117,12 +117,12 @@ fn loops(model: &Snapshot, face: View<'_, Face>, edges: &Edges) -> Result<Vec<Us
 fn closeness(places: impl Iterator<Item = UvPoint>) -> [f64; 2] {
     let (mut lo, mut hi, mut size) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2], 0.0);
     for uv in places {
-        lo = [lower(lo[0], uv.u()), lower(lo[1], uv.v())];
-        hi = [higher(hi[0], uv.u()), higher(hi[1], uv.v())];
-        size = higher(size, higher(uv.u().abs(), uv.v().abs()));
+        lo = [smaller(lo[0], uv.u()), smaller(lo[1], uv.v())];
+        hi = [larger(hi[0], uv.u()), larger(hi[1], uv.v())];
+        size = larger(size, larger(uv.u().abs(), uv.v().abs()));
     }
     let fraction = 1.0 / 4_294_967_296.0;
-    [higher(higher(hi[0] - lo[0], hi[1] - lo[1]), size) * fraction; 2]
+    [larger(larger(hi[0] - lo[0], hi[1] - lo[1]), size) * fraction; 2]
 }
 
 /// The boundary of `face` against the samples of `edges`, each segment with the piece of an edge it runs along, and the
