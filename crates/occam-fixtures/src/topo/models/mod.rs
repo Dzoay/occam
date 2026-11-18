@@ -29,45 +29,62 @@ pub use geometric::{
 pub use split::{split, top_square};
 
 /// An edge: its curve, the part of it, the indices of its start and finish vertices, and its role.
-#[allow(missing_docs, reason = "the sentence above names each field")]
 pub struct EdgeSpec {
+    /// The curve it lies on.
     pub curve: CurveRecord,
+    /// The part of the curve it covers, start then finish.
     pub range: (f64, f64),
+    /// The indices of its start and finish vertices.
     pub ends: (usize, usize),
+    /// Its role.
     pub role: EdgeRole,
 }
 
 /// A face: the index of its surface, whether it is reversed, and its loops, the outer first, each a list of edge
 /// indices and whether the use runs against the edge, with a witness.
-#[allow(missing_docs, reason = "the sentence above names each field")]
 pub struct FaceSpec {
+    /// The index of its surface.
     pub surface: usize,
+    /// Whether it faces against its surface.
     pub reversed: bool,
+    /// Its loops, the outer first: each a list of edge indices and whether the use runs against the edge, with a
+    /// witness.
     pub loops: Vec<(Vec<(usize, bool)>, UvPoint)>,
 }
 
 /// A body to build.
-#[allow(missing_docs, reason = "the sentence above names each field")]
 pub struct Spec {
+    /// What kind of body it is.
     pub kind: BodyKind,
+    /// Its vertices' points.
     pub points: Vec<Point<World>>,
+    /// Its edges.
     pub edges: Vec<EdgeSpec>,
+    /// Its surfaces.
     pub surfaces: Vec<SurfaceRecord>,
+    /// Its faces.
     pub faces: Vec<FaceSpec>,
     /// Open wires, each a list of edge indices and directions.
     pub wires: Vec<Vec<(usize, bool)>>,
 }
 
 /// The ids a build gave, in the spec's order. `uses` lists the faces' loops' uses, then the wires'.
-#[allow(missing_docs, reason = "the sentence above names each field")]
 pub struct Built {
+    /// The body.
     pub body: Id<Body>,
+    /// Its shell, if it has faces.
     pub shell: Option<Id<Shell>>,
+    /// The faces.
     pub faces: Vec<Id<Face>>,
+    /// The faces' loops.
     pub loops: Vec<Id<Loop>>,
+    /// The open wires.
     pub wires: Vec<Id<Wire>>,
+    /// The faces' loops' uses, then the wires'.
     pub uses: Vec<Id<EdgeUse>>,
+    /// The edges.
     pub edges: Vec<Id<Edge>>,
+    /// The vertices.
     pub vertices: Vec<Id<Vertex>>,
 }
 
