@@ -21,7 +21,7 @@ determinism = []
 workloads = []
 # A model read back without being measured or checked (`Restore::trusted`), for the browser's mesh workers, which trust
 # the editing worker's check (docs/decisions/2026-11-16-mesh-workers-trust-the-editing-worker.md). Only occam-wasm turns
-# it on, through occam's, so the `occam` command has no way to open a model unchecked.
+# it on, through occam's, which `gates layers` checks, so the `occam` command has no way to open a model unchecked.
 trusted = []
 
 [[example]]
