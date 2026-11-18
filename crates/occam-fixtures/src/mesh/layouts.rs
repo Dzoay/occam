@@ -22,7 +22,7 @@ use occam_topo::{
 use occam_units::{Angle, Direction, Length, Local, Placement, Point, UvPoint, Vec3, Vector, World};
 
 /// An edge: a piece of `curve` over `range`, from point `ends.0` to point `ends.1`.
-#[allow(missing_docs, reason = "the sentence above names each field")]
+#[expect(missing_docs, reason = "the sentence above names each field")]
 pub struct Piece {
     pub curve: Arc<dyn Curve>,
     pub range: (f64, f64),
@@ -30,7 +30,7 @@ pub struct Piece {
 }
 
 /// A use of edge `edge` in a face's loop, against the edge if `reversed`, with its curve in the face's parameters.
-#[allow(missing_docs, reason = "the sentence above names each field")]
+#[expect(missing_docs, reason = "the sentence above names each field")]
 pub struct Side {
     pub edge: usize,
     pub reversed: bool,
@@ -38,7 +38,7 @@ pub struct Side {
 }
 
 /// A face on `surface` bounded by one loop of `sides`, with `witness` strictly inside it.
-#[allow(missing_docs, reason = "the sentence above names each field")]
+#[expect(missing_docs, reason = "the sentence above names each field")]
 pub struct Patch {
     pub surface: Arc<dyn Surface>,
     pub sides: Vec<Side>,
@@ -46,7 +46,7 @@ pub struct Patch {
 }
 
 /// A sheet body: its points, its edges and its faces, all joined into one shell.
-#[allow(missing_docs, reason = "the sentence above names each field")]
+#[expect(missing_docs, reason = "the sentence above names each field")]
 pub struct Layout {
     pub points: Vec<Vec3>,
     pub edges: Vec<Piece>,
@@ -54,6 +54,7 @@ pub struct Layout {
 }
 
 /// The model of `layouts`, each a sheet body of its own, committed; with each one's edges, in its order.
+#[must_use]
 pub fn model(layouts: &[Layout]) -> (Snapshot, Vec<Vec<Id<Edge>>>) {
     let mut edit = Snapshot::empty(tol()).edit();
     let edges = layouts.iter().map(|layout| write(&mut edit, layout)).collect();
@@ -105,6 +106,7 @@ fn straight(points: &[Vec3], (a, b): (usize, usize)) -> Piece {
 }
 
 /// The line in a face's parameters from `from` along `along`, its parameter the distance along it.
+#[must_use]
 pub fn uv_line(from: (f64, f64), along: (f64, f64)) -> Arc<dyn ParamCurve> {
     occam_fixtures::topo::models::uv_line(from, along).0
 }
@@ -116,6 +118,7 @@ fn side(edge: usize, reversed: bool, pcurve: Arc<dyn ParamCurve>) -> Side {
 
 /// A flat disc of `radius` about the origin, facing +Z: one face bounded by one closed circle, both of whose ends are
 /// its one vertex, with no curve in the face's parameters.
+#[must_use]
 pub fn disc(radius: f64) -> Layout {
     let circle = Circle::placed(&Placement::identity(), Length::from_millimetres(radius)).unwrap();
     let edges = vec![Piece { curve: Arc::new(circle), range: (0.0, 2.0 * PI), ends: (0, 0) }];
@@ -125,6 +128,7 @@ pub fn disc(radius: f64) -> Layout {
 }
 
 /// A flat triangle in `z = 0`, facing +Z: three straight edges, each drawn in the plane's parameters.
+#[must_use]
 pub fn triangle() -> Layout {
     let points = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
     let edges = vec![straight(&points, (0, 1)), straight(&points, (1, 2)), straight(&points, (2, 0))];
@@ -138,6 +142,7 @@ pub fn triangle() -> Layout {
 }
 
 /// [`disc`], with its circle drawn in the plane's parameters, where the plane's `(u, v)` is `(x, y)`.
+#[must_use]
 pub fn disc_drawn(radius: f64) -> Layout {
     let mut layout = disc(radius);
     let circle = Circle::placed(&Placement::identity(), Length::from_millimetres(radius)).unwrap();
@@ -147,6 +152,7 @@ pub fn disc_drawn(radius: f64) -> Layout {
 }
 
 /// `layout` with the curves of face `face`'s edges in its parameters taken away.
+#[must_use]
 pub fn undrawn(mut layout: Layout, face: usize) -> Layout {
     layout.faces[face].sides.iter_mut().for_each(|side| side.pcurve = None);
     layout
@@ -154,6 +160,7 @@ pub fn undrawn(mut layout: Layout, face: usize) -> Layout {
 
 /// The poles of P9's bicubic patch, a row of constant `v` at a time: a bump over the unit square whose row at `v = 0`
 /// is collapsed to one point.
+#[must_use]
 pub fn collapsed_poles() -> Vec<Point<World>> {
     let height = |i: u32, j: u32| if (1..3).contains(&i) && j > 0 { 0.4 } else { 0.1 * f64::from(i * j) / 9.0 };
     let pole = |i: u32, j: u32| {
@@ -164,6 +171,7 @@ pub fn collapsed_poles() -> Vec<Point<World>> {
 
 /// P9's bicubic patch with a collapsed row: one face bounded by three edges, its sides at `u = 0` and `u = 1` meeting
 /// at the point the row at `v = 0` collapses to, where its loop crosses from one side to the other.
+#[must_use]
 pub fn collapsed_patch() -> Layout {
     let poles = collapsed_poles();
     let surface = SplineSurface::bezier((4, 4), poles.clone(), None).unwrap();
@@ -188,6 +196,7 @@ pub fn collapsed_patch() -> Layout {
 
 /// Half a sphere of `radius` about the origin, as construction lays it out: one face from the meridian at `u = pi` up
 /// to the north pole, where its loop crosses to the meridian at `u = 0`, down that to the south pole, and across back.
+#[must_use]
 pub fn sphere_half(radius: f64) -> Layout {
     let turn = |axis: Vec3, angle: f64| {
         Placement::<World, World>::rotation(Direction::normalised(axis), Angle::from_radians(angle))
@@ -216,6 +225,7 @@ fn cylinder_frame(radius: f64, height: f64) -> Placement<Local, World> {
 }
 
 /// The unit square in the plane `z = 0`, facing +Z: one face bounded by four straight edges.
+#[must_use]
 pub fn square() -> Layout {
     let points =
         vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
@@ -232,6 +242,7 @@ pub fn square() -> Layout {
 
 /// [`square`], and a quarter of a cylinder of `radius` that leaves it along its edge at `x = 0`, tangent to it there,
 /// and bends down: a sheet of two faces whose shared edge is straight.
+#[must_use]
 pub fn plane_and_cylinder(radius: f64) -> Layout {
     let mut layout = square();
     layout.points.extend([Vec3::new(-radius, 0.0, -radius), Vec3::new(-radius, 1.0, -radius)]);
@@ -265,6 +276,7 @@ fn arc(height: f64, ends: (usize, usize)) -> Piece {
 /// ends down to `y = 0`, and from there up to a notch at `x`, `gap` below the arc. At a coarse deflection the arc is
 /// one chord, which cuts across the notch. A quarter of a cylinder stands on the arc, down to `z = -1`, so that the arc
 /// is an edge of two faces.
+#[must_use]
 pub fn notched(x: f64, gap: f64) -> Layout {
     let (s, top) = (FRAC_1_SQRT_2, (1.0 - x * x).sqrt() - gap);
     let points = vec![
@@ -312,6 +324,7 @@ pub fn notched(x: f64, gap: f64) -> Layout {
 /// A flat lens facing +Z between quarter turns of two circles of radius 1, centred `sqrt(1/2)` below and above the
 /// origin: the arc of the upper circle runs along its bottom, and that of the lower along its top. At a deflection of 1
 /// each arc is one piece, so its loop joins up to two points.
+#[must_use]
 pub fn lens() -> Layout {
     let s = FRAC_1_SQRT_2;
     let circle = |y: f64| {

@@ -12,16 +12,19 @@ use occam_topo::{CurveRecord, EdgeUseRecord, Edit, Face, FaceRecord, Id, Loop, V
 use occam_units::{Bounds, Direction, Length, Point, Tangent, Tolerance, UvPoint, Vec3, World};
 
 /// A given vertex on the x axis, with no edges yet.
+#[must_use]
 pub fn vertex(x: f64) -> VertexRecord {
     VertexRecord { point: point(x, 0.0, 0.0), radius: Length::from_millimetres(0.0), star: None }
 }
 
 /// The x axis, as a curve.
+#[must_use]
 pub fn x_axis() -> CurveRecord {
     CurveRecord(Arc::new(Line::new(point(0.0, 0.0, 0.0), Direction::normalised(Vec3::new(1.0, 0.0, 0.0)))))
 }
 
 /// The number named `name` in `report`.
+#[must_use]
 pub fn number(report: &Report, name: &str) -> Option<f64> {
     report.value(name).and_then(|v| match v.value {
         Value::Scalar(x) => Some(x),

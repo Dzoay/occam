@@ -11,22 +11,6 @@
 //! that builds it into their tests by `#[path]`: these quantities in occam-units, [`spline_workloads`] in occam-geom,
 //! [`topo`]'s `models` and `testing` in occam-topo. Such a module names its kernel crate by its name, never `crate`,
 //! its neighbours by `super`, and this crate by its name, and carries no tests of its own, which would run twice.
-#![allow(
-    clippy::unwrap_used,
-    clippy::indexing_slicing,
-    clippy::panic,
-    reason = "fixtures fail loudly, as the tests they were written in do: nothing here ships"
-)]
-#![allow(
-    clippy::missing_panics_doc,
-    clippy::must_use_candidate,
-    reason = "a fixture that cannot be built panics, each of them, and a test has no use for one but to use it"
-)]
-#![allow(
-    clippy::inline_always,
-    reason = "a measured kernel compiles at a dispatched instruction level only through what is inlined into it (P4)"
-)]
-
 extern crate self as occam_fixtures;
 
 pub mod lane_workloads;
@@ -37,6 +21,11 @@ pub mod spline_workloads;
 #[cfg(test)]
 mod spline_workloads_tests;
 pub mod topo;
+#[expect(
+    clippy::unwrap_used,
+    clippy::missing_panics_doc,
+    reason = "`tol_of` alone: a test that asks for a tolerance no model can have stops there"
+)]
 mod units;
 
 pub use occam::step;

@@ -16,6 +16,7 @@ use occam_topo::{Around, CurveRecord, EdgeRecord, EdgeRole, EdgeUseRecord, End, 
 use occam_topo::{Edge, EdgeUse, Face, Id, Loop};
 
 /// The top square `(i, j)` of a plate `k` squares across, as [`super::plate`] numbers its faces.
+#[must_use]
 pub fn top_square(built: &Built, k: usize, (i, j): (usize, usize)) -> Id<Face> {
     built.faces[k * k + j * k + i]
 }

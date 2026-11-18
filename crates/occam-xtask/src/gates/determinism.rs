@@ -214,6 +214,8 @@ fn runs_of(repo: &Repo, probe: &Probe, builds: &[Build]) -> Result<Vec<(Build, S
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     no_args(args)?;
+    // The same count is in occam-topo's probe test (`every_thread` in crates/occam-topo/src/probe.rs), which takes no
+    // argument and which this crate cannot share code with. If the two differ, the topology fails as the wrong build.
     let threads = thread::available_parallelism().map_or(2, |count| count.get().max(2));
     let builds = builds(threads, &levels(repo)?);
     let mut summaries = Vec::new();

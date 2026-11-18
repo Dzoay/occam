@@ -16,6 +16,7 @@ use occam_topo::Edit;
 use occam_topo::{BodyKind, CurveRecord, EdgeRole, EdgeUseRecord, ParamCurveRecord, SurfaceRecord, UseOwner};
 
 /// The straight line in a face's parameters from `(u, v)`, along `(du, dv)`, its parameter the distance along it.
+#[must_use]
 pub fn uv_line((u, v): (f64, f64), (du, dv): (f64, f64)) -> ParamCurveRecord {
     let line = Line::new(point(u, v, 0.0), Direction::normalised(Vec3::new(du, dv, 0.0)));
     ParamCurveRecord(Arc::new(UvCurve::new(line).unwrap()))
@@ -49,6 +50,7 @@ pub fn straight_pcurves(edit: &mut Edit, built: &Built) {
 /// A cylinder of radius 1 and height 2 about +Z, its side two patches split at `u = start` and `u = start + π`, with the
 /// seam edge at `start`, and flat ends. From `start` above 0 the second patch runs past `u = 2π`, across the surface's
 /// own seam.
+#[must_use]
 pub fn cylinder_from(start: f64) -> Spec {
     let (a, b, c) = (start, start + PI, start + 2.0 * PI);
     let lift = |z: f64| {
@@ -114,6 +116,7 @@ pub fn cylinder_pcurves(edit: &mut Edit, built: &Built, start: f64, shift: f64) 
 
 /// A flat disc of radius 1 about the origin, facing +Z: one face bounded by one closed circular edge, whose two ends
 /// are one vertex.
+#[must_use]
 pub fn disc() -> Spec {
     let circle = Circle::placed(&Placement::identity(), Length::from_millimetres(1.0)).unwrap();
     let edges = vec![EdgeSpec {
@@ -136,6 +139,7 @@ pub fn disc() -> Spec {
 
 /// A square sheet 3 by 3 in the XY plane, facing +Z, with a square hole 1 by 1 in its middle: the outer loop runs
 /// anticlockwise with its witness in the sheet, and the hole clockwise with its witness in the hole.
+#[must_use]
 pub fn holed_sheet() -> Spec {
     let corners = [[0., 0.], [3., 0.], [3., 3.], [0., 3.], [1., 1.], [1., 2.], [2., 2.], [2., 1.]];
     let points: Vec<Point<World>> = corners.iter().map(|&[x, y]| point(x, y, 0.0)).collect();
@@ -151,6 +155,7 @@ pub fn holed_sheet() -> Spec {
 
 /// [`sheet`] with a second loop of the same edges run the other way, its own reversal attached as a hole (S1's
 /// 52-case bug): every point of the hole is inside the outer loop, the outer loop's witness included.
+#[must_use]
 pub fn sheet_holed_by_its_reversal() -> Spec {
     let mut spec = sheet();
     let face = &mut spec.faces[0];

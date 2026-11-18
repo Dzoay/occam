@@ -80,6 +80,7 @@ struct UseSpec {
 }
 
 /// The point at these coordinates.
+#[must_use]
 pub fn point(x: f64, y: f64, z: f64) -> Point<World> {
     Point::from_vec3(Vec3::new(x, y, z))
 }
@@ -254,6 +255,7 @@ fn segment(a: Point<World>, b: Point<World>, ends: (usize, usize)) -> EdgeSpec {
 }
 
 /// The placement whose XY plane passes through `p` and faces along `normal`, which is along an axis.
+#[must_use]
 pub fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
     let axis = |x, y, z| Direction::<Local>::normalised(Vec3::new(x, y, z));
     let (about, angle) = if normal.x != 0.0 {
@@ -269,6 +271,7 @@ pub fn facing(normal: Vec3, p: Vec3) -> Placement<Local, World> {
 
 /// A body of flat faces along the axes, each a list of vertex indices anticlockwise seen from outside, its edges in
 /// the order the faces first meet them.
+#[must_use]
 pub fn polyhedron(kind: BodyKind, corners: &[[f64; 3]], faces: &[&[usize]]) -> Spec {
     let points: Vec<Point<World>> = corners.iter().map(|&[x, y, z]| point(x, y, z)).collect();
     let mut edges: Vec<EdgeSpec> = Vec::new();
@@ -305,6 +308,7 @@ pub fn polyhedron(kind: BodyKind, corners: &[[f64; 3]], faces: &[&[usize]]) -> S
 }
 
 /// The unit cube, its corner 0 at the origin.
+#[must_use]
 pub fn cube() -> Spec {
     let corners = [
         [0., 0., 0.],
@@ -338,11 +342,13 @@ pub fn frame() -> Spec {
 }
 
 /// A unit square sheet in the XY plane, facing +Z.
+#[must_use]
 pub fn sheet() -> Spec {
     polyhedron(BodyKind::Sheet, &[[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.]], &[&[0, 1, 2, 3]])
 }
 
 /// An open wire of three straight edges.
+#[must_use]
 pub fn wire() -> Spec {
     let points = vec![point(0.0, 0.0, 0.0), point(1.0, 0.0, 0.0), point(1.0, 1.0, 0.0), point(2.0, 1.0, 0.0)];
     let edges = (0..3).map(|k| segment(points[k], points[k + 1], (k, k + 1))).collect();
@@ -351,6 +357,7 @@ pub fn wire() -> Spec {
 }
 
 /// A cylinder of radius 1 and height 2 about +Z, its side two patches split at `u = 0` and `u = π`, with flat ends.
+#[must_use]
 pub fn cylinder() -> Spec {
     cylinder_from(0.0)
 }

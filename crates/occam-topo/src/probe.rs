@@ -179,7 +179,9 @@ mod tests {
         lines.len()
     }
 
-    /// As many threads as `gates determinism` asks of the builds that have them: the machine's, and two at least.
+    /// As many threads as `gates determinism` asks of the builds that have them: the machine's, and two at least. The
+    /// same count is in the gate's `run` (crates/occam-xtask/src/gates/determinism.rs), which a test cannot be told
+    /// and cannot share code with. If the two differ, the gate refuses this probe as the wrong build.
     #[cfg(not(target_family = "wasm"))]
     fn every_thread() -> Exec {
         let threads = std::thread::available_parallelism().map_or(2, |count| count.get().max(2));
