@@ -141,6 +141,9 @@ Named, not numbered. They run in this order, except where a row says otherwise:
 | first release | `exchange`, `blends`, `release` | [plan/first-release.md](plan/first-release.md) (outline) |
 | after that | Named below; planned when reached | none yet |
 
+[The review backlog of 2026-11-17](plan/review-2026-11-17.md) holds what a whole-codebase review claimed, in the order
+the user gave. It is not a milestone and has no steps.
+
 **After the first release**, in no fixed order and each needing the user's go-ahead: the 2D sketch solver; the document
 layer (feature tree, persistent naming, incremental recompute);
 [assemblies](decisions/2026-11-11-assemblies-after-release.md);
