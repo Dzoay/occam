@@ -112,6 +112,34 @@ What was a risk on 14 November, and what the gate does about it:
 - **A slice with no mutants** now passes without building anything. Before, it built and ran the unmutated suite
   first.
 
+## What a copy says is checked
+
+Added 2026-11-17, after a review of the gate found three ways it could pass when it should not. None was measured;
+each was read from the code and shown by a failing test. The user
+[accepted them](2026-11-17-what-the-mutants-and-counts-gates-accept.md) the same day.
+
+- **Unviable mutants pass only from a copy that still builds.** A mutant that does not build is unviable, and that is
+  accepted, as it was. But if the disk fills or a copy loses files during a run, every mutant after that fails to
+  build too, and the gate used to report them all as unviable and pass. A copy that lists an unviable mutant now
+  builds the unmutated tests once more when its run is over. If that fails, the gate fails with
+  `mutants.environment-broke` and records nothing, so `--iterate` does not take those mutants for settled. Cost: one
+  incremental build per copy that had an unviable mutant, in each pass, the copies side by side; a mutant's build took
+  6 to 10 seconds in the tables above.
+- **A timeout counts as caught only alone.** The timeout is five times the unmutated suite, which is timed alone, yet
+  the mutants are tested in several copies at once, so a surviving mutant's tests could run out of time and count as
+  caught. A mutant that runs out of time is now tested again, one at a time with nothing else running, in a shard
+  that holds it alone, with the same timeout. What the retest says stands: caught, missed, or out of time again, and
+  only the last counts as caught by timeout. Nothing is retested where the pass already fails. The timeout itself is
+  not scaled by the number of copies: with the retest it would change no outcome, and each real hang would cost that
+  many times more. Cost: nothing without a timeout; each mutant that times out costs one copy of the tree and up to
+  one more timeout, not in parallel.
+- **A run's directory is locked before a sweep can see it.** A run made its directory, named by its process's number,
+  and locked it afterwards, so another run starting in between could remove it as one whose run was gone. It is now
+  made and locked under a name no sweep takes for a run's, and renamed once the lock is held. No cost.
+
+Not covered: an environment that breaks so that the build still works and the tests fail, which makes mutants look
+caught. Catching that would mean running the unmutated suite again in every copy after every pass.
+
 ## `--copy-target`, measured, which does not work yet
 
 Half of the first run's building was each job's first, cold build. cargo-mutants' `--copy-target true` is meant to

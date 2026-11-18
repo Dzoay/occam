@@ -4,8 +4,10 @@
 //! primitives and rotations translated into the runner's steps; no boolean runs. Every edge of one operand of each
 //! boolean is then tried against every face of the other, through `hits`, which tests their boxes first, and `scan`,
 //! which does not, and the two are compared by digest. A case whose booleans' operands need an operation the runner
-//! cannot build yet, such as another boolean or a fillet, is skipped and counted by its reason. It takes minutes in a
-//! debug build, so it runs nightly with the rest of the full corpus, through `just corpus-hits`.
+//! cannot build yet, such as another boolean or a fillet, is skipped and counted by its reason, and the counts are
+//! pinned here ([`SKIPPED`], [`BOOLEANS_SKIPPED`]): a case the runner refuses, a scan that fails, a count that moves or
+//! an empty corpus fails the test ([`faults`]). The comparison is of `hits` with `scan`, occam with itself; the oracle's
+//! answers are `intersection.timing`'s. It runs nightly with the rest of the full corpus, through `just corpus-hits`.
 #![cfg(not(target_family = "wasm"))]
 #![allow(
     clippy::unwrap_used,
@@ -16,92 +18,29 @@
 )]
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::f64::consts::PI;
-use std::fs;
-use std::path::Path;
 
 use occam_geom::{Curve, Domain, ParamCurve, ParamRange, Surface, UvBox, Wrap};
 use occam_intersect::{Budget, Hits, Span, boxes_meet, hits, scan};
-use occam_math::{Digest, sin_cos};
+use occam_math::Digest;
 use occam_topo::{Body, Snapshot};
-use occam_units::{Tolerance, UvPoint, Vec3};
+use occam_units::{Tolerance, UvPoint};
 use serde_json::{Value, json};
+
+mod corpus;
+
+use corpus::{BUILT, cases, step};
 
 /// The work a scan may do: enough that no pair of the corpus runs out of it.
 const BUDGET: Budget = Budget { steps: 1_000_000 };
 
-/// The corpus's operations the runner builds today, by the case format's name.
-const BUILT: [&str; 6] = ["box", "cylinder", "cone", "sphere", "torus", "rotate"];
-
 /// The case format's booleans, whose operands are the pairs.
 const BOOLEANS: [&str; 3] = ["fuse", "cut", "common"];
 
-/// Every case of the corpus, by file name, in order.
-fn cases() -> Vec<(String, Value)> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/corpus");
-    let mut found = Vec::new();
-    for dir in ["generated", "imported"] {
-        for entry in fs::read_dir(root.join(dir)).unwrap() {
-            let path = entry.unwrap().path();
-            if path.extension().is_some_and(|e| e == "json") {
-                let case: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-                assert_eq!(case["schema"], "occam-oracle-case/1", "{}", path.display());
-                found.push((path.file_name().unwrap().to_string_lossy().into_owned(), case));
-            }
-        }
-    }
-    found.sort_by(|a, b| a.0.cmp(&b.0));
-    found
-}
+/// The cases that give no pair, by why, and how many: a count that moves is looked at, and changed here.
+const SKIPPED: [(&str, usize); 1] = [("no boolean", 237)];
 
-fn three(value: &Value) -> [f64; 3] {
-    let v: Vec<f64> = value.as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
-    [v[0], v[1], v[2]]
-}
-
-fn vec3([x, y, z]: [f64; 3]) -> Vec3 {
-    Vec3::new(x, y, z)
-}
-
-/// The runner's frame at `origin` with its Z along `axis`, and an X it accepts across it.
-fn frame(origin: &Value, axis: Option<&Value>) -> Value {
-    let z = axis.map_or([0.0, 0.0, 1.0], three);
-    let x = if z[0].abs() < 0.9 { [1.0, 0.0, 0.0] } else { [0.0, 1.0, 0.0] };
-    json!({"origin": origin, "z": z, "x": x})
-}
-
-/// `v` turned by `angle` radians about the unit `axis`, right-handed (Rodrigues).
-fn turned(v: Vec3, axis: Vec3, angle: f64) -> Vec3 {
-    let (sin, cos) = sin_cos(angle);
-    v * cos + axis.cross(v) * sin + axis * (axis.dot(v) * (1.0 - cos))
-}
-
-/// A rotation of the case format, as the frame the runner's `copy` places the world's at: the turn about the axis
-/// through `axis_origin`, which takes the origin to `o - R o`.
-fn rotation(op: &Value) -> Value {
-    let (origin, axis) = (vec3(three(&op["axis_origin"])), vec3(three(&op["axis"])));
-    let axis = axis * (1.0 / axis.norm());
-    let angle = op["angle_degrees"].as_f64().unwrap() * PI / 180.0;
-    let at = origin - turned(origin, axis, angle);
-    let (z, x) = (turned(Vec3::new(0.0, 0.0, 1.0), axis, angle), turned(Vec3::new(1.0, 0.0, 0.0), axis, angle));
-    json!({"origin": [at.x, at.y, at.z], "z": [z.x, z.y, z.z], "x": [x.x, x.y, x.z]})
-}
-
-/// The runner's step for a case's operation, which is one it builds, labelled with its id.
-fn step(op: &Value) -> Value {
-    let (id, origin) = (&op["id"], &op["origin"]);
-    match op["op"].as_str().unwrap() {
-        "box" => json!({"op": "box", "label": id, "size": op["size"], "frame": frame(origin, None)}),
-        "sphere" => json!({"op": "sphere", "label": id, "radius": op["radius"], "frame": frame(origin, None)}),
-        "cylinder" => json!({"op": "cylinder", "label": id, "radius": op["radius"], "height": op["height"],
-            "frame": frame(origin, op.get("axis"))}),
-        "cone" => json!({"op": "cone", "label": id, "radius1": op["radius1"], "radius2": op["radius2"],
-            "height": op["height"], "frame": frame(origin, op.get("axis"))}),
-        "torus" => json!({"op": "torus", "label": id, "major": op["major_radius"], "minor": op["minor_radius"],
-            "frame": frame(origin, op.get("axis"))}),
-        _ => json!({"op": "copy", "label": id, "target": op["target"], "frame": rotation(op)}),
-    }
-}
+/// The booleans of the cases built that are not tried, by why, and how many.
+const BOOLEANS_SKIPPED: [(&str, usize); 2] = [("an operand is made by cut", 62), ("an operand is made by fuse", 3)];
 
 /// The ids `id` is built from, itself last, or why it cannot be built yet.
 fn needs<'c>(ops: &BTreeMap<&'c str, &'c Value>, id: &'c str, out: &mut BTreeSet<&'c str>) -> Result<(), String> {
@@ -229,6 +168,8 @@ struct Totals {
     points: usize,
     failures: BTreeMap<String, usize>,
     skipped: BTreeMap<String, usize>,
+    /// The cases the runner refused, each with its reports' codes.
+    refused: BTreeMap<String, String>,
     /// The booleans of cases built that are not tried, by why.
     booleans_skipped: BTreeMap<String, usize>,
 }
@@ -267,7 +208,8 @@ impl Totals {
         let ran = occam::run(None, &request);
         if let Some(failed) = &ran.failed {
             let codes: Vec<&str> = failed.reports.iter().map(|r| r.code.text()).collect();
-            return one(&mut self.skipped, format!("the runner refused it: {}", codes.join(", ")));
+            self.refused.insert(name.to_string(), codes.join(", "));
+            return;
         }
         let model = ran.model.as_ref().unwrap();
         let labels = ran.done.iter().filter_map(|done| Some((done.label.clone()?, done.made?)));
@@ -295,17 +237,16 @@ impl Totals {
                 more(map.entry(key).or_default(), count);
             }
         }
+        self.refused.extend(other.refused);
         self
     }
 }
 
-#[test]
-#[ignore = "the full corpus runs nightly, not per PR (docs/PLAN.md section 5): `just corpus-hits`"]
-fn on_the_corpus_the_box_test_removes_scans_and_changes_no_digest() {
-    let all = cases();
+/// Every case of `all` tried, on as many threads as there are, up to eight.
+fn tried(all: &[(String, Value)]) -> Totals {
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get().min(8));
-    let chunk = all.len().div_ceil(threads);
-    let totals = std::thread::scope(|scope| {
+    let chunk = all.len().div_ceil(threads).max(1);
+    std::thread::scope(|scope| {
         let workers: Vec<_> = all
             .chunks(chunk)
             .map(|part| {
@@ -319,8 +260,40 @@ fn on_the_corpus_the_box_test_removes_scans_and_changes_no_digest() {
             })
             .collect();
         workers.into_iter().map(|worker| worker.join().unwrap()).fold(Totals::default(), Totals::add)
-    });
-    let Totals { cases, built, pairs, removed, points, failures, skipped, booleans_skipped } = &totals;
+    })
+}
+
+/// `got` against the pinned `want`, as a fault if they differ.
+fn moved(what: &str, got: &BTreeMap<String, usize>, want: &[(&str, usize)]) -> Option<String> {
+    let want: BTreeMap<String, usize> = want.iter().map(|(why, count)| ((*why).to_string(), *count)).collect();
+    (*got != want).then(|| format!("the {what} skipped are {got:?}, and {want:?} are pinned"))
+}
+
+/// Everything wrong with what the corpus gave; nothing, if the test passes.
+fn faults(totals: &Totals) -> Vec<String> {
+    if totals.cases == 0 {
+        return vec!["the corpus is empty".to_string()];
+    }
+    let mut found: Vec<String> =
+        totals.refused.iter().map(|(case, codes)| format!("{case}: the runner refused it: {codes}")).collect();
+    if !totals.failures.is_empty() {
+        found.push(format!("scans failed, by code: {:?}", totals.failures));
+    }
+    found.extend(moved("cases", &totals.skipped, &SKIPPED));
+    found.extend(moved("booleans", &totals.booleans_skipped, &BOOLEANS_SKIPPED));
+    if totals.pairs == 0 || totals.points == 0 {
+        found.push("nothing was compared".to_string());
+    }
+    if totals.removed == 0 {
+        found.push("the box test removes no scan".to_string());
+    }
+    found
+}
+
+#[test]
+fn on_the_corpus_the_box_test_removes_scans_and_changes_no_digest() {
+    let totals = tried(&cases());
+    let Totals { cases, built, pairs, removed, points, failures, skipped, booleans_skipped, refused } = &totals;
     println!(
         "corpus: {cases} cases, {built} built, {pairs} edge and face pairs, {removed} scans removed by the box test"
     );
@@ -331,6 +304,79 @@ fn on_the_corpus_the_box_test_removes_scans_and_changes_no_digest() {
     for (reason, count) in booleans_skipped {
         println!("corpus: booleans of cases built, skipped {count}: {reason}");
     }
-    assert!(*built > 0 && *pairs > 0 && *points > 0, "nothing was compared");
-    assert!(*removed > 0, "the box test removes no scan");
+    for (case, codes) in refused {
+        println!("corpus: the runner refused {case}: {codes}");
+    }
+    assert_eq!(faults(&totals), Vec::<String>::new());
+}
+
+/// A case of two boxes, the second `size` on a side, and their cut.
+fn two_boxes(size: f64) -> Value {
+    json!({"schema": "occam-oracle-case/1", "ops": [
+        {"op": "box", "id": "a", "size": [2.0, 2.0, 2.0], "origin": [0.0, 0.0, 0.0]},
+        {"op": "box", "id": "b", "size": [size, size, size], "origin": [1.0, 1.0, 1.0]},
+        {"op": "cut", "id": "c", "target": "a", "tool": "b"}
+    ], "result": "c"})
+}
+
+/// What the corpus gives when nothing is wrong, in the pinned counts.
+fn sound() -> Totals {
+    let pinned = |list: &[(&str, usize)]| list.iter().map(|(why, count)| ((*why).to_string(), *count)).collect();
+    Totals {
+        cases: 578,
+        built: 341,
+        pairs: 100,
+        removed: 60,
+        points: 9,
+        skipped: pinned(&SKIPPED),
+        booleans_skipped: pinned(&BOOLEANS_SKIPPED),
+        ..Totals::default()
+    }
+}
+
+#[test]
+fn sound_totals_have_no_fault_and_two_boxes_that_cross_are_compared() {
+    assert_eq!(faults(&sound()), Vec::<String>::new());
+    let totals = tried(&[("crossing".to_string(), two_boxes(2.0))]);
+    assert_eq!((totals.cases, totals.built, totals.refused.len()), (1, 1, 0));
+    // Each box has 12 edges and 6 faces, tried both ways; three edges of each enter the other, through one face each.
+    assert_eq!((totals.pairs, totals.points), (144, 6));
+    assert!(totals.removed > 0 && totals.failures.is_empty(), "{} {:?}", totals.removed, totals.failures);
+}
+
+#[test]
+fn an_empty_corpus_is_a_fault_and_not_a_panic() {
+    let found = faults(&tried(&[]));
+    assert!(found.iter().any(|fault| fault == "the corpus is empty"), "{found:?}");
+}
+
+#[test]
+fn a_case_the_runner_refuses_is_a_fault_that_names_it() {
+    let totals = tried(&[("crossing".to_string(), two_boxes(2.0)), ("flat".to_string(), two_boxes(0.0))]);
+    assert_eq!((totals.cases, totals.built), (2, 1));
+    let found = faults(&totals);
+    assert!(found.iter().any(|fault| fault.starts_with("flat: the runner refused it: ")), "{found:?}");
+}
+
+#[test]
+fn a_count_that_moves_a_scan_that_fails_and_a_run_that_compares_nothing_are_each_a_fault() {
+    let one_fault = |totals: Totals, want: &str| {
+        let found = faults(&totals);
+        assert!(found.len() == 1 && found[0].starts_with(want), "{want}: {found:?}");
+    };
+    let mut more_skipped = sound();
+    one(&mut more_skipped.skipped, "no boolean".to_string());
+    one_fault(more_skipped, "the cases skipped are ");
+    let mut new_reason = sound();
+    one(&mut new_reason.skipped, "an operand is made by fillet".to_string());
+    one_fault(new_reason, "the cases skipped are ");
+    let mut fewer_booleans = sound();
+    fewer_booleans.booleans_skipped.remove("an operand is made by fuse");
+    one_fault(fewer_booleans, "the booleans skipped are ");
+    let mut failed = sound();
+    one(&mut failed.failures, "intersect.budget".to_string());
+    one_fault(failed, "scans failed, by code: ");
+    one_fault(Totals { pairs: 0, ..sound() }, "nothing was compared");
+    one_fault(Totals { points: 0, ..sound() }, "nothing was compared");
+    one_fault(Totals { removed: 0, ..sound() }, "the box test removes no scan");
 }

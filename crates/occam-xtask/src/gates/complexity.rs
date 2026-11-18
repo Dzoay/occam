@@ -3,6 +3,10 @@
 //!
 //! An entry in the list holds only while its measure is exactly its ceiling, and it may be neither added nor raised
 //! against the merge base, so the list can only shrink. Clippy's `too_many_lines` is the hard bar above this one.
+//!
+//! It also reads every lint relaxation, for the workspace manifest's rule on them ([`lints`]); no exemption covers one.
+
+mod lints;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -198,12 +202,14 @@ fn list(text: &str, findings: &mut Vec<Finding>) -> BTreeMap<String, usize> {
     entries
 }
 
-/// Measures every file; what is over a bar is returned with the number of functions measured.
-fn measure(files: &[(String, String)], findings: &mut Vec<Finding>) -> (Vec<Over>, usize) {
-    let (mut over, mut measured, mut code) = (Vec::new(), 0_usize, Vec::new());
+/// Measures every file; what is over a bar is returned with the number of functions measured and the lint relaxations
+/// counted.
+fn measure(files: &[(String, String)], findings: &mut Vec<Finding>) -> (Vec<Over>, usize, lints::Count) {
+    let (mut over, mut measured, mut code, mut relaxed) = (Vec::new(), 0_usize, Vec::new(), lints::Count::default());
     for (path, text) in files {
         match syn::parse_file(text) {
             Ok(file) => {
+                lints::check(&file, path, &mut relaxed, findings);
                 let found = functions(&file, text);
                 measured = measured.saturating_add(found.len());
                 let long = found.into_iter().filter(|function| function.loc > FUNCTION);
@@ -227,12 +233,12 @@ fn measure(files: &[(String, String)], findings: &mut Vec<Finding>) -> (Vec<Over
         code.push((path.as_str(), lines));
     }
     over.extend(duplicates(&code));
-    (over, measured)
+    (over, measured, relaxed)
 }
 
 fn check(files: &[(String, String)], exemptions: &str, base: &str) -> Verdict {
     let mut findings = Vec::new();
-    let (over, measured) = measure(files, &mut findings);
+    let (over, measured, relaxed) = measure(files, &mut findings);
     let exempt = list(exemptions, &mut findings);
     let base = list(base, &mut Vec::new());
     for item in over.iter().filter(|item| !exempt.contains_key(&item.key)) {
@@ -260,7 +266,14 @@ fn check(files: &[(String, String)], exemptions: &str, base: &str) -> Verdict {
             ));
         }
     }
-    verdict(format!("{measured} functions in {} files, {} exempted", files.len(), exempt.len()), findings)
+    let summary = format!(
+        "{measured} functions in {} files, {} exempted, {} lint relaxations, {} off a crate root",
+        files.len(),
+        exempt.len(),
+        relaxed.all,
+        relaxed.off_root
+    );
+    verdict(summary, findings)
 }
 
 #[cfg(test)]
@@ -281,7 +294,10 @@ mod tests {
 
     #[test]
     fn a_function_at_the_bar_passes_and_one_over_fails() {
-        assert_eq!(check(&file(long_fn("f", 60)), "", ""), Ok("1 functions in 1 files, 0 exempted".to_string()));
+        assert_eq!(
+            check(&file(long_fn("f", 60)), "", ""),
+            Ok("1 functions in 1 files, 0 exempted, 0 lint relaxations, 0 off a crate root".to_string())
+        );
         let found = check(&file(long_fn("f", 61)), "", "").unwrap_err();
         assert_eq!(found[0].code, "complexity.over-bar");
         assert_eq!(found[0].file, PATH);
@@ -308,14 +324,17 @@ mod tests {
     #[test]
     fn a_nested_function_is_inside_its_outer_function() {
         let text = format!("fn outer() {{ {} }}\n", long_fn("inner", 40));
-        assert_eq!(check(&file(text), "", ""), Ok("1 functions in 1 files, 0 exempted".to_string()));
+        assert_eq!(
+            check(&file(text), "", ""),
+            Ok("1 functions in 1 files, 0 exempted, 0 lint relaxations, 0 off a crate root".to_string())
+        );
     }
 
     #[test]
     fn a_trait_method_without_a_body_is_not_measured() {
         assert_eq!(
             check(&file("trait T { fn f(); }\n".into()), "", ""),
-            Ok("0 functions in 1 files, 0 exempted".to_string())
+            Ok("0 functions in 1 files, 0 exempted, 0 lint relaxations, 0 off a crate root".to_string())
         );
     }
 
@@ -381,7 +400,10 @@ mod tests {
     #[test]
     fn a_kept_exemption_passes_and_counts() {
         let list = format!("fn {PATH} f lines=61 waiting for the split\n");
-        assert_eq!(check(&file(long_fn("f", 61)), &list, &list), Ok("1 functions in 1 files, 1 exempted".to_string()));
+        assert_eq!(
+            check(&file(long_fn("f", 61)), &list, &list),
+            Ok("1 functions in 1 files, 1 exempted, 0 lint relaxations, 0 off a crate root".to_string())
+        );
     }
 
     #[test]
