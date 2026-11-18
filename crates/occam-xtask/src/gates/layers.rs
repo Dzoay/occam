@@ -2,10 +2,12 @@
 //! crates above it, and everything below the composition crate binds that crate and nothing else, but for the tooling
 //! crates' tests: `occam-verify` and `occam-xtask` may name any crate above them in `[dev-dependencies]`
 //! (`docs/decisions/2026-11-15-verify-and-xtask-test-against-any-crate.md`), and `occam-fixtures` binds any crate above
-//! it and is named by any crate, in `[dev-dependencies]` only (`docs/decisions/2026-11-17-occam-fixtures.md`).
+//! it and is named by any crate, in `[dev-dependencies]` only (`docs/decisions/2026-11-17-occam-fixtures.md`). And a
+//! feature only one crate may turn on is turned on by no other manifest, since cargo builds a crate once for a whole
+//! workspace build, with every feature any member asks of it, so no build of the workspace would notice.
 
 use super::no_args;
-use crate::manifest::{self, is_crate_manifest, is_internal};
+use crate::manifest::{self, Request, is_crate_manifest, is_internal};
 use crate::plan::{self, PLAN};
 use crate::repo::Repo;
 use crate::verdict::{Finding, Verdict, verdict};
@@ -22,6 +24,10 @@ fn fixtures(path: &str, name: &str, tested: bool) -> Option<Finding> {
     let message = format!("{name} is built with {FIXTURES}, which only tests, benchmarks and examples may use");
     (!tested).then(|| Finding::new("layers.fixtures-shipped", path, message, "name it in `[dev-dependencies]` only"))
 }
+
+/// The features of the workspace's crates that only one crate may turn on, with that crate: the open of a model without
+/// its check is the browser build's alone (`docs/decisions/2026-11-16-mesh-workers-trust-the-editing-worker.md`).
+const RESERVED: [(&str, &str); 1] = [("trusted", "occam-wasm")];
 
 pub fn run(repo: &Repo, args: &[String]) -> Verdict {
     no_args(args)?;
@@ -49,6 +55,19 @@ fn judge(path: &str, name: &str, dep: &str, layers: (usize, usize, Option<usize>
             Some(Finding::new("layers.upward", path, format!("{name} depends on {dep}, which is not above it"), remedy))
         }
     }
+}
+
+/// What is wrong with `name` turning a feature of a workspace crate on. A kernel crate, which is not below the composition
+/// crate, may pass a reserved feature on from its own feature of the same name, which is how the one crate reaches it.
+fn reserved(path: &str, name: &str, request: &Request, below: bool) -> Option<Finding> {
+    let (feature, holder) = RESERVED.iter().find(|(feature, _)| *feature == request.feature)?;
+    let passed_on = !below && request.by.as_deref() == Some(*feature);
+    if name == *holder || passed_on {
+        return None;
+    }
+    let message = format!("{name} turns on {}'s `{feature}`, which only {holder} may", request.of);
+    let remedy = format!("leave `{feature}` to {holder}, and do here without what it adds");
+    Some(Finding::new("layers.feature", path, message, remedy))
 }
 
 fn check(plan: &str, manifests: &[(String, String)]) -> Verdict {
@@ -87,6 +106,8 @@ fn check(plan: &str, manifests: &[(String, String)]) -> Verdict {
             let tested = tested || manifest.name == FIXTURES;
             findings.extend(judge(path, &manifest.name, dep, (own, composition, tier_of(&tiers, dep)), tested));
         }
+        let asked = manifest.requests.iter().filter(|request| is_internal(&request.of));
+        findings.extend(asked.filter_map(|request| reserved(path, &manifest.name, request, own > composition)));
     }
     verdict(format!("{} crates, {edges} internal edges", manifests.len()), findings)
 }
@@ -201,6 +222,56 @@ mod tests {
         assert_eq!(codes(&check(PLAN_TEXT, &[manifest("occam-fixtures", &[])])), ["layers.unlisted"]);
         let unlisted = in_section("occam-math", "dev-dependencies", &["occam-fixtures"]);
         assert_eq!(codes(&check(PLAN_TEXT, &[unlisted])), ["layers.upward"], "a plan that does not list it");
+    }
+
+    /// `name`'s manifest with `body` after its `[package]`.
+    fn written(name: &str, body: &str) -> (String, String) {
+        (format!("crates/{name}/Cargo.toml"), format!("[package]\nname = \"{name}\"\n{body}"))
+    }
+
+    const ASKS: &str = "[dependencies]\noccam = { path = \"../occam\", features = [\"trusted\"] }\n";
+
+    #[test]
+    fn only_the_browser_build_may_ask_for_trusted() {
+        assert_eq!(check(PLAN_TEXT, &[written("occam-wasm", ASKS)]), Ok("1 crates, 1 internal edges".to_string()));
+        let found = check(PLAN_TEXT, &[written("occam-cli", ASKS)]).unwrap_err();
+        assert_eq!(codes(&Err(found.clone())), ["layers.feature"]);
+        assert_eq!(found[0].file, "crates/occam-cli/Cargo.toml");
+        assert_eq!(found[0].message, "occam-cli turns on occam's `trusted`, which only occam-wasm may");
+        assert!(found[0].remedy.contains("occam-wasm") && found[0].remedy.contains("`trusted`"), "{found:?}");
+        let tested = ASKS.replace("[dependencies]", "[dev-dependencies]");
+        assert_eq!(codes(&check(PLAN_TEXT, &[written("occam-cli", &tested)])), ["layers.feature"], "its tests");
+        let other = ASKS.replace("trusted", "workloads");
+        assert!(check(PLAN_TEXT, &[written("occam-cli", &other)]).is_ok(), "any other feature");
+    }
+
+    #[test]
+    fn below_the_composition_crate_no_feature_passes_trusted_on() {
+        let passed = "[dependencies]\noccam = \"1\"\n[features]\ntrusted = [\"occam/trusted\"]\n";
+        assert_eq!(codes(&check(PLAN_TEXT, &[written("occam-cli", passed)])), ["layers.feature"]);
+        assert_eq!(codes(&check(PLAN_TEXT, &[written("occam-xtask", passed)])), ["layers.feature"]);
+        assert!(check(PLAN_TEXT, &[written("occam-wasm", passed)]).is_ok());
+    }
+
+    #[test]
+    fn a_kernel_crate_passes_trusted_on_only_from_its_own_trusted() {
+        let passed = "[dependencies]\noccam-math = \"1\"\n[features]\ntrusted = [\"occam-math/trusted\"]\n";
+        assert_eq!(check(PLAN_TEXT, &[written("occam", passed)]), Ok("1 crates, 1 internal edges".to_string()));
+        let found = check(PLAN_TEXT, &[written("occam", &passed.replace("\ntrusted = ", "\nfast = "))]).unwrap_err();
+        assert_eq!(codes(&Err(found.clone())), ["layers.feature"]);
+        assert_eq!(found[0].message, "occam turns on occam-math's `trusted`, which only occam-wasm may");
+        let always = format!("{passed}default = [\"trusted\"]\n");
+        let found = check(PLAN_TEXT, &[written("occam", &always)]).unwrap_err();
+        assert_eq!(codes(&Err(found.clone())), ["layers.feature"], "on by default");
+        assert_eq!(found[0].message, "occam turns on occam's `trusted`, which only occam-wasm may");
+        let asked = "[dependencies]\noccam-math = { version = \"1\", features = [\"trusted\"] }\n";
+        assert_eq!(codes(&check(PLAN_TEXT, &[written("occam", asked)])), ["layers.feature"], "asked for outright");
+    }
+
+    #[test]
+    fn a_feature_called_trusted_of_a_crate_from_elsewhere_is_not_the_gates() {
+        let elsewhere = "[dependencies]\nserde = { version = \"1\", features = [\"trusted\"] }\n";
+        assert!(check(PLAN_TEXT, &[written("occam-cli", elsewhere)]).is_ok());
     }
 
     #[test]

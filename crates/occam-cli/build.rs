@@ -10,11 +10,9 @@ mod embed;
 
 fn main() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let (page, stub) = (root.join("page"), root.join("src/view/stub.html"));
-    println!("cargo::rerun-if-changed={}", page.display());
-    println!("cargo::rerun-if-changed={}", stub.display());
+    let [page, stub] = embed::WATCHED.map(|path| root.join(path));
     let (source, built) = embed::source(&page, &stub);
-    println!("cargo::rustc-env=OCCAM_PAGE={}", if built { "built" } else { "stub" });
+    println!("{}", embed::instructions(built));
     let out = std::env::var_os("OUT_DIR").map_or_default(PathBuf::from).join("page.rs");
     if let Err(error) = std::fs::write(&out, source) {
         println!("cargo::error=the embedded page could not be written to {}: {error}", out.display());

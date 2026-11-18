@@ -83,6 +83,8 @@ mod tests;
 mod tests_hits;
 #[cfg(test)]
 mod tests_pinned;
+#[cfg(test)]
+mod tests_placed;
 mod trace;
 #[cfg(test)]
 mod trace_tests;

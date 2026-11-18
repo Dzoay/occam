@@ -54,7 +54,7 @@ These hold from the first commit. The first thirteen are [the user's priorities]
 | L5 | Solvers carry failure state: failing pair, curves found, residual gap. The input model is unchanged on failure | `Report`'s partial state; review of each solver step |
 | L11 | Geometric invariants are the arbiter; OCCT is a provisional oracle | `occam-verify` |
 | L18 | Layers are crates, and the allowed graph is checked | `gates layers` |
-| L19 | Every lint is on from the start, indexing and arithmetic included | workspace lints, probes |
+| L19 | Every lint is on from the start, indexing and arithmetic included | workspace lints, probes, `gates complexity` |
 | L23 | Same inputs give identical bits at any thread count, and on x86-64 and single-threaded wasm32 for what `Real` computes, through [one maths choke point](decisions/2026-11-09-one-maths-choke-point.md) | `gates determinism` |
 | L28 | Threads and SIMD lanes compose: threads across items, lanes inside each task | `proving-ground.p4`; perf gate |
 | L30 | The browser build is timed on every PR from the first kernel | `gates perf` |
@@ -102,16 +102,16 @@ tests and wasm. CI runs all of them, with the same commands. Goal: a PR's CI fin
 
 | Gate | What it checks | Built by |
 |---|---|---|
-| `fmt`, `clippy` | Formatting; every lint with warnings denied, including no panics, indexing, arithmetic, printing, `Any` and hashed collections in kernel crates (L19, L23, L26) | `bedrock.repo` |
+| `fmt`, `clippy` | Formatting; every lint with warnings denied, including no panics, indexing, arithmetic, printing, `Any` and hashed collections in kernel crates (L19, L23, L26). Clippy also builds `occam-cli` alone, so the `occam` command and the kernel under it compile as they ship, without `trusted` or any other feature only another crate turns on | `bedrock.repo` |
 | `test` | Every test through nextest on the host, and doctests | `bedrock.repo` |
 | `tools-test` | The Python tools' tests (the surveys, the corpus, the determinism record, the trigonometry's coefficients), standard library only | `census.freecad-api` |
 | `wasm` | Tests on wasm32-wasip2; the browser target builds; a Windows check | `bedrock.repo` |
 | `web-check`, `web-test` | The viewer's TypeScript, `tsc --noEmit` in strict mode, declaration files included, against `@types/web`'s browser and WebGPU types; its tests in headless Chromium on the software adapter, asserting the buffers it uploads, not pixels, following each report's remedy, holding its reports to the catalogue, its mesh workers' meshes to the native `occam mesh`'s bits, the page `occam view` serves, built in, following the model file, its clicks picking the ids `occam pick` gives, mapping no GPU buffer, and the end-to-end demo with the agent's calls scripted, scored as the live agent test is | `view.renderer`, `view.workers`, `view.live`, `view.select`, `view.agent` |
-| `gates layers` | The crate graph matches §4 (L18) | `bedrock.gates` |
-| `gates complexity` | Function and file length, duplication, with a shrink-only exemption list (L20) | `bedrock.gates` |
+| `gates layers` | The crate graph matches §4 (L18). Only occam-wasm's manifest turns on the `trusted` feature, the open of a model without its check, which a kernel crate passes on only from its own `trusted`; no workspace build would notice another, since cargo gives a crate every feature any member asks of it | `bedrock.gates` |
+| `gates complexity` | Function and file length, duplication, with a shrink-only exemption list (L20). The root manifest's rule on relaxing a lint (L19, [decision](decisions/2026-11-17-a-lint-is-relaxed-on-the-narrowest-item.md)): every `allow` and `expect` in `crates/` gives a reason, and an `allow` stands only at a crate's root, so anywhere else it is an `expect`, which fails once nothing needs it | `bedrock.gates` |
 | `gates provenance` | Rust identifiers in `crates/` and `web/` against `ci/forbidden-identifiers.txt`, with `tools/oracle/` exempt. Every file in a kernel crate carries `//! Source: <key>` resolving in `docs/SOURCES.md`, or `//! Source: original`. Derived files are declared in `REUSE.toml` (L36) | `bedrock.gates` |
-| `gates mutants` | Mutation testing on the PR's diff, zero survivors, by the whole workspace's tests ([kept, after measuring narrower scopes](decisions/2026-11-14-mutants-keep-the-whole-workspace.md)). Builds and runs the unmutated suite once, outside the checkout, gives a mutant's tests five times as long, at least 300 seconds, and tests the mutants in [copies of that built tree](decisions/2026-11-14-mutants-keep-the-whole-workspace.md#warm-in-place-shards-adopted) (L13, L14). Before any of it, whatever the diff, every `exclude_re` entry in `.cargo/mutants.toml` must exclude a mutant of the workspace as cargo-mutants lists it, since an entry by line goes stale when an edit moves its mutant; `--exclusions` runs that check alone | `bedrock.gates` |
-| `gates counts` | No test binary has fewer tests than on the PR's base, or is gone, unless a commit's `Tests-Removed: <binary> <reason>` footer names it (L44, [measured, not stored](decisions/2026-11-14-test-counts-measured-not-stored.md)). CI gives the base, `--base origin/main`, and the gate builds it a second time; a run without one says it compared nothing | `bedrock.gates` |
+| `gates mutants` | Mutation testing on the PR's diff, zero survivors, by the whole workspace's tests ([kept, after measuring narrower scopes](decisions/2026-11-14-mutants-keep-the-whole-workspace.md)). Builds and runs the unmutated suite once, outside the checkout, gives a mutant's tests five times as long, at least 300 seconds, and tests the mutants in [copies of that built tree](decisions/2026-11-14-mutants-keep-the-whole-workspace.md#warm-in-place-shards-adopted) (L13, L14). [A copy is not taken at its word](decisions/2026-11-14-mutants-keep-the-whole-workspace.md#what-a-copy-says-is-checked): one that found a mutant unviable must still build the unmutated tests afterwards, or the gate fails, and a mutant that ran out of time is tested again alone before it counts as caught. Before any of it, whatever the diff, every `exclude_re` entry in `.cargo/mutants.toml` must exclude a mutant of the workspace as cargo-mutants lists it, since an entry by line goes stale when an edit moves its mutant; `--exclusions` runs that check alone | `bedrock.gates` |
+| `gates counts` | No test binary has lost a test it has on the PR's base, by name, or is gone, unless a commit's `Tests-Removed: <binary> <reason>` footer names it (L44, [measured, not stored](decisions/2026-11-14-test-counts-measured-not-stored.md)). CI gives the base, `--base origin/main`, and the gate builds it a second time; a run without one says it compared nothing | `bedrock.gates` |
 | `gates plan` | A step PR carries its `Plan-Step:` footers, and `just next` agrees (L40) | `bedrock.gates` |
 | `gates seam` | occam-geom's seam matches `ci/seam.txt`, every public signature of its modules; a change needs a newer decision, named in the record (L21) | `geometry.freeze` |
 | `gates docs` | Links resolve, step and decision ids are unique, files in `docs/evidence/` are unchanged once merged (L41, L45) | `bedrock.gates` |
@@ -120,8 +120,14 @@ tests and wasm. CI runs all of them, with the same commands. Goal: a PR's CI fin
 | `gates determinism` | [The contract](DETERMINISM.md): output hashes match on x86-64 at 1 and N threads and on single-threaded wasm32, with NaNs canonicalised before hashing (L23) | `bedrock.maths` |
 | `gates perf` | Native instruction counts per operation class, scalar and lanes. Browser timing is reported on every PR; only the same-run simd128-against-scalar ratio is gated (L30, L31) | `bedrock.perf` |
 
-Nightly, not per PR: the full corpus, randomised boolean sequences, and the OCCT comparison (L16, L17). The workflow comes
+Nightly, not per PR: randomised boolean sequences, and the OCCT comparison (L16, L17), which
+[runs the oracle over the corpus and then `occam-verify`'s comparison](decisions/2026-11-17-the-corpus-per-pr-the-oracle-nightly.md), so that no oracle output enters the repository. The workflow comes
 from `bedrock.ci`, and jobs join it as the corpus and operations arrive.
+
+Per PR, in `test`: the corpus cases that occam builds today and that record a closed-form answer are built, measured and
+judged against it by `occam-verify`, and intersection's hits on every case's operands are held to the unculled scan;
+each takes seconds. Both corpus tests pin what they leave out by reason and count,
+and fail on a case the runner refuses, a count that moves or an empty corpus.
 
 ## 6. Milestones
 

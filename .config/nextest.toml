@@ -26,6 +26,11 @@ priority = -5
 filter = "package(occam-intersect) & test(/^resolution_tests::p5s_near_tangent/)"
 priority = -5
 
+# occam-verify's run of intersection's hits over the whole corpus, seconds long, runs after the unit tests too.
+[[profile.default.overrides]]
+filter = "package(occam-verify) & binary(corpus_hits) & test(/^on_the_corpus/)"
+priority = -5
+
 # The gates and CI: run everything and report every failure.
 [profile.ci]
 fail-fast = false

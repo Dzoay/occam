@@ -82,8 +82,8 @@ jobs:
       - name: uv, which runs reuse
         run: pipx install "uv==0.13.7"
       - run: just gate all --except mutants,perf,counts
-      # No test binary has fewer tests than on the PR's base, which the gate checks out and builds a second time. On a
-      # push to main HEAD is the base, and it says so and passes.
+      # No test binary has lost a test it has on the PR's base, which the gate checks out and builds a second time. On
+      # a push to main HEAD is the base, and it says so and passes.
       - run: just gate counts --base origin/main
       - run: just tools-test
 

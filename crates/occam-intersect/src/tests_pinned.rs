@@ -236,7 +236,7 @@ fn least(case: &Case) -> u32 {
 }
 
 /// The cases pinned: a name, a curve over a span, and a surface over a patch.
-type Case = (&'static str, Arc<dyn Curve>, Span, Arc<dyn Surface>, UvBox);
+pub(crate) type Case = (&'static str, Arc<dyn Curve>, Span, Arc<dyn Surface>, UvBox);
 
 /// A line through, touching, dipping into and missing a cylinder of radius 2, under each placement.
 fn by_cylinders() -> Vec<Case> {
@@ -253,7 +253,7 @@ fn by_cylinders() -> Vec<Case> {
     all
 }
 
-fn cases() -> Vec<Case> {
+pub(crate) fn cases() -> Vec<Case> {
     let mut all = by_cylinders();
     let plane: Arc<dyn Surface> = Arc::new(Plane::placed(&Placement::identity()));
     let flat = patch((-10.0, -10.0), (10.0, 10.0));
@@ -337,7 +337,9 @@ fn edges() -> Vec<Case> {
 }
 
 /// What each case gave when pinned: crossings, contacts and overlaps found, the decisions made, and the digest of
-/// every hit's bits. A change to how a scan works, not only to what it finds, shows here.
+/// every hit's bits. A change to how a scan works, not only to what it finds, shows here. The digests are what a scan
+/// gave, so they detect a change and prove nothing: where the hits must be, from the geometry, is asserted by the tests
+/// above and [`crate::tests_hits`]' of the same constructions, and for the rest in [`crate::tests_placed`].
 const PINNED: [(&str, Pin); 27] = [
     ("through 0", (2, 0, 0, 107, 0, 0xD36B_710C_C1B2_8263)),
     ("touch 0", (0, 1, 0, 107, 0, 0xFF92_69B9_72F2_EBE3)),

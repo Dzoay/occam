@@ -302,9 +302,18 @@ mod tests {
 
     #[test]
     fn the_bounds_lie_outside_what_it_holds() {
+        // 1 ± 1e-20 both round to 1, so a bound is outside them only if it is moved past 1: by one step of 2^-52, which
+        // below 1 is two doubles and above it one.
         let a = Interval::new(1.0, 1e-20);
-        assert!(a.lower() < 1.0 && a.upper() > 1.0);
-        assert!(holds(Interval::new(a.lower(), 0.0), &of(1.0).difference(&of(1e-20))) || a.lower() < 1.0 - 1e-20);
+        let (least, most) = (of(1.0).difference(&of(1e-20)), of(1.0).sum(&of(1e-20)));
+        assert!(holds(a, &least) && holds(a, &most));
+        assert_eq!(of(a.lower()).difference(&least).sign(), Some(Ordering::Less), "{} is below 1 - 1e-20", a.lower());
+        assert_eq!(of(a.upper()).difference(&most).sign(), Some(Ordering::Greater), "{} is above 1 + 1e-20", a.upper());
+        assert_eq!((a.lower(), a.upper()), (1.0 - f64::EPSILON, 1.0 + f64::EPSILON), "and no further than one step");
+        // Ends that are doubles, 1.5 and 2.5: each bound is past its end, by no more than two units in its last place.
+        let b = Interval::new(2.0, 0.5);
+        assert!(b.lower() < 1.5 && b.lower() >= 1.5 - 2.0 * f64::EPSILON, "{}", b.lower());
+        assert!(b.upper() > 2.5 && b.upper() <= 2.5 + 4.0 * f64::EPSILON, "{}", b.upper());
         assert_eq!(Interval::exact(0.0).upper(), f64::from_bits(1));
         assert_eq!(Interval::exact(0.0).lower(), -f64::from_bits(1));
     }
