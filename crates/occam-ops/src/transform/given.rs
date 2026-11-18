@@ -10,10 +10,10 @@ use occam_report::{Code, Input, NamedValue, Quantity, Report};
 use occam_units::{Affine, Local, Placement, World};
 use serde_json::{Map, Value};
 
-use crate::construct::given::gather;
+use crate::args::Args;
 use crate::operation::Operation;
 use crate::primitive::{pose, three};
-use crate::read::{At, number, object, wrong_type};
+use crate::read::{At, gather, number, wrong_type};
 use crate::request::Units;
 use crate::sweep::{Named, named};
 
@@ -52,15 +52,14 @@ fn factors(at: &At, value: &Value, out: &mut Vec<Report>) -> Option<[f64; 3]> {
     Some([a?, b?, c?])
 }
 
-/// The fields of a `transform` or a `copy` step, at `at`, checking that it takes them.
+/// What a `transform` or a `copy` step, at `at`, gives in `fields`.
 pub(crate) fn transform_step(
     at: &At,
+    _: Operation,
     fields: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
-) -> Option<TransformArgs> {
-    let value = Value::Object(fields.clone());
-    let fields = object(at, &value, Operation::Transform.fields(), out)?;
+) -> Option<Args> {
     let target = gather(named(at, fields, "target"), out);
     let scale_at = at.field("scale");
     let factors = fields.get("scale").map_or(Some([1.0; 3]), |value| factors(&scale_at, value, out));
@@ -69,5 +68,5 @@ pub(crate) fn transform_step(
     let (target, factors, about, frame) = (target?, factors?, about?, frame?);
     let placed = Placement::<World, Local>::identity().then(&frame.placement());
     let map = Affine::stretch(&about.placement(), factors)?.then(&Affine::placed(placed));
-    Some(TransformArgs { target, map, scale_at: scale_at.input() })
+    Some(Args::Transform(TransformArgs { target, map, scale_at: scale_at.input() }))
 }

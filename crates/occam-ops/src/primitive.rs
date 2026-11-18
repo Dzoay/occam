@@ -15,7 +15,9 @@ use occam_report::{EntityRef, Report};
 use occam_topo::Edit;
 use serde_json::{Map, Value};
 
-use crate::operation::Operation;
+use crate::args::Args;
+use crate::operand::Labels;
+use crate::operation::{Does, Made, Operation};
 use crate::read::At;
 use crate::request::Units;
 use parts::Parts;
@@ -26,16 +28,25 @@ pub(crate) use read::{pose, three};
 
 /// The primitive the step at `at`, making `operation`, one of the six, asks for with `parameters` in `units`, if every
 /// input is good; every bad input in `out`.
-pub(crate) fn read(
+fn read(
     at: &At,
     operation: Operation,
     parameters: &Map<String, Value>,
     units: Units,
     out: &mut Vec<Report>,
-) -> Option<PrimitiveArgs> {
+) -> Option<Args> {
     let before = out.len();
-    read::read(at, operation, parameters, units, out).filter(|_| out.len() == before)
+    read::read(at, operation, parameters, units, out).filter(|_| out.len() == before).map(Args::Primitive)
 }
+
+/// Makes the primitive `args` holds in `edit`, if it holds one.
+fn run(edit: &mut Edit, args: &Args, _: &Labels) -> Option<Made> {
+    let Args::Primitive(args) = args else { return None };
+    Some(make(edit, args))
+}
+
+/// A primitive's step, whichever of the six it makes: its reader and its runner.
+pub(crate) const SOLID: Does = Does { read, run };
 
 /// Makes the primitive `args` describe in `edit`, and gives its body.
 ///

@@ -61,7 +61,9 @@ source itself: P5 cited them from memory. The sketch's `intersect.rs` is deleted
 
 The exit's measurements: `gates perf` classes for the closed forms, the pencil method, the hybrid and hits, with browser
 timing; sections join `gates determinism`; P5's speed table on the real code, the closed forms per pair and the hybrid's
-scaling at 1 to 6 threads (P5: 3.0 to 5.2 times); the held-out set scored; and the oracle comparison across the corpus.
+scaling at 1 to 6 threads (P5: 3.0 to 5.2 times); the held-out set scored; and the oracle comparison across the corpus, as a nightly job that runs the oracle over the
+corpus and then `occam-verify`'s `load` and `judge` on what it wrote
+([decision](../decisions/2026-11-17-the-corpus-per-pr-the-oracle-nightly.md)).
 
 *Failing test first:* each new class is `perf.unrecorded` until the record takes it; the determinism probe fails until
 sections are in its stream.

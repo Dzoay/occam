@@ -6,6 +6,18 @@
 
 use std::path::{Path, PathBuf};
 
+/// The page's directory and the stub page, from the crate's directory.
+pub const WATCHED: [&str; 2] = ["page", "src/view/stub.html"];
+
+/// What the build script says to cargo: to run it again when the page or the stub changes, and whether it embedded
+/// the page, `built`. The paths are from the crate's directory, where cargo looks for them, and never name where
+/// that directory is: cargo keeps these lines with the build, and a copy of a built tree whose lines name the tree
+/// it was copied from runs the script again and compiles the crate (`gates mutants` builds once and copies).
+pub fn instructions(built: bool) -> String {
+    let watched = WATCHED.map(|path| format!("cargo::rerun-if-changed={path}\n"));
+    format!("{}cargo::rustc-env=OCCAM_PAGE={}", watched.concat(), if built { "built" } else { "stub" })
+}
+
 /// The files of `page` the binary serves, by the name each is served at, in name order: every file but the
 /// directory's own `.gitignore` and the source maps, which only a browser's tools ask for.
 pub fn files(page: &Path) -> Vec<(String, PathBuf)> {

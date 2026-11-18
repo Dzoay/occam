@@ -354,8 +354,7 @@ fn a_face_with_no_curve_in_its_parameters_has_no_area_measured_but_a_plane_still
 #[test]
 fn a_step_built_by_hand_without_its_target_is_refused_as_missing_it() {
     let snapshot = Snapshot::empty(default_tolerance().unwrap());
-    let parameters = Map::new();
-    let step = Step { index: 1, label: None, operation: Operation::Measure, parameters, args: Args::None };
+    let step = Step { index: 1, label: None, operation: Operation::Measure, args: Args::None };
     let report = measure(&snapshot, &step, &Labels::default()).unwrap_err();
     let at = Input::at("steps[1]").in_step(1, Some("measure"));
     assert_eq!((report.code, report.input.clone()), (Code::InputMissing, Some(at)));
