@@ -20,6 +20,21 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 #[test]
+fn the_build_script_names_what_it_watches_from_the_crates_directory() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (built, page) in [(false, "stub"), (true, "built")] {
+        let said = embed::instructions(built);
+        let watched: Vec<&str> =
+            said.lines().filter_map(|line| line.strip_prefix("cargo::rerun-if-changed=")).collect();
+        // As they are in any copy of the tree: no line names the directory this one is in.
+        assert_eq!(watched, ["page", "src/view/stub.html"], "{said}");
+        assert!(watched.iter().all(|path| root.join(path).exists()), "each is there to watch: {said}");
+        assert_eq!(said.lines().last(), Some(format!("cargo::rustc-env=OCCAM_PAGE={page}").as_str()), "{said}");
+        assert_eq!(said.lines().count(), 3, "{said}");
+    }
+}
+
+#[test]
 fn the_page_built_in_is_every_file_but_the_maps_and_without_an_index_the_stub() {
     let page = scratch("embed");
     let stub = page.join("stub.html");

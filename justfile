@@ -93,13 +93,14 @@ sketch:
 fmt-check:
     cargo fmt --all --check
 
-# Clippy on every crate and target, warnings denied, and on occam-topo's and occam-mesh's determinism probes, which only a feature builds
+# Clippy on every crate and target, warnings denied; on occam-topo's and occam-mesh's determinism probes, which only a feature builds; and on occam-cli alone, as it ships, without the features a workspace build turns on for every crate, `trusted` above all
 [env("CARGO_TARGET_DIR", target)]
 [group('gates')]
 clippy:
     cargo clippy --workspace --all-targets -- -D warnings
     cargo clippy -p occam-topo --all-targets --features determinism -- -D warnings
     cargo clippy -p occam-mesh --all-targets --features determinism -- -D warnings
+    cargo clippy -p occam-cli -- -D warnings
 
 # The viewer's types, strict and declaration files included, against @types/web's, with `tsc --noEmit`; esbuild builds it without checking them
 [group('gates')]
